@@ -1,0 +1,204 @@
+{
+  "v": 3,
+  "attachments": {},
+  "boards": {
+    "Amount.dc.html": {
+      "h": 844,
+      "is_interactive": true,
+      "radius": 36,
+      "title": "07 Deposit to margin account · optional concept (tap amount to type)",
+      "w": 390,
+      "x": 1410,
+      "y": 1720
+    },
+    "Connect.dc.html": {
+      "h": 844,
+      "is_interactive": true,
+      "radius": 36,
+      "title": "02 Connect Backpack",
+      "w": 390,
+      "x": 470,
+      "y": 0
+    },
+    "ConnectMWA.dc.html": {
+      "h": 844,
+      "is_interactive": true,
+      "radius": 36,
+      "title": "02b Connect · Mobile Wallet Adapter (tap “Use installed wallet”)",
+      "w": 390,
+      "x": 2350,
+      "y": 0
+    },
+    "Earn.dc.html": {
+      "h": 844,
+      "is_interactive": true,
+      "radius": 36,
+      "title": "05 Earn · Vaults (search + filter work · scroll)",
+      "w": 390,
+      "x": 0,
+      "y": 1720
+    },
+    "Farm.dc.html": {
+      "h": 1000,
+      "is_interactive": true,
+      "radius": 36,
+      "title": "08 Farm · Leveraged yield",
+      "w": 390,
+      "x": 1880,
+      "y": 1720
+    },
+    "Home.dc.html": {
+      "h": 1240,
+      "is_interactive": true,
+      "radius": 36,
+      "title": "03 Portfolio (tap account for menu)",
+      "w": 390,
+      "x": 940,
+      "y": 0
+    },
+    "HomeB.dc.html": {
+      "h": 844,
+      "is_interactive": true,
+      "radius": 36,
+      "title": "03b Portfolio · redesign (Lender/Trader toggle · Current/History dropdown)",
+      "w": 390,
+      "x": 1880,
+      "y": 0
+    },
+    "Main.dc.html": {
+      "h": 844,
+      "is_interactive": true,
+      "radius": 36,
+      "title": "01 Welcome (tap the headline to step through)",
+      "w": 390,
+      "x": 0,
+      "y": 0
+    },
+    "Markets.dc.html": {
+      "h": 844,
+      "is_interactive": true,
+      "radius": 36,
+      "title": "11 Market picker (search at the bottom · sort)",
+      "w": 390,
+      "x": 940,
+      "y": 3360
+    },
+    "Order.dc.html": {
+      "h": 844,
+      "is_interactive": true,
+      "radius": 36,
+      "title": "10 Perps · Order ticket (tap the amount to type · Leverage chip)",
+      "w": 390,
+      "x": 470,
+      "y": 3360
+    },
+    "Perps.dc.html": {
+      "h": 1240,
+      "is_interactive": true,
+      "radius": 36,
+      "title": "09 Perps · Market (range 1D–All below chart · scrub the chart)",
+      "w": 390,
+      "x": 0,
+      "y": 3360
+    },
+    "Review.dc.html": {
+      "h": 844,
+      "is_interactive": true,
+      "radius": 36,
+      "title": "13 Perps · Review & sign (tap the button to step)",
+      "w": 390,
+      "x": 1880,
+      "y": 3360
+    },
+    "Settings.dc.html": {
+      "h": 844,
+      "is_interactive": true,
+      "radius": 36,
+      "title": "04 Profile & settings (watchlist · theme dropdown)",
+      "w": 390,
+      "x": 1410,
+      "y": 0
+    },
+    "SupplySheet.dc.html": {
+      "h": 844,
+      "is_interactive": true,
+      "radius": 36,
+      "title": "07b Supply sheet (tap the amount to type)",
+      "w": 390,
+      "x": 940,
+      "y": 1720
+    },
+    "Swap.dc.html": {
+      "h": 844,
+      "is_interactive": true,
+      "radius": 36,
+      "title": "12 Swap (type the amount · token/route/slippage menus · Review opens in place)",
+      "w": 390,
+      "x": 1410,
+      "y": 3360
+    },
+    "Vault.dc.html": {
+      "h": 844,
+      "is_interactive": true,
+      "radius": 36,
+      "title": "06 Vault · USDC (period toggle · Pool details sheet · tweak position)",
+      "w": 390,
+      "x": 470,
+      "y": 1720
+    }
+  },
+  "createdOnFiles": {
+    "at": "2026-09-28T09:10:00Z",
+    "v": 1
+  },
+  "designSystems": [],
+  "launch": {
+    "view": "canvas"
+  },
+  "notes": {
+    "row1": {
+      "kind": "title1",
+      "maxW": 2740,
+      "text": "Onboarding & Portfolio",
+      "w": 240,
+      "x": 0,
+      "y": -300
+    },
+    "row2": {
+      "kind": "title1",
+      "maxW": 2270,
+      "text": "Earn & Farm",
+      "w": 240,
+      "x": 0,
+      "y": 1420
+    },
+    "row3": {
+      "kind": "title1",
+      "maxW": 2270,
+      "text": "Perps & Swap",
+      "w": 240,
+      "x": 0,
+      "y": 3060
+    }
+  },
+  "order": [
+    "Main.dc.html",
+    "Connect.dc.html",
+    "ConnectMWA.dc.html",
+    "Home.dc.html",
+    "HomeB.dc.html",
+    "Settings.dc.html",
+    "Earn.dc.html",
+    "Vault.dc.html",
+    "SupplySheet.dc.html",
+    "Amount.dc.html",
+    "Farm.dc.html",
+    "Perps.dc.html",
+    "Order.dc.html",
+    "Markets.dc.html",
+    "Swap.dc.html",
+    "Review.dc.html"
+  ],
+  "pages": [],
+  "title": "Vanna Mobile"
+}

@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Welcome to Vanna</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&amp;family=JetBrains+Mono:wght@400;500;600&amp;display=swap">
+<style>
+body{margin:0;font-family:'Plus Jakarta Sans',system-ui,sans-serif}
+a{color:inherit}
+*{scrollbar-width:none}*::-webkit-scrollbar{display:none}
+.hero{background-image:url(/_blob/8cc2c02ae59988595202324e0da61969);background-size:cover;background-position:left top;-webkit-mask-image:linear-gradient(180deg,#000 58%,transparent 100%),linear-gradient(90deg,transparent 0,#000 28%);-webkit-mask-composite:source-in;mask-image:linear-gradient(180deg,#000 58%,transparent 100%),linear-gradient(90deg,transparent 0,#000 28%);mask-composite:intersect}
+.gt{background:linear-gradient(95deg,#FC5457 0%,#FF8AC2 45%,#9F7BEE 100%);-webkit-background-clip:text;background-clip:text;color:transparent}
+@keyframes vfade{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+.in{animation:vfade 600ms ease-out both}
+@media (prefers-reduced-motion: reduce){.in{animation:none}}
+</style>
+</helmet>
+<div style="width: 390px; height: 844px; position: relative; overflow: hidden; background: #0C0C0D; color: #FFFFFF; font-family: 'Plus Jakarta Sans', system-ui, sans-serif">
+  <div class="hero" style="position: absolute; right: 0; top: 0; width: 250px; height: 470px"></div>
+
+  <div style="position: relative; height: 100%; box-sizing: border-box; padding: 52px 24px 28px; display: flex; flex-direction: column">
+    <div style="height: 44px; display: flex; align-items: center; justify-content: space-between">
+      <img src="/_blob/9522abd43bbe6600df610e270423ff6c" alt="Vanna" style="width: 106px; height: 33px">
+      <span style="height: 32px; padding: 0 12px 0 8px; box-sizing: border-box; border-radius: 999px; background: rgba(12,12,13,0.72); border: 1px solid rgba(255,255,255,0.12); display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 500; color: rgba(255,255,255,0.88)"><img src="/_blob/4fda11b4a30f7ec1c38590238e643cfa" alt="" style="width: 16px; height: 16px">Built on Solana</span>
+    </div>
+
+    <div role="tablist" aria-label="Intro steps" style="margin-top: 20px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px">
+      <sc-for list="{{segs}}" as="g" hint-placeholder-count="3">
+        <button type="button" role="tab" onClick="{{g.pick}}" aria-selected="{{g.on}}" aria-label="{{g.label}}" style="height: 24px; padding: 0; border: none; background: transparent; display: flex; align-items: center; cursor: pointer"><span style="flex-grow: 1; height: 3px; border-radius: 2px; background: {{g.bg}}"></span></button>
+      </sc-for>
+    </div>
+
+    <button type="button" onClick="{{next}}" aria-label="Next intro step" style="margin-top: 150px; padding: 0; border: none; background: transparent; color: #FFFFFF; text-align: left; display: flex; flex-direction: column; gap: 14px; cursor: pointer">
+      <span style="font-size: 12px; font-weight: 600; letter-spacing: 0.18em; color: rgba(255,255,255,0.7)">{{s.eyebrow}}</span>
+      <span style="font-size: 40px; line-height: 44px; font-weight: 800; letter-spacing: -0.035em">{{s.lead}} <span class="gt">{{s.accent}}</span></span>
+      <span style="font-size: 15px; line-height: 22px; color: rgba(255,255,255,0.62)">{{s.sub}}</span>
+    </button>
+
+    <div style="flex-grow: 1"></div>
+
+    <div style="display: flex; flex-direction: column; gap: 10px; border-radius: 25px; border-style: none; border-width: 1px; border-color: #141413">
+      <a href="Connect.dc.html" style="position: relative; height: 56px; border-radius: 14px; background: linear-gradient(100deg, #703AE6 0%, #B45BC9 50%, #FC5457 100%); color: #FFFFFF; font-size: 16px; font-weight: 700; text-decoration: none; display: flex; align-items: center; justify-content: center; gap: 10px">
+        <img src="/_blob/02c61c845398e2f930049e782b776b8c" alt="" style="width: 24px; height: 24px; border-radius: 7px">Connect Backpack
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="position: absolute; right: 18px"><path d="M5 12h14"></path><path d="m13 6 6 6-6 6"></path></svg>
+      </a>
+      <a href="Earn.dc.html" style="position: relative; height: 56px; box-sizing: border-box; border-radius: 14px; border: 1px solid rgba(255,255,255,0.22); color: #FFFFFF; font-size: 16px; font-weight: 600; text-decoration: none; display: flex; align-items: center; justify-content: center">
+        Explore markets
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="position: absolute; right: 18px"><path d="M5 12h14"></path><path d="m13 6 6 6-6 6"></path></svg>
+      </a>
+    </div>
+
+    <div style="margin-top: 18px; display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: 12px">
+      <span style="height: 1px; background: rgba(255,255,255,0.1)"></span>
+      <span style="font-size: 12px; color: rgba(255,255,255,0.5)">Non-custodial · your keys never leave your wallet</span>
+      <span style="height: 1px; background: rgba(255,255,255,0.1)"></span>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { i: 0 };
+  }
+  renderVals() {
+    const slides = [
+      { eyebrow: 'EARN', lead: 'Credit that makes your', accent: 'assets work harder.', sub: 'Supply USDC, SOL or tokenized stocks and earn from every block.' },
+      { eyebrow: 'TRADE', lead: 'Go long or short on', accent: 'tokenized stocks.', sub: 'Up to 5× on TSLAx, GOOGLx, AAPLx and PreStocks.' },
+      { eyebrow: 'FARM', lead: 'Leveraged yield in', accent: 'one signature.', sub: 'Borrow on Vanna and supply to Kamino in a single transaction.' }
+    ];
+    const i = this.state.i;
+    return {
+      s: slides[i],
+      segs: slides.map((x, k) => ({ label: x.eyebrow, on: k === i ? 'true' : 'false', bg: k <= i ? '#FFFFFF' : 'rgba(255,255,255,0.22)', pick: () => this.setState({ i: k }) })),
+      next: () => this.setState({ i: (i + 1) % slides.length })
+    };
+  }
+}
+</script>
+</body>
+</html>

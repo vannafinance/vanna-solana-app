@@ -1,0 +1,296 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Swap</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&amp;family=JetBrains+Mono:wght@400;500;600&amp;display=swap">
+<style>
+body{margin:0;font-family:'Plus Jakarta Sans',system-ui,sans-serif}
+.m{font-family:'JetBrains Mono',ui-monospace,monospace;font-variant-numeric:tabular-nums}
+a{color:inherit}
+*{scrollbar-width:none}*::-webkit-scrollbar{display:none}
+button,input{font-family:inherit}
+input::placeholder{color:#8A8F98}
+@keyframes vup{from{transform:translateY(24px);opacity:0}to{transform:none;opacity:1}}
+.up{animation:vup 220ms ease-out both}
+@media (prefers-reduced-motion: reduce){.up{animation:none}}
+@keyframes vdrop{from{opacity:0;transform:translateY(-6px) scale(.96)}to{opacity:1;transform:none}}
+.drop{transform-origin:top right;animation:vdrop 180ms cubic-bezier(.2,.8,.2,1) both}
+.dropl{transform-origin:top left;animation:vdrop 180ms cubic-bezier(.2,.8,.2,1) both}
+.dropu{transform-origin:bottom center;animation:vdrop 180ms cubic-bezier(.2,.8,.2,1) both}
+.chev{transition:transform 200ms cubic-bezier(.2,.8,.2,1)}
+.thumb{transition:left 240ms cubic-bezier(.2,.8,.2,1),width 240ms cubic-bezier(.2,.8,.2,1)}
+.opt{transition:background-color 120ms}
+.opt:hover{background-color:rgba(127,127,127,.08)}
+@media (prefers-reduced-motion: reduce){.drop,.dropl,.dropu{animation:none}.chev,.thumb{transition:none}}
+.flip{transition:transform 320ms cubic-bezier(.2,.8,.2,1)}
+.amt{border:none;outline:none;background:transparent;padding:0;margin:0;width:100%;min-width:0;caret-color:#FC5457}
+.amt::placeholder{color:inherit;opacity:.35}
+@keyframes vspin{to{transform:rotate(360deg)}}.spin{animation:vspin 900ms linear infinite}
+@keyframes vpop{0%{transform:scale(.6);opacity:0}60%{transform:scale(1.08);opacity:1}100%{transform:none}}.pop{animation:vpop 380ms cubic-bezier(.2,.8,.2,1) both}
+@keyframes vfadein{from{opacity:0}to{opacity:1}}.scrim{animation:vfadein 200ms ease-out both}
+@keyframes vsheetup{from{transform:translateY(100%)}to{transform:none}}.sheetup{animation:vsheetup 320ms cubic-bezier(.2,.8,.2,1) both}
+</style>
+</helmet>
+<div style="width: 390px; height: 844px; position: relative; overflow: hidden; background: {{t.bg}}; color: {{t.text}}; font-family: 'Plus Jakarta Sans', system-ui, sans-serif">
+  <header style="position: absolute; left: 0; right: 0; top: 0; z-index: 3; box-sizing: border-box; height: 104px; padding: 48px 12px 0 16px; display: flex; align-items: center; justify-content: space-between; background: {{t.bg}}">
+    <img src="{{t.word}}" alt="Vanna" style="width: 90px; height: 28px">
+    <a href="HomeB.dc.html" aria-haspopup="menu" aria-label="Account 7xKp…4fQ2" style="width: 44px; height: 44px; margin-right: -6px; position: relative; display: flex; align-items: center; justify-content: center">
+      <svg width="32" height="32" viewBox="0 0 32 32" aria-hidden="true"><clipPath id="avh"><circle cx="16" cy="16" r="16"></circle></clipPath><g clip-path="url(#avh)"><rect width="32" height="32" fill="#E6E6E6"></rect><rect x="0" y="0" width="8" height="8" fill="#111111"></rect><rect x="24" y="0" width="8" height="8" fill="#111111"></rect><rect x="8" y="8" width="16" height="8" fill="#FC5457"></rect><rect x="0" y="16" width="8" height="8" fill="#8C8C8C"></rect><rect x="24" y="16" width="8" height="8" fill="#8C8C8C"></rect><rect x="8" y="24" width="16" height="8" fill="#111111"></rect></g></svg>
+      <span style="position: absolute; right: 5px; bottom: 5px; width: 10px; height: 10px; box-sizing: border-box; border-radius: 999px; border: 2px solid {{t.bg}}; background: {{t.pos}}"></span>
+    </a>
+  </header>
+
+  <div style="position: absolute; left: 0; right: 0; top: 104px; bottom: 0; box-sizing: border-box; padding: 0 16px 108px; display: flex; flex-direction: column">
+    <div style="position: relative; z-index: 3; height: 56px; margin-right: -8px; display: flex; align-items: center; justify-content: space-between">
+      <h1 style="margin: 0; font-size: 24px; font-weight: 700; letter-spacing: -0.025em">Swap</h1>
+      <div style="display: flex; align-items: center; gap: 2px">
+        <button type="button" onClick="{{toggleRoute}}" aria-haspopup="listbox" aria-expanded="{{routeOpenA}}" style="height: 40px; padding: 0 8px 0 12px; border: none; border-radius: 10px; background: {{routeBg}}; display: flex; align-items: center; gap: 4px; color: {{t.text3}}; font-size: 13px; cursor: pointer; transition: background-color 150ms">via <span style="font-weight: 700; color: {{t.text}}">Jupiter</span><svg class="chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="color: {{t.text3}}; transform: {{routeChev}}"><path d="m6 9 6 6 6-6"></path></svg></button>
+        <button type="button" onClick="{{toggleSlip}}" aria-haspopup="dialog" aria-expanded="{{slipOpenA}}" aria-label="Slippage, {{slip}}" style="height: 40px; padding: 0 10px; border: none; border-radius: 10px; background: {{slipBg}}; color: {{t.text}}; display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; cursor: pointer; transition: background-color 150ms">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h10M18 7h2M4 17h2M10 17h10"></path><circle cx="16" cy="7" r="2"></circle><circle cx="8" cy="17" r="2"></circle></svg><span class="m">{{slip}}</span>
+        </button>
+      </div>
+      <sc-if value="{{routeOpen}}" hint-placeholder-val="{{ false }}">
+        <ul role="listbox" aria-label="Swap route" class="drop" style="position: absolute; right: 64px; top: 48px; margin: 0; padding: 6px; list-style: none; width: 220px; box-sizing: border-box; border-radius: 16px; border: 1px solid {{t.fieldLine}}; background: {{t.menu}}; box-shadow: {{t.shadow}}">
+          <li role="option" aria-selected="true" style="height: 52px; padding: 0 10px; display: flex; align-items: center; gap: 10px"><span style="flex-grow: 1; display: flex; flex-direction: column; gap: 1px"><span style="font-size: 14px; font-weight: 700">Jupiter</span><span style="font-size: 11px; color: {{t.text3}}">Best price across Solana</span></span><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="opacity: 1"><path d="m5 12 5 5 9-10"></path></svg></li>
+          <li role="option" aria-disabled="true" style="height: 52px; padding: 0 10px; display: flex; align-items: center; gap: 10px; color: {{t.text3}}"><span style="flex-grow: 1; font-size: 14px; font-weight: 600">Raydium</span><span style="font-size: 11px; font-weight: 600">Coming soon</span></li>
+        </ul>
+      </sc-if>
+      <sc-if value="{{slipOpen}}" hint-placeholder-val="{{ false }}">
+        <div role="dialog" aria-label="Slippage tolerance" class="drop" style="position: absolute; right: 0; top: 48px; width: 252px; box-sizing: border-box; padding: 14px; border-radius: 16px; border: 1px solid {{t.fieldLine}}; background: {{t.menu}}; box-shadow: {{t.shadow}}; display: flex; flex-direction: column; gap: 12px">
+          <span style="font-size: 13px; font-weight: 700">Slippage tolerance</span>
+          <div role="radiogroup" aria-label="Slippage" style="position: relative; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); padding: 3px; border-radius: 10px; background: {{t.fill}}">
+            <span aria-hidden="true" class="thumb" style="position: absolute; top: 3px; bottom: 3px; left: {{slipX}}; width: calc((100% - 6px) / 3); border-radius: 8px; background: {{t.bg}}; box-shadow: 0 1px 3px rgba(0,0,0,0.14)"></span>
+            <sc-for list="{{slips}}" as="s" hint-placeholder-count="3">
+              <button type="button" role="radio" aria-checked="{{s.on}}" onClick="{{s.pick}}" class="m" style="position: relative; height: 36px; padding: 0; border: none; background: transparent; color: {{s.fg}}; font-size: 13px; font-weight: 700; cursor: pointer; transition: color 200ms">{{s.label}}</button>
+            </sc-for>
+          </div>
+          <span style="font-size: 12px; line-height: 17px; color: {{t.text3}}">The swap reverts if the price moves more than this.</span>
+        </div>
+      </sc-if>
+    </div>
+
+    <section aria-label="Sell" style="position: relative; z-index: 2; padding-top: 20px; display: flex; flex-direction: column; gap: 10px">
+    <div style="display: flex; align-items: center; justify-content: space-between; font-size: 13px; color: {{t.text3}}"><span style="font-weight: 600">You sell</span><span class="m" style="display: flex; align-items: center; gap: 2px">{{sellBal}}<button type="button" onClick="{{max}}" style="height: 32px; padding: 0 0 0 8px; border: none; background: transparent; color: {{t.text}}; font-size: 13px; font-weight: 700; cursor: pointer">Max</button></span></div>
+    <div style="position: relative; display: flex; align-items: center; gap: 12px">
+      <input class="amt m" type="text" inputmode="decimal" autocomplete="off" aria-label="Amount to sell" placeholder="0" value="{{v}}" onInput="{{onAmt}}" onChange="{{onAmt}}" onFocus="{{onFocus}}" style="flex-grow: 1; height: 56px; font-size: 44px; font-weight: 600; letter-spacing: -0.04em; color: {{sellColor}}">
+      <button type="button" onClick="{{sellTok.toggle}}" aria-haspopup="listbox" aria-expanded="{{sellTok.openA}}" style="flex-shrink: 0; height: 44px; padding: 0 8px 0 6px; border-radius: 999px; border: 1px solid {{t.fieldLine}}; background: {{sellTok.btnBg}}; color: {{t.text}}; display: flex; align-items: center; gap: 8px; font-size: 16px; font-weight: 700; cursor: pointer; transition: background-color 150ms">
+        <img src="{{sellTok.icon}}" alt="" style="width: 30px; height: 30px; border-radius: 999px">{{sellTok.sym}}<svg class="chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="color: {{t.text3}}; transform: {{sellTok.chev}}"><path d="m6 9 6 6 6-6"></path></svg>
+      </button>
+      <sc-if value="{{sellTok.open}}" hint-placeholder-val="{{ false }}">
+        <ul role="listbox" aria-label="You sell token" class="drop" style="position: absolute; right: 0; top: 52px; z-index: 4; margin: 0; padding: 6px; list-style: none; width: 232px; box-sizing: border-box; border-radius: 16px; border: 1px solid {{t.fieldLine}}; background: {{t.menu}}; box-shadow: {{t.shadow}}">
+          <sc-for list="{{sellTok.list}}" as="o" hint-placeholder-count="4">
+            <li role="option" aria-selected="{{o.on}}" style="display: flex">
+              <button type="button" class="opt" onClick="{{o.pick}}" style="flex-grow: 1; height: 52px; padding: 0 10px; border: none; border-radius: 10px; background: transparent; color: {{t.text}}; display: flex; align-items: center; gap: 10px; text-align: left; cursor: pointer">
+                <img src="{{o.icon}}" alt="" style="width: 28px; height: 28px; border-radius: 999px">
+                <span style="flex-grow: 1; display: flex; flex-direction: column; gap: 1px"><span style="font-size: 14px; font-weight: {{o.w}}">{{o.sym}}</span><span class="m" style="font-size: 11px; color: {{t.text3}}">{{o.bal}}</span></span>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="opacity: {{o.check}}"><path d="m5 12 5 5 9-10"></path></svg>
+              </button>
+            </li>
+          </sc-for>
+        </ul>
+      </sc-if>
+    </div>
+    <div style="display: flex; align-items: center; justify-content: space-between">
+        <span class="m" style="font-size: 13px; color: {{t.text3}}">{{sellUsd}}</span>
+        <div style="display: flex; gap: 4px">
+          <sc-for list="{{pcts}}" as="p" hint-placeholder-count="3">
+            <button type="button" onClick="{{p.pick}}" class="m" style="height: 32px; padding: 0 8px; border: none; border-radius: 8px; background: transparent; color: {{t.text2}}; font-size: 12px; font-weight: 600; cursor: pointer">{{p.label}}</button>
+          </sc-for>
+        </div>
+      </div>
+    </section>
+
+    <div style="position: relative; z-index: 1; height: 72px; display: flex; align-items: center">
+      <span style="flex-grow: 1; height: 1px; background: {{t.line}}"></span>
+      <button type="button" onClick="{{flip}}" aria-label="Flip sell and buy tokens" class="flip" style="width: 56px; height: 56px; margin: 0 12px; flex-shrink: 0; box-sizing: border-box; border-radius: 999px; border: 1px solid {{t.fieldLine}}; background: {{t.bg}}; box-shadow: 0 6px 18px rgba(17,17,17,0.14); display: flex; align-items: center; justify-content: center; cursor: pointer; transform: {{flipRot}}"><img src="/_blob/e9a4dc2e42d01dc076173579d6188f36" alt="" style="width: 30px; height: 30px"></button>
+      <span style="flex-grow: 1; height: 1px; background: {{t.line}}"></span>
+    </div>
+
+    <section aria-label="Buy" style="position: relative; z-index: 1; display: flex; flex-direction: column; gap: 10px">
+    <div style="display: flex; align-items: center; justify-content: space-between; font-size: 13px; color: {{t.text3}}"><span style="font-weight: 600">You receive</span><span class="m">{{buyBal}}</span></div>
+    <div style="position: relative; display: flex; align-items: center; gap: 12px">
+      <span class="m" aria-live="polite" style="flex-grow: 1; min-width: 0; height: 56px; line-height: 56px; font-size: 44px; font-weight: 600; letter-spacing: -0.04em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: {{recvColor}}">{{receive}}</span>
+      <button type="button" onClick="{{buyTok.toggle}}" aria-haspopup="listbox" aria-expanded="{{buyTok.openA}}" style="flex-shrink: 0; height: 44px; padding: 0 8px 0 6px; border-radius: 999px; border: 1px solid {{t.fieldLine}}; background: {{buyTok.btnBg}}; color: {{t.text}}; display: flex; align-items: center; gap: 8px; font-size: 16px; font-weight: 700; cursor: pointer; transition: background-color 150ms">
+        <img src="{{buyTok.icon}}" alt="" style="width: 30px; height: 30px; border-radius: 999px">{{buyTok.sym}}<svg class="chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="color: {{t.text3}}; transform: {{buyTok.chev}}"><path d="m6 9 6 6 6-6"></path></svg>
+      </button>
+      <sc-if value="{{buyTok.open}}" hint-placeholder-val="{{ false }}">
+        <ul role="listbox" aria-label="You receive token" class="drop" style="position: absolute; right: 0; top: 52px; z-index: 4; margin: 0; padding: 6px; list-style: none; width: 232px; box-sizing: border-box; border-radius: 16px; border: 1px solid {{t.fieldLine}}; background: {{t.menu}}; box-shadow: {{t.shadow}}">
+          <sc-for list="{{buyTok.list}}" as="o" hint-placeholder-count="4">
+            <li role="option" aria-selected="{{o.on}}" style="display: flex">
+              <button type="button" class="opt" onClick="{{o.pick}}" style="flex-grow: 1; height: 52px; padding: 0 10px; border: none; border-radius: 10px; background: transparent; color: {{t.text}}; display: flex; align-items: center; gap: 10px; text-align: left; cursor: pointer">
+                <img src="{{o.icon}}" alt="" style="width: 28px; height: 28px; border-radius: 999px">
+                <span style="flex-grow: 1; display: flex; flex-direction: column; gap: 1px"><span style="font-size: 14px; font-weight: {{o.w}}">{{o.sym}}</span><span class="m" style="font-size: 11px; color: {{t.text3}}">{{o.bal}}</span></span>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="opacity: {{o.check}}"><path d="m5 12 5 5 9-10"></path></svg>
+              </button>
+            </li>
+          </sc-for>
+        </ul>
+      </sc-if>
+    </div>
+      <span class="m" style="font-size: 13px; color: {{t.text3}}">{{rateLine}}</span>
+    </section>
+
+    <div style="flex-grow: 1"></div>
+    <button type="button" onClick="{{openReview}}" aria-disabled="{{ctaOff}}" style="height: 56px; border: none; border-radius: 14px; background: {{ctaBg}}; color: #FFFFFF; font-size: 16px; font-weight: 700; cursor: {{ctaCursor}}">{{cta}}</button>
+  </div>
+
+  <nav aria-label="Primary" style="position: absolute; left: 16px; right: 16px; bottom: 20px; height: 64px; box-sizing: border-box; padding: 0 4px; border-radius: 999px; background: {{t.navGlass}}; backdrop-filter: blur(20px) saturate(1.4); -webkit-backdrop-filter: blur(20px) saturate(1.4); border: 1px solid {{t.navLine}}; box-shadow: {{t.shadow}}; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); align-items: center">
+    <a href="HomeB.dc.html" style="height: 56px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; text-decoration: none; color: {{t.text3}}">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"></path></svg>
+      <span style="font-size: 10px; font-weight: 600; line-height: 12px">Portfolio</span>
+    </a>
+    <a href="Earn.dc.html" style="height: 56px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; text-decoration: none; color: {{t.text3}}">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="6" rx="8" ry="3"></ellipse><path d="M4 6v6c0 1.7 3.6 3 8 3s8-1.3 8-3V6"></path><path d="M4 12v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6"></path></svg>
+      <span style="font-size: 10px; font-weight: 600; line-height: 12px">Earn</span>
+    </a>
+    <a href="Swap.dc.html" aria-current="page" aria-label="Swap" style="height: 56px; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; gap: 3px; text-decoration: none; color: {{t.text}}">
+      <span style="width: 56px; height: 56px; margin-top: -30px; box-sizing: border-box; border-radius: 999px; background: {{t.bg}}; border: 2px solid {{t.text}}; box-shadow: 0 6px 18px rgba(17,17,17,0.18); display: flex; align-items: center; justify-content: center"><img src="/_blob/e9a4dc2e42d01dc076173579d6188f36" alt="" style="width: 30px; height: 30px"></span>
+      <span style="font-size: 10px; font-weight: 700; line-height: 12px">Swap</span>
+    </a>
+    <a href="Perps.dc.html" style="height: 56px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; text-decoration: none; color: {{t.text3}}">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17l6-6 4 4 8-8"></path><path d="M15 7h6v6"></path></svg>
+      <span style="font-size: 10px; font-weight: 600; line-height: 12px">Perps</span>
+    </a>
+    <a href="Farm.dc.html" style="height: 56px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; text-decoration: none; color: {{t.text3}}">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21v-9"></path><path d="M12 12c0-4 3-7 8-7 0 5-3 7-8 7z"></path><path d="M12 14c0-3-2.5-5.5-7-5.5 0 4 2.5 5.5 7 5.5z"></path></svg>
+      <span style="font-size: 10px; font-weight: 600; line-height: 12px">Farm</span>
+    </a>
+  </nav>
+
+  <sc-if value="{{reviewOpen}}" hint-placeholder-val="{{ false }}">
+    <button type="button" onClick="{{closeReview}}" aria-label="Close review" class="scrim" style="position: absolute; inset: 0; z-index: 8; padding: 0; border: none; background: {{t.scrim}}; cursor: pointer"></button>
+    <section role="dialog" aria-label="Review swap" class="sheetup" style="position: absolute; left: 0; right: 0; bottom: 0; z-index: 9; box-sizing: border-box; padding: 8px 20px 28px; border-radius: 28px 28px 0 0; background: {{t.sheet}}; display: flex; flex-direction: column">
+      <div style="width: 36px; height: 4px; border-radius: 999px; background: {{t.fieldLine}}; align-self: center"></div>
+      <sc-if value="{{notDone}}" hint-placeholder-val="{{ true }}">
+        <div style="display: flex; flex-direction: column">
+          <div style="height: 52px; margin: 4px -12px 0 0; display: flex; align-items: center; justify-content: space-between">
+            <h2 style="margin: 0; font-size: 18px; font-weight: 700">Review swap</h2>
+            <button type="button" onClick="{{closeReview}}" aria-label="Close" style="width: 48px; height: 48px; padding: 0; border: none; background: transparent; color: {{t.text}}; display: flex; align-items: center; justify-content: center; cursor: pointer"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></button>
+          </div>
+          <div style="margin-top: 8px; display: grid; grid-template-columns: 40px minmax(0, 1fr); column-gap: 14px; row-gap: 6px; align-items: center">
+            <img src="{{sellTok.icon}}" alt="" style="width: 40px; height: 40px; border-radius: 999px">
+            <span style="display: flex; flex-direction: column; gap: 1px"><span style="font-size: 12px; color: {{t.text3}}">You sell</span><span class="m" style="font-size: 26px; line-height: 32px; font-weight: 700; letter-spacing: -0.03em">{{vShow}} {{sellTok.sym}}</span></span>
+            <span style="justify-self: center; width: 2px; height: 22px; border-radius: 1px; background: {{t.track}}"></span><span></span>
+            <img src="{{buyTok.icon}}" alt="" style="width: 40px; height: 40px; border-radius: 999px">
+            <span style="display: flex; flex-direction: column; gap: 1px"><span style="font-size: 12px; color: {{t.text3}}">You receive</span><span class="m" style="font-size: 26px; line-height: 32px; font-weight: 700; letter-spacing: -0.03em; color: {{t.posText}}">{{receive}} {{buyTok.sym}}</span></span>
+          </div>
+          <dl style="margin: 24px 0 0; display: flex; flex-direction: column; gap: 14px">
+            <sc-for list="{{rows}}" as="r" hint-placeholder-count="5">
+              <div style="display: flex; justify-content: space-between; gap: 16px"><dt style="font-size: 14px; color: {{t.text3}}">{{r.k}}</dt><dd class="m" style="margin: 0; font-size: 14px; font-weight: 600; text-align: right">{{r.v}}</dd></div>
+            </sc-for>
+          </dl>
+          <button type="button" onClick="{{advance}}" style="margin-top: 28px; height: 56px; border: none; border-radius: 14px; background: {{confirmBg}}; color: {{confirmFg}}; display: flex; align-items: center; justify-content: center; gap: 10px; font-size: 16px; font-weight: 700; cursor: pointer; transition: background-color 200ms">
+            <sc-if value="{{busy}}" hint-placeholder-val="{{ false }}"><svg class="spin" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 3a9 9 0 1 1-9 9"></path></svg></sc-if>{{confirmLabel}}
+          </button>
+          <span style="margin-top: 10px; text-align: center; font-size: 12px; color: {{t.text3}}">{{confirmHint}}</span>
+        </div>
+      </sc-if>
+      <sc-if value="{{done}}" hint-placeholder-val="{{ false }}">
+        <div style="padding: 28px 0 0; display: flex; flex-direction: column; align-items: center; gap: 10px; text-align: center">
+          <span class="pop" style="width: 72px; height: 72px; border-radius: 999px; background: {{t.pos}}; color: #111111; display: flex; align-items: center; justify-content: center"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 5 5 9-10"></path></svg></span>
+          <span style="margin-top: 6px; font-size: 24px; font-weight: 700; letter-spacing: -0.02em">Swap complete</span>
+          <span class="m" style="font-size: 14px; color: {{t.text2}}">{{vShow}} {{sellTok.sym}} → {{receive}} {{buyTok.sym}}</span>
+          <a href="https://explorer.solana.com" style="height: 44px; display: flex; align-items: center; font-size: 14px; font-weight: 700; color: {{t.text}}; text-decoration: none">View on explorer</a>
+          <button type="button" onClick="{{finish}}" style="margin-top: 8px; width: 100%; height: 56px; border: none; border-radius: 14px; background: {{t.text}}; color: {{t.bg}}; font-size: 16px; font-weight: 700; cursor: pointer">Done</button>
+        </div>
+      </sc-if>
+    </section>
+  </sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["light","dark"],"default":"light"},"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { v: '2.5', sell: 'SOL', buy: 'USDC', menu: '', slip: '0.5%', flips: 0, review: false, stage: 0 };
+  }
+  tokens() {
+    const light = { word: '/_blob/a759693c94ec9c77db2dda762f77b416', bg: '#FFFFFF', fill: '#F4F4F4', fieldLine: '#E2E2E2', track: '#E2E2E2', line: 'rgba(17,17,17,0.08)', text: '#111111', text2: '#4B5563', text3: '#6B7280', onInk: '#FFFFFF', grad: 'linear-gradient(135deg, #FC5457 10%, #703AE6 80%)', pos: '#32EEE2', posText: '#1C7C83', long: '#32EEE2', short: '#FC5457', negText: '#B33C3E', disabled: '#BFBFBF', scrim: 'rgba(17,17,17,0.4)', sheet: '#FFFFFF', menu: '#FFFFFF', navGlass: 'rgba(255,255,255,0.72)', navLine: 'rgba(17,17,17,0.08)', fade: 'linear-gradient(to top, rgba(255,255,255,0.9) 0%, rgba(255,255,255,0.55) 45%, rgba(255,255,255,0) 100%)', shadow: '0px 7px 15px rgba(0,0,0,0.08), 0px 28px 28px rgba(0,0,0,0.07)' };
+    const dark = { word: '/_blob/9522abd43bbe6600df610e270423ff6c', bg: '#111111', fill: '#1E1E1E', fieldLine: '#2C2C2C', track: '#2C2C2C', line: 'rgba(255,255,255,0.08)', text: '#FFFFFF', text2: '#BFBFBF', text3: '#949494', onInk: '#111111', grad: 'linear-gradient(135deg, #FC5457 10%, #703AE6 80%)', pos: '#32EEE2', posText: '#32EEE2', long: '#32EEE2', short: '#FC5457', negText: '#FD8C8E', disabled: '#595959', scrim: 'rgba(0,0,0,0.6)', sheet: '#1E1E1E', menu: '#1E1E1E', navGlass: 'rgba(30,30,30,0.66)', navLine: 'rgba(255,255,255,0.08)', fade: 'linear-gradient(to top, rgba(17,17,17,0.9) 0%, rgba(17,17,17,0.55) 45%, rgba(17,17,17,0) 100%)', shadow: '0 12px 32px rgba(0,0,0,0.5)' };
+    return (this.props.theme ?? 'light') === 'dark' ? dark : light;
+  }
+  renderVals() {
+    const t = this.tokens();
+    const st = this.state;
+    const TK = {
+      SOL: { icon: '/_blob/4fda11b4a30f7ec1c38590238e643cfa', bal: 12.40, usd: 100 },
+      USDC: { icon: '/_blob/09e073f5e222ada0320681e7093ff7b4', bal: 3120.55, usd: 1 },
+      TSLAx: { icon: '/_blob/1e343423a63e8d1e43c4f214a310e96d', bal: 6.35, usd: 368.44 },
+      GOOGLx: { icon: '/_blob/d559c7641fca79fb89e54a04d076d4ce', bal: 0, usd: 175 }
+    };
+    const f2 = (n) => n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const fq = (n) => n >= 100 ? f2(n) : String(+n.toFixed(4));
+    const S = TK[st.sell], B = TK[st.buy];
+    const num = parseFloat(st.v || '0') || 0;
+    const over = num > S.bal;
+    const empty = num === 0;
+    const rate = S.usd / B.usd * 0.9992;
+    const out = num * rate;
+    const slipPct = parseFloat(st.slip) / 100;
+    const menu = st.menu;
+    const setMenu = (m) => () => this.setState({ menu: menu === m ? '' : m });
+    const picker = (side) => {
+      const cur = side === 'sell' ? st.sell : st.buy, other = side === 'sell' ? st.buy : st.sell;
+      const key = side + 'Tok';
+      const open = menu === key;
+      return {
+        sym: cur, icon: TK[cur].icon, open: open, openA: open ? 'true' : 'false', chev: open ? 'rotate(180deg)' : 'none', btnBg: open ? t.fill : 'transparent',
+        toggle: setMenu(key),
+        list: Object.keys(TK).map((k) => ({ sym: k, icon: TK[k].icon, bal: fq(TK[k].bal) + ' ' + k, on: k === cur ? 'true' : 'false', w: k === cur ? 700 : 500, check: k === cur ? 1 : 0,
+          pick: () => { const nx = { menu: '' }; if (k === other) { nx.sell = side === 'sell' ? k : cur; nx.buy = side === 'sell' ? cur : k; } else { nx[side] = k; } this.setState(nx); } }))
+      };
+    };
+    const stage = st.stage;
+    const onAmt = (e) => {
+      let x = String(e.target.value).replace(/,/g, '.').replace(/[^0-9.]/g, '');
+      const i = x.indexOf('.');
+      if (i >= 0) x = x.slice(0, i + 1) + x.slice(i + 1).replace(/\./g, '');
+      if (x !== st.v) this.setState({ v: x });
+    };
+    const SL = ['0.1%', '0.5%', '1%'];
+    return {
+      t: t, v: st.v, vShow: fq(num), onAmt: onAmt, onFocus: () => { if (menu) this.setState({ menu: '' }); },
+      sellTok: picker('sell'), buyTok: picker('buy'),
+      sellBal: 'Balance ' + fq(S.bal), buyBal: 'Balance ' + fq(B.bal),
+      sellColor: over ? t.negText : t.text,
+      recvColor: empty ? t.text3 : t.text,
+      sellUsd: '≈ $' + f2(num * S.usd),
+      receive: empty ? '0' : fq(out),
+      rateLine: '1 ' + st.sell + ' = ' + fq(rate) + ' ' + st.buy,
+      pcts: [['25%', 0.25], ['50%', 0.5], ['Max', 1]].map(([label, k]) => ({ label: label, pick: () => this.setState({ v: String(+(S.bal * k).toFixed(4)) }) })),
+      max: () => this.setState({ v: String(S.bal) }),
+      slip: st.slip, slipOpen: menu === 'slip', slipOpenA: menu === 'slip' ? 'true' : 'false', slipBg: menu === 'slip' ? t.fill : 'transparent', toggleSlip: setMenu('slip'),
+      slipX: 'calc(3px + (100% - 6px) / 3 * ' + SL.indexOf(st.slip) + ')',
+      slips: SL.map((s) => ({ label: s, on: st.slip === s ? 'true' : 'false', fg: st.slip === s ? t.text : t.text3, pick: () => this.setState({ slip: s, menu: '' }) })),
+      routeOpen: menu === 'route', routeOpenA: menu === 'route' ? 'true' : 'false', routeBg: menu === 'route' ? t.fill : 'transparent', routeChev: menu === 'route' ? 'rotate(180deg)' : 'none', toggleRoute: setMenu('route'),
+      flipRot: 'rotate(' + (st.flips * 180) + 'deg)',
+      flip: () => this.setState({ flips: st.flips + 1, sell: st.buy, buy: st.sell, v: empty ? st.v : String(+out.toFixed(4)), menu: '' }),
+      ctaBg: empty || over ? t.disabled : t.grad, ctaOff: empty || over ? 'true' : 'false', ctaCursor: empty || over ? 'not-allowed' : 'pointer',
+      cta: over ? 'Not enough ' + st.sell : (empty ? 'Enter an amount' : 'Review swap'),
+      openReview: () => { if (!empty && !over) this.setState({ review: true, stage: 0, menu: '' }); },
+      reviewOpen: st.review, closeReview: () => this.setState({ review: false, stage: 0 }),
+      rows: [
+        { k: 'Rate', v: '1 ' + st.sell + ' = ' + fq(rate) + ' ' + st.buy },
+        { k: 'Minimum received', v: fq(out * (1 - slipPct)) + ' ' + st.buy },
+        { k: 'Slippage', v: st.slip },
+        { k: 'Route', v: 'Jupiter' },
+        { k: 'Network fee', v: '~0.000005 SOL' }
+      ],
+      notDone: stage < 3, done: stage === 3, busy: stage === 1 || stage === 2,
+      confirmLabel: ['Confirm swap', 'Waiting for signature…', 'Swapping…'][Math.min(stage, 2)],
+      confirmHint: stage === 0 ? 'You will approve this in your wallet' : (stage === 1 ? 'Check your wallet app' : 'Confirming on Solana'),
+      confirmBg: stage === 0 ? t.grad : t.fill, confirmFg: stage === 0 ? '#FFFFFF' : t.text,
+      advance: () => this.setState({ stage: Math.min(stage + 1, 3) }),
+      finish: () => this.setState({ review: false, stage: 0, v: '' })
+    };
+  }
+}
+</script>
+</body>
+</html>

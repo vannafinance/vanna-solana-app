@@ -1,0 +1,178 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Farm · One-click leveraged yield</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500;600&amp;display=swap">
+<style>
+body{margin:0;font-family:'Plus Jakarta Sans',system-ui,sans-serif}
+.m{font-family:'JetBrains Mono',ui-monospace,monospace;font-variant-numeric:tabular-nums}
+a{color:inherit}
+*{scrollbar-width:none}*::-webkit-scrollbar{display:none}
+button,input{font-family:inherit}
+</style>
+</helmet>
+<div style="width: 390px; height: 1000px; position: relative; overflow: hidden; background: {{t.bg}}; color: {{t.text}}; font-family: 'Plus Jakarta Sans', system-ui, sans-serif">
+  
+
+  <nav aria-label="Primary" style="position: absolute; left: 16px; right: 16px; bottom: 20px; height: 64px; box-sizing: border-box; padding: 0 4px; border-radius: 999px; background: {{t.nav}}; border: 1px solid {{t.navLine}}; box-shadow: {{t.shadow}}; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); align-items: center">
+    <a href="Home.dc.html" style="height: 56px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; text-decoration: none; color: {{t.text3}}">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"></path></svg>
+      <span style="font-size: 10px; font-weight: 600; line-height: 12px">Portfolio</span>
+    </a>
+    <a href="Earn.dc.html" style="height: 56px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; text-decoration: none; color: {{t.text3}}">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="6" rx="8" ry="3"></ellipse><path d="M4 6v6c0 1.7 3.6 3 8 3s8-1.3 8-3V6"></path><path d="M4 12v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6"></path></svg>
+      <span style="font-size: 10px; font-weight: 600; line-height: 12px">Earn</span>
+    </a>
+    <a href="Swap.dc.html" aria-label="Swap" style="height: 56px; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; gap: 3px; text-decoration: none; color: {{t.text3}}">
+      <span style="width: 56px; height: 56px; margin-top: -30px; box-sizing: border-box; border-radius: 999px; background: {{t.bg}}; border: 1px solid {{t.fieldLine}}; box-shadow: 0 6px 18px rgba(17,17,17,0.18); display: flex; align-items: center; justify-content: center"><img src="/_blob/e9a4dc2e42d01dc076173579d6188f36" alt="" style="width: 30px; height: 30px"></span>
+      <span style="font-size: 10px; font-weight: 600; line-height: 12px">Swap</span>
+    </a>
+    <a href="Perps.dc.html" style="height: 56px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; text-decoration: none; color: {{t.text3}}">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17l6-6 4 4 8-8"></path><path d="M15 7h6v6"></path></svg>
+      <span style="font-size: 10px; font-weight: 600; line-height: 12px">Perps</span>
+    </a>
+    <a href="Farm.dc.html" aria-current="page" style="height: 56px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; text-decoration: none; color: {{t.accentText}}">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21v-9" fill="none"></path><path d="M12 12c0-4 3-7 8-7 0 5-3 7-8 7z"></path><path d="M12 14c0-3-2.5-5.5-7-5.5 0 4 2.5 5.5 7 5.5z"></path></svg>
+      <span style="font-size: 10px; font-weight: 700; line-height: 12px">Farm</span>
+    </a>
+  </nav>
+<div style="box-sizing: border-box; padding: 48px 16px 120px; display: flex; flex-direction: column">
+    <header style="height: 56px; margin: 0 -16px; padding: 0 12px 0 16px; display: flex; align-items: center; justify-content: space-between; flex-shrink: 0">
+      <img src="{{t.word}}" alt="Vanna" style="width: 90px; height: 28px">
+      <a href="Home.dc.html" aria-haspopup="menu" aria-label="Account 7xKp…4fQ2" style="width: 44px; height: 44px; margin-right: -6px; position: relative; display: flex; align-items: center; justify-content: center">
+        <svg width="32" height="32" viewBox="0 0 32 32" aria-hidden="true"><clipPath id="avh"><circle cx="16" cy="16" r="16"></circle></clipPath><g clip-path="url(#avh)"><rect width="32" height="32" fill="#E6E6E6"></rect><rect x="0" y="0" width="8" height="8" fill="#111111"></rect><rect x="24" y="0" width="8" height="8" fill="#111111"></rect><rect x="8" y="8" width="16" height="8" fill="#FC5457"></rect><rect x="0" y="16" width="8" height="8" fill="#8C8C8C"></rect><rect x="24" y="16" width="8" height="8" fill="#8C8C8C"></rect><rect x="8" y="24" width="16" height="8" fill="#111111"></rect></g></svg>
+        <span style="position: absolute; right: 5px; bottom: 5px; width: 10px; height: 10px; box-sizing: border-box; border-radius: 999px; border: 2px solid {{t.bg}}; background: {{t.pos}}"></span>
+      </a>
+    </header>
+    <div style="height: 56px; display: flex; align-items: center; justify-content: space-between">
+      <h1 style="margin: 0; font-size: 22px; font-weight: 700; letter-spacing: -0.02em">Farm</h1>
+      <div role="tablist" aria-label="Farm view" style="display: flex; gap: 18px">
+        <sc-for list="{{tabs}}" as="b" hint-placeholder-count="3">
+          <button type="button" role="tab" onClick="{{b.pick}}" aria-selected="{{b.on}}" style="height: 44px; padding: 0; border: none; border-bottom: 2px solid {{b.bar}}; background: transparent; color: {{b.fg}}; font-size: 14px; font-weight: {{b.w}}; cursor: pointer">{{b.label}}</button>
+        </sc-for>
+      </div>
+    </div>
+
+    <section aria-label="Strategy" style="padding: 16px 0 18px; display: flex; flex-direction: column; gap: 14px; border-top: 1px solid {{t.line}}">
+      <div style="display: flex; align-items: flex-end; justify-content: space-between; gap: 12px">
+        <div style="display: flex; flex-direction: column; gap: 2px">
+          <span style="font-size: 13px; color: {{t.text3}}">Est. net APY at {{lev}}×</span>
+          <span class="m" style="font-size: 44px; line-height: 50px; font-weight: 600; letter-spacing: -0.04em; color: {{t.posText}}">{{net}}</span>
+        </div>
+        <span class="m" style="padding-bottom: 8px; font-size: 13px; color: {{t.text2}}">{{yearly}} / yr</span>
+      </div>
+      <div aria-label="How the funds move" style="display: grid; grid-template-columns: minmax(0, 1fr) 20px minmax(0, 1fr) 20px minmax(0, 1fr); align-items: center; padding-top: 12px; border-top: 1px solid {{t.line}}">
+        <span style="display: flex; flex-direction: column; gap: 4px"><span style="font-size: 11px; color: {{t.text3}}">Collateral</span><span style="display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600"><img src="/_blob/1e343423a63e8d1e43c4f214a310e96d" alt="" style="width: 18px; height: 18px; border-radius: 999px">TSLAx</span></span>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: {{t.text3}}"><path d="M5 12h14"></path><path d="m13 6 6 6-6 6"></path></svg>
+        <span style="display: flex; flex-direction: column; gap: 4px; align-items: center"><span style="font-size: 11px; color: {{t.text3}}">Borrow on Vanna</span><span class="m" style="font-size: 13px; font-weight: 600">2.93%</span></span>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: {{t.text3}}"><path d="M5 12h14"></path><path d="m13 6 6 6-6 6"></path></svg>
+        <span style="display: flex; flex-direction: column; gap: 4px; align-items: flex-end"><span style="font-size: 11px; color: {{t.text3}}">Supply on Kamino</span><span class="m" style="font-size: 13px; font-weight: 600; color: {{t.posText}}">4.08%</span></span>
+      </div>
+    </section>
+
+    <button type="button" style="min-height: 64px; padding: 0; border: none; border-top: 1px solid {{t.line}}; background: transparent; display: flex; align-items: center; gap: 12px; color: {{t.text}}; text-align: left; cursor: pointer">
+      <img src="/_blob/09e073f5e222ada0320681e7093ff7b4" alt="" style="width: 32px; height: 32px">
+      <span style="flex-grow: 1; display: flex; flex-direction: column; gap: 2px"><span style="font-size: 12px; color: {{t.text3}}">Yield pool</span><span style="font-size: 15px; font-weight: 600">USDC · Kamino Main Market</span></span>
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="color: {{t.text3}}"><path d="m6 9 6 6 6-6"></path></svg>
+    </button>
+
+    <section aria-label="Collateral" style="padding: 14px 0; display: flex; flex-direction: column; gap: 6px; border-top: 1px solid {{t.line}}">
+      <div style="display: flex; justify-content: space-between; font-size: 13px; color: {{t.text3}}"><span>You deposit</span><span class="m">Balance 14.80</span></div>
+      <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px">
+        <button type="button" style="height: 48px; padding: 0; border: none; background: transparent; color: {{t.text}}; display: flex; align-items: center; gap: 8px; font-size: 18px; font-weight: 700; cursor: pointer">
+          <img src="/_blob/1e343423a63e8d1e43c4f214a310e96d" alt="" style="width: 32px; height: 32px; border-radius: 999px">TSLAx
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="color: {{t.text3}}"><path d="m6 9 6 6 6-6"></path></svg>
+        </button>
+        <span class="m" style="font-size: 36px; line-height: 44px; font-weight: 600; letter-spacing: -0.03em">10.00</span>
+      </div>
+      <div style="display: flex; align-items: center; justify-content: space-between">
+        <div style="display: flex; gap: 6px">
+          <sc-for list="{{pcts}}" as="p" hint-placeholder-count="4">
+            <button type="button" class="m" style="height: 32px; padding: 0 10px; border-radius: 10px; border: 1px solid {{t.fieldLine}}; background: transparent; color: {{t.text}}; font-size: 12px; font-weight: 600; cursor: pointer">{{p}}</button>
+          </sc-for>
+        </div>
+        <span class="m" style="font-size: 13px; color: {{t.text3}}">≈ $3,684.40</span>
+      </div>
+    </section>
+
+    <section aria-label="Leverage" style="padding: 12px 0 4px; border-top: 1px solid {{t.line}}">
+      <div style="display: flex; justify-content: space-between; align-items: baseline">
+        <span style="font-size: 13px; color: {{t.text3}}">Leverage</span>
+        <span class="m" style="font-size: 20px; font-weight: 700">{{lev}}×</span>
+      </div>
+      <div style="position: relative; height: 28px; margin: 4px 12px 0">
+        <div style="position: absolute; left: 0; right: 0; top: 12px; height: 4px; border-radius: 2px; background: {{t.track}}"></div>
+        <div style="position: absolute; left: 0; top: 12px; height: 4px; border-radius: 2px; width: {{fillW}}; background: {{t.text}}"></div>
+        <sc-for list="{{ticks}}" as="k" hint-placeholder-count="5">
+          <span style="position: absolute; top: 11px; left: {{k.x}}; width: 6px; height: 6px; margin-left: -3px; border-radius: 999px; background: {{k.c}}"></span>
+        </sc-for>
+        <span style="position: absolute; top: 2px; left: {{fillW}}; width: 24px; height: 24px; margin-left: -12px; box-sizing: border-box; border-radius: 999px; border: 4px solid {{t.text}}; background: {{t.bg}}; transition: left 160ms ease"></span>
+      </div>
+      <div style="display: grid; grid-template-columns: repeat(5, minmax(0, 1fr))">
+        <sc-for list="{{levs}}" as="l" hint-placeholder-count="5">
+          <button type="button" onClick="{{l.pick}}" aria-pressed="{{l.on}}" aria-label="{{l.label}} leverage" class="m" style="height: 36px; padding: 0; border: none; background: transparent; color: {{l.fg}}; font-size: 12px; font-weight: {{l.w}}; text-align: {{l.align}}; cursor: pointer">{{l.label}}</button>
+        </sc-for>
+      </div>
+    </section>
+
+    <dl style="margin: 0; display: flex; flex-direction: column; border-top: 1px solid {{t.line}}; border-bottom: 1px solid {{t.line}}">
+      <div style="height: 36px; display: flex; align-items: center; justify-content: space-between"><dt style="font-size: 12px; color: {{t.text3}}">Borrowed from Vanna</dt><dd class="m" style="margin: 0; font-size: 12px; font-weight: 600">{{borrow}}</dd></div>
+      <div style="height: 36px; display: flex; align-items: center; justify-content: space-between"><dt style="font-size: 12px; color: {{t.text3}}">Deployed to Kamino</dt><dd class="m" style="margin: 0; font-size: 12px; font-weight: 600">{{deployed}}</dd></div>
+      <div style="height: 36px; display: flex; align-items: center; justify-content: space-between"><dt style="font-size: 12px; color: {{t.text3}}">Health factor</dt><dd class="m" style="margin: 0; font-size: 12px; font-weight: 600">{{hf}} <span style="font-weight: 400; color: {{t.text3}}">· liquidates at 1.10</span></dd></div>
+    </dl>
+
+    <a href="Review.dc.html" style="margin-top: 16px; height: 56px; border-radius: 12px; background: {{t.grad}}; color: {{t.onAccent}}; font-size: 16px; font-weight: 700; text-decoration: none; display: flex; align-items: center; justify-content: center">{{cta}}</a>
+    <span style="padding-top: 10px; text-align: center; font-size: 12px; color: {{t.text3}}">One signature · borrow and supply happen in one transaction</span>
+  </div></div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["light","dark"],"default":"light"},"$preview":{"width":390,"height":1000}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { lev: 3, tab: 'Deploy' };
+  }
+  tokens() {
+    const light = { theme: 'light', word: '/_blob/a759693c94ec9c77db2dda762f77b416', bg: '#FFFFFF', fill: '#F7F7F7', fieldLine: '#E2E2E2', track: '#E2E2E2', raised: '#E2E2E2', lineStrong: '#E2E2E2', line: 'rgba(17,17,17,0.08)', text: '#111111', text2: '#4B5563', text3: '#6B7280', accent: '#111111', accentText: '#111111', accentSoft: '#F2F2F2', onInk: '#FFFFFF', grad: 'linear-gradient(135deg, #FC5457 10%, #703AE6 80%)', onAccent: '#FFFFFF', pos: '#32EEE2', posText: '#1C7C83', neg: '#E54C4F', negText: '#B33C3E', nav: 'rgba(255,255,255,0.97)', navLine: '#E2E2E2', scrim: 'rgba(17,17,17,0.4)', sheet: '#FFFFFF', shadow: '0px 7px 15px rgba(0,0,0,0.08), 0px 28px 28px rgba(0,0,0,0.07)' };
+    const dark = { theme: 'dark', word: '/_blob/9522abd43bbe6600df610e270423ff6c', bg: '#111111', fill: '#1E1E1E', fieldLine: '#2C2C2C', track: '#2C2C2C', raised: '#2C2C2C', lineStrong: 'rgba(255,255,255,0.18)', line: 'rgba(255,255,255,0.08)', text: '#FFFFFF', text2: '#BFBFBF', text3: '#949494', accent: '#FFFFFF', accentText: '#FFFFFF', accentSoft: '#262626', onInk: '#111111', grad: 'linear-gradient(135deg, #FC5457 10%, #703AE6 80%)', onAccent: '#FFFFFF', pos: '#32EEE2', posText: '#32EEE2', neg: '#E54C4F', negText: '#FD8C8E', nav: 'rgba(30,30,30,0.97)', navLine: '#2C2C2C', scrim: 'rgba(0,0,0,0.6)', sheet: '#1E1E1E', shadow: '0 12px 32px rgba(0,0,0,0.5)' };
+    return (this.props.theme ?? 'light') === 'dark' ? dark : light;
+  }
+  renderVals() {
+    const t = this.tokens();
+    const C = 3684.40;
+    const L = this.state.lev;
+    const f2 = (n) => n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const debt = C * (L - 1);
+    const frac = (L - 1) / 4;
+    const levs = [1, 2, 3, 4, 5].map((n, i) => ({
+      label: n + '×', on: n === L ? 'true' : 'false',
+      fg: n === L ? t.text : t.text3, w: n === L ? 700 : 500,
+      align: i === 0 ? 'left' : (i === 4 ? 'right' : 'center'),
+      pick: () => this.setState({ lev: n })
+    }));
+    const ticks = [0, 1, 2, 3, 4].map((i) => ({ x: (i * 25) + '%', c: i / 4 <= frac ? t.text : t.track }));
+    const tabs = ['Deploy', 'Position', 'History'].map((label) => {
+      const on = this.state.tab === label;
+      return { label: label, on: on ? 'true' : 'false', bar: on ? t.text : 'transparent', fg: on ? t.text : t.text3, w: on ? 700 : 500, pick: () => this.setState({ tab: label }) };
+    });
+    return {
+      t: t, lev: L, levs: levs, ticks: ticks, tabs: tabs,
+      pcts: ['25%', '50%', '75%', 'Max'],
+      fillW: (frac * 100) + '%',
+      borrow: L > 1 ? '$' + f2(debt) : '—',
+      deployed: L > 1 ? '$' + f2(debt) + ' USDC' : '—',
+      hf: L > 1 ? f2(L / (L - 1)) : '—',
+      net: '+' + ((L - 1) * 1.15).toFixed(2) + '%',
+      yearly: '+$' + f2(debt * 0.0115),
+      cta: L > 1 ? 'Deposit and farm at ' + L + '×' : 'Choose leverage'
+    };
+  }
+}
+</script>
+</body>
+</html>

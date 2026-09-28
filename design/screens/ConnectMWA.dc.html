@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Connect wallet (Mobile Wallet Adapter)</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&amp;family=JetBrains+Mono:wght@400;500;600&amp;display=swap">
+<style>
+body{margin:0;font-family:'Plus Jakarta Sans',system-ui,sans-serif}
+.m{font-family:'JetBrains Mono',ui-monospace,monospace;font-variant-numeric:tabular-nums}
+a{color:inherit}
+*{scrollbar-width:none}*::-webkit-scrollbar{display:none}
+button,input{font-family:inherit}
+.vbg{background-image:url(/_blob/8cc2c02ae59988595202324e0da61969);background-size:cover;background-position:left top;-webkit-mask-image:linear-gradient(180deg,#000 58%,transparent 100%),linear-gradient(90deg,transparent 0,#000 28%);-webkit-mask-composite:source-in;mask-image:linear-gradient(180deg,#000 58%,transparent 100%),linear-gradient(90deg,transparent 0,#000 28%);mask-composite:intersect}
+@keyframes vspin{to{transform:rotate(360deg)}}
+.spin{animation:vspin 900ms linear infinite}
+@keyframes vup{from{transform:translateY(24px);opacity:0}to{transform:none;opacity:1}}
+.up{animation:vup 220ms ease-out both}
+@media (prefers-reduced-motion: reduce){.spin,.up{animation:none}}
+</style>
+</helmet>
+<div style="width: 390px; height: 844px; position: relative; overflow: hidden; background: #0C0C0D; color: {{t.text}}; font-family: 'Plus Jakarta Sans', system-ui, sans-serif">
+  <div class="vbg" style="position: absolute; right: 0; top: 0; width: 250px; height: 470px"></div>
+  <img src="/_blob/9522abd43bbe6600df610e270423ff6c" alt="Vanna" style="position: absolute; left: 24px; top: 58px; width: 106px; height: 33px">
+
+  <section aria-label="Connect a wallet" style="position: absolute; left: 0; right: 0; bottom: 0; box-sizing: border-box; padding: 8px 20px 28px; border-radius: 24px 24px 0 0; background: {{t.sheet}}; display: flex; flex-direction: column">
+    <div style="width: 36px; height: 4px; border-radius: 999px; background: {{t.track}}; align-self: center"></div>
+    <div style="height: 52px; margin: 4px -12px 0 0; display: flex; align-items: center; justify-content: space-between">
+      <h2 style="margin: 0; font-size: 20px; font-weight: 800; letter-spacing: -0.02em">{{title}}</h2>
+      <a href="Main.dc.html" aria-label="Close" style="width: 48px; height: 48px; display: flex; align-items: center; justify-content: center; color: {{t.text}}"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></a>
+    </div>
+
+    <sc-if value="{{isPick}}" hint-placeholder-val="{{ true }}">
+      <div style="display: flex; flex-direction: column">
+        <p style="margin: 0; font-size: 14px; line-height: 21px; color: {{t.text2}}">Vanna uses the wallet already on your phone. Nothing is stored here — you approve every transaction in your wallet.</p>
+
+        <button type="button" onClick="{{toChooser}}" style="margin-top: 20px; height: 60px; border: none; border-radius: 14px; background: {{t.grad}}; color: #FFFFFF; display: flex; align-items: center; justify-content: center; gap: 10px; font-size: 16px; font-weight: 700; cursor: pointer">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="2.5" width="12" height="19" rx="3"></rect><path d="M11 18.5h2"></path></svg>Use installed wallet
+        </button>
+        <span style="margin-top: 8px; text-align: center; font-size: 12px; color: {{t.text3}}">Mobile Wallet Adapter · works with any Solana wallet app</span>
+
+        <span style="margin-top: 24px; font-size: 12px; font-weight: 600; letter-spacing: 0.12em; color: {{t.text3}}">OR OPEN DIRECTLY</span>
+        <button type="button" onClick="{{pickBackpack}}" style="margin-top: 6px; height: 60px; padding: 0; border: none; background: transparent; color: {{t.text}}; display: flex; align-items: center; gap: 12px; text-align: left; cursor: pointer">
+          <img src="/_blob/02c61c845398e2f930049e782b776b8c" alt="" style="width: 40px; height: 40px; border-radius: 11px">
+          <span style="flex-grow: 1; display: flex; flex-direction: column; gap: 2px"><span style="font-size: 15px; font-weight: 700">Backpack</span><span style="font-size: 12px; color: {{t.text3}}">Recommended for Vanna</span></span>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: {{t.text3}}"><path d="m9 6 6 6-6 6"></path></svg>
+        </button>
+
+        <button type="button" onClick="{{toggleRpc}}" aria-expanded="{{rpcOpen}}" style="margin-top: 8px; height: 48px; padding: 0; border: none; background: transparent; color: {{t.text2}}; display: flex; align-items: center; justify-content: space-between; font-size: 13px; cursor: pointer">
+          <span style="display: flex; align-items: center; gap: 8px"><span style="width: 6px; height: 6px; border-radius: 999px; background: {{t.pos}}"></span>Vanna runs on a Solana mainnet fork</span>
+          <span style="display: flex; align-items: center; gap: 4px; font-weight: 700; color: {{t.text}}">RPC setup<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="transform: {{chev}}"><path d="m6 9 6 6 6-6"></path></svg></span>
+        </button>
+        <sc-if value="{{showRpc}}" hint-placeholder-val="{{ false }}">
+          <div style="padding-bottom: 8px; display: flex; flex-direction: column; gap: 10px">
+            <span style="font-size: 13px; line-height: 19px; color: {{t.text3}}">So your wallet shows the right balances, add a custom RPC in its network settings.</span>
+            <button type="button" style="height: 48px; box-sizing: border-box; padding: 0 6px 0 14px; border-radius: 12px; border: 1px solid {{t.fieldLine}}; background: transparent; color: {{t.text}}; display: flex; align-items: center; justify-content: space-between; gap: 8px; cursor: pointer">
+              <span class="m" style="font-size: 12px">rpc-devnet.solana.vanna.finance</span>
+              <span style="height: 36px; padding: 0 12px; border-radius: 10px; background: {{t.text}}; color: {{t.sheet}}; font-size: 12px; font-weight: 700; display: flex; align-items: center">Copy</span>
+            </button>
+          </div>
+        </sc-if>
+
+        <a href="https://solanamobile.com" style="margin-top: 4px; height: 44px; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 600; color: {{t.text3}}; text-decoration: none">Don't have a wallet? Get one</a>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{isApprove}}" hint-placeholder-val="{{ false }}">
+      <div style="padding: 20px 0 8px; display: flex; flex-direction: column; align-items: center; gap: 16px; text-align: center">
+        <div style="position: relative; width: 84px; height: 84px; display: flex; align-items: center; justify-content: center">
+          <svg class="spin" width="84" height="84" viewBox="0 0 84 84" style="position: absolute; inset: 0" aria-hidden="true"><circle cx="42" cy="42" r="39" fill="none" stroke="{{t.track}}" stroke-width="3"></circle><path d="M42 3a39 39 0 0 1 39 39" fill="none" stroke="{{t.text}}" stroke-width="3" stroke-linecap="round"></path></svg>
+          <span style="width: 56px; height: 56px; border-radius: 16px; background: {{walletBg}}; color: #FFFFFF; display: flex; align-items: center; justify-content: center; font-size: 20px; font-weight: 800; overflow: hidden">{{walletMono}}<img src="{{walletImg}}" alt="" style="width: {{imgW}}; height: 56px"></span>
+        </div>
+        <span style="font-size: 17px; font-weight: 700">Approve in {{wallet}}</span>
+        <span style="max-width: 280px; font-size: 14px; line-height: 21px; color: {{t.text2}}">Confirm the connection, then sign the one-time message to sign in. It costs nothing.</span>
+        <button type="button" onClick="{{toDone}}" style="margin-top: 8px; width: 100%; height: 56px; border: none; border-radius: 14px; background: {{t.text}}; color: {{t.sheet}}; font-size: 16px; font-weight: 700; cursor: pointer">Simulate approval</button>
+        <button type="button" onClick="{{back}}" style="height: 44px; padding: 0; border: none; background: transparent; color: {{t.text3}}; font-size: 14px; font-weight: 600; cursor: pointer">Cancel</button>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{isDone}}" hint-placeholder-val="{{ false }}">
+      <div style="padding: 20px 0 8px; display: flex; flex-direction: column; align-items: center; gap: 12px; text-align: center">
+        <span style="width: 64px; height: 64px; border-radius: 999px; background: {{t.pos}}; color: #111111; display: flex; align-items: center; justify-content: center"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 5 5 9-10"></path></svg></span>
+        <span style="font-size: 18px; font-weight: 800">Connected</span>
+        <span class="m" style="font-size: 13px; color: {{t.text2}}">{{wallet}} · 7xKp8Vd2…mQh94fQ2</span>
+        <a href="HomeB.dc.html" style="margin-top: 16px; width: 100%; height: 56px; border-radius: 14px; background: {{t.grad}}; color: #FFFFFF; font-size: 16px; font-weight: 700; text-decoration: none; display: flex; align-items: center; justify-content: center">Go to portfolio</a>
+      </div>
+    </sc-if>
+  </section>
+
+  <sc-if value="{{isChooser}}" hint-placeholder-val="{{ false }}">
+    <button type="button" onClick="{{back}}" aria-label="Close wallet chooser" style="position: absolute; inset: 0; padding: 0; border: none; background: rgba(0,0,0,0.5); cursor: pointer"></button>
+    <section role="dialog" aria-label="Choose a wallet" class="up" style="position: absolute; left: 8px; right: 8px; bottom: 8px; box-sizing: border-box; padding: 20px 16px 16px; border-radius: 28px; background: {{t.system}}; color: {{t.text}}; display: flex; flex-direction: column">
+      <span style="font-size: 12px; color: {{t.text3}}">Android system chooser</span>
+      <span style="margin-top: 4px; font-size: 18px; font-weight: 700">Open with a wallet</span>
+      <div style="margin-top: 18px; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px">
+        <sc-for list="{{wallets}}" as="w" hint-placeholder-count="4">
+          <button type="button" onClick="{{w.pick}}" style="padding: 8px 0; border: none; background: transparent; color: {{t.text}}; display: flex; flex-direction: column; align-items: center; gap: 8px; cursor: pointer">
+            <span style="width: 52px; height: 52px; border-radius: 15px; background: {{w.bg}}; color: #FFFFFF; display: flex; align-items: center; justify-content: center; font-size: 18px; font-weight: 800; overflow: hidden">{{w.mono}}<img src="{{w.img}}" alt="" style="width: {{w.imgW}}; height: 52px"></span>
+            <span style="font-size: 12px; font-weight: 600">{{w.name}}</span>
+          </button>
+        </sc-for>
+      </div>
+      <div style="margin-top: 12px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px">
+        <button type="button" onClick="{{back}}" style="height: 44px; border: none; border-radius: 999px; background: transparent; color: {{t.text}}; font-size: 14px; font-weight: 600; cursor: pointer">Just once</button>
+        <button type="button" onClick="{{back}}" style="height: 44px; border: none; border-radius: 999px; background: transparent; color: {{t.text}}; font-size: 14px; font-weight: 600; cursor: pointer">Always</button>
+      </div>
+    </section>
+  </sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["light","dark"],"default":"dark"},"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { step: 'pick', wallet: 'Backpack', rpc: false };
+  }
+  tokens() {
+    const light = { sheet: '#FFFFFF', system: '#F3F1F6', track: '#E2E2E2', fieldLine: '#E2E2E2', text: '#111111', text2: '#4B5563', text3: '#6B7280', grad: 'linear-gradient(135deg, #FC5457 10%, #703AE6 80%)', pos: '#32EEE2' };
+    const dark = { sheet: '#1E1E1E', system: '#2B2930', track: '#2C2C2C', fieldLine: '#2C2C2C', text: '#FFFFFF', text2: '#BFBFBF', text3: '#949494', grad: 'linear-gradient(135deg, #FC5457 10%, #703AE6 80%)', pos: '#32EEE2' };
+    return (this.props.theme ?? 'dark') === 'dark' ? dark : light;
+  }
+  renderVals() {
+    const t = this.tokens();
+    const st = this.state;
+    const W = {
+      Backpack: { bg: '#E33E3F', mono: '', img: '/_blob/02c61c845398e2f930049e782b776b8c', imgW: '100%' },
+      Phantom: { bg: '#3B3B3B', mono: 'P', img: '/_blob/02c61c845398e2f930049e782b776b8c', imgW: '0' },
+      Solflare: { bg: '#3B3B3B', mono: 'S', img: '/_blob/02c61c845398e2f930049e782b776b8c', imgW: '0' },
+      'Seed Vault': { bg: '#3B3B3B', mono: 'SV', img: '/_blob/02c61c845398e2f930049e782b776b8c', imgW: '0' }
+    };
+    const cur = W[st.wallet];
+    const go = (step) => () => this.setState({ step: step });
+    return {
+      t: t,
+      title: st.step === 'done' ? "You're in" : (st.step === 'approve' ? 'Waiting for wallet' : 'Connect a wallet'),
+      isPick: st.step === 'pick' || st.step === 'chooser', isChooser: st.step === 'chooser', isApprove: st.step === 'approve', isDone: st.step === 'done',
+      toChooser: go('chooser'), back: go('pick'), toDone: go('done'),
+      pickBackpack: () => this.setState({ step: 'approve', wallet: 'Backpack' }),
+      wallet: st.wallet, walletBg: cur.bg, walletMono: cur.mono, walletImg: cur.img, imgW: cur.imgW,
+      wallets: Object.keys(W).map((name) => Object.assign({ name: name, pick: () => this.setState({ step: 'approve', wallet: name }) }, W[name])),
+      showRpc: st.rpc, rpcOpen: st.rpc ? 'true' : 'false', chev: st.rpc ? 'rotate(180deg)' : 'none',
+      toggleRpc: () => this.setState({ rpc: !st.rpc })
+    };
+  }
+}
+</script>
+</body>
+</html>
