@@ -1,0 +1,50 @@
+# dependencies
+node_modules/
+
+# Expo
+.expo/
+dist/
+expo-env.d.ts
+
+# native projects are generated (Continuous Native Generation)
+/android
+/ios
+.kotlin/
+.gradle/
+*.log
+
+# build outputs and signing material
+*.apk
+*.aab
+*.keystore
+*.jks
+*.p8
+*.p12
+*.key
+*.pem
+*.mobileprovision
+
+# Metro
+.metro-health-check*
+
+# typescript
+*.tsbuildinfo
+
+# local environment (real values never enter git; ship .env.example instead)
+.env*
+!.env.example
+*.env
+
+# OS and editor
+.DS_Store
+Thumbs.db
+
+# AI agent instructions and private references (local only)
+.claude/
+CLAUDE.md
+AGENTS.md
+vanna-skill.md
+external-integrations.md
+
+# design tooling output
+design/generator/node_modules/
