@@ -9,6 +9,7 @@ import { useTheme } from "@/theme/use-theme";
 
 import { AppText } from "./app-text";
 import { IconButton } from "./icon-button";
+import { TokenIcon } from "./token-icon";
 
 type ProductHeaderProps = {
   product: Product;
@@ -18,7 +19,7 @@ type ProductHeaderProps = {
   onBack?: () => void;
   notificationCount?: number;
   onNotifications: () => void;
-  avatar: ReactNode;
+  avatar?: ReactNode;
   onAvatar: () => void;
   children?: ReactNode;
 };
@@ -31,7 +32,7 @@ export function ProductHeader({
   onBack,
   notificationCount = 0,
   onNotifications,
-  avatar,
+  avatar = <TokenIcon symbol="SOL" size={40} />,
   onAvatar,
   children,
 }: ProductHeaderProps) {

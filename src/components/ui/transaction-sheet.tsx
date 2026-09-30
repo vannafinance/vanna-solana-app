@@ -1,17 +1,12 @@
-import { Check, Wallet, WifiSlash, X } from "phosphor-react-native";
+import { Check, Warning, Wallet, WifiSlash, X } from "phosphor-react-native";
 import { ActivityIndicator, View } from "react-native";
 
 import { useTheme } from "@/theme/use-theme";
+import type { TransactionState } from "@/types/transaction";
 
 import { AppText } from "./app-text";
 import { BottomSheet } from "./bottom-sheet";
 import { Button } from "./button";
-
-export type TransactionState =
-  | { phase: "signing"; step: number; steps: number; wallet: string }
-  | { phase: "confirming"; title: string; message: string }
-  | { phase: "success"; title: string; message: string; explorerLabel?: string }
-  | { phase: "failure"; kind: "network" | "rejected"; title: string; message: string };
 
 type TransactionSheetProps = {
   state: TransactionState | null;
@@ -37,7 +32,14 @@ export function TransactionSheet({ state, onPrimary, onClose, primaryLabel, onEx
       case "failure":
         return {
           bg: colors.negative,
-          node: state.kind === "network" ? <WifiSlash size={44} color="#FFFFFF" weight="bold" /> : <X size={44} color="#FFFFFF" weight="bold" />,
+          node:
+            state.kind === "network" ? (
+              <WifiSlash size={44} color="#FFFFFF" weight="bold" />
+            ) : state.kind === "rejected" ? (
+              <X size={44} color="#FFFFFF" weight="bold" />
+            ) : (
+              <Warning size={44} color="#FFFFFF" weight="bold" />
+            ),
         };
     }
   })();

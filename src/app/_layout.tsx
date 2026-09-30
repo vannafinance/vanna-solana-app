@@ -1,6 +1,7 @@
 import { PlusJakartaSans_400Regular, PlusJakartaSans_600SemiBold, useFonts } from "@expo-google-fonts/plus-jakarta-sans";
 import { Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
+import { StatusBar } from "expo-status-bar";
 import { useEffect } from "react";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
@@ -18,7 +19,8 @@ export default function RootLayout() {
 
   return (
     <SafeAreaProvider>
-      <Stack screenOptions={{ headerShown: false }} />
+      <StatusBar style="auto" />
+      <Stack screenOptions={{ headerShown: false, animation: "slide_from_right" }} />
     </SafeAreaProvider>
   );
 }
