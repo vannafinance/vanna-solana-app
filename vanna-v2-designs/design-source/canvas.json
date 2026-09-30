@@ -1,0 +1,1362 @@
+{
+ "v": 3,
+ "attachments": {},
+ "createdOnFiles": {
+  "at": "2026-09-29T16:45:00Z",
+  "v": 1
+ },
+ "designSystems": [],
+ "title": "Vanna Android App",
+ "boards": {
+  "V7Flow1Start.dc.html": {
+   "x": 0,
+   "y": 0,
+   "w": 2348,
+   "h": 1035,
+   "title": "Flow 1",
+   "is_interactive": true,
+   "page": "v7"
+  },
+  "V7Flow2Home.dc.html": {
+   "x": 0,
+   "y": 1495,
+   "w": 3284,
+   "h": 1035,
+   "title": "Flow 2",
+   "is_interactive": true,
+   "page": "v7"
+  },
+  "V7Flow3Perps.dc.html": {
+   "x": 0,
+   "y": 2990,
+   "w": 6560,
+   "h": 1035,
+   "title": "Flow 3",
+   "is_interactive": true,
+   "page": "v7"
+  },
+  "V7Flow4Margin.dc.html": {
+   "x": 0,
+   "y": 4485,
+   "w": 1880,
+   "h": 1035,
+   "title": "Flow 4",
+   "is_interactive": true,
+   "page": "v7"
+  },
+  "V7Flow5Swap.dc.html": {
+   "x": 0,
+   "y": 5980,
+   "w": 3752,
+   "h": 1035,
+   "title": "Flow 5",
+   "is_interactive": true,
+   "page": "v7"
+  },
+  "V7Flow6Earn.dc.html": {
+   "x": 0,
+   "y": 7475,
+   "w": 7028,
+   "h": 1035,
+   "title": "Flow 6",
+   "is_interactive": true,
+   "page": "v7"
+  },
+  "V7Flow7Farm.dc.html": {
+   "x": 0,
+   "y": 8970,
+   "w": 7028,
+   "h": 1035,
+   "title": "Flow 7",
+   "is_interactive": true,
+   "page": "v7"
+  },
+  "V7Flow8SadPaths.dc.html": {
+   "x": 0,
+   "y": 10465,
+   "w": 6092,
+   "h": 2062,
+   "title": "Flow 8",
+   "is_interactive": true,
+   "page": "v7"
+  },
+  "V7Flow9Dark.dc.html": {
+   "x": 0,
+   "y": 12987,
+   "w": 6560,
+   "h": 1035,
+   "title": "Flow 9",
+   "is_interactive": true,
+   "page": "v7"
+  },
+  "V7Welcome.dc.html": {
+   "x": 0,
+   "y": 0,
+   "w": 412,
+   "h": 915,
+   "title": "Welcome · opening motion",
+   "is_interactive": true,
+   "page": "v7s"
+  },
+  "V7Connect.dc.html": {
+   "x": 492,
+   "y": 0,
+   "w": 412,
+   "h": 915,
+   "title": "Connect · pick Backpack",
+   "is_interactive": true,
+   "page": "v7s"
+  },
+  "V7ConnectApprove.dc.html": {
+   "x": 984,
+   "y": 0,
+   "w": 412,
+   "h": 915,
+   "title": "Connect · approve in Backpack",
+   "is_interactive": true,
+   "page": "v7s"
+  },
+  "V7ConnectRpc.dc.html": {
+   "x": 1476,
+   "y": 0,
+   "w": 412,
+   "h": 915,
+   "title": "Connect · add Vanna RPC",
+   "is_interactive": true,
+   "page": "v7s"
+  },
+  "V7ConnectDone.dc.html": {
+   "x": 1968,
+   "y": 0,
+   "w": 412,
+   "h": 915,
+   "title": "Connect · connected",
+   "is_interactive": true,
+   "page": "v7s"
+  },
+  "V7Home.dc.html": {
+   "x": 0,
+   "y": 1335,
+   "w": 412,
+   "h": 915,
+   "title": "Home · Overview",
+   "is_interactive": true,
+   "page": "v7s"
+  },
+  "V7HomeNotif.dc.html": {
+   "x": 492,
+   "y": 1335,
+   "w": 412,
+   "h": 915,
+   "title": "Home · notifications",
+   "is_interactive": true,
+   "page": "v7s"
+  },
+  "V7Notifications.dc.html": {
+   "x": 984,
+   "y": 1335,
+   "w": 412,
+   "h": 915,
+   "title": "Notifications",
+   "is_interactive": true,
+   "page": "v7s"
+  },
+  "V7Lender.dc.html": {
+   "x": 1476,
+   "y": 1335,
+   "w": 412,
+   "h": 915,
+   "title": "Home · Lender",
+   "is_interactive": true,
+   "page": "v7s"
+  },
+  "V7Trader.dc.html": {
+   "x": 1968,
+   "y": 1335,
+   "w": 412,
+   "h": 915,
+   "title": "Home · Trader",
+   "is_interactive": true,
+   "page": "v7s"
+  },
+  "V7TraderHistory.dc.html": {
+   "x": 2460,
+   "y": 1335,
+   "w": 412,
+   "h": 915,
+   "title": "Trader · history",
+   "is_interactive": true,
+   "page": "v7s"
+  },
+  "V7Profile.dc.html": {
+   "x": 2952,
+   "y": 1335,
+   "w": 412,
+   "h": 915,
+   "title": "Profile",
+   "is_interactive": true,
+   "page": "v7s"
+  },
+  "V7Perps.dc.html": {
+   "x": 0,
+   "y": 2670,
+   "w": 412,
+   "h": 915,
+   "title": "Perps · Markets",
+   "is_interactive": true,
+   "page": "v7s"
+  },
+  "V7PerpsMarket.dc.html": {
+   "x": 492,
+   "y": 2670,
+   "w": 412,
+   "h": 915,
+   "title": "Perps · asset",
+   "is_interactive": true,
+   "page": "v7s"
+  },
+  "V7PerpsOrder.dc.html": {
+   "x": 984,
+   "y": 2670,
+   "w": 412,
+   "h": 915,
+   "title": "Order",
+   "is_interactive": true,
+   "page": "v7s"
+  },
+  "V7PerpsOrderSign.dc.html": {
+   "x": 1476,
+   "y": 2670,
+   "w": 412,
+   "h": 915,
+   "title": "Order · approve",
+   "is_interactive": true,
+   "page": "v7s"
+  },
+  "V7PerpsOrderConfirm.dc.html": {
+   "x": 1968,
+   "y": 2670,
+   "w": 412,
+   "h": 915,
+   "title": "Order · confirming",
+   "is_interactive": true,
+   "page": "v7s"
+  },
+  "V7PerpsOrderDone.dc.html": {
+   "x": 2460,
+   "y": 2670,
+   "w": 412,
+   "h": 915,
+   "title": "Order · confirmed",
+   "is_interactive": true,
+   "page": "v7s"
+  },
+  "V7PerpsPositions.dc.html": {
+   "x": 2952,
+   "y": 2670,
+   "w": 412,
+   "h": 915,
+   "title": "Perps · Positions",
+   "is_interactive": true,
+   "page": "v7s"
+  },
+  "V7PerpsClose.dc.html": {
+   "x": 3444,
+   "y": 2670,
+   "w": 412,
+   "h": 915,
+   "title": "Close · all",
+   "is_interactive": true,
+   "page": "v7s"
+  },
+  "V7PerpsClose50.dc.html": {
+   "x": 3936,
+   "y": 2670,
+   "w": 412,
+   "h": 915,
+   "title": "Close · 50%",
+   "is_interactive": true,
+   "page": "v7s"
+  },
+  "V7PerpsCloseDone.dc.html": {
+   "x": 4428,
+   "y": 2670,
+   "w": 412,
+   "h": 915,
+   "title": "Close · done",
+   "is_interactive": true,
+   "page": "v7s"
+  },
+  "V7PerpsAdd.dc.html": {
+   "x": 4920,
+   "y": 2670,
+   "w": 412,
+   "h": 915,
+   "title": "Add collateral",
+   "is_interactive": true,
+   "page": "v7s"
+  },
+  "V7PerpsAddSign.dc.html": {
+   "x": 5412,
+   "y": 2670,
+   "w": 412,
+   "h": 915,
+   "title": "Add collateral · approve",
+   "is_interactive": true,
+   "page": "v7s"
+  },
+  "V7PerpsAddDone.dc.html": {
+   "x": 5904,
+   "y": 2670,
+   "w": 412,
+   "h": 915,
+   "title": "Add collateral · done",
+   "is_interactive": true,
+   "page": "v7s"
+  },
+  "V7PerpsHistory.dc.html": {
+   "x": 0,
+   "y": 3790,
+   "w": 412,
+   "h": 915,
+   "title": "Perps · History",
+   "is_interactive": true,
+   "page": "v7s"
+  },
+  "V7MarginCreate.dc.html": {
+   "x": 0,
+   "y": 5125,
+   "w": 412,
+   "h": 915,
+   "title": "Create margin account",
+   "is_interactive": true,
+   "page": "v7s"
+  },
+  "V7MarginAgree.dc.html": {
+   "x": 492,
+   "y": 5125,
+   "w": 412,
+   "h": 915,
+   "title": "Borrow agreement",
+   "is_interactive": true,
+   "page": "v7s"
+  },
+  "V7MarginSign.dc.html": {
+   "x": 984,
+   "y": 5125,
+   "w": 412,
+   "h": 915,
+   "title": "Approve in Backpack",
+   "is_interactive": true,
+   "page": "v7s"
+  },
+  "V7MarginDone.dc.html": {
+   "x": 1476,
+   "y": 5125,
+   "w": 412,
+   "h": 915,
+   "title": "Margin account active",
+   "is_interactive": true,
+   "page": "v7s"
+  },
+  "V7Swap.dc.html": {
+   "x": 0,
+   "y": 6460,
+   "w": 412,
+   "h": 915,
+   "title": "Swap",
+   "is_interactive": true,
+   "page": "v7s"
+  },
+  "V7SwapTokens.dc.html": {
+   "x": 492,
+   "y": 6460,
+   "w": 412,
+   "h": 915,
+   "title": "Token dropdown",
+   "is_interactive": true,
+   "page": "v7s"
+  },
+  "V7SwapRoute.dc.html": {
+   "x": 984,
+   "y": 6460,
+   "w": 412,
+   "h": 915,
+   "title": "Via picker",
+   "is_interactive": true,
+   "page": "v7s"
+  },
+  "V7SwapSettings.dc.html": {
+   "x": 1476,
+   "y": 6460,
+   "w": 412,
+   "h": 915,
+   "title": "Settings",
+   "is_interactive": true,
+   "page": "v7s"
+  },
+  "V7SwapSign.dc.html": {
+   "x": 1968,
+   "y": 6460,
+   "w": 412,
+   "h": 915,
+   "title": "Approve",
+   "is_interactive": true,
+   "page": "v7s"
+  },
+  "V7SwapConfirm.dc.html": {
+   "x": 2460,
+   "y": 6460,
+   "w": 412,
+   "h": 915,
+   "title": "Confirming",
+   "is_interactive": true,
+   "page": "v7s"
+  },
+  "V7SwapDone.dc.html": {
+   "x": 2952,
+   "y": 6460,
+   "w": 412,
+   "h": 915,
+   "title": "Swapped",
+   "is_interactive": true,
+   "page": "v7s"
+  },
+  "V7SwapHistory.dc.html": {
+   "x": 3444,
+   "y": 6460,
+   "w": 412,
+   "h": 915,
+   "title": "Swap · History",
+   "is_interactive": true,
+   "page": "v7s"
+  },
+  "V7Earn.dc.html": {
+   "x": 0,
+   "y": 7795,
+   "w": 412,
+   "h": 915,
+   "title": "Earn · overall deposit",
+   "is_interactive": true,
+   "page": "v7s"
+  },
+  "V7EarnEarnings.dc.html": {
+   "x": 492,
+   "y": 7795,
+   "w": 412,
+   "h": 915,
+   "title": "Earn · net earnings",
+   "is_interactive": true,
+   "page": "v7s"
+  },
+  "V7EarnVault.dc.html": {
+   "x": 984,
+   "y": 7795,
+   "w": 412,
+   "h": 915,
+   "title": "Pool · Positions",
+   "is_interactive": true,
+   "page": "v7s"
+  },
+  "V7EarnVaultDetails.dc.html": {
+   "x": 1476,
+   "y": 7795,
+   "w": 412,
+   "h": 915,
+   "title": "Pool · Details",
+   "is_interactive": true,
+   "page": "v7s"
+  },
+  "V7EarnVaultActivity.dc.html": {
+   "x": 1968,
+   "y": 7795,
+   "w": 412,
+   "h": 915,
+   "title": "Pool · Activity",
+   "is_interactive": true,
+   "page": "v7s"
+  },
+  "V7EarnVaultCollateral.dc.html": {
+   "x": 2460,
+   "y": 7795,
+   "w": 412,
+   "h": 915,
+   "title": "Pool · Collateral",
+   "is_interactive": true,
+   "page": "v7s"
+  },
+  "V7EarnVaultAnalytics.dc.html": {
+   "x": 2952,
+   "y": 7795,
+   "w": 412,
+   "h": 915,
+   "title": "Pool · Analytics",
+   "is_interactive": true,
+   "page": "v7s"
+  },
+  "V7EarnVaultManagers.dc.html": {
+   "x": 3444,
+   "y": 7795,
+   "w": 412,
+   "h": 915,
+   "title": "Pool · Managers",
+   "is_interactive": true,
+   "page": "v7s"
+  },
+  "V7EarnSupply.dc.html": {
+   "x": 3936,
+   "y": 7795,
+   "w": 412,
+   "h": 915,
+   "title": "Supply",
+   "is_interactive": true,
+   "page": "v7s"
+  },
+  "V7EarnSupplySign.dc.html": {
+   "x": 4428,
+   "y": 7795,
+   "w": 412,
+   "h": 915,
+   "title": "Supply · approve",
+   "is_interactive": true,
+   "page": "v7s"
+  },
+  "V7EarnSupplyDone.dc.html": {
+   "x": 4920,
+   "y": 7795,
+   "w": 412,
+   "h": 915,
+   "title": "Supply · done",
+   "is_interactive": true,
+   "page": "v7s"
+  },
+  "V7EarnWithdraw.dc.html": {
+   "x": 5412,
+   "y": 7795,
+   "w": 412,
+   "h": 915,
+   "title": "Withdraw",
+   "is_interactive": true,
+   "page": "v7s"
+  },
+  "V7EarnWithdrawDone.dc.html": {
+   "x": 5904,
+   "y": 7795,
+   "w": 412,
+   "h": 915,
+   "title": "Withdraw · done",
+   "is_interactive": true,
+   "page": "v7s"
+  },
+  "V7EarnPositions.dc.html": {
+   "x": 0,
+   "y": 8915,
+   "w": 412,
+   "h": 915,
+   "title": "Earn · Positions",
+   "is_interactive": true,
+   "page": "v7s"
+  },
+  "V7EarnHistory.dc.html": {
+   "x": 492,
+   "y": 8915,
+   "w": 412,
+   "h": 915,
+   "title": "Earn · History",
+   "is_interactive": true,
+   "page": "v7s"
+  },
+  "V7Farm.dc.html": {
+   "x": 0,
+   "y": 10250,
+   "w": 412,
+   "h": 915,
+   "title": "Deploy",
+   "is_interactive": true,
+   "page": "v7s"
+  },
+  "V7FarmPools.dc.html": {
+   "x": 492,
+   "y": 10250,
+   "w": 412,
+   "h": 915,
+   "title": "Pool dropdown",
+   "is_interactive": true,
+   "page": "v7s"
+  },
+  "V7FarmTokens.dc.html": {
+   "x": 984,
+   "y": 10250,
+   "w": 412,
+   "h": 915,
+   "title": "Collateral dropdown",
+   "is_interactive": true,
+   "page": "v7s"
+  },
+  "V7FarmLev4.dc.html": {
+   "x": 1476,
+   "y": 10250,
+   "w": 412,
+   "h": 915,
+   "title": "Leverage 4x",
+   "is_interactive": true,
+   "page": "v7s"
+  },
+  "V7FarmSign.dc.html": {
+   "x": 1968,
+   "y": 10250,
+   "w": 412,
+   "h": 915,
+   "title": "Deploy · approve",
+   "is_interactive": true,
+   "page": "v7s"
+  },
+  "V7FarmDone.dc.html": {
+   "x": 2460,
+   "y": 10250,
+   "w": 412,
+   "h": 915,
+   "title": "Deploy · done",
+   "is_interactive": true,
+   "page": "v7s"
+  },
+  "V7FarmPositionsNew.dc.html": {
+   "x": 2952,
+   "y": 10250,
+   "w": 412,
+   "h": 915,
+   "title": "Position · after deploy",
+   "is_interactive": true,
+   "page": "v7s"
+  },
+  "V7FarmPositions.dc.html": {
+   "x": 3444,
+   "y": 10250,
+   "w": 412,
+   "h": 915,
+   "title": "Position",
+   "is_interactive": true,
+   "page": "v7s"
+  },
+  "V7FarmPosition.dc.html": {
+   "x": 3936,
+   "y": 10250,
+   "w": 412,
+   "h": 915,
+   "title": "Position detail",
+   "is_interactive": true,
+   "page": "v7s"
+  },
+  "V7FarmClose.dc.html": {
+   "x": 4428,
+   "y": 10250,
+   "w": 412,
+   "h": 915,
+   "title": "Close · all",
+   "is_interactive": true,
+   "page": "v7s"
+  },
+  "V7FarmClose50.dc.html": {
+   "x": 4920,
+   "y": 10250,
+   "w": 412,
+   "h": 915,
+   "title": "Close · 50%",
+   "is_interactive": true,
+   "page": "v7s"
+  },
+  "V7FarmCloseSign.dc.html": {
+   "x": 5412,
+   "y": 10250,
+   "w": 412,
+   "h": 915,
+   "title": "Close · approve 1 of 2",
+   "is_interactive": true,
+   "page": "v7s"
+  },
+  "V7FarmCloseStep2.dc.html": {
+   "x": 5904,
+   "y": 10250,
+   "w": 412,
+   "h": 915,
+   "title": "Close · approve 2 of 2",
+   "is_interactive": true,
+   "page": "v7s"
+  },
+  "V7FarmCloseDone.dc.html": {
+   "x": 0,
+   "y": 11370,
+   "w": 412,
+   "h": 915,
+   "title": "Close · done",
+   "is_interactive": true,
+   "page": "v7s"
+  },
+  "V7FarmHistory.dc.html": {
+   "x": 492,
+   "y": 11370,
+   "w": 412,
+   "h": 915,
+   "title": "Position History",
+   "is_interactive": true,
+   "page": "v7s"
+  },
+  "V7HomeOffline.dc.html": {
+   "x": 0,
+   "y": 12705,
+   "w": 412,
+   "h": 915,
+   "title": "Home · offline",
+   "is_interactive": true,
+   "page": "v7s"
+  },
+  "V7ConnectRpcFail.dc.html": {
+   "x": 492,
+   "y": 12705,
+   "w": 412,
+   "h": 915,
+   "title": "Connect · RPC not set",
+   "is_interactive": true,
+   "page": "v7s"
+  },
+  "V7ConnectDeclined.dc.html": {
+   "x": 984,
+   "y": 12705,
+   "w": 412,
+   "h": 915,
+   "title": "Connect · declined",
+   "is_interactive": true,
+   "page": "v7s"
+  },
+  "V7ConnectInstall.dc.html": {
+   "x": 1476,
+   "y": 12705,
+   "w": 412,
+   "h": 915,
+   "title": "Connect · no Backpack",
+   "is_interactive": true,
+   "page": "v7s"
+  },
+  "V7MarginFee.dc.html": {
+   "x": 1968,
+   "y": 12705,
+   "w": 412,
+   "h": 915,
+   "title": "Margin · no SOL for fees",
+   "is_interactive": true,
+   "page": "v7s"
+  },
+  "V7MarginRejected.dc.html": {
+   "x": 2460,
+   "y": 12705,
+   "w": 412,
+   "h": 915,
+   "title": "Margin · cancelled",
+   "is_interactive": true,
+   "page": "v7s"
+  },
+  "V7PerpsOrderNoFunds.dc.html": {
+   "x": 2952,
+   "y": 12705,
+   "w": 412,
+   "h": 915,
+   "title": "Order · not enough margin",
+   "is_interactive": true,
+   "page": "v7s"
+  },
+  "V7PerpsOrderRisky.dc.html": {
+   "x": 3444,
+   "y": 12705,
+   "w": 412,
+   "h": 915,
+   "title": "Order · health too low",
+   "is_interactive": true,
+   "page": "v7s"
+  },
+  "V7PerpsOrderFailed.dc.html": {
+   "x": 3936,
+   "y": 12705,
+   "w": 412,
+   "h": 915,
+   "title": "Order · network error",
+   "is_interactive": true,
+   "page": "v7s"
+  },
+  "V7PerpsOrderRejected.dc.html": {
+   "x": 4428,
+   "y": 12705,
+   "w": 412,
+   "h": 915,
+   "title": "Order · cancelled",
+   "is_interactive": true,
+   "page": "v7s"
+  },
+  "V7PerpsCloseFailed.dc.html": {
+   "x": 4920,
+   "y": 12705,
+   "w": 412,
+   "h": 915,
+   "title": "Close · network error",
+   "is_interactive": true,
+   "page": "v7s"
+  },
+  "V7PerpsAddFee.dc.html": {
+   "x": 5412,
+   "y": 12705,
+   "w": 412,
+   "h": 915,
+   "title": "Add collateral · no SOL",
+   "is_interactive": true,
+   "page": "v7s"
+  },
+  "V7SwapNoFunds.dc.html": {
+   "x": 5904,
+   "y": 12705,
+   "w": 412,
+   "h": 915,
+   "title": "Swap · not enough USDC",
+   "is_interactive": true,
+   "page": "v7s"
+  },
+  "V7SwapFailed.dc.html": {
+   "x": 0,
+   "y": 13825,
+   "w": 412,
+   "h": 915,
+   "title": "Swap · network error",
+   "is_interactive": true,
+   "page": "v7s"
+  },
+  "V7SwapSlippage.dc.html": {
+   "x": 492,
+   "y": 13825,
+   "w": 412,
+   "h": 915,
+   "title": "Swap · price moved",
+   "is_interactive": true,
+   "page": "v7s"
+  },
+  "V7SwapFee.dc.html": {
+   "x": 984,
+   "y": 13825,
+   "w": 412,
+   "h": 915,
+   "title": "Swap · no SOL for fees",
+   "is_interactive": true,
+   "page": "v7s"
+  },
+  "V7SwapRejected.dc.html": {
+   "x": 1476,
+   "y": 13825,
+   "w": 412,
+   "h": 915,
+   "title": "Swap · cancelled",
+   "is_interactive": true,
+   "page": "v7s"
+  },
+  "V7EarnSupplyNoFunds.dc.html": {
+   "x": 1968,
+   "y": 13825,
+   "w": 412,
+   "h": 915,
+   "title": "Supply · not enough USDC",
+   "is_interactive": true,
+   "page": "v7s"
+  },
+  "V7EarnSupplyFee.dc.html": {
+   "x": 2460,
+   "y": 13825,
+   "w": 412,
+   "h": 915,
+   "title": "Supply · no SOL for fees",
+   "is_interactive": true,
+   "page": "v7s"
+  },
+  "V7EarnWithdrawOver.dc.html": {
+   "x": 2952,
+   "y": 13825,
+   "w": 412,
+   "h": 915,
+   "title": "Withdraw · more than supplied",
+   "is_interactive": true,
+   "page": "v7s"
+  },
+  "V7EarnWithdrawFailed.dc.html": {
+   "x": 3444,
+   "y": 13825,
+   "w": 412,
+   "h": 915,
+   "title": "Withdraw · network error",
+   "is_interactive": true,
+   "page": "v7s"
+  },
+  "V7FarmNoFunds.dc.html": {
+   "x": 3936,
+   "y": 13825,
+   "w": 412,
+   "h": 915,
+   "title": "Farm · no GOOGLx",
+   "is_interactive": true,
+   "page": "v7s"
+  },
+  "V7FarmFailed.dc.html": {
+   "x": 4428,
+   "y": 13825,
+   "w": 412,
+   "h": 915,
+   "title": "Deploy · network error",
+   "is_interactive": true,
+   "page": "v7s"
+  },
+  "V7FarmRejected.dc.html": {
+   "x": 4920,
+   "y": 13825,
+   "w": 412,
+   "h": 915,
+   "title": "Deploy · cancelled",
+   "is_interactive": true,
+   "page": "v7s"
+  },
+  "V7FarmCloseFailed.dc.html": {
+   "x": 5412,
+   "y": 13825,
+   "w": 412,
+   "h": 915,
+   "title": "Close · step 1 failed",
+   "is_interactive": true,
+   "page": "v7s"
+  },
+  "V7FarmCloseStep2Failed.dc.html": {
+   "x": 5904,
+   "y": 13825,
+   "w": 412,
+   "h": 915,
+   "title": "Close · step 2 failed",
+   "is_interactive": true,
+   "page": "v7s"
+  },
+  "V7HomeDark.dc.html": {
+   "x": 0,
+   "y": 15160,
+   "w": 412,
+   "h": 915,
+   "title": "Home · dark",
+   "is_interactive": true,
+   "page": "v7s"
+  },
+  "V7PerpsDark.dc.html": {
+   "x": 492,
+   "y": 15160,
+   "w": 412,
+   "h": 915,
+   "title": "Perps · dark",
+   "is_interactive": true,
+   "page": "v7s"
+  },
+  "V7PerpsMarketDark.dc.html": {
+   "x": 984,
+   "y": 15160,
+   "w": 412,
+   "h": 915,
+   "title": "PerpsMarket · dark",
+   "is_interactive": true,
+   "page": "v7s"
+  },
+  "V7PerpsPositionsDark.dc.html": {
+   "x": 1476,
+   "y": 15160,
+   "w": 412,
+   "h": 915,
+   "title": "PerpsPositions · dark",
+   "is_interactive": true,
+   "page": "v7s"
+  },
+  "V7SwapDark.dc.html": {
+   "x": 1968,
+   "y": 15160,
+   "w": 412,
+   "h": 915,
+   "title": "Swap · dark",
+   "is_interactive": true,
+   "page": "v7s"
+  },
+  "V7EarnDark.dc.html": {
+   "x": 2460,
+   "y": 15160,
+   "w": 412,
+   "h": 915,
+   "title": "Earn · dark",
+   "is_interactive": true,
+   "page": "v7s"
+  },
+  "V7EarnVaultDark.dc.html": {
+   "x": 2952,
+   "y": 15160,
+   "w": 412,
+   "h": 915,
+   "title": "EarnVault · dark",
+   "is_interactive": true,
+   "page": "v7s"
+  },
+  "V7FarmDark.dc.html": {
+   "x": 3444,
+   "y": 15160,
+   "w": 412,
+   "h": 915,
+   "title": "Farm · dark",
+   "is_interactive": true,
+   "page": "v7s"
+  },
+  "V7FarmPositionDark.dc.html": {
+   "x": 3936,
+   "y": 15160,
+   "w": 412,
+   "h": 915,
+   "title": "FarmPosition · dark",
+   "is_interactive": true,
+   "page": "v7s"
+  },
+  "V7TraderDark.dc.html": {
+   "x": 4428,
+   "y": 15160,
+   "w": 412,
+   "h": 915,
+   "title": "Trader · dark",
+   "is_interactive": true,
+   "page": "v7s"
+  },
+  "V7LenderDark.dc.html": {
+   "x": 4920,
+   "y": 15160,
+   "w": 412,
+   "h": 915,
+   "title": "Lender · dark",
+   "is_interactive": true,
+   "page": "v7s"
+  },
+  "V7NotificationsDark.dc.html": {
+   "x": 5412,
+   "y": 15160,
+   "w": 412,
+   "h": 915,
+   "title": "Notifications · dark",
+   "is_interactive": true,
+   "page": "v7s"
+  },
+  "V7ProfileDark.dc.html": {
+   "x": 5904,
+   "y": 15160,
+   "w": 412,
+   "h": 915,
+   "title": "Profile · dark",
+   "is_interactive": true,
+   "page": "v7s"
+  },
+  "V7ConnectDark.dc.html": {
+   "x": 0,
+   "y": 16280,
+   "w": 412,
+   "h": 915,
+   "title": "Connect · dark",
+   "is_interactive": true,
+   "page": "v7s"
+  }
+ },
+ "notes": {
+  "v7row0": {
+   "kind": "title1",
+   "maxW": 7000,
+   "text": "1. Start: the opening plays once, then Connect wallet walks through Backpack step by step",
+   "w": 240,
+   "x": 0,
+   "y": -300,
+   "page": "v7"
+  },
+  "v7row1": {
+   "kind": "title1",
+   "maxW": 7000,
+   "text": "2. Home: wallet and margin at a glance, products as tiles, positions as a list",
+   "w": 240,
+   "x": 0,
+   "y": 1195,
+   "page": "v7"
+  },
+  "v7row2": {
+   "kind": "title1",
+   "maxW": 7000,
+   "text": "3. Perps: market → order → approve → confirmed, then manage the position (close or add collateral)",
+   "w": 240,
+   "x": 0,
+   "y": 2690,
+   "page": "v7"
+  },
+  "v7row3": {
+   "kind": "title1",
+   "maxW": 7000,
+   "text": "4. Margin account: created once, before the first Perps or Farm trade",
+   "w": 240,
+   "x": 0,
+   "y": 4185,
+   "page": "v7"
+  },
+  "v7row4": {
+   "kind": "title1",
+   "maxW": 7000,
+   "text": "5. Swap from your wallet via Jupiter: pick, approve, confirming, swapped",
+   "w": 240,
+   "x": 0,
+   "y": 5680,
+   "page": "v7"
+  },
+  "v7row5": {
+   "kind": "title1",
+   "maxW": 7000,
+   "text": "6. Earn: overall deposit and net earnings graphs, pool tabs as on the web, supply and withdraw flows",
+   "w": 240,
+   "x": 0,
+   "y": 7175,
+   "page": "v7"
+  },
+  "v7row6": {
+   "kind": "title1",
+   "maxW": 7000,
+   "text": "7. Farm: USDC or SOL Kamino pool, any stock as collateral, leverage, deploy; then Position, close in two approvals, and Position History",
+   "w": 240,
+   "x": 0,
+   "y": 8670,
+   "page": "v7"
+  },
+  "v7row7": {
+   "kind": "title1",
+   "maxW": 7000,
+   "text": "8. When things go wrong: every action has a sad path. Not enough balance blocks the button with a clear reason; failed transactions say why (network, price moved, no SOL for fees, a step that did not finish) and offer a retry",
+   "w": 240,
+   "x": 0,
+   "y": 10165,
+   "page": "v7"
+  },
+  "v7row8": {
+   "kind": "title1",
+   "maxW": 7000,
+   "text": "9. Dark mode",
+   "w": 240,
+   "x": 0,
+   "y": 12687,
+   "page": "v7"
+  },
+  "v7srow0": {
+   "kind": "title1",
+   "maxW": 7000,
+   "text": "1. Start: the opening plays once, then Connect wallet walks through Backpack step by step",
+   "w": 240,
+   "x": 0,
+   "y": -300,
+   "page": "v7s"
+  },
+  "v7srow1": {
+   "kind": "title1",
+   "maxW": 7000,
+   "text": "2. Home: wallet and margin at a glance, products as tiles, positions as a list",
+   "w": 240,
+   "x": 0,
+   "y": 1035,
+   "page": "v7s"
+  },
+  "v7srow2": {
+   "kind": "title1",
+   "maxW": 7000,
+   "text": "3. Perps: market → order → approve → confirmed, then manage the position (close or add collateral)",
+   "w": 240,
+   "x": 0,
+   "y": 2370,
+   "page": "v7s"
+  },
+  "v7srow3": {
+   "kind": "title1",
+   "maxW": 7000,
+   "text": "4. Margin account: created once, before the first Perps or Farm trade",
+   "w": 240,
+   "x": 0,
+   "y": 4825,
+   "page": "v7s"
+  },
+  "v7srow4": {
+   "kind": "title1",
+   "maxW": 7000,
+   "text": "5. Swap from your wallet via Jupiter: pick, approve, confirming, swapped",
+   "w": 240,
+   "x": 0,
+   "y": 6160,
+   "page": "v7s"
+  },
+  "v7srow5": {
+   "kind": "title1",
+   "maxW": 7000,
+   "text": "6. Earn: overall deposit and net earnings graphs, pool tabs as on the web, supply and withdraw flows",
+   "w": 240,
+   "x": 0,
+   "y": 7495,
+   "page": "v7s"
+  },
+  "v7srow6": {
+   "kind": "title1",
+   "maxW": 7000,
+   "text": "7. Farm: USDC or SOL Kamino pool, any stock as collateral, leverage, deploy; then Position, close in two approvals, and Position History",
+   "w": 240,
+   "x": 0,
+   "y": 9950,
+   "page": "v7s"
+  },
+  "v7srow7": {
+   "kind": "title1",
+   "maxW": 7000,
+   "text": "8. When things go wrong: every action has a sad path. Not enough balance blocks the button with a clear reason; failed transactions say why (network, price moved, no SOL for fees, a step that did not finish) and offer a retry",
+   "w": 240,
+   "x": 0,
+   "y": 12405,
+   "page": "v7s"
+  },
+  "v7srow8": {
+   "kind": "title1",
+   "maxW": 7000,
+   "text": "9. Dark mode",
+   "w": 240,
+   "x": 0,
+   "y": 14860,
+   "page": "v7s"
+  }
+ },
+ "order": [
+  "V7Flow1Start.dc.html",
+  "V7Flow2Home.dc.html",
+  "V7Flow3Perps.dc.html",
+  "V7Flow4Margin.dc.html",
+  "V7Flow5Swap.dc.html",
+  "V7Flow6Earn.dc.html",
+  "V7Flow7Farm.dc.html",
+  "V7Flow8SadPaths.dc.html",
+  "V7Flow9Dark.dc.html",
+  "V7Welcome.dc.html",
+  "V7Connect.dc.html",
+  "V7ConnectApprove.dc.html",
+  "V7ConnectRpc.dc.html",
+  "V7ConnectDone.dc.html",
+  "V7Home.dc.html",
+  "V7HomeNotif.dc.html",
+  "V7Notifications.dc.html",
+  "V7Lender.dc.html",
+  "V7Trader.dc.html",
+  "V7TraderHistory.dc.html",
+  "V7Profile.dc.html",
+  "V7Perps.dc.html",
+  "V7PerpsMarket.dc.html",
+  "V7PerpsOrder.dc.html",
+  "V7PerpsOrderSign.dc.html",
+  "V7PerpsOrderConfirm.dc.html",
+  "V7PerpsOrderDone.dc.html",
+  "V7PerpsPositions.dc.html",
+  "V7PerpsClose.dc.html",
+  "V7PerpsClose50.dc.html",
+  "V7PerpsCloseDone.dc.html",
+  "V7PerpsAdd.dc.html",
+  "V7PerpsAddSign.dc.html",
+  "V7PerpsAddDone.dc.html",
+  "V7PerpsHistory.dc.html",
+  "V7MarginCreate.dc.html",
+  "V7MarginAgree.dc.html",
+  "V7MarginSign.dc.html",
+  "V7MarginDone.dc.html",
+  "V7Swap.dc.html",
+  "V7SwapTokens.dc.html",
+  "V7SwapRoute.dc.html",
+  "V7SwapSettings.dc.html",
+  "V7SwapSign.dc.html",
+  "V7SwapConfirm.dc.html",
+  "V7SwapDone.dc.html",
+  "V7SwapHistory.dc.html",
+  "V7Earn.dc.html",
+  "V7EarnEarnings.dc.html",
+  "V7EarnVault.dc.html",
+  "V7EarnVaultDetails.dc.html",
+  "V7EarnVaultActivity.dc.html",
+  "V7EarnVaultCollateral.dc.html",
+  "V7EarnVaultAnalytics.dc.html",
+  "V7EarnVaultManagers.dc.html",
+  "V7EarnSupply.dc.html",
+  "V7EarnSupplySign.dc.html",
+  "V7EarnSupplyDone.dc.html",
+  "V7EarnWithdraw.dc.html",
+  "V7EarnWithdrawDone.dc.html",
+  "V7EarnPositions.dc.html",
+  "V7EarnHistory.dc.html",
+  "V7Farm.dc.html",
+  "V7FarmPools.dc.html",
+  "V7FarmTokens.dc.html",
+  "V7FarmLev4.dc.html",
+  "V7FarmSign.dc.html",
+  "V7FarmDone.dc.html",
+  "V7FarmPositionsNew.dc.html",
+  "V7FarmPositions.dc.html",
+  "V7FarmPosition.dc.html",
+  "V7FarmClose.dc.html",
+  "V7FarmClose50.dc.html",
+  "V7FarmCloseSign.dc.html",
+  "V7FarmCloseStep2.dc.html",
+  "V7FarmCloseDone.dc.html",
+  "V7FarmHistory.dc.html",
+  "V7HomeOffline.dc.html",
+  "V7ConnectRpcFail.dc.html",
+  "V7ConnectDeclined.dc.html",
+  "V7ConnectInstall.dc.html",
+  "V7MarginFee.dc.html",
+  "V7MarginRejected.dc.html",
+  "V7PerpsOrderNoFunds.dc.html",
+  "V7PerpsOrderRisky.dc.html",
+  "V7PerpsOrderFailed.dc.html",
+  "V7PerpsOrderRejected.dc.html",
+  "V7PerpsCloseFailed.dc.html",
+  "V7PerpsAddFee.dc.html",
+  "V7SwapNoFunds.dc.html",
+  "V7SwapFailed.dc.html",
+  "V7SwapSlippage.dc.html",
+  "V7SwapFee.dc.html",
+  "V7SwapRejected.dc.html",
+  "V7EarnSupplyNoFunds.dc.html",
+  "V7EarnSupplyFee.dc.html",
+  "V7EarnWithdrawOver.dc.html",
+  "V7EarnWithdrawFailed.dc.html",
+  "V7FarmNoFunds.dc.html",
+  "V7FarmFailed.dc.html",
+  "V7FarmRejected.dc.html",
+  "V7FarmCloseFailed.dc.html",
+  "V7FarmCloseStep2Failed.dc.html",
+  "V7HomeDark.dc.html",
+  "V7PerpsDark.dc.html",
+  "V7PerpsMarketDark.dc.html",
+  "V7PerpsPositionsDark.dc.html",
+  "V7SwapDark.dc.html",
+  "V7EarnDark.dc.html",
+  "V7EarnVaultDark.dc.html",
+  "V7FarmDark.dc.html",
+  "V7FarmPositionDark.dc.html",
+  "V7TraderDark.dc.html",
+  "V7LenderDark.dc.html",
+  "V7NotificationsDark.dc.html",
+  "V7ProfileDark.dc.html",
+  "V7ConnectDark.dc.html"
+ ],
+ "pages": [
+  {
+   "id": "v7",
+   "name": "v7 · Clean, full flows"
+  },
+  {
+   "id": "v7s",
+   "name": "v7 · Screens one by one (Play)"
+  }
+ ],
+ "launch": {
+  "view": "canvas",
+  "page": "v7"
+ }
+}

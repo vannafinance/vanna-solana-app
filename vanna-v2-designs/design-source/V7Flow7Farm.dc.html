@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Vanna v7 · Farm: USDC or SOL Kamino pool, any stock as collateral, leverage, deploy; then Position, close in two approvals, and Position History</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;font-family:'Plus Jakarta Sans',system-ui,sans-serif}
+*{box-sizing:border-box;scrollbar-width:none}
+*::-webkit-scrollbar{display:none}
+button{font-family:inherit;cursor:pointer}
+input{font-family:inherit}
+a{color:#703AE6}a:hover{color:#5029A3}
+@keyframes vnFade{from{opacity:0}to{opacity:1}}
+@keyframes vnSheet{from{transform:translateY(100%)}to{transform:translateY(0)}}
+@keyframes vnDrop{from{opacity:0;transform:translateY(-8px) scale(0.98)}to{opacity:1;transform:translateY(0) scale(1)}}
+@keyframes vnRing{0%{transform:scale(0.7);opacity:0.55}100%{transform:scale(1.9);opacity:0}}
+@keyframes vnFill{from{width:6%}to{width:92%}}
+@keyframes vnPop{0%{transform:scale(0.3);opacity:0}60%{transform:scale(1.12);opacity:1}100%{transform:scale(1)}}
+@keyframes vnRise{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+@keyframes vnBreath{0%,100%{transform:scale(1)}50%{transform:scale(1.06)}}
+@keyframes vnCycle{0%{opacity:0;transform:translateY(60%)}4%{opacity:1;transform:translateY(0)}22%{opacity:1;transform:translateY(0)}26%{opacity:0;transform:translateY(-60%)}100%{opacity:0;transform:translateY(-60%)}}
+@keyframes vnFloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-7px)}}
+@keyframes vnBlink{0%,49%{opacity:1}50%,100%{opacity:0}}
+@keyframes vnShine{0%{left:-90px}60%,100%{left:110%}}
+@media (prefers-reduced-motion: reduce){*{animation-duration:1ms !important;transition-duration:1ms !important}}
+</style>
+</helmet>
+<div style="width: 7028px; height: 1035px; box-sizing: border-box; padding: 32px; background: #0B0B0B; display: grid; grid-template-columns: repeat(15, 412px); column-gap: 56px; row-gap: 56px; align-content: start; font-family: 'Plus Jakarta Sans', system-ui, sans-serif">
+<div style="display: flex; flex-direction: column; gap: 12px"><div style="height: 44px; display: flex; flex-direction: column; justify-content: flex-end"><span style="font-size: 16px; line-height: 22px; font-weight: 600; color: #FFFFFF">1. Deploy</span><span style="font-size: 12px; line-height: 16px; color: #949494; font-family: ui-monospace, monospace">V7Farm</span></div><div style="width: 412px; height: 915px; border-radius: 28px; overflow: hidden; box-shadow: 0 0 0 1px #2C2C2C"><dc-import name="V7Farm"  hint-size="412px,915px"></dc-import></div></div>
+<div style="display: flex; flex-direction: column; gap: 12px"><div style="height: 44px; display: flex; flex-direction: column; justify-content: flex-end"><span style="font-size: 16px; line-height: 22px; font-weight: 600; color: #FFFFFF">2. Pool dropdown</span><span style="font-size: 12px; line-height: 16px; color: #949494; font-family: ui-monospace, monospace">V7FarmPools</span></div><div style="width: 412px; height: 915px; border-radius: 28px; overflow: hidden; box-shadow: 0 0 0 1px #2C2C2C"><dc-import name="V7FarmPools"  hint-size="412px,915px"></dc-import></div></div>
+<div style="display: flex; flex-direction: column; gap: 12px"><div style="height: 44px; display: flex; flex-direction: column; justify-content: flex-end"><span style="font-size: 16px; line-height: 22px; font-weight: 600; color: #FFFFFF">3. Collateral dropdown</span><span style="font-size: 12px; line-height: 16px; color: #949494; font-family: ui-monospace, monospace">V7FarmTokens</span></div><div style="width: 412px; height: 915px; border-radius: 28px; overflow: hidden; box-shadow: 0 0 0 1px #2C2C2C"><dc-import name="V7FarmTokens"  hint-size="412px,915px"></dc-import></div></div>
+<div style="display: flex; flex-direction: column; gap: 12px"><div style="height: 44px; display: flex; flex-direction: column; justify-content: flex-end"><span style="font-size: 16px; line-height: 22px; font-weight: 600; color: #FFFFFF">4. Leverage 4x</span><span style="font-size: 12px; line-height: 16px; color: #949494; font-family: ui-monospace, monospace">V7FarmLev4</span></div><div style="width: 412px; height: 915px; border-radius: 28px; overflow: hidden; box-shadow: 0 0 0 1px #2C2C2C"><dc-import name="V7FarmLev4"  hint-size="412px,915px"></dc-import></div></div>
+<div style="display: flex; flex-direction: column; gap: 12px"><div style="height: 44px; display: flex; flex-direction: column; justify-content: flex-end"><span style="font-size: 16px; line-height: 22px; font-weight: 600; color: #FFFFFF">5. Deploy · approve</span><span style="font-size: 12px; line-height: 16px; color: #949494; font-family: ui-monospace, monospace">V7FarmSign</span></div><div style="width: 412px; height: 915px; border-radius: 28px; overflow: hidden; box-shadow: 0 0 0 1px #2C2C2C"><dc-import name="V7FarmSign"  hint-size="412px,915px"></dc-import></div></div>
+<div style="display: flex; flex-direction: column; gap: 12px"><div style="height: 44px; display: flex; flex-direction: column; justify-content: flex-end"><span style="font-size: 16px; line-height: 22px; font-weight: 600; color: #FFFFFF">6. Deploy · done</span><span style="font-size: 12px; line-height: 16px; color: #949494; font-family: ui-monospace, monospace">V7FarmDone</span></div><div style="width: 412px; height: 915px; border-radius: 28px; overflow: hidden; box-shadow: 0 0 0 1px #2C2C2C"><dc-import name="V7FarmDone"  hint-size="412px,915px"></dc-import></div></div>
+<div style="display: flex; flex-direction: column; gap: 12px"><div style="height: 44px; display: flex; flex-direction: column; justify-content: flex-end"><span style="font-size: 16px; line-height: 22px; font-weight: 600; color: #FFFFFF">7. Position · after deploy</span><span style="font-size: 12px; line-height: 16px; color: #949494; font-family: ui-monospace, monospace">V7FarmPositionsNew</span></div><div style="width: 412px; height: 915px; border-radius: 28px; overflow: hidden; box-shadow: 0 0 0 1px #2C2C2C"><dc-import name="V7FarmPositionsNew"  hint-size="412px,915px"></dc-import></div></div>
+<div style="display: flex; flex-direction: column; gap: 12px"><div style="height: 44px; display: flex; flex-direction: column; justify-content: flex-end"><span style="font-size: 16px; line-height: 22px; font-weight: 600; color: #FFFFFF">8. Position</span><span style="font-size: 12px; line-height: 16px; color: #949494; font-family: ui-monospace, monospace">V7FarmPositions</span></div><div style="width: 412px; height: 915px; border-radius: 28px; overflow: hidden; box-shadow: 0 0 0 1px #2C2C2C"><dc-import name="V7FarmPositions"  hint-size="412px,915px"></dc-import></div></div>
+<div style="display: flex; flex-direction: column; gap: 12px"><div style="height: 44px; display: flex; flex-direction: column; justify-content: flex-end"><span style="font-size: 16px; line-height: 22px; font-weight: 600; color: #FFFFFF">9. Position detail</span><span style="font-size: 12px; line-height: 16px; color: #949494; font-family: ui-monospace, monospace">V7FarmPosition</span></div><div style="width: 412px; height: 915px; border-radius: 28px; overflow: hidden; box-shadow: 0 0 0 1px #2C2C2C"><dc-import name="V7FarmPosition"  hint-size="412px,915px"></dc-import></div></div>
+<div style="display: flex; flex-direction: column; gap: 12px"><div style="height: 44px; display: flex; flex-direction: column; justify-content: flex-end"><span style="font-size: 16px; line-height: 22px; font-weight: 600; color: #FFFFFF">10. Close · all</span><span style="font-size: 12px; line-height: 16px; color: #949494; font-family: ui-monospace, monospace">V7FarmClose</span></div><div style="width: 412px; height: 915px; border-radius: 28px; overflow: hidden; box-shadow: 0 0 0 1px #2C2C2C"><dc-import name="V7FarmClose"  hint-size="412px,915px"></dc-import></div></div>
+<div style="display: flex; flex-direction: column; gap: 12px"><div style="height: 44px; display: flex; flex-direction: column; justify-content: flex-end"><span style="font-size: 16px; line-height: 22px; font-weight: 600; color: #FFFFFF">11. Close · 50%</span><span style="font-size: 12px; line-height: 16px; color: #949494; font-family: ui-monospace, monospace">V7FarmClose50</span></div><div style="width: 412px; height: 915px; border-radius: 28px; overflow: hidden; box-shadow: 0 0 0 1px #2C2C2C"><dc-import name="V7FarmClose50"  hint-size="412px,915px"></dc-import></div></div>
+<div style="display: flex; flex-direction: column; gap: 12px"><div style="height: 44px; display: flex; flex-direction: column; justify-content: flex-end"><span style="font-size: 16px; line-height: 22px; font-weight: 600; color: #FFFFFF">12. Close · approve 1 of 2</span><span style="font-size: 12px; line-height: 16px; color: #949494; font-family: ui-monospace, monospace">V7FarmCloseSign</span></div><div style="width: 412px; height: 915px; border-radius: 28px; overflow: hidden; box-shadow: 0 0 0 1px #2C2C2C"><dc-import name="V7FarmCloseSign"  hint-size="412px,915px"></dc-import></div></div>
+<div style="display: flex; flex-direction: column; gap: 12px"><div style="height: 44px; display: flex; flex-direction: column; justify-content: flex-end"><span style="font-size: 16px; line-height: 22px; font-weight: 600; color: #FFFFFF">13. Close · approve 2 of 2</span><span style="font-size: 12px; line-height: 16px; color: #949494; font-family: ui-monospace, monospace">V7FarmCloseStep2</span></div><div style="width: 412px; height: 915px; border-radius: 28px; overflow: hidden; box-shadow: 0 0 0 1px #2C2C2C"><dc-import name="V7FarmCloseStep2"  hint-size="412px,915px"></dc-import></div></div>
+<div style="display: flex; flex-direction: column; gap: 12px"><div style="height: 44px; display: flex; flex-direction: column; justify-content: flex-end"><span style="font-size: 16px; line-height: 22px; font-weight: 600; color: #FFFFFF">14. Close · done</span><span style="font-size: 12px; line-height: 16px; color: #949494; font-family: ui-monospace, monospace">V7FarmCloseDone</span></div><div style="width: 412px; height: 915px; border-radius: 28px; overflow: hidden; box-shadow: 0 0 0 1px #2C2C2C"><dc-import name="V7FarmCloseDone"  hint-size="412px,915px"></dc-import></div></div>
+<div style="display: flex; flex-direction: column; gap: 12px"><div style="height: 44px; display: flex; flex-direction: column; justify-content: flex-end"><span style="font-size: 16px; line-height: 22px; font-weight: 600; color: #FFFFFF">15. Position History</span><span style="font-size: 12px; line-height: 16px; color: #949494; font-family: ui-monospace, monospace">V7FarmHistory</span></div><div style="width: 412px; height: 915px; border-radius: 28px; overflow: hidden; box-shadow: 0 0 0 1px #2C2C2C"><dc-import name="V7FarmHistory"  hint-size="412px,915px"></dc-import></div></div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":7028,"height":1035}}'>
+class Component extends DCLogic {
+renderVals() {
+return {};
+}
+}
+</script>
+</body>
+</html>
