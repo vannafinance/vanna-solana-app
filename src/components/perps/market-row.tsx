@@ -38,7 +38,7 @@ export function MarketRow({ symbol, pair, detail, price, watched, onPress }: Mar
           </AppText>
           {watched ? <Star size={14} weight="fill" color={colors.link} /> : null}
         </View>
-        <AppText variant="label" color="textMuted">
+        <AppText variant="label" color="textMuted" numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.85}>
           {detail}
         </AppText>
       </View>

@@ -6,12 +6,12 @@ type AreaChartProps = {
   points: readonly number[];
   height?: number;
   stroke: string;
-  fillFrom: string;
-  fillTo: string;
+  fillColor: string;
+  fillOpacity?: number;
   strokeWidth?: number;
 };
 
-export function AreaChart({ points, height = 140, stroke, fillFrom, fillTo, strokeWidth = 2.5 }: AreaChartProps) {
+export function AreaChart({ points, height = 140, stroke, fillColor, fillOpacity = 0.35, strokeWidth = 2.5 }: AreaChartProps) {
   const [width, setWidth] = useState(0);
 
   const path = (() => {
@@ -34,8 +34,8 @@ export function AreaChart({ points, height = 140, stroke, fillFrom, fillTo, stro
         <Svg width={width} height={height}>
           <Defs>
             <LinearGradient id="area" x1="0" y1="0" x2="0" y2="1">
-              <Stop offset="0" stopColor={fillFrom} />
-              <Stop offset="1" stopColor={fillTo} />
+              <Stop offset="0" stopColor={fillColor} stopOpacity={fillOpacity} />
+              <Stop offset="1" stopColor={fillColor} stopOpacity={0} />
             </LinearGradient>
           </Defs>
           <Path d={path.area} fill="url(#area)" />

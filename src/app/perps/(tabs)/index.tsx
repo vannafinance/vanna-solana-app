@@ -1,4 +1,5 @@
 import { router } from "expo-router";
+import { View } from "react-native";
 
 import { MarketFilterChips } from "@/components/perps/market-filter-chips";
 import { MarketList } from "@/components/perps/market-list";
@@ -12,9 +13,11 @@ import { formatSignedUsd, formatUsd } from "@/format/format-amount";
 import { useHeaderProps } from "@/hooks/use-header-props";
 import { MARKET_FILTERS, usePerpsMarkets } from "@/hooks/use-perps-markets";
 import { usePerpsPositions } from "@/hooks/use-perps-positions";
+import { useTheme } from "@/theme/use-theme";
 
 export default function PerpsMarketsScreen() {
   const headerProps = useHeaderProps();
+  const { spacing } = useTheme();
   const { markets, filter, setFilter, query, setQuery } = usePerpsMarkets();
   const portfolio = usePerpsPositions();
 
@@ -23,7 +26,9 @@ export default function PerpsMarketsScreen() {
       <ResourceView resource={portfolio} emptyLabel="No margin account yet">
         {(data) => (
           <>
-            <HeroStat size="large" label="Net available collateral" value={formatUsd(data.account.available)} />
+            <View style={{ marginTop: spacing.lg }}>
+              <HeroStat size="large" label="Net available collateral" value={formatUsd(data.account.available)} />
+            </View>
             <OpenPositionsStrip
               symbols={data.positions.map((position) => position.symbol)}
               pnl={formatSignedUsd(data.openPnl)}

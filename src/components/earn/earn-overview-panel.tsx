@@ -43,8 +43,7 @@ export function EarnOverviewPanel({ overview, mode, onModeChange, range, onRange
             points={overview.data.series.map(Number)}
             height={96}
             stroke={colors.onHero}
-            fillFrom={colors.heroDivider}
-            fillTo="transparent"
+            fillColor={colors.onHero}
           />
         </>
       ) : (

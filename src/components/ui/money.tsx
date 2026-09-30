@@ -17,7 +17,7 @@ export function Money({ value, variant = "display", color = "text", style }: Mon
   const fraction = point === -1 ? "" : value.slice(point);
 
   return (
-    <AppText variant={variant} color={color} style={style} accessibilityLabel={value}>
+    <AppText variant={variant} color={color} style={style} accessibilityLabel={value} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
       {whole}
       <AppText variant={variant} color={color} style={{ opacity: 0.62 }}>
         {fraction}
