@@ -120,3 +120,75 @@ test("deposits are valued through the exchange rate and price, with a value-weig
   assert.ok(averageApyBps(deposits) > 5 && averageApyBps(deposits) < 8);
   assert.throws(() => valueDeposits([{ symbol: "OPENAI", shares: 1n, decimals: 9 }], pools, {}), { name: "MissingPriceError" });
 });
+
+const bs58 = require("bs58");
+const { PublicKey } = require("@solana/web3.js");
+const historyStubs = { "./config": { API_BASE_URL: "x", VANNA_PROGRAM_ID: "BZ812nUv4Qhr2p1JVgmoJGjYTGk1brAXckyhFSCNH3Zg" } };
+const { decodeEarnEvents } = loadTs("src/lib/solana/earn-history.ts", historyStubs);
+const { netPrincipal, vaultEarnings, totalEarned } = loadTs("src/lib/portfolio/net-earnings.ts", stubs);
+const { groupLenderHistory } = loadTs("src/lib/portfolio/lender-history.ts", stubs);
+const { decodeBase58 } = loadTs("src/lib/solana/base58.ts", stubs);
+
+const USDC_MINT = new PublicKey("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v");
+const SUPPLY_DISC = [52, 247, 77, 250, 74, 122, 100, 33];
+
+function supplyTx(amount, failed = false) {
+  const data = new Uint8Array(24);
+  data.set(SUPPLY_DISC, 0);
+  new DataView(data.buffer).setBigUint64(8, amount, true);
+  const accounts = Array.from({ length: 13 }, () => PublicKey.unique());
+  accounts[4] = USDC_MINT;
+  return {
+    meta: { err: failed ? {} : null, preTokenBalances: [], postTokenBalances: [] },
+    transaction: { message: { accountKeys: [], instructions: [{ programId: new PublicKey("BZ812nUv4Qhr2p1JVgmoJGjYTGk1brAXckyhFSCNH3Zg"), accounts, data: bs58.encode(data) }] } },
+  };
+}
+
+test("base58 decoding matches the reference implementation", () => {
+  const sample = Uint8Array.from([0, 0, 1, 2, 250, 255]);
+  assert.deepEqual([...decodeBase58(bs58.encode(sample))], [...sample]);
+  assert.equal(decodeBase58("0OIl"), null);
+});
+
+test("a supply instruction decodes to the asset and exact amount, using the signature time", () => {
+  const [event] = decodeEarnEvents(supplyTx(2_500_000_000n), "sig1", 1_790_679_386);
+  assert.equal(event.kind, "supply");
+  assert.equal(event.symbol, "USDC");
+  assert.equal(event.amount, 2_500_000_000n);
+  assert.equal(event.timestamp, 1_790_679_386_000);
+  assert.equal(decodeEarnEvents(supplyTx(1n, true), "sig2", 1).length, 0);
+});
+
+test("net principal drops an asset whose withdrawal size is unknown", () => {
+  const events = [
+    { kind: "supply", symbol: "SOL", amount: 9_990_000_000n, signature: "a", timestamp: 2 },
+    { kind: "withdraw", symbol: "SOL", amount: null, signature: "b", timestamp: 3 },
+    { kind: "supply", symbol: "USDC", amount: 1_000_000_000n, signature: "c", timestamp: 1 },
+    { kind: "withdraw", symbol: "USDC", amount: 400_000_000n, signature: "d", timestamp: 4 },
+  ];
+  const principal = netPrincipal(events);
+  assert.equal(principal.has("SOL"), false);
+  assert.equal(principal.get("USDC"), 600_000_000n);
+});
+
+test("earnings are current underlying minus principal, valued at the unit price, never negative", () => {
+  const events = [{ kind: "supply", symbol: "USDC", amount: 1_000_000_000n, signature: "a", timestamp: 1 }];
+  const deposit = { symbol: "USDC", decimals: 6, supplied: 1_000_700_000n, value: 1_000_600_000n, supplyApyBps: 5 };
+  const [entry] = vaultEarnings([deposit], events);
+  assert.equal(entry.earned, 700_000n * 1_000_600_000n / 1_000_700_000n);
+  assert.equal(totalEarned([entry]), entry.earned);
+  assert.equal(vaultEarnings([{ ...deposit, supplied: 900_000_000n, value: 900_000_000n }], events)[0].earned, 0n);
+  assert.equal(vaultEarnings([deposit], []).length, 0);
+});
+
+test("lender history groups by day and words supplies and withdrawals", () => {
+  const now = new Date(2026, 9, 1, 12, 0, 0);
+  const events = [
+    { kind: "withdraw", symbol: "SOL", amount: null, signature: "b", timestamp: new Date(2026, 9, 1, 9).getTime() },
+    { kind: "supply", symbol: "SOL", amount: 9_990_000_000n, signature: "a", timestamp: new Date(2026, 8, 25, 9).getTime() },
+  ];
+  const groups = groupLenderHistory(events, now);
+  assert.equal(groups.map((group) => group.label).join(","), "Today,Sep 25");
+  assert.equal(groups[0].items[0].title, "Withdrew SOL");
+  assert.equal(groups[1].items[0].title, "Supplied 9.99 SOL");
+});

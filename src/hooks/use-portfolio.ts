@@ -1,8 +1,11 @@
 import { useCallback } from "react";
 
 import { useAccountSnapshot } from "@/hooks/use-account-snapshot";
+import { useEarnDeposits } from "@/hooks/use-earn-deposits";
+import { useEarnEvents } from "@/hooks/use-earn-events";
 import { useWalletAddress } from "@/hooks/use-wallet-address";
 import { useWalletHoldings } from "@/hooks/use-wallet-holdings";
+import { totalEarned, vaultEarnings } from "@/lib/portfolio/net-earnings";
 import type { Portfolio } from "@/types/portfolio";
 import type { Resource } from "@/types/resource";
 
@@ -12,12 +15,18 @@ export function usePortfolio(): Resource<Portfolio> {
   const wallet = useWalletAddress();
   const account = useAccountSnapshot(wallet);
   const holdings = useWalletHoldings(wallet);
+  const deposits = useEarnDeposits(wallet);
+  const events = useEarnEvents(wallet);
   const { refetch: refetchAccount } = account;
   const { refetch: refetchHoldings } = holdings;
+  const { refetch: refetchDeposits } = deposits;
+  const { refetch: refetchEvents } = events;
   const retry = useCallback(() => {
     void refetchAccount();
     void refetchHoldings();
-  }, [refetchAccount, refetchHoldings]);
+    void refetchDeposits();
+    void refetchEvents();
+  }, [refetchAccount, refetchHoldings, refetchDeposits, refetchEvents]);
 
   if (wallet === null) return { status: "empty" };
   if (account.data === undefined) {
@@ -34,7 +43,7 @@ export function usePortfolio(): Resource<Portfolio> {
       marginBalance: snapshot.collateral,
       totalBorrowed: snapshot.borrowed,
       netAvailable: snapshot.netAvailable,
-      netEarnings: null,
+      netEarnings: deposits.data && events.data ? totalEarned(vaultEarnings(deposits.data, events.data)) : null,
       health: snapshot.health,
       leverage: snapshot.leverage,
       roomBeforeLiquidation: snapshot.roomBeforeLiquidation,
