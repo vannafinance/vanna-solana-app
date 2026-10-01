@@ -319,3 +319,34 @@ test("a Jupiter quote keeps integer amounts and converts price impact to basis p
   assert.throws(() => parseJupiterQuote({ outAmount: 70459485, otherAmountThreshold: "1", priceImpactPct: "0" }), { kind: "invalid-response" });
   assert.throws(() => parseJupiterQuote(null), { kind: "invalid-response" });
 });
+
+const { deriveNotifications } = loadTs("src/lib/notifications/derive.ts", stubs);
+
+test("notifications come from health, earn events and swaps, newest first, with unread by last seen", () => {
+  const now = Date.UTC(2026, 9, 2, 12);
+  const items = deriveNotifications({
+    now,
+    lastSeen: now - 3 * 60 * 60 * 1000,
+    health: 1.25,
+    hasMarginAccount: true,
+    healthAcknowledged: false,
+    earnEvents: [{ kind: "supply", symbol: "SOL", amount: 9_990_000_000n, signature: "a", timestamp: now - 5 * 24 * 60 * 60 * 1000 }],
+    swaps: [{ signature: "s", timestamp: now - 60 * 60 * 1000, from: "SOL", to: "USDC", amountIn: 78_510_000_000n, decimalsIn: 9, amountOut: 9_261_940_000n, decimalsOut: 6 }],
+  });
+  assert.equal(items.map((item) => item.id).join(","), "account-health,s-swap,a-supply");
+  assert.equal(items[0].badge, "warning");
+  assert.equal(items[0].unread, true);
+  assert.equal(items[1].title, "Swapped SOL for USDC");
+  assert.equal(items[1].time, "1h");
+  assert.equal(items[1].unread, true);
+  assert.equal(items[2].unread, false);
+  assert.equal(items[2].group, "earlier");
+  assert.equal(items[2].title, "Supplied 9.99 SOL");
+});
+
+test("a healthy account and an acknowledged warning are not unread, and no margin account means no health item", () => {
+  const base = { now: 1_000_000, lastSeen: 0, earnEvents: [], swaps: [] };
+  assert.equal(deriveNotifications({ ...base, health: 2.4, hasMarginAccount: true, healthAcknowledged: false })[0].unread, false);
+  assert.equal(deriveNotifications({ ...base, health: 1.2, hasMarginAccount: true, healthAcknowledged: true })[0].unread, false);
+  assert.equal(deriveNotifications({ ...base, health: null, hasMarginAccount: false, healthAcknowledged: false }).length, 0);
+});

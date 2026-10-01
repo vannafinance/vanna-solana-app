@@ -2,7 +2,7 @@ import type { AssetSymbol } from "./portfolio";
 
 export type NotificationKind = "health" | "trade" | "earn";
 
-export type NotificationBadge = "warning" | "gain" | "earned" | "opened" | "withdrawn" | "closed" | "safe";
+export type NotificationBadge = "warning" | "gain" | "earned" | "opened" | "withdrawn" | "closed" | "safe" | "swapped";
 
 export type AppNotification = {
   id: string;

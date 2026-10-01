@@ -1,15 +1,26 @@
 import { useSyncExternalStore } from "react";
 
-import { onlineFlag, previewAccount } from "@/lib/preview-data/home";
+import { useAccountSnapshot } from "@/hooks/use-account-snapshot";
+import { useWalletAddress } from "@/hooks/use-wallet-address";
+import { simulatedOffline } from "@/lib/dev/simulated-offline";
 
-// Preview: reads a flag. The real implementation reads expo-network once that package is added.
+const MINUTE = 60_000;
+
+// Offline means the latest refresh of the account failed. The age of the data on screen is the time between the
+// last good read and that failure.
 export function useConnectivity() {
-  const online = useSyncExternalStore(onlineFlag.subscribe, onlineFlag.get);
+  const wallet = useWalletAddress();
+  const account = useAccountSnapshot(wallet);
+  const simulated = useSyncExternalStore(simulatedOffline.subscribe, simulatedOffline.get);
+  const { refetch } = account;
 
   return {
-    online,
-    staleMinutes: previewAccount.lastSyncedMinutesAgo,
-    retry: () => onlineFlag.set(true),
-    simulateOffline: (offline: boolean) => onlineFlag.set(!offline),
+    online: !simulated && !account.isError,
+    staleMinutes: Math.max(Math.floor((account.errorUpdatedAt - account.dataUpdatedAt) / MINUTE), 0),
+    retry: () => {
+      simulatedOffline.set(false);
+      void refetch();
+    },
+    simulateOffline: simulatedOffline.set,
   };
 }

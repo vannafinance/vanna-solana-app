@@ -1,9 +1,9 @@
 import { useState } from "react";
 
-import { previewResource } from "@/hooks/preview-resource";
-import { previewNotifications } from "@/lib/preview-data/home";
 import type { AppNotification, NotificationKind } from "@/types/notification";
 import type { Resource } from "@/types/resource";
+
+import { useNotificationFeed } from "./use-notification-feed";
 
 export type NotificationFilter = "all" | NotificationKind;
 
@@ -13,15 +13,14 @@ export function useNotifications(): {
   setFilter: (filter: NotificationFilter) => void;
   markAllRead: () => void;
 } {
-  const [items, setItems] = useState(previewNotifications);
+  const feed = useNotificationFeed();
   const [filter, setFilter] = useState<NotificationFilter>("all");
-
-  const visible = filter === "all" ? items : items.filter((item) => item.kind === filter);
+  const visible = filter === "all" ? feed.items : feed.items.filter((item) => item.kind === filter);
 
   return {
-    notifications: visible.length === 0 ? { status: "empty" } : previewResource(visible),
+    notifications: !feed.ready ? { status: "loading" } : visible.length === 0 ? { status: "empty" } : { status: "ready", data: visible },
     filter,
     setFilter,
-    markAllRead: () => setItems((current) => current.map((item) => ({ ...item, unread: false }))),
+    markAllRead: feed.markAllRead,
   };
 }

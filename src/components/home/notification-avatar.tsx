@@ -16,6 +16,7 @@ const badges: Record<NotificationBadge, { icon: IconName; color: ThemeColor }> =
   withdrawn: { icon: "arrow_downward", color: "badgeInfo" },
   closed: { icon: "check", color: "badgePositive" },
   safe: { icon: "verified_user", color: "badgePositive" },
+  swapped: { icon: "swap_horiz", color: "primary" },
 };
 
 type NotificationAvatarProps = {

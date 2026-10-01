@@ -273,21 +273,3 @@ export const previewNotifications: AppNotification[] = [
     unread: false,
   },
 ];
-
-function previewFlag(initial: boolean) {
-  const listeners = new Set<() => void>();
-  let current = initial;
-  return {
-    get: () => current,
-    set: (next: boolean) => {
-      current = next;
-      listeners.forEach((listener) => listener());
-    },
-    subscribe: (listener: () => void) => {
-      listeners.add(listener);
-      return () => listeners.delete(listener);
-    },
-  };
-}
-
-export const onlineFlag = previewFlag(true);
