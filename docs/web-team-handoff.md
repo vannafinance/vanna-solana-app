@@ -6,13 +6,14 @@ From: Vanna Solana mobile app (Android). Checked against `https://devnet.solana.
 
 | # | Item | Status | Needed from the web team |
 | --- | --- | --- | --- |
-| 1 | `/api/solana/history` and `/api/solana/spot-history` return 502 | Broken on the hosted server | Read history from the fork RPC instead of Alchemy (code below) |
-| 2 | Perps positions have no server route | Missing | Add `GET /api/perps/positions/{addr}` (draft below) |
-| 3 | Portfolio shows Net Earnings `$0.00` when history fails | Misleading | Show an unavailable state instead of zero (small change) |
+| 1 | `/api/solana/history` and `/api/solana/spot-history` return 502 | Broken on the hosted server, but the web page still works through a fallback (see below) | Fix or remove the indexed call; confirm the fallback window in production |
+| 2 | Perps positions have no server route | Missing | Add `GET /api/perps/positions/{addr}` (draft below) so the phone does not re-derive them |
 
-The mobile app needs only items 1 and 2. Everything else it reads already works (`/api/account/{addr}`, `/api/pools`, fork RPC).
+The mobile app needs only these two. Everything else it reads already works (`/api/account/{addr}`, `/api/pools`, fork RPC).
 
-## 1. History routes fail with "Method not found"
+**Correction to an earlier version of this note:** it said history failing blocks Perps positions and Net Earnings, and that Net Earnings `$0.00` is misleading. That was wrong. `historyWithFallback` in `lib/solana/history.ts` runs the indexed call and a direct RPC scan together and merges them, so the web Perps "Position History" and Swap History still show rows when the indexed call fails. The `$0.00` for the test wallet is probably correct (its SOL deposit was fully withdrawn, so deposited minus principal is not positive).
+
+## 1. The indexed history call fails with "Method not found"
 
 ### Reproduce (no login needed)
 
@@ -22,6 +23,14 @@ curl -s "https://devnet.solana.vanna.finance/api/solana/history?kind=earn&addres
 ```
 
 The same happens for `kind=swap`, `kind=margin` and `/api/solana/spot-history?address=...`. In the browser these are the red `history?kind=earn...` and `spot-history?...` entries in the Network tab on `/portfolio`, and they retry repeatedly.
+
+### What it affects (the web survives, with limits)
+
+`historyWithFallback` merges the failing indexed rows with `recentRpcHistory`, which scans the newest signatures on the fork RPC: 200 when `IS_LOCAL_FORK_RPC` is true, only 8 otherwise. So:
+
+- History older than that window is lost. Please confirm which value the deployed app uses; if it is 8, anyone with more than 8 recent transactions loses older rows, and earlier positions' entry price and PnL can go blank (your own comment in that function describes this).
+- The failing request is retried repeatedly on every page load (visible in the Network tab), which adds load and noise.
+- Net Earnings relies on the same history, so it can be wrong for wallets older than the window.
 
 ### Cause
 
@@ -33,7 +42,7 @@ The same happens for `kind=swap`, `kind=margin` and `/api/solana/spot-history?ad
 
 ### Fix: replace the body of `fetchAlchemyTransactionsForAddress`
 
-Keep the exported name so both routes and `decodeVannaHistory` keep working. `decodeVannaHistory` already accepts the standard parsed-transaction shape (`transaction`, `meta.logMessages`, `blockTime`).
+This gives the indexed call real depth again (the fallback only covers the newest 200). Keep the exported name so both routes and `decodeVannaHistory` keep working. `decodeVannaHistory` already accepts the standard parsed-transaction shape (`transaction`, `meta.logMessages`, `blockTime`).
 
 ```ts
 import { Connection, PublicKey } from "@solana/web3.js";
@@ -79,7 +88,7 @@ export async function fetchAlchemyTransactionsForAddress(address: string): Promi
 - `getSignaturesForAddress` on a margin account misses transactions that load the margin PDA through an Address Lookup Table. Scan the margin account's owner wallet for `margin` and `swap` kinds, as `recentRpcHistory` already does.
 - `getTransactionsForAddress` and `getTokenLargestAccounts` / `getProgramAccounts` on the Token program are not available.
 
-### Acceptance checks (known wallet, expected results)
+### Acceptance checks (known wallet, expected results once the indexed call is fixed)
 
 ```bash
 A=2iyYKhNcD5fiPNphQQDq1KVqVVR3iXrwy6UFkYuhF98e
@@ -93,7 +102,7 @@ These are the values the mobile app decoded directly from the fork, and they mat
 
 ## 2. Perps positions route (does not exist)
 
-The web derives Long/Short rows in the browser with `listDerivedPositions(marginAccountAddress)` (`lib/solana/long-short.ts`), and `computeAverageOpenPrice` in the table component gives entry price. A phone cannot run Anchor reads or the attribution rules (which separate Farm from Perps using margin and swap history), so please expose them as JSON. It depends on item 1 because `listDerivedPositions` calls `getSolanaMarginHistory` and `getSolanaSwapHistory`.
+The web derives Long/Short rows in the browser with `listDerivedPositions(marginAccountAddress)` (`lib/solana/long-short.ts`), and `computeAverageOpenPrice` in the table component gives entry price. A phone cannot run Anchor reads or the attribution rules (which separate Farm from Perps using margin and swap history), so please expose them as JSON. `listDerivedPositions` calls `getSolanaMarginHistory` and `getSolanaSwapHistory`, which work through the fallback above, so this route is not blocked by item 1 (it is limited by the same window).
 
 `app/api/perps/positions/[addr]/route.ts` (draft, modelled on `app/api/account/[addr]/route.ts`, not run against a live server):
 
@@ -144,10 +153,6 @@ Each row is a `DerivedPosition` (`lib/long-short-math.ts`): `stock`, `side` (`lo
 | `openedAt` | first matching swap row timestamp | "Since Sep 22" |
 
 Numbers can stay JSON numbers like `/api/account` (USD figures are numbers there too). Errors should keep the existing shape (`{ error }` with 400/429/502) so one client handles both routes.
-
-## 3. Net Earnings shows `$0.00` when history fails
-
-`components/portfolio/portfolio-section.tsx` computes Net Earnings from `useEarnTransactions()`. When that request fails the list is empty, no asset has a known principal, and the card shows `$0.00` with no error. The mobile app shows "-" in that case. Suggest the same on web: when the history query errors, render "-" or an error line instead of zero.
 
 ## What the mobile app already reads (no change needed)
 
