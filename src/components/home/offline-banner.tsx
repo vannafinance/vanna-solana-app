@@ -6,7 +6,7 @@ import { ripple } from "@/components/ui/ripple";
 import { useTheme } from "@/theme/use-theme";
 
 type OfflineBannerProps = {
-  staleMinutes: number;
+  staleMinutes?: number;
   onRetry: () => void;
 };
 
@@ -35,7 +35,7 @@ export function OfflineBanner({ staleMinutes, onRetry }: OfflineBannerProps) {
           You&apos;re offline
         </AppText>
         <AppText variant="caption" color="onPinkTint">
-          {`Balances are from ${staleMinutes} min ago. Trades and swaps are paused.`}
+          {staleMinutes === undefined ? "Balances may be out of date. We couldn't refresh them." : `Balances are from ${staleMinutes} min ago. Trades and swaps are paused.`}
         </AppText>
       </View>
       <Pressable

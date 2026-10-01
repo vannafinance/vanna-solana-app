@@ -1,10 +1,11 @@
 import { PlusJakartaSans_400Regular, PlusJakartaSans_600SemiBold, useFonts } from "@expo-google-fonts/plus-jakarta-sans";
 import { MobileWalletProvider } from "@wallet-ui/react-native-web3js";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { focusManager, QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { StatusBar } from "expo-status-bar";
 import { useEffect } from "react";
+import { AppState } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
@@ -15,6 +16,11 @@ import { APP_IDENTITY, CHAIN, RPC_URL } from "@/lib/solana/config";
 import { walletCache } from "@/lib/solana/wallet-cache";
 
 SplashScreen.preventAutoHideAsync();
+
+focusManager.setEventListener((handleFocus) => {
+  const subscription = AppState.addEventListener("change", (state) => handleFocus(state === "active"));
+  return () => subscription.remove();
+});
 
 const queryClient = new QueryClient({ defaultOptions: { queries: { retry: 1, staleTime: 10_000 } } });
 

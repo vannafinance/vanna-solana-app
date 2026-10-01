@@ -22,6 +22,10 @@ export function formatUsd(raw: bigint, decimals = USD_DECIMALS): string {
   return text.startsWith("-") ? `-$${text.slice(1)}` : `$${text}`;
 }
 
+export function formatUsdOrDash(raw: bigint | null, decimals = USD_DECIMALS): string {
+  return raw === null ? "—" : formatUsd(raw, decimals);
+}
+
 export function formatSignedUsd(raw: bigint, decimals = USD_DECIMALS): string {
   return raw > 0n ? `+${formatUsd(raw, decimals)}` : formatUsd(raw, decimals);
 }

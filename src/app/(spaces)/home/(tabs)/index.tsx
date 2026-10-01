@@ -13,20 +13,21 @@ import { ResourceView } from "@/components/ui/resource-view";
 import { Screen } from "@/components/ui/screen";
 import { SectionHeader } from "@/components/ui/section-header";
 import { SpaceHeader } from "@/components/ui/space-header";
-import { formatSignedUsd, formatUsd } from "@/format/format-amount";
+import { formatSignedUsd, formatUsd, formatUsdOrDash } from "@/format/format-amount";
 import { assetDetail, changeToday } from "@/format/format-asset";
 import { useConnectivity } from "@/hooks/use-connectivity";
 import { useHeaderProps } from "@/hooks/use-header-props";
 import { useNotificationMenu } from "@/hooks/use-notification-menu";
 import { usePortfolio } from "@/hooks/use-portfolio";
+import { routes } from "@/navigation/routes";
 import { useTheme } from "@/theme/use-theme";
-import type { Portfolio } from "@/types/portfolio";
+import type { Portfolio, Position, TokenBalance } from "@/types/portfolio";
 
 const PREVIEW_POSITIONS = 3;
 
-function Positions({ data }: { data: Portfolio }) {
+function Positions({ positions }: { positions: Position[] }) {
   const { spacing } = useTheme();
-  const shown = data.positions.slice(0, PREVIEW_POSITIONS);
+  const shown = positions.slice(0, PREVIEW_POSITIONS);
 
   return (
     <>
@@ -42,7 +43,7 @@ function Positions({ data }: { data: Portfolio }) {
   );
 }
 
-function Assets({ data }: { data: Portfolio }) {
+function Assets({ assets }: { assets: TokenBalance[] }) {
   const { spacing } = useTheme();
 
   return (
@@ -51,13 +52,13 @@ function Assets({ data }: { data: Portfolio }) {
         <SectionHeader title="Your assets" />
       </View>
       <Card padded={false} style={{ paddingHorizontal: spacing.lg, paddingVertical: spacing.xs }}>
-        {data.assets.map((asset, index) => (
+        {assets.map((asset, index) => (
           <AssetRow
             key={asset.symbol}
             symbol={asset.symbol}
             detail={assetDetail(asset.symbol, asset.tokens, asset.value)}
             value={formatUsd(asset.value)}
-            change={changeToday(asset.changeTodayBps)}
+            change={asset.changeTodayBps === undefined ? undefined : changeToday(asset.changeTodayBps)}
             changeBps={asset.changeTodayBps}
             first={index === 0}
           />
@@ -65,6 +66,11 @@ function Assets({ data }: { data: Portfolio }) {
       </Card>
     </>
   );
+}
+
+function healthText(data: Portfolio) {
+  if (!data.hasMarginAccount) return "—";
+  return data.health === null ? "No debt" : `${data.health.toFixed(2)} · ${healthLabel(data.health)}`;
 }
 
 export default function Overview() {
@@ -83,13 +89,13 @@ export default function Overview() {
               {(data) => (
                 <HeroMetrics
                   primary={[
-                    { label: "Wallet balance", value: formatUsd(data.walletBalance) },
+                    { label: "Wallet balance", value: formatUsdOrDash(data.walletBalance) },
                     { label: "Margin account", value: formatUsd(data.marginBalance) },
                   ]}
                   secondary={[
-                    { label: "Health", value: data.health === null ? "No debt" : `${data.health.toFixed(2)} · ${healthLabel(data.health)}`, dot: data.health !== null },
+                    { label: "Health", value: healthText(data), dot: data.hasMarginAccount && data.health !== null },
                     { label: "Total borrowed", value: formatUsd(data.totalBorrowed) },
-                    { label: "Net earnings", value: formatSignedUsd(data.netEarnings), positive: data.netEarnings > 0n },
+                    { label: "Net earnings", value: data.netEarnings === null ? "—" : formatSignedUsd(data.netEarnings), positive: data.netEarnings !== null && data.netEarnings > 0n },
                   ]}
                 />
               )}
@@ -97,22 +103,32 @@ export default function Overview() {
           </SpaceHeader>
         }
       >
-        {connectivity.online ? null : <OfflineBanner staleMinutes={connectivity.staleMinutes} onRetry={connectivity.retry} />}
+        {connectivity.online && !(portfolio.status === "ready" && portfolio.stale) ? null : (
+          <OfflineBanner
+            staleMinutes={connectivity.online ? undefined : connectivity.staleMinutes}
+            onRetry={portfolio.status === "ready" && portfolio.refresh ? portfolio.refresh : connectivity.retry}
+          />
+        )}
 
-        <ResourceView resource={portfolio} emptyLabel="No positions yet">
-          {(data) =>
-            data.positions.length === 0 ? (
-              <>
-                <Assets data={data} />
-                <EmptyCard title="No open positions" message="Open a long or short in Trade, or deploy into Farm. Positions show up here." />
-              </>
-            ) : (
-              <>
-                <Positions data={data} />
-                <Assets data={data} />
-              </>
-            )
-          }
+        <ResourceView resource={portfolio} emptyLabel="No balances yet">
+          {(data) => (
+            <>
+              {data.hasMarginAccount ? null : (
+                <EmptyCard
+                  title="No margin account yet"
+                  message="Create one to borrow, trade with leverage and farm. It holds your collateral."
+                  actionLabel="Create margin account"
+                  onAction={() => router.push(routes.marginCreate)}
+                />
+              )}
+              {data.positions === null ? null : data.positions.length === 0 ? (
+                data.hasMarginAccount ? <EmptyCard title="No open positions" message="Open a long or short in Trade, or deploy into Farm. Positions show up here." /> : null
+              ) : (
+                <Positions positions={data.positions} />
+              )}
+              {data.assets === null ? null : <Assets assets={data.assets} />}
+            </>
+          )}
         </ResourceView>
       </Screen>
       <NotificationDropdown

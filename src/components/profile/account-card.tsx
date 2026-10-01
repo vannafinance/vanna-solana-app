@@ -3,12 +3,12 @@ import { View } from "react-native";
 import { AppText } from "@/components/ui/app-text";
 import { Card } from "@/components/ui/card";
 import { Pill } from "@/components/ui/pill";
-import { formatUsd } from "@/format/format-amount";
+import { formatUsdOrDash } from "@/format/format-amount";
 import { shortAddress } from "@/format/short-address";
 import { useTheme } from "@/theme/use-theme";
 
 type AccountCardProps = {
-  walletBalance: bigint;
+  walletBalance: bigint | null;
   marginAddress: string | null;
 };
 
@@ -28,7 +28,7 @@ export function AccountCard({ walletBalance, marginAddress }: AccountCardProps) 
           Wallet balance
         </AppText>
         <AppText variant="body" strong>
-          {formatUsd(walletBalance)}
+          {formatUsdOrDash(walletBalance)}
         </AppText>
       </View>
       <View style={row}>

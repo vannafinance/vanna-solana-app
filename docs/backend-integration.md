@@ -49,3 +49,14 @@ Alchemy does not index a private Surfpool fork. The web app merges indexed histo
 - Logout clears persisted authorization, cancels pending queries and clears query cache. Signed-out Profile offers Connect wallet.
 - Earn, Swap, Farm, Perps and financial Home/Profile fields still use fixtures. They are not integrated transaction paths yet.
 - Next transaction gate: verify the installed wallet supports sign-only transactions before porting supply/redeem.
+
+## Mobile data layer (Portfolio)
+
+| Layer | Files | Responsibility |
+| --- | --- | --- |
+| Transport and parsing | `src/lib/solana/request-json.ts`, `account-api.ts`, `wallet-holdings.ts`, `oracle-prices.ts` | Fetch with timeout and cancellation, validate payloads, read fork RPC. No React. |
+| Pure logic | `src/lib/portfolio/value-holdings.ts` | Valuation in bigint; throws if a held token has no price. |
+| Queries | `src/hooks/use-account-snapshot.ts`, `use-wallet-holdings.ts` | React Query (12 s stale, 1 retry, refetch on app resume). |
+| Contract for screens | `src/hooks/use-portfolio.ts` | `Resource<Portfolio>`; a failed wallet read leaves wallet fields `null`, a failed refresh keeps the last data with `stale`. |
+
+In development `EXPO_PUBLIC_DEV_WALLET_ADDRESS` (a public address) replaces the connected wallet. Not yet real: net earnings, positions list, Lender and Trader tabs.

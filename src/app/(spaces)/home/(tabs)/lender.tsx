@@ -71,7 +71,7 @@ export default function Lender() {
                 <>
                   <ChipRow options={views} value={view} onChange={setView} />
                   {view === "spot" ? (
-                    <SpotList walletBalance={portfolio.status === "ready" ? portfolio.data.walletBalance : 0n} balances={data.spot} />
+                    <SpotList walletBalance={portfolio.status === "ready" ? portfolio.data.walletBalance : null} balances={data.spot} />
                   ) : (
                     data.vaults.map((vault) => (
                       <LenderVaultCard key={vault.id} vault={vault} onWithdraw={() => router.push("/earn")} onSupplyMore={() => router.push("/earn")} />

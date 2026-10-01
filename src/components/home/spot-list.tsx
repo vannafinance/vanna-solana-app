@@ -3,12 +3,12 @@ import { View } from "react-native";
 import { AppText } from "@/components/ui/app-text";
 import { Card } from "@/components/ui/card";
 import { TokenIcon } from "@/components/ui/token-icon";
-import { formatToken, formatUsd } from "@/format/format-amount";
+import { formatToken, formatUsd, formatUsdOrDash } from "@/format/format-amount";
 import { useTheme } from "@/theme/use-theme";
 import type { TokenBalance } from "@/types/portfolio";
 
 type SpotListProps = {
-  walletBalance: bigint;
+  walletBalance: bigint | null;
   balances: readonly TokenBalance[];
 };
 
@@ -22,7 +22,7 @@ export function SpotList({ walletBalance, balances }: SpotListProps) {
           Wallet balance
         </AppText>
         <AppText variant="bodyLg" strong style={{ lineHeight: 24 }}>
-          {formatUsd(walletBalance)}
+          {formatUsdOrDash(walletBalance)}
         </AppText>
       </View>
       {balances.map((balance) => (

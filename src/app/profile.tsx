@@ -51,7 +51,7 @@ export default function Profile() {
                 debt={data.totalBorrowed}
               />
             )}
-            <AccountCard walletBalance={data.walletBalance} marginAddress={margin.exists ? data.marginAddress : null} />
+            <AccountCard walletBalance={data.walletBalance} marginAddress={data.marginAddress} />
           </>
         )}
       </ResourceView>

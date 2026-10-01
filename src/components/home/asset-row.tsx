@@ -10,8 +10,8 @@ type AssetRowProps = {
   symbol: TokenSymbol;
   detail: string;
   value: string;
-  change: string;
-  changeBps: number;
+  change?: string;
+  changeBps?: number;
   first?: boolean;
 };
 
@@ -20,7 +20,7 @@ export function AssetRow({ symbol, detail, value, change, changeBps, first = fal
 
   return (
     <View
-      accessibilityLabel={`${symbol}, ${value}, ${change}`}
+      accessibilityLabel={change ? `${symbol}, ${value}, ${change}` : `${symbol}, ${value}`}
       style={{
         flexDirection: "row",
         alignItems: "center",
@@ -43,9 +43,11 @@ export function AssetRow({ symbol, detail, value, change, changeBps, first = fal
         <AppText variant="bodyLg" strong>
           {value}
         </AppText>
-        <AppText variant="caption" color={pnlColor(BigInt(changeBps))}>
-          {change}
-        </AppText>
+        {change === undefined || changeBps === undefined ? null : (
+          <AppText variant="caption" color={pnlColor(BigInt(changeBps))}>
+            {change}
+          </AppText>
+        )}
       </View>
     </View>
   );

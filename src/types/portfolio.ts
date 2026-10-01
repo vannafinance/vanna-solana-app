@@ -61,7 +61,7 @@ export type TokenBalance = {
   symbol: AssetSymbol;
   tokens: TokenAmount;
   value: bigint;
-  changeTodayBps: number;
+  changeTodayBps?: number;
 };
 
 export type LenderVault = {
@@ -90,18 +90,19 @@ export type LenderActivityGroup = {
 };
 
 export type Portfolio = {
-  walletBalance: bigint;
+  walletBalance: bigint | null;
   marginBalance: bigint;
   totalBorrowed: bigint;
   netAvailable: bigint;
-  netEarnings: bigint;
+  netEarnings: bigint | null;
   health: number | null;
   leverage: number | null;
   roomBeforeLiquidation: bigint;
+  hasMarginAccount: boolean;
   walletAddress: string;
-  marginAddress: string;
-  positions: Position[];
-  assets: TokenBalance[];
+  marginAddress: string | null;
+  positions: Position[] | null;
+  assets: TokenBalance[] | null;
 };
 
 export type TraderSummary = {
