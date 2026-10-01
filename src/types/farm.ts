@@ -74,12 +74,15 @@ export type DeployQuote = {
   borrow: TokenAmount;
   projectedYearlyUsd: bigint;
   projectedMonthlyUsd: bigint;
+  netApyBps: number;
+  liquidationPriceUsd: bigint;
   healthFactor: number | null;
 };
 
 export type DeployForm = {
   pools: readonly FarmPool[];
   collaterals: readonly FarmCollateral[];
+  held: readonly FarmCollateral[];
   pool: FarmPool;
   collateral: FarmCollateral;
   amountText: string;

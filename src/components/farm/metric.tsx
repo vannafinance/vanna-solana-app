@@ -10,16 +10,17 @@ type MetricProps = {
   value: string;
   sub: string;
   valueColor?: ThemeColor;
+  valueLineHeight?: number;
 };
 
-export function Metric({ label, value, sub, valueColor = "text" }: MetricProps) {
+export function Metric({ label, value, sub, valueColor = "text", valueLineHeight = 22 }: MetricProps) {
   return (
     <View style={{ flex: 1, gap: 2 }}>
       <CapsLabel>{label}</CapsLabel>
-      <AppText variant="bodyLg" strong color={valueColor}>
+      <AppText variant="bodyLg" strong color={valueColor} style={{ lineHeight: valueLineHeight }}>
         {value}
       </AppText>
-      <AppText variant="caption" color="textMuted">
+      <AppText variant="caption" color="textMuted" style={{ lineHeight: 16 }}>
         {sub}
       </AppText>
     </View>

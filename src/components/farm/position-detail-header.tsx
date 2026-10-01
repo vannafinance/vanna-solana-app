@@ -1,8 +1,9 @@
-import { ArrowLeft } from "phosphor-react-native";
 import { Pressable, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { AppText } from "@/components/ui/app-text";
+import { Icon } from "@/components/ui/icon";
+import { ripple } from "@/components/ui/ripple";
 import { useTheme } from "@/theme/use-theme";
 
 import { formatHealth } from "./farm-format";
@@ -14,43 +15,28 @@ type PositionDetailHeaderProps = {
 };
 
 export function PositionDetailHeader({ onBack, health }: PositionDetailHeaderProps) {
-  const { colors, radius, spacing, minTouchTarget } = useTheme();
+  const { colors } = useTheme();
   const insets = useSafeAreaInsets();
 
   return (
-    <View
-      style={{
-        flexDirection: "row",
-        alignItems: "center",
-        justifyContent: "space-between",
-        paddingTop: insets.top + spacing.sm,
-        paddingHorizontal: spacing.lg,
-        minHeight: 56 + insets.top,
-      }}
-    >
+    <View style={{ height: 56 + insets.top, paddingTop: insets.top, paddingLeft: 4, paddingRight: 16, flexDirection: "row", alignItems: "center", gap: 4 }}>
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel="Back to positions"
+        accessibilityLabel="All positions"
         onPress={onBack}
-        style={{ minHeight: minTouchTarget, flexDirection: "row", alignItems: "center", gap: 6 }}
+        android_ripple={ripple(colors.text)}
+        style={{ height: 48, paddingHorizontal: 10, borderRadius: 24, flexDirection: "row", alignItems: "center", gap: 6, overflow: "hidden" }}
       >
-        <ArrowLeft size={20} color={colors.text} />
+        <Icon name="arrow_back" size={20} color="text" />
         <AppText variant="body">Positions</AppText>
       </Pressable>
+      <View style={{ flex: 1 }} />
       {health === undefined ? null : (
-        <View
-          style={{
-            minHeight: 32,
-            flexDirection: "row",
-            alignItems: "center",
-            gap: 6,
-            paddingHorizontal: spacing.md,
-            borderRadius: radius.pill,
-            backgroundColor: colors.surface,
-          }}
-        >
+        <View style={{ height: 32, paddingHorizontal: 12, borderRadius: 16, backgroundColor: colors.surface, flexDirection: "row", alignItems: "center", gap: 6 }}>
           <HealthGauge health={health} width={16} />
-          <AppText variant="body" strong>{`HF ${formatHealth(health)}`}</AppText>
+          <AppText variant="body" strong>
+            {`HF ${formatHealth(health)}`}
+          </AppText>
         </View>
       )}
     </View>

@@ -5,6 +5,7 @@ import { Linking } from "react-native";
 import { formatPercent, formatToken } from "@/format/format-amount";
 import { toInputText } from "@/lib/farm/amount-text";
 import { buildDeployForm } from "@/lib/farm/deploy-form";
+import { stepHeld } from "@/lib/farm/farm-math";
 import { explorerAccountUrl } from "@/lib/farm/explorer";
 import { nextFarmPositionId, addFarmPosition, farmCollaterals, farmPools } from "@/lib/preview-data/farm";
 import { positionFromDeploy } from "@/lib/farm/position-math";
@@ -69,6 +70,7 @@ export function useFarmDeploy() {
     needsMarginAccount: !margin.exists,
     selectPool: setPoolSymbol,
     selectCollateral,
+    stepCollateral: (direction: 1 | -1) => selectCollateral(stepHeld(data.held, collateralSymbol, direction)),
     setAmountText,
     fillMax: () => setAmountText(balanceText(data.collateral)),
     setLeverage,

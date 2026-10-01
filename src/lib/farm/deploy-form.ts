@@ -1,7 +1,7 @@
 import { parseUnits, type TokenAmount } from "@/format/format-amount";
 import type { CollateralSymbol, DeployForm, DeployIssue, FarmCollateral, FarmPool, PoolSymbol } from "@/types/farm";
 
-import { deployQuote, MIN_LEVERAGE } from "./farm-math";
+import { deployQuote, heldCollaterals, MIN_LEVERAGE } from "./farm-math";
 
 type DeployInput = {
   pools: readonly FarmPool[];
@@ -21,8 +21,8 @@ function findBySymbol<T extends { symbol: string }>(items: readonly T[], symbol:
 function findIssue(collateral: FarmCollateral, amount: bigint, leverage: number): DeployIssue | null {
   if (collateral.balance <= 0n) return "no-balance";
   if (amount > collateral.balance) return "over-balance";
-  if (amount <= 0n) return "no-amount";
   if (leverage <= MIN_LEVERAGE) return "low-leverage";
+  if (amount <= 0n) return "no-amount";
   return null;
 }
 
@@ -34,6 +34,7 @@ export function buildDeployForm({ pools, collaterals, poolSymbol, collateralSymb
   return {
     pools,
     collaterals,
+    held: heldCollaterals(collaterals),
     pool,
     collateral,
     amountText,

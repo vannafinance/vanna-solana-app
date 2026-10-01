@@ -16,16 +16,38 @@ export function formatHealth(healthFactor: number): string {
 }
 
 export function healthColor(healthFactor: number): ThemeColor {
-  if (healthFactor >= health.safeFrom) return "positive";
-  return healthFactor > health.liquidation ? "warning" : "negative";
+  if (healthFactor >= health.safeFrom) return "heroPositive";
+  return healthFactor > health.liquidation ? "healthWatch" : "short";
 }
 
-export function formatYearlyProfit(usd: bigint): string {
-  return `≈${formatUsd(usd).replace(/\.00$/, "")}/yr`;
+export function healthLabel(healthFactor: number): string {
+  if (healthFactor >= health.safeFrom) return "Safe";
+  return healthFactor > health.liquidation ? "Moderate" : "At risk";
 }
 
 export function pairLabel(collateralSymbol: string, poolSymbol: string): string {
   return `${collateralSymbol} → ${poolSymbol}`;
+}
+
+export function formatTimestamp(timestamp: number): string {
+  const date = new Date(timestamp);
+  const day = date.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+  const time = date.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+  return `${day} · ${time}`;
+}
+
+export function shortSignature(signature: string): string {
+  return `${signature.slice(0, 4)}…${signature.slice(-4)}`;
+}
+
+export function formatBorrow({ pool, quote }: DeployForm): string {
+  return withSymbol(quote.borrow, pool.symbol);
+}
+
+export function formatYearlyCaption({ pool, quote, amount }: DeployForm): string {
+  if (amount.raw <= 0n) return "Enter an amount to see it in dollars";
+  if (quote.healthFactor === null) return "Pick 2x or more to start earning";
+  return `≈ ${formatUsd(quote.projectedYearlyUsd)} a year, paid in ${pool.symbol}`;
 }
 
 export function deployCtaLabel({ issue, collateral }: DeployForm, needsMarginAccount: boolean): string {
