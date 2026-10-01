@@ -2,6 +2,10 @@
 
 `index.html` shows the design as it is on `feature/vanna-v2-designs` (left) next to the working copy (right), inside Android phone, foldable and tablet frames.
 
+## Share it as one file
+
+`vanna-compare.html` is the whole comparison in a single file (both prototypes, images and change log inside). Double-click it or send it to anyone: no server needed. Rebuild it after changes with `node compare/tools/build.js` then `python compare/tools/bundle.py`.
+
 ## For teammates: run it in 1 minute
 
 Nothing to install to look at it: `current.html` and `new.html` are already built and committed.

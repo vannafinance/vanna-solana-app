@@ -4,7 +4,15 @@ This branch adds a **side-by-side comparison of the Vanna Android app**: on the 
 
 ---
 
-## Start in 2 minutes
+## Quickest: one file, no setup
+
+Open **[`vanna-v2-designs/compare/vanna-compare.html`](vanna-v2-designs/compare/vanna-compare.html)** → **Download raw file** (the ⤓ button), then double-click it. It is the whole comparison in a single file (both prototypes, all images and the change log inside, 3.3 MB): no server, no Git, works in Chrome and Edge. Send it to anyone over Slack or email the same way. Only the font loads from the internet; offline it falls back to the system font.
+
+Regenerate it after changes: `node compare/tools/build.js` then `python compare/tools/bundle.py` (from `vanna-v2-designs/`).
+
+---
+
+## Start in 2 minutes (to work on it)
 
 You need **Git** and **Python 3** (or Node.js). Nothing to install: the built pages are committed.
 

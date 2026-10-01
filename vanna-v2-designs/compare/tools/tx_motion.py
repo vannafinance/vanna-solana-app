@@ -130,11 +130,20 @@ def transactions():
         d = blk[blk.index('<sc-if value="{{ txDone }}"'):]
         d = d[:d.index('</sc-if>')]
         title = re.search(r'<h2[^>]*>(.*?)</h2>', d, flags=re.S).group(1).strip()
-        text = re.search(r'<p[^>]*>(.*?)</p>', d, flags=re.S).group(1).strip()
+        text = re.search(r'<p(?:\s[^>]*)?>(.*?)</p>', d, flags=re.S).group(1).strip()   # <p ...>, not <path ...>
         prim = [(href, re.sub(r'<.*', '', lab).strip()) for href, lab in re.findall(r'<a href="([^"#][^"]*)"[^>]*>(.*?)</a>', d, flags=re.S)]
         new = tx_block(title, text, prim[0] if prim else None)
         open(p, 'w', encoding='utf8').write(h[:a] + new + h[b:])
         print('tx card:', f, '|', title, '|', prim[0] if prim else 'Done')
+    # repair cards built before the <path> fix: the old heading and icon tail leaked into the text line
+    for f in sorted(os.listdir(os.path.join(SRC, 'tpl'))):
+        p = os.path.join(SRC, 'tpl', f)
+        h = open(p, encoding='utf8').read()
+        n = re.sub(r'<div class="vn-tx-txt"><b>([^<]*)</b><span></path></svg></span>\s*<h2[^>]*>.*?</h2>\s*<p(?:\s[^>]*)?>(.*?)</span></div>',
+                   lambda m: '<div class="vn-tx-txt"><b>' + m.group(1) + '</b><span>' + m.group(2) + '</span></div>', h, flags=re.S)
+        if n != h:
+            open(p, 'w', encoding='utf8').write(n)
+            print('tx card repaired:', f)
     # "Step N of M" only for real multi-step flows
     for f in sorted(os.listdir(os.path.join(SRC, 'cls'))):
         p = os.path.join(SRC, 'cls', f)
