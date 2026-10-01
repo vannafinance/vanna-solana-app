@@ -1,0 +1,217 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Preview: live charts</title>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root { --page:#F7F7F7; --card:#FFFFFF; --text:#1F1F1F; --text2:#595959; --line:#F4F4F4; --pos:#1C7C83; --link:#703AE6; --tv:#F1EBFD; --tvI:#5029A3;
+  --shadow:0 1px 2px rgba(17,17,17,.04),0 8px 24px rgba(17,17,17,.05); --bg:#EDEBF3; }
+:root[data-theme="dark"] { --page:#111111; --card:#1E1E1E; --text:#FFFFFF; --text2:#BFBFBF; --line:#2C2C2C; --pos:#32EEE2; --link:#BDA4F4; --tv:#2F1B61; --tvI:#D3C2F7;
+  --shadow:none; --bg:#1A1A1F; }
+* { box-sizing: border-box; }
+body { margin:0; background:var(--bg); font-family:'Plus Jakarta Sans',system-ui,sans-serif; font-variant-numeric:tabular-nums; color:var(--text); }
+.top { padding:20px 28px 0; display:flex; align-items:center; gap:16px; flex-wrap:wrap; }
+.top h1 { margin:0; font-size:20px; font-weight:600; }
+.top p { margin:0; font-size:14px; color:var(--text2); flex-basis:100%; }
+.top button { height:36px; padding:0 14px; border-radius:18px; border:1px solid rgba(127,127,127,.3); background:var(--card); color:var(--text); font:600 14px 'Plus Jakarta Sans'; cursor:pointer; }
+.wrap { display:flex; gap:28px; padding:20px 28px 28px; align-items:flex-start; flex-wrap:wrap; }
+.phone { display:flex; flex-direction:column; align-items:center; gap:12px; }
+.screen { width:412px; max-width:calc(100vw - 32px); height:820px; border-radius:36px; overflow:hidden auto; background:var(--page); box-shadow:0 0 0 9px #0B0B0D,0 30px 60px -20px rgba(47,27,97,.4); }
+.cap { font-size:14px; color:var(--text2); font-weight:500; max-width:412px; text-align:center; }
+.panel { background:linear-gradient(180deg,#137A82 0%,#0A464B 100%); color:#FFF; border-radius:0 0 28px 28px; padding:56px 16px 20px; }
+.modes { display:flex; height:44px; border-bottom:1px solid rgba(255,255,255,.18); }
+.modes button, .chips button { border:0; background:transparent; font:600 14px 'Plus Jakarta Sans'; cursor:pointer; }
+.modes button { flex:1; color:rgba(255,255,255,.72); }
+.modes button[aria-selected="true"] { color:#FFF; box-shadow:inset 0 -2px 0 #FFF; }
+.val { margin-top:14px; font-size:40px; line-height:48px; font-weight:600; letter-spacing:-.02em; }
+.when { font-size:14px; line-height:20px; color:rgba(255,255,255,.78); min-height:20px; }
+.chips { margin-top:10px; display:flex; gap:4px; }
+.chips button { height:32px; padding:0 12px; border-radius:8px; font-size:12px; color:rgba(255,255,255,.72); }
+.chips button[aria-selected="true"] { background:rgba(255,255,255,.22); color:#FFF; }
+.chart { margin-top:12px; }
+.body { padding:16px; }
+.card { border-radius:16px; background:var(--card); box-shadow:var(--shadow); padding:16px; }
+.ghost { height:64px; border-radius:16px; background:var(--card); box-shadow:var(--shadow); margin-top:12px; opacity:.6; }
+.tabs { display:flex; gap:20px; padding:56px 16px 0; border-bottom:1px solid var(--line); font-size:14px; font-weight:600; color:var(--text2); overflow:hidden; }
+.tabs span { padding-bottom:12px; white-space:nowrap; }
+.tabs .on { color:var(--text); box-shadow:inset 0 -2px 0 var(--link); }
+.grid2 { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+.k { font-size:12px; color:var(--text2); }
+.v { font-size:24px; line-height:32px; font-weight:600; }
+h3 { margin:20px 0 8px; font-size:14px; font-weight:600; }
+.cchips { display:flex; gap:4px; margin-top:10px; }
+.cchips button { height:32px; padding:0 12px; border-radius:8px; border:0; background:transparent; color:var(--text2); font:600 12px 'Plus Jakarta Sans'; cursor:pointer; }
+.cchips button[aria-selected="true"] { background:var(--tv); color:var(--tvI); }
+.legend { display:flex; gap:16px; margin-top:6px; font-size:12px; color:var(--text2); }
+.legend i { display:inline-block; width:16px; height:0; border-top:2.5px solid var(--link); vertical-align:middle; margin-right:6px; }
+.legend i.s { border-top:2px dashed var(--pos); }
+.note { margin:10px 2px 0; font-size:12px; line-height:18px; color:var(--text2); }
+</style></head>
+<body>
+<div class="top"><h1>Live charts</h1><button id="theme" type="button">Dark mode</button>
+<p>Press and drag on any chart (or hover with a mouse): the number and date follow your finger, and let go to return to today. The ranges reload the data. Charts draw at the screen's real width, so nothing stretches on tablets. Resize this window to check.</p></div>
+<div class="wrap">
+  <div class="phone"><div class="screen">
+    <div class="panel">
+      <div class="modes" role="tablist" data-g="a"><button role="tab" data-m="dep" aria-selected="true">Overall deposit</button><button role="tab" data-m="earn" aria-selected="false">Net earnings</button></div>
+      <div class="val" id="a-val"></div><div class="when" id="a-when"></div>
+      <div class="chart" id="a-chart"></div>
+      <div class="chips" role="tablist" data-g="a"></div>
+    </div>
+    <div class="body"><div class="ghost"></div><div class="ghost"></div></div>
+  </div><div class="cap"><b>A · Clean</b> (recommended for the coloured header): one number, its date, and dates under the line. Drag to read any day.</div></div>
+
+  <div class="phone"><div class="screen">
+    <div class="panel">
+      <div class="modes" role="tablist" data-g="b"><button role="tab" data-m="dep" aria-selected="true">Overall deposit</button><button role="tab" data-m="earn" aria-selected="false">Net earnings</button></div>
+      <div class="val" id="b-val"></div><div class="when" id="b-when"></div>
+      <div class="chart" id="b-chart"></div>
+      <div class="chips" role="tablist" data-g="b"></div>
+    </div>
+    <div class="body"><div class="ghost"></div><div class="ghost"></div></div>
+  </div><div class="cap"><b>B · With value axis</b>: adds 3 values on the right with faint lines, like the web app. More precise, busier.</div></div>
+
+  <div class="phone"><div class="screen">
+    <div class="tabs"><span>Positions</span><span>Details</span><span>Activity</span><span class="on">Analytics</span><span>Managers</span></div>
+    <div class="body">
+      <div class="grid2">
+        <div class="card"><div class="k">Supply APY</div><div class="v" style="color:var(--pos)">1.82%</div></div>
+        <div class="card"><div class="k">Borrow APY</div><div class="v">4.77%</div></div>
+      </div>
+      <h3>Supply APY history</h3>
+      <div class="card">
+        <div class="v" id="c-val"></div><div class="k" id="c-when"></div>
+        <div class="chart" id="c-chart"></div>
+        <div class="cchips" role="tablist" id="c-chips"></div>
+      </div>
+      <h3>Interest rate curve</h3>
+      <div class="card">
+        <div class="k" id="r-head">Now</div>
+        <div style="display:flex;gap:20px;margin-top:2px"><div><div class="v" id="r-b"></div><div class="k">Borrowers pay</div></div><div><div class="v" style="color:var(--pos)" id="r-s"></div><div class="k">Lenders earn</div></div></div>
+        <div class="chart" id="r-chart" style="margin-top:14px"></div>
+        <div class="legend"><span><i></i>Borrow rate</span><span><i class="s"></i>Lender rate</span></div>
+      </div>
+      <p class="note">TSLAx vault on devnet, 1 Oct 2026: 38.18% of the pool is borrowed. Rates follow Vanna's kink model: 10% at the 80% kink (fitted to all live pools). The slope above the kink isn't published yet; 60% is a placeholder. APY history before launch is simulated for this preview.</p>
+    </div>
+  </div><div class="cap"><b>Vault › Analytics</b>: a real APY history and an interest rate curve you can drag along. The numbers above each chart update as you drag.</div></div>
+</div>
+
+<script src="../src/charts.js"></script>
+<script>
+(function () {
+  var DAY = 864e5, HOUR = 36e5, NOW = Date.UTC(2026, 9, 1, 15, 0);
+  var DEP1 = Date.UTC(2026, 8, 3, 10), DEP2 = Date.UTC(2026, 8, 20, 14);
+  function noise(i, s) { var x = Math.sin(i * 12.9898 + s * 78.233) * 43758.5453; return x - Math.floor(x) - 0.5; }
+  // the user's lending account: 2,500 USDC on 3 Sep, 1.50 SOL on 20 Sep; earnings accrue to +$1.37 today
+  function earned(t) {
+    var a = t > DEP1 ? (Math.min(t, NOW) - DEP1) / (NOW - DEP1) * 0.81 : 0;
+    var b = t > DEP2 ? (Math.min(t, NOW) - DEP2) / (NOW - DEP2) * 0.56 : 0;
+    return a + b;
+  }
+  function deposit(t, i) {
+    var v = (t >= DEP1 ? 2500 : 0) + earned(t);
+    if (t >= DEP2) v += 176.5 + (t >= NOW - HOUR ? 0 : noise(i, 3) * 6);
+    return v;
+  }
+  var RANGES = { '1W': [7 * DAY, 3 * HOUR], '1M': [30 * DAY, 12 * HOUR], '3M': [91 * DAY, DAY], 'All': [NOW - DEP1 + 2 * DAY, 12 * HOUR] };
+  var LABELS = [['1W', '1 Week'], ['1M', '1 Month'], ['3M', '3 Months'], ['All', 'All Time']];
+  function series(mode, rg) {
+    var r = RANGES[rg], pts = [], i = 0;
+    for (var t = NOW - r[0]; t <= NOW; t += r[1], i++) pts.push([t, mode === 'dep' ? deposit(t, i) : earned(t)]);
+    if (pts[pts.length - 1][0] !== NOW) pts.push([NOW, mode === 'dep' ? deposit(NOW, i) : earned(NOW)]);
+    return pts;
+  }
+  var M = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  function dfmt(ms, kind, step) {
+    var d = new Date(ms), day = d.getUTCDate() + ' ' + M[d.getUTCMonth()];
+    if (kind === 'axis') return day;
+    if (ms >= NOW) return 'Today, ' + day;
+    return step < DAY ? day + ', ' + String(d.getUTCHours()).padStart(2, '0') + ':00' : day + ' ' + d.getUTCFullYear();
+  }
+  var usd = function (v) { return '$' + v.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); };
+  var usd0 = function (v) { return '$' + (v >= 1000 ? (v / 1000).toFixed(v % 1000 ? 1 : 0) + 'K' : v.toFixed(v < 10 && v % 1 ? 1 : 0)); };
+
+  function heroChart(g, axis) {
+    var st = { mode: 'dep', rg: '3M' };
+    var valEl = document.getElementById(g + '-val'), whenEl = document.getElementById(g + '-when');
+    var chips = document.querySelector('.chips[data-g="' + g + '"]');
+    chips.innerHTML = LABELS.map(function (l) { return '<button role="tab" data-r="' + l[0] + '">' + l[1] + '</button>'; }).join('');
+    var ch;
+    function fmt(v) { return st.mode === 'dep' ? usd(v) : '+' + usd(v); }
+    function head(p) {
+      var pts = series(st.mode, st.rg), q = p || pts[pts.length - 1];
+      valEl.textContent = fmt(q[1]);
+      whenEl.textContent = dfmt(q[0], 'head', RANGES[st.rg][1]);
+    }
+    function render() {
+      document.querySelectorAll('.modes[data-g="' + g + '"] button').forEach(function (b) { b.setAttribute('aria-selected', b.dataset.m === st.mode); });
+      chips.querySelectorAll('button').forEach(function (b) { b.setAttribute('aria-selected', b.dataset.r === st.rg); });
+      var o = { points: series(st.mode, st.rg), color: '#FFFFFF', ink: '#FFFFFF', ink2: 'rgba(255,255,255,.72)', grid: 'rgba(255,255,255,.16)',
+        dotRing: '#0F5F66', axis: axis ? 'axis' : 'clean', zero: true, height: 150, fmt: fmt, fmtAxis: usd0, dateFmt: dfmt, onScrub: head,
+        label: (st.mode === 'dep' ? 'Overall deposit' : 'Net earnings') + ' over ' + st.rg };
+      if (ch) ch.set(o); else ch = vnLine(document.getElementById(g + '-chart'), o);
+      head(null);
+    }
+    document.querySelectorAll('.modes[data-g="' + g + '"] button').forEach(function (b) { b.onclick = function () { st.mode = b.dataset.m; render(); }; });
+    chips.querySelectorAll('button').forEach(function (b) { b.onclick = function () { st.rg = b.dataset.r; render(); }; });
+    render();
+  }
+  heroChart('a', false);
+  heroChart('b', true);
+
+  // vault: supply APY history = borrow rate x utilization, utilization drifting around today's 38.18%
+  function css(n) { return getComputedStyle(document.documentElement).getPropertyValue(n).trim(); }
+  var K = { base: 0, slope1: 0.10, slope2: 0.60, kink: 0.80 };
+  var AR = { '7D': [7 * DAY, 3 * HOUR], '30D': [30 * DAY, 12 * HOUR], '90D': [90 * DAY, DAY] };
+  function apySeries(rg) {
+    var r = AR[rg], pts = [], i = 0;
+    for (var t = NOW - r[0]; t <= NOW; t += r[1], i++) {
+      var age = (NOW - t) / DAY, u = Math.max(0.05, 0.3818 - age * 0.0019 + (Math.sin(age / 2.3) * 0.018 + Math.sin(age / 0.9 + 1) * 0.006) * Math.min(1, age / 2));   // utilisation drifts smoothly
+      pts.push([t, vnRate(K, u) * u * 100]);
+    }
+    pts[pts.length - 1] = [NOW, 1.82];
+    return pts;
+  }
+  var cst = { rg: '30D' }, cch, rch;
+  var cchips = document.getElementById('c-chips');
+  cchips.innerHTML = ['7D', '30D', '90D'].map(function (k) { return '<button role="tab" data-r="' + k + '">' + k + '</button>'; }).join('');
+  function cHead(p) {
+    var pts = apySeries(cst.rg), q = p || pts[pts.length - 1];
+    document.getElementById('c-val').textContent = q[1].toFixed(2) + '%';
+    document.getElementById('c-when').textContent = dfmt(q[0], 'head', AR[cst.rg][1]);
+  }
+  function cOpts() {
+    return { points: apySeries(cst.rg), color: css('--pos'), ink: css('--text'), ink2: css('--text2'), grid: css('--line'), dotRing: css('--card'),
+      axis: 'axis', height: 150, fmt: function (v) { return v.toFixed(2) + '%'; }, fmtAxis: function (v) { return v.toFixed(1) + '%'; },
+      dateFmt: dfmt, onScrub: cHead, label: 'Supply APY over ' + cst.rg };
+  }
+  function cRender() {
+    cchips.querySelectorAll('button').forEach(function (b) { b.setAttribute('aria-selected', b.dataset.r === cst.rg); });
+    if (cch) cch.set(cOpts()); else cch = vnLine(document.getElementById('c-chart'), cOpts());
+    cHead(null);
+  }
+  cchips.querySelectorAll('button').forEach(function (b) { b.onclick = function () { cst.rg = b.dataset.r; cRender(); }; });
+  cRender();
+
+  function rHead(p) {
+    var u = p ? p.u : 0.3818;
+    document.getElementById('r-head').textContent = p ? 'If ' + Math.round(u * 100) + '% of the pool is borrowed' : 'Now · ' + (u * 100).toFixed(2) + '% of the pool is borrowed';
+    document.getElementById('r-b').textContent = (vnRate(K, u) * 100).toFixed(2) + '%';
+    document.getElementById('r-s').textContent = (vnRate(K, u) * u * 100).toFixed(2) + '%';
+  }
+  function rDraw() {
+    var el = document.getElementById('r-chart'); if (rch) rch.destroy();
+    rch = vnRateCurve(el, { now: 0.3818, kink: K.kink, base: K.base, slope1: K.slope1, slope2: K.slope2, color: css('--link'), supplyColor: css('--pos'),
+      ink: css('--text'), ink2: css('--text2'), grid: css('--line'), dotRing: css('--card'), onScrub: rHead });
+    rHead(null);
+  }
+  rDraw();
+
+  document.getElementById('theme').onclick = function () {
+    var dark = document.documentElement.dataset.theme !== 'dark';
+    document.documentElement.dataset.theme = dark ? 'dark' : 'light';
+    this.textContent = dark ? 'Light mode' : 'Dark mode';
+    cch.set(cOpts()); cHead(null); rDraw();
+  };
+})();
+</script>
+</body></html>

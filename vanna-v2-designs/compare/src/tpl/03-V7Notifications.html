@@ -1,0 +1,54 @@
+<div style="width: 412px; height: 915px; position: relative; overflow: hidden; background: {{ t.page }}; color: {{ t.text }}; font-family: 'Plus Jakarta Sans', system-ui, sans-serif; font-variant-numeric: tabular-nums">
+<div class="vn-main" style="position: absolute; inset: 0; overflow-y: auto; padding-bottom: 24px">
+<header style="height: 56px; margin-top: 28px; padding: 0 8px 0 4px; display: flex; align-items: center; gap: 4px">
+<a href="V7Home.dc.html" aria-label="Back" style="width: 48px; height: 48px; border-radius: 24px; color: {{ t.text }}; display: flex; align-items: center; justify-content: center"><svg width="22" height="22" viewBox="0 -960 960 960" fill="currentColor" aria-hidden="true"><path d="m313-440 196 196q12 12 11.5 28T508-188q-12 11-28 11.5T452-188L188-452q-6-6-8.5-13t-2.5-15q0-8 2.5-15t8.5-13l264-264q11-11 27.5-11t28.5 11q12 12 12 28.5T508-715L313-520h447q17 0 28.5 11.5T800-480q0 17-11.5 28.5T760-440H313Z"></path></svg></a>
+<h1 style="margin: 0; flex-grow: 1; font-size: 20px; line-height: 28px; font-weight: 600">Notifications</h1>
+<button type="button" onClick="{{ markAll }}" style="height: 40px; padding: 0 12px; border: 0; background: transparent; color: {{ t.link }}; font-size: 14px; font-weight: 600">Mark all read</button>
+</header>
+<div style="padding: 8px 16px 0 16px; display: flex; flex-direction: column; gap: 12px">
+<div role="tablist" style="display: flex; gap: 8px">
+<sc-for list="{{ filters }}" as="c" hint-placeholder-count="4">
+<button type="button" role="tab" aria-selected="{{ c.on }}" onClick="{{ c.pick }}" style="height: 32px; padding: 0 16px; border-radius: 8px; border: 1px solid {{ c.bd }}; background: {{ c.bg }}; color: {{ c.fg }}; font-size: 14px; font-weight: 600; display: inline-flex; align-items: center; gap: 6px"><span style="display: {{ c.ck }}; margin-left: -4px"><svg width="16" height="16" viewBox="0 -960 960 960" fill="currentColor" aria-hidden="true"><path d="m382-354 339-339q12-12 28-12t28 12q12 12 12 28.5T777-636L410-268q-12 12-28 12t-28-12L182-440q-12-12-11.5-28.5T183-497q12-12 28.5-12t28.5 12l142 143Z"></path></svg></span>{{ c.label }}</button>
+</sc-for>
+</div>
+<sc-if value="{{ hasToday }}" hint-placeholder-val="{{ true }}">
+<div style="border-radius: 16px; background: {{ t.card }}; box-shadow: {{ t.shadow }}; padding: 0 16px">
+<div style="height: 44px; display: flex; align-items: center; font-size: 12px; font-weight: 600; color: {{ t.text2 }}">Today</div>
+<sc-for list="{{ today }}" as="n" hint-placeholder-count="3">
+<div style="padding: 14px 0; display: flex; gap: 12px; border-top: 1px solid {{ t.line }}">
+<span style="position: relative; width: 40px; height: 40px; flex-shrink: 0">
+<sc-if value="{{ n.img }}" hint-placeholder-val="{{ true }}"><img src="{{ n.img }}" alt="" style="width: 40px; height: 40px; border-radius: 999px; display: block"></sc-if>
+<sc-if value="{{ n.mark }}" hint-placeholder-val="{{ false }}"><span style="width: 40px; height: 40px; border-radius: 999px; background: {{ t.tv }}; display: flex; align-items: center; justify-content: center"><img src="@IMG:ef5faa62df31da21c9379ab31ec4247a@" alt="" style="width: 22px; height: 22px"></span></sc-if>
+<span style="position: absolute; right: -4px; bottom: -4px; width: 20px; height: 20px; border-radius: 999px; background: {{ n.bb }}; border: 2px solid {{ t.card }}; color: #FFFFFF; display: flex; align-items: center; justify-content: center"><svg width="10" height="10" viewBox="0 -960 960 960" fill="currentColor" aria-hidden="true"><path d="{{ n.d }}"></path></svg></span>
+</span>
+<span style="flex-grow: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px">
+<span style="display: flex; justify-content: space-between; gap: 8px; font-size: 14px; line-height: 20px; font-weight: 600"><span>{{ n.title }}</span><span style="font-size: 12px; font-weight: 400; color: {{ t.text2 }}; flex-shrink: 0; display: flex; align-items: center; gap: 6px">{{ n.time }}<sc-if value="{{ n.unread }}" hint-placeholder-val="{{ true }}"><span style="width: 8px; height: 8px; border-radius: 999px; background: #FF007A"></span></sc-if></span></span>
+<span style="font-size: 12px; line-height: 16px; color: {{ t.text2 }}">{{ n.body }}</span>
+<sc-if value="{{ n.cta }}" hint-placeholder-val="{{ false }}"><a href="{{ n.href }}" style="margin-top: 8px; align-self: flex-start; height: 32px; padding: 0 14px; border-radius: 8px; background: {{ t.page }}; color: {{ t.text }}; font-size: 12px; font-weight: 600; display: flex; align-items: center; text-decoration: none">{{ n.cta }}</a></sc-if>
+</span>
+</div>
+</sc-for>
+</div>
+</sc-if>
+<sc-if value="{{ hasEarlier }}" hint-placeholder-val="{{ true }}">
+<div style="border-radius: 16px; background: {{ t.card }}; box-shadow: {{ t.shadow }}; padding: 0 16px">
+<div style="height: 44px; display: flex; align-items: center; font-size: 12px; font-weight: 600; color: {{ t.text2 }}">Earlier</div>
+<sc-for list="{{ earlier }}" as="n" hint-placeholder-count="3">
+<div style="padding: 14px 0; display: flex; gap: 12px; border-top: 1px solid {{ t.line }}">
+<span style="position: relative; width: 40px; height: 40px; flex-shrink: 0">
+<sc-if value="{{ n.img }}" hint-placeholder-val="{{ true }}"><img src="{{ n.img }}" alt="" style="width: 40px; height: 40px; border-radius: 999px; display: block"></sc-if>
+<sc-if value="{{ n.mark }}" hint-placeholder-val="{{ false }}"><span style="width: 40px; height: 40px; border-radius: 999px; background: {{ t.tv }}; display: flex; align-items: center; justify-content: center"><img src="@IMG:ef5faa62df31da21c9379ab31ec4247a@" alt="" style="width: 22px; height: 22px"></span></sc-if>
+<span style="position: absolute; right: -4px; bottom: -4px; width: 20px; height: 20px; border-radius: 999px; background: {{ n.bb }}; border: 2px solid {{ t.card }}; color: #FFFFFF; display: flex; align-items: center; justify-content: center"><svg width="10" height="10" viewBox="0 -960 960 960" fill="currentColor" aria-hidden="true"><path d="{{ n.d }}"></path></svg></span>
+</span>
+<span style="flex-grow: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px">
+<span style="display: flex; justify-content: space-between; gap: 8px; font-size: 14px; line-height: 20px; font-weight: 600"><span>{{ n.title }}</span><span style="font-size: 12px; font-weight: 400; color: {{ t.text2 }}; flex-shrink: 0; display: flex; align-items: center; gap: 6px">{{ n.time }}<sc-if value="{{ n.unread }}" hint-placeholder-val="{{ true }}"><span style="width: 8px; height: 8px; border-radius: 999px; background: #FF007A"></span></sc-if></span></span>
+<span style="font-size: 12px; line-height: 16px; color: {{ t.text2 }}">{{ n.body }}</span>
+<sc-if value="{{ n.cta }}" hint-placeholder-val="{{ false }}"><a href="{{ n.href }}" style="margin-top: 8px; align-self: flex-start; height: 32px; padding: 0 14px; border-radius: 8px; background: {{ t.page }}; color: {{ t.text }}; font-size: 12px; font-weight: 600; display: flex; align-items: center; text-decoration: none">{{ n.cta }}</a></sc-if>
+</span>
+</div>
+</sc-for>
+</div>
+</sc-if>
+</div>
+</div>
+</div>

@@ -1,0 +1,318 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Vanna design review</title>
+<link rel="icon" href="mark.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+/* Tokens. One accent (Vanna violet); the coral→violet gradient only on the mark and the live dot. */
+:root{
+  --canvas:#F5F3FA;--dot:rgba(80,41,163,.11);--bar:rgba(255,255,255,.78);--surface:#FFFFFF;--sunken:#EFECF6;
+  --line:rgba(31,31,31,.08);--line2:rgba(31,31,31,.14);--text:#1F1F1F;--text2:#595959;--text3:#8C8C99;
+  --accent:#703AE6;--accentInk:#5029A3;--accentSoft:#F1EBFD;--pos:#1C7C83;
+  --shadow:0 1px 2px rgba(47,27,97,.06),0 8px 24px rgba(47,27,97,.08);--pop:0 24px 64px -12px rgba(47,27,97,.28),0 4px 12px rgba(17,17,17,.06);
+  color-scheme:light;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --canvas:#0B0B0C;--dot:rgba(255,255,255,.07);--bar:rgba(17,17,17,.78);--surface:#1A1A1C;--sunken:#141416;
+  --line:rgba(255,255,255,.08);--line2:rgba(255,255,255,.14);--text:#FFFFFF;--text2:#BFBFBF;--text3:#8C8C99;
+  --accent:#8D61EB;--accentInk:#D3C2F7;--accentSoft:#2F1B61;--pos:#32EEE2;
+  --shadow:none;--pop:0 24px 64px -12px rgba(0,0,0,.6);color-scheme:dark;
+}}
+:root[data-theme="dark"]{
+  --canvas:#0B0B0C;--dot:rgba(255,255,255,.07);--bar:rgba(17,17,17,.78);--surface:#1A1A1C;--sunken:#141416;
+  --line:rgba(255,255,255,.08);--line2:rgba(255,255,255,.14);--text:#FFFFFF;--text2:#BFBFBF;--text3:#8C8C99;
+  --accent:#8D61EB;--accentInk:#D3C2F7;--accentSoft:#2F1B61;--pos:#32EEE2;
+  --shadow:none;--pop:0 24px 64px -12px rgba(0,0,0,.6);color-scheme:dark;
+}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{background-color:var(--canvas);background-image:radial-gradient(var(--dot) 1px,transparent 1.3px);background-size:22px 22px;background-position:11px 11px;
+  color:var(--text);font:400 13px/18px 'Plus Jakarta Sans',system-ui,-apple-system,'Segoe UI',sans-serif;font-variant-numeric:tabular-nums;display:flex;flex-direction:column;overflow:hidden;-webkit-font-smoothing:antialiased}
+button,select{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+svg{display:block}
+
+/* toolbar */
+.bar{flex-shrink:0;height:60px;display:flex;align-items:center;gap:16px;padding:0 20px;background:var(--bar);backdrop-filter:saturate(1.4) blur(14px);-webkit-backdrop-filter:saturate(1.4) blur(14px);border-bottom:1px solid var(--line);position:relative;z-index:5}
+.brand{display:flex;align-items:center;gap:10px;min-width:0}
+.brand img{width:26px;height:26px}
+.brand b{font-size:15px;font-weight:600;letter-spacing:-.01em;white-space:nowrap}
+.brand span{color:var(--text3);white-space:nowrap}
+.grow{flex:1}
+.ctl{display:flex;align-items:center;gap:8px}
+.pick{position:relative;display:flex;align-items:center}
+.pick svg.lead{position:absolute;left:12px;width:16px;height:16px;color:var(--text2);pointer-events:none}
+.pick svg.chev{position:absolute;right:10px;width:14px;height:14px;color:var(--text3);pointer-events:none}
+.pick select{appearance:none;-webkit-appearance:none;height:36px;padding:0 32px 0 36px;border-radius:18px;border:1px solid var(--line2);background:var(--surface);font-weight:500;cursor:pointer;max-width:290px}
+.pick select:hover{border-color:var(--text3)}
+.seg{display:inline-flex;height:36px;padding:3px;border-radius:18px;background:var(--sunken);border:1px solid var(--line)}
+.seg button{display:inline-flex;align-items:center;gap:6px;height:28px;padding:0 12px;border:0;border-radius:14px;background:transparent;color:var(--text2);font-weight:500;cursor:pointer;transition:background-color .15s,color .15s}
+.seg button svg{width:15px;height:15px}
+.seg button[aria-pressed="true"]{background:var(--surface);color:var(--text);box-shadow:0 1px 2px rgba(17,17,17,.10),0 0 0 1px var(--line)}
+.btn{display:inline-flex;align-items:center;gap:8px;height:36px;padding:0 14px;border-radius:18px;border:1px solid var(--line2);background:var(--surface);font-weight:500;cursor:pointer;white-space:nowrap;transition:border-color .15s,background-color .15s}
+.btn:hover{border-color:var(--text3)}
+.btn.icon{width:36px;padding:0;justify-content:center}
+.btn svg{width:16px;height:16px}
+.count{min-width:20px;height:20px;padding:0 6px;border-radius:10px;background:var(--accent);color:#FFFFFF;font-size:11px;font-weight:600;display:inline-flex;align-items:center;justify-content:center}
+
+/* the two sides */
+main{flex:1;min-height:0;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);position:relative}
+main::before{content:"";position:absolute;left:50%;top:24px;bottom:24px;width:1px;background:linear-gradient(var(--line2) 0 0) center/1px 100% no-repeat;opacity:.9}
+.side{min-width:0;min-height:0;display:flex;flex-direction:column}
+.cap{flex-shrink:0;display:flex;flex-direction:column;align-items:center;gap:10px;padding:18px 16px 0}
+.cap .t{display:flex;align-items:center;gap:8px;font-size:15px;line-height:22px;font-weight:600;letter-spacing:-.01em;white-space:nowrap}
+.cap .t small{font-size:13px;font-weight:400;color:var(--text3);letter-spacing:0}
+.chip{height:22px;padding:0 9px;border-radius:11px;font-size:11px;font-weight:600;display:inline-flex;align-items:center;gap:6px;letter-spacing:.01em}
+.chip.cur{background:var(--sunken);color:var(--text2);border:1px solid var(--line)}
+.chip.new{background:var(--accentSoft);color:var(--accentInk)}
+.live{width:7px;height:7px;border-radius:50%;background:linear-gradient(135deg,#FC5457,#703AE6)}
+.live.pulse{animation:pulse 1.2s cubic-bezier(.2,.9,.3,1)}
+@keyframes pulse{0%{box-shadow:0 0 0 0 rgba(112,58,230,.55)}100%{box-shadow:0 0 0 10px rgba(112,58,230,0)}}
+.cap .s{display:flex;align-items:center;gap:6px;color:var(--text3);font-size:12px;line-height:16px;white-space:nowrap;min-width:0;max-width:100%}
+.cap .s .scr{color:var(--text2);overflow:hidden;text-overflow:ellipsis}
+.cap .s i{width:3px;height:3px;border-radius:50%;background:var(--text3);opacity:.6;flex-shrink:0}
+.link{display:inline-flex;align-items:center;gap:4px;height:24px;padding:0 8px;margin:0 -4px;border:0;border-radius:12px;background:transparent;color:var(--accent);font-size:12px;font-weight:500;text-decoration:none;cursor:pointer;white-space:nowrap}
+.link:hover{background:var(--accentSoft)}
+.link svg{width:13px;height:13px}
+.flow{display:inline-flex;height:32px;padding:3px;border-radius:16px;background:var(--surface);border:1px solid var(--line);box-shadow:var(--shadow)}
+.flow button{height:24px;padding:0 14px;border:0;border-radius:12px;background:transparent;color:var(--text2);font-size:12px;font-weight:500;cursor:pointer;transition:background-color .15s,color .15s}
+.flow button:hover{color:var(--text)}
+.flow button[aria-pressed="true"]{background:var(--accentSoft);color:var(--accentInk);font-weight:600}
+.stage{flex:1;min-height:0;position:relative}
+.stage iframe{position:absolute;inset:0;width:100%;height:100%;border:0;background:transparent}
+
+/* change log sheet */
+.scrim{position:fixed;inset:0;background:rgba(17,17,17,.24);opacity:0;pointer-events:none;transition:opacity .2s;z-index:19}
+.scrim.on{opacity:1;pointer-events:auto}
+.drawer{position:fixed;top:12px;right:12px;bottom:12px;width:min(400px,calc(100vw - 24px));background:var(--surface);border:1px solid var(--line);border-radius:20px;box-shadow:var(--pop);transform:translateX(calc(100% + 24px));transition:transform .28s cubic-bezier(.2,.9,.3,1);z-index:20;display:flex;flex-direction:column;overflow:hidden}
+.drawer.open{transform:none}
+.drawer header{display:flex;align-items:center;gap:8px;padding:18px 18px 14px}
+.drawer header b{font-size:16px;font-weight:600;flex:1;letter-spacing:-.01em}
+.drawer ol{list-style:none;margin:0;padding:0 18px 18px;overflow:auto;flex:1;counter-reset:c}
+.drawer li{padding:14px 0;border-top:1px solid var(--line)}
+.drawer li b{display:block;font-weight:600;font-size:14px;line-height:20px}
+.drawer li p{margin:4px 0 8px;color:var(--text2)}
+.drawer li .when{color:var(--text3);font-size:12px}
+.stems{display:flex;flex-wrap:wrap;gap:6px}
+.stems button{height:26px;padding:0 10px;border-radius:13px;border:1px solid var(--line2);background:transparent;font-size:12px;font-weight:500;cursor:pointer;color:var(--accent)}
+.stems button:hover{background:var(--accentSoft);border-color:transparent}
+.empty{color:var(--text3);padding:12px 0}
+
+@media (max-width:980px){
+  .brand span{display:none}
+  .seg button span{display:none}
+}
+@media (max-width:760px){
+  .bar{height:auto;flex-wrap:wrap;padding:10px 16px;gap:10px}
+  .grow{display:none}
+  body{overflow-y:auto;overflow-x:hidden}
+  main{grid-template-columns:minmax(0,1fr);grid-auto-rows:minmax(680px,1fr)}
+  main::before{display:none}
+  .side+.side{border-top:1px solid var(--line)}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
+</head>
+<body>
+<header class="bar" role="toolbar" aria-label="Comparison controls">
+  <div class="brand"><img src="mark.svg" alt=""><b>Vanna</b><span>Android design review</span></div>
+  <span class="grow"></span>
+  <div class="ctl">
+    <label class="pick" title="Both sides use the same device">
+      <svg class="lead" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true"><path d="M176,16H80A24,24,0,0,0,56,40V216a24,24,0,0,0,24,24h96a24,24,0,0,0,24-24V40A24,24,0,0,0,176,16Zm8,200a8,8,0,0,1-8,8H80a8,8,0,0,1-8-8V40a8,8,0,0,1,8-8h96a8,8,0,0,1,8,8ZM140,60a12,12,0,1,1-12-12A12,12,0,0,1,140,60Z"/></svg>
+      <select id="device" aria-label="Device"></select>
+      <svg class="chev" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true"><path d="M213.66,101.66l-80,80a8,8,0,0,1-11.32,0l-80-80A8,8,0,0,1,53.66,90.34L128,164.69l74.34-74.35a8,8,0,0,1,11.32,11.32Z"/></svg>
+    </label>
+    <div class="seg" role="group" aria-label="Theme">
+      <button type="button" data-theme="Light"><svg viewBox="0 0 256 256" fill="currentColor" aria-hidden="true"><path d="M120,40V16a8,8,0,0,1,16,0V40a8,8,0,0,1-16,0Zm72,88a64,64,0,1,1-64-64A64.07,64.07,0,0,1,192,128Zm-16,0a48,48,0,1,0-48,48A48.05,48.05,0,0,0,176,128ZM58.34,69.66A8,8,0,0,0,69.66,58.34l-16-16A8,8,0,0,0,42.34,53.66Zm0,116.68-16,16a8,8,0,0,0,11.32,11.32l16-16a8,8,0,0,0-11.32-11.32ZM192,72a8,8,0,0,0,5.66-2.34l16-16a8,8,0,0,0-11.32-11.32l-16,16A8,8,0,0,0,192,72Zm5.66,114.34a8,8,0,0,0-11.32,11.32l16,16a8,8,0,0,0,11.32-11.32ZM48,128a8,8,0,0,0-8-8H16a8,8,0,0,0,0,16H40A8,8,0,0,0,48,128Zm80,80a8,8,0,0,0-8,8v24a8,8,0,0,0,16,0V216A8,8,0,0,0,128,208Zm112-88H216a8,8,0,0,0,0,16h24a8,8,0,0,0,0-16Z"/></svg><span>Light</span></button>
+      <button type="button" data-theme="Dark"><svg viewBox="0 0 256 256" fill="currentColor" aria-hidden="true"><path d="M233.54,142.23a8,8,0,0,0-8-2,88.08,88.08,0,0,1-109.8-109.8,8,8,0,0,0-10-10,104.84,104.84,0,0,0-52.91,37A104,104,0,0,0,136,224a103.09,103.09,0,0,0,62.52-20.88,104.84,104.84,0,0,0,37-52.91A8,8,0,0,0,233.54,142.23ZM188.9,190.34A88,88,0,0,1,65.66,67.11a89,89,0,0,1,31.4-26A106,106,0,0,0,96,56,104.11,104.11,0,0,0,200,160a106,106,0,0,0,14.92-1.06A89,89,0,0,1,188.9,190.34Z"/></svg><span>Dark</span></button>
+      <button type="button" data-theme="System"><svg viewBox="0 0 256 256" fill="currentColor" aria-hidden="true"><path d="M128,24A104,104,0,1,0,232,128,104.11,104.11,0,0,0,128,24ZM40,128a88.1,88.1,0,0,1,88-88V216A88.1,88.1,0,0,1,40,128Z"/></svg><span>System</span></button>
+    </div>
+    <div class="seg" role="group" aria-label="Android system navigation" title="Android system navigation, applied to both sides">
+      <button type="button" data-nav="gesture"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="5" y="15" width="14" height="3" rx="1.5"/></svg><span>Gestures</span></button>
+      <button type="button" data-nav="3btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><path d="M8 8.5 3.5 12 8 15.5Z"/><circle cx="12.5" cy="12" r="3"/><rect x="17.5" y="9" width="5" height="6" rx="1"/></svg><span>3-button</span></button>
+    </div>
+  </div>
+  <span class="grow"></span>
+  <div class="ctl">
+    <button class="btn icon" type="button" id="reloadBtn" title="Reload both sides" aria-label="Reload both sides"><svg viewBox="0 0 256 256" fill="currentColor" aria-hidden="true"><path d="M224,48V96a8,8,0,0,1-8,8H168a8,8,0,0,1,0-16h28.69L182.06,73.37a79.56,79.56,0,0,0-56.13-23.43h-.45A79.52,79.52,0,0,0,69.59,72.71,8,8,0,0,1,58.41,61.27a96,96,0,0,1,135,.79L208,76.69V48a8,8,0,0,1,16,0ZM186.41,183.29a80,80,0,0,1-112.47-.66L59.31,168H88a8,8,0,0,0,0-16H40a8,8,0,0,0-8,8v48a8,8,0,0,0,16,0V179.31l14.63,14.63A95.43,95.43,0,0,0,130,222.06h.53a95.36,95.36,0,0,0,67.07-27.33,8,8,0,0,0-11.18-11.44Z"/></svg></button>
+    <button class="btn" type="button" id="changesBtn">Changes <span class="count" id="count">0</span></button>
+  </div>
+</header>
+
+<main>
+  <section class="side" aria-label="Current">
+    <div class="cap">
+      <div class="t"><span class="chip cur">v7</span>Current <small>on GitHub · feature/vanna-v2-designs</small></div>
+      <div class="flow" role="group" aria-label="Start point" data-side="current"><button type="button" data-go="welcome" aria-pressed="false">Welcome</button><button type="button" data-go="app" aria-pressed="false">App</button></div>
+      <div class="s"><span class="scr" id="curStem">…</span><i></i>
+                <a class="link" id="curOpen" href="current.html" target="_blank" rel="noopener">Open full size<svg viewBox="0 0 256 256" fill="currentColor" aria-hidden="true"><path d="M200,64V168a8,8,0,0,1-16,0V83.31L69.66,197.66a8,8,0,0,1-11.32-11.32L172.69,72H88a8,8,0,0,1,0-16H192A8,8,0,0,1,200,64Z"/></svg></a>
+      </div>
+    </div>
+    <div class="stage"><iframe id="fCurrent" title="Current design"></iframe></div>
+  </section>
+  <section class="side" aria-label="New">
+    <div class="cap">
+      <div class="t"><span class="chip new"><span class="live" id="live"></span>New</span>Working copy <small id="built">not built yet</small></div>
+      <div class="flow" role="group" aria-label="Start point" data-side="new"><button type="button" data-go="welcome" aria-pressed="false">Welcome</button><button type="button" data-go="app" aria-pressed="false">App</button></div>
+      <div class="s"><span class="scr" id="newStem">…</span><i></i>
+                <a class="link" id="newOpen" href="new.html" target="_blank" rel="noopener">Open full size<svg viewBox="0 0 256 256" fill="currentColor" aria-hidden="true"><path d="M200,64V168a8,8,0,0,1-16,0V83.31L69.66,197.66a8,8,0,0,1-11.32-11.32L172.69,72H88a8,8,0,0,1,0-16H192A8,8,0,0,1,200,64Z"/></svg></a>
+      </div>
+    </div>
+    <div class="stage"><iframe id="fNew" title="New design"></iframe></div>
+  </section>
+</main>
+
+<div class="scrim" id="scrim"></div>
+<aside class="drawer" id="drawer" aria-label="Changes in New">
+  <header><b>What changed in New</b><button class="btn icon" id="closeDrawer" type="button" aria-label="Close"><svg viewBox="0 0 256 256" fill="currentColor" aria-hidden="true"><path d="M205.66,194.34a8,8,0,0,1-11.32,11.32L128,139.31,61.66,205.66a8,8,0,0,1-11.32-11.32L116.69,128,50.34,61.66A8,8,0,0,1,61.66,50.34L128,116.69l66.34-66.35a8,8,0,0,1,11.32,11.32L139.31,128Z"/></svg></button></header>
+  <ol id="changeList"></ol>
+</aside>
+
+<script>
+(function () {
+  'use strict';
+  var DEVICES = [
+    ['Android phones', [
+      ['compact', 'Compact phone · 360 × 800', 360, 800],
+      ['pixel8', 'Pixel 8 · 412 × 915 · design size', 412, 915],
+      ['large', 'Large phone · 448 × 998', 448, 998],
+      ['short', 'Short phone · 360 × 640', 360, 640],
+      ['tall', 'Tall phone · 412 × 1004', 412, 1004],
+      ['cover', 'Fold cover screen · 344 × 882', 344, 882]
+    ]],
+    ['Android foldables and tablets', [
+      ['fold', 'Foldable, open · 700 × 840', 700, 840],
+      ['foldL', 'Foldable, open landscape · 840 × 700', 840, 700],
+      ['tabSL', 'Small tablet landscape · 1024 × 600', 1024, 600],
+      ['tab7', 'Small tablet · 600 × 1024', 600, 1024],
+      ['tabP', 'Tablet, portrait · 800 × 1280', 800, 1280],
+      ['tabL', 'Tablet, landscape · 1280 × 800', 1280, 800]
+    ]]
+  ];
+  var $ = function (id) { return document.getElementById(id); };
+  var frames = { current: $('fCurrent'), new: $('fNew') };
+  var st = load({ device: 'pixel8', mode: 'System', nav: 'gesture' });
+  var stems = { current: null, new: null }, titles = {}, stamp = null;
+
+  function load(def) { try { return Object.assign(def, JSON.parse(localStorage.getItem('vnReview') || '{}')); } catch (e) { return def; } }
+  function save() { try { localStorage.setItem('vnReview', JSON.stringify(st)); } catch (e) {} }
+  function send(side, cmd) { var w = frames[side].contentWindow; if (w) w.postMessage(cmd, '*'); }
+  function both(cmd) { send('current', cmd); send('new', cmd); }
+  function scheme() { return getComputedStyle(document.documentElement).colorScheme || 'light'; }
+
+  /* device: both sides always share one frame so they compare fairly */
+  var devSel = $('device'), devs = {};
+  DEVICES.forEach(function (g) {
+    var og = document.createElement('optgroup'); og.label = g[0];
+    g[1].forEach(function (d) { devs[d[0]] = d; var o = document.createElement('option'); o.value = d[0]; o.textContent = d[1]; og.appendChild(o); });
+    devSel.appendChild(og);
+  });
+  if (!devs[st.device]) st.device = 'pixel8';
+  function deviceCmd() { var d = devs[st.device]; return { vnCmd: 'device', w: d[2], h: d[3] }; }
+  devSel.value = st.device;
+  devSel.addEventListener('change', function () { st.device = devSel.value; save(); both(deviceCmd()); });
+
+  /* theme: sets both apps and this page; Profile → Appearance inside an app changes only that side */
+  function paintTheme() {
+    document.querySelectorAll('[data-theme]').forEach(function (b) { if (b.tagName === 'BUTTON') b.setAttribute('aria-pressed', b.dataset.theme === st.mode ? 'true' : 'false'); });
+    if (st.mode === 'System') document.documentElement.removeAttribute('data-theme');
+    else document.documentElement.setAttribute('data-theme', st.mode.toLowerCase());
+    both({ vnCmd: 'bg', color: 'transparent', scheme: scheme() });
+  }
+  document.querySelectorAll('button[data-theme]').forEach(function (b) {
+    b.addEventListener('click', function () { st.mode = b.dataset.theme; save(); paintTheme(); both({ vnCmd: 'theme', mode: st.mode }); });
+  });
+  if (window.matchMedia) matchMedia('(prefers-color-scheme: dark)').addEventListener('change', paintTheme);
+  paintTheme();
+
+  /* Android system navigation: gesture handle, or the back / home / recents bar (takes 48dp from the app) */
+  function navCmd() { return { vnCmd: 'navmode', mode: st.nav }; }
+  function paintNav() { document.querySelectorAll('button[data-nav]').forEach(function (b) { b.setAttribute('aria-pressed', b.dataset.nav === st.nav ? 'true' : 'false'); }); }
+  document.querySelectorAll('button[data-nav]').forEach(function (b) {
+    b.addEventListener('click', function () { st.nav = b.dataset.nav; save(); paintNav(); both(navCmd()); });
+  });
+  paintNav();
+
+  /* each side runs on its own; its only control is where to start: Welcome (fresh restart) or the App (Home) */
+  var START = /^V7(Welcome|Connect)/;
+  document.querySelectorAll('.flow').forEach(function (g) {
+    g.addEventListener('click', function (e) {
+      var b = e.target.closest('button'); if (!b) return;
+      var side = g.dataset.side;
+      if (b.dataset.go === 'welcome') send(side, { vnCmd: 'restart', mode: st.mode });
+      else send(side, { vnCmd: 'go', stem: 'V7Home' });   // the start destination: Portfolio on New, Home on Current
+    });
+  });
+  function paintFlow(side) {
+    var g = document.querySelector('.flow[data-side="' + side + '"]'), inStart = START.test(stems[side] || '');
+    g.querySelectorAll('button').forEach(function (b) { b.setAttribute('aria-pressed', (b.dataset.go === 'welcome') === inStart ? 'true' : 'false'); });
+  }
+
+  function url(side) { return (side === 'current' ? 'current.html' : 'new.html') + '?embed=1&side=' + side + '&v=' + Date.now() + '#' + (stems[side] || 'V7Welcome'); }
+  function loadFrame(side) { frames[side].src = url(side); }
+  $('reloadBtn').addEventListener('click', function () { loadFrame('current'); loadFrame('new'); });
+
+  window.addEventListener('message', function (e) {
+    var m = e.data; if (!m || !m.vn || !m.side || !frames[m.side]) return;
+    var side = m.side;
+    if (m.vn === 'ready') {
+      if (m.titles) Object.assign(titles, m.titles);
+      send(side, deviceCmd());
+      send(side, navCmd());
+      send(side, { vnCmd: 'theme', mode: st.mode });
+      send(side, { vnCmd: 'bg', color: 'transparent', scheme: scheme() });
+      return;
+    }
+    if (m.stem) {
+      stems[side] = m.stem;
+      $(side === 'current' ? 'curStem' : 'newStem').textContent = titles[m.stem] || m.stem.replace(/^V7/, '');
+      $(side === 'current' ? 'curOpen' : 'newOpen').href = (side === 'current' ? 'current.html' : 'new.html') + '#' + m.stem;
+      paintFlow(side);
+    }
+  });
+
+  /* change log, and reload New after each build (polls meta.js, which also works from file://) */
+  function openDrawer(on) { $('drawer').classList.toggle('open', on); $('scrim').classList.toggle('on', on); }
+  function renderChanges(list) {
+    $('count').textContent = list.length;
+    var ol = $('changeList'); ol.innerHTML = '';
+    if (!list.length) { ol.innerHTML = '<li class="empty">No changes yet. New is identical to Current.</li>'; return; }
+    list.slice().reverse().forEach(function (c) {
+      var li = document.createElement('li'), b = document.createElement('b'), p = document.createElement('p'), s = document.createElement('div');
+      b.textContent = c.title || 'Change'; p.textContent = c.detail || ''; s.className = 'stems';
+      (c.screens || []).forEach(function (stem) {
+        var x = document.createElement('button'); x.type = 'button'; x.textContent = titles[stem] || stem.replace(/^V7/, '');
+        x.title = 'Open on both sides'; x.addEventListener('click', function () { both({ vnCmd: 'go', stem: stem }); openDrawer(false); }); s.appendChild(x);
+      });
+      li.appendChild(b); if (c.detail) li.appendChild(p);
+      if (c.date) { var w = document.createElement('p'); w.className = 'when'; w.textContent = c.date; li.appendChild(w); }
+      li.appendChild(s); ol.appendChild(li);
+    });
+  }
+  window.__vnMetaLoaded = function (meta) {
+    renderChanges(meta.changes || []);
+    $('built').textContent = 'built ' + new Date(meta.stamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    if (stamp && meta.stamp !== stamp) { loadFrame('new'); var l = $('live'); l.classList.remove('pulse'); void l.offsetWidth; l.classList.add('pulse'); }
+    stamp = meta.stamp;
+  };
+  function pollMeta() {
+    var s = document.createElement('script'); s.src = 'meta.js?v=' + Date.now();
+    s.onload = s.onerror = function () { s.remove(); };
+    document.head.appendChild(s);
+  }
+  pollMeta(); setInterval(pollMeta, 1500);
+  $('changesBtn').addEventListener('click', function () { openDrawer(true); });
+  $('closeDrawer').addEventListener('click', function () { openDrawer(false); });
+  $('scrim').addEventListener('click', function () { openDrawer(false); });
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape') openDrawer(false); });
+
+  loadFrame('current'); loadFrame('new');
+})();
+</script>
+</body>
+</html>

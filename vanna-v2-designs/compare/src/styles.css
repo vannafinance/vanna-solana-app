@@ -1,0 +1,178 @@
+/* New-only styles, injected into new.html by compare/tools/build.js. */
+
+/* Welcome: the trade becomes the mark (see compare/tools/welcome.py) */
+@keyframes vnwDraw { from { stroke-dashoffset: 1 } to { stroke-dashoffset: 0 } }
+@keyframes vnwTrace { to { opacity: 0.18 } }
+@keyframes vnwPen { from { offset-distance: 0% } to { offset-distance: 100% } }
+@keyframes vnwOn { from { opacity: 1 } to { opacity: 1 } }
+@keyframes vnwPenFade { 0% { opacity: 1 } 70% { opacity: 1 } 100% { opacity: 0 } }
+@keyframes vnwSweep { from { transform: translateX(0) } to { transform: translateX(360px) } }
+@keyframes vnwLtr { from { transform: translateY(52px) } to { transform: translateY(0) } }
+@keyframes vnwFade { from { opacity: 0 } to { opacity: 1 } }
+
+/* Material ripple / state layer (see runtime.js) */
+.vn-ripple { position: absolute; inset: 0; border-radius: inherit; overflow: hidden; pointer-events: none; }
+.vn-ripple span { position: absolute; border-radius: 50%; background: currentColor; opacity: 0.12; transform: scale(0); animation: vnRipple 420ms cubic-bezier(0.2, 0, 0, 1) forwards; }
+.vn-ripple.out { opacity: 0; transition: opacity 280ms linear; }
+@keyframes vnRipple { to { transform: scale(1); } }
+
+/* Messages are M3 snackbars: bottom, above the navigation bar, left-aligned, 4dp corners */
+.toast { left: 16px !important; right: 16px; top: auto !important; bottom: 100px; max-width: none !important; min-height: 48px; padding: 14px 16px !important;
+  border-radius: 4px !important; background: #2C2C2C !important; color: #FFFFFF !important; font: 400 14px/20px 'Plus Jakarta Sans', system-ui, sans-serif !important;
+  text-align: left !important; box-shadow: 0 4px 8px rgba(17,17,17,0.18), 0 1px 3px rgba(17,17,17,0.24); transform: translateY(16px) !important;
+  transition: opacity 180ms linear, transform 250ms cubic-bezier(0.2, 0, 0, 1) !important; }
+.toast.on { transform: none !important; }
+.vn-3btn .toast { bottom: 148px; }   /* 3-button navigation takes 48dp from the bottom */
+
+/* ---------------------------------------------------------------------------------------------
+   Android large screens (see compare/tools/adaptive.py for the class hooks).
+   The device screen is the container, so these respond to the device width in dp:
+   compact < 600 (phones, unchanged) · medium 600–839 (small tablets, foldables) · expanded ≥ 840.
+   --------------------------------------------------------------------------------------------- */
+#screen { container: device / size; }
+
+@container device (min-width: 600px) {
+  /* one readable column; full-bleed backgrounds stay full-bleed */
+  #screen > div { --vn-g: max(24px, calc((100cqw - 720px) / 2)); }
+  .vn-main > * { padding-left: var(--vn-g) !important; padding-right: var(--vn-g) !important; }
+  .vn-actions { padding-left: var(--vn-g) !important; padding-right: var(--vn-g) !important; }
+  /* space headers: band and panel stay full-bleed; header, tabs and hero content sit in the column */
+  .vn-main > .vn-hero { padding-left: 0 !important; padding-right: 0 !important; }
+  .vn-hero > .vn-band { padding-left: calc(var(--vn-g) - 4px) !important; padding-right: calc(var(--vn-g) - 4px) !important; }
+  .vn-hero > .vn-panel { padding-left: var(--vn-g) !important; padding-right: var(--vn-g) !important; }
+
+  /* bottom navigation bar -> navigation rail */
+  .vn-navbar { top: 0 !important; right: auto !important; width: 80px !important; height: auto !important; padding: 44px 0 0 0 !important;
+    flex-direction: column !important; align-items: center !important; gap: 12px; border-right: 1px solid rgba(127,127,127,0.16); }
+  .vn-navbar > a { flex: 0 0 auto !important; width: 80px; height: 64px !important; }
+  .vn-main.vn-has-nav { left: 80px !important; bottom: 0 !important; --vn-g: max(24px, calc((100cqw - 80px - 720px) / 2)); }
+
+  /* bottom sheets: at most 640dp wide, centred */
+  .vn-sheet { left: 50% !important; right: auto !important; width: min(640px, calc(100cqw - 48px)) !important;
+    margin-left: calc(min(640px, calc(100cqw - 48px)) / -2) !important; }
+
+  /* Welcome and Connect: the 412-wide composition centred horizontally */
+  .vn-w-art { left: calc(50% - 206px) !important; }
+  .vn-w-copy { left: calc(50% - 206px) !important; right: auto !important; width: 412px; }
+  .vn-w-copy > * { max-width: 412px; }
+}
+
+/* tall enough for the whole 412 × 915 composition: centre it vertically too */
+@container device (min-width: 600px) and (min-height: 916px) {
+  .vn-w-art { top: calc(50% - 457px) !important; }
+  .vn-w-copy { top: calc(50% - 457px) !important; bottom: auto !important; height: 915px; }
+}
+
+@container device (min-width: 840px) {
+  #screen > div { --vn-g: max(32px, calc((100cqw - 840px) / 2)); }
+  .vn-main.vn-has-nav { --vn-g: max(32px, calc((100cqw - 80px - 840px) / 2)); }
+}
+
+/* landscape tablets: art on the left half, words and actions on the right half */
+@container device (min-width: 840px) and (min-aspect-ratio: 5/4) {
+  .vn-w-art { left: calc(25% - 206px) !important; top: calc(50% - 300px) !important; }
+  .vn-w-copy { left: 50% !important; right: 0 !important; top: 0 !important; bottom: 0 !important; width: auto; height: auto;
+    display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 40px; padding: 0 48px; }
+  .vn-w-copy > * { position: static !important; width: min(420px, 100%); max-width: none; }
+}
+@container device (min-width: 840px) {
+  .vn-tiles { grid-template-columns: repeat(4, minmax(0, 1fr)) !important; }
+}
+@container device (min-width: 600px) {
+  .vn-chart { width: 100% !important; height: auto !important; max-height: 46cqh; }
+}
+/* snackbars on large screens: capped width, centred, no bottom bar to clear (the rail is on the side) */
+.vn-wide .toast { left: 50% !important; right: auto; width: min(560px, calc(100% - 48px)); bottom: 24px; transform: translate(-50%, 16px) !important; }
+.vn-wide .toast.on { transform: translate(-50%, 0) !important; }
+.vn-wide.vn-3btn .toast { bottom: 72px; }
+
+/* Menus (Material 3): open = fade + 8px drop + scale from the button's corner, options follow 20ms apart;
+   close = quick fade (runtime.js keeps a copy on screen for 140ms). */
+@keyframes vnMenu { from { opacity: 0; transform: translateY(-8px) scale(0.94); } to { opacity: 1; transform: none; } }
+@keyframes vnMenuItem { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+@keyframes vnMenuOut { from { opacity: 1; transform: none; } to { opacity: 0; transform: translateY(-4px) scale(0.98); } }
+.vn-menu [role="option"] { animation: vnMenuItem 240ms cubic-bezier(0.2, 0, 0, 1) both; }
+.vn-menu [role="option"]:nth-of-type(2) { animation-delay: 20ms; }
+.vn-menu [role="option"]:nth-of-type(3) { animation-delay: 40ms; }
+.vn-menu [role="option"]:nth-of-type(4) { animation-delay: 60ms; }
+.vn-menu [role="option"]:nth-of-type(n+5) { animation-delay: 80ms; }
+.vn-menu-ghost { position: absolute; pointer-events: none; z-index: 60; margin: 0 !important; animation: vnMenuOut 140ms cubic-bezier(0.3, 0, 1, 1) forwards !important; }
+@media (prefers-reduced-motion: reduce) { .vn-menu, .vn-menu [role="option"], .vn-menu-ghost { animation-duration: 1ms !important; } }
+
+/* ===== tx-motion (tools/tx_motion.py) ===== */
+@keyframes vnTxGrow { from { clip-path: inset(calc(100% - 56px) 18% 0 18% round 28px); } to { clip-path: inset(0 0 0 0 round 24px); } }
+@keyframes vnTxIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+@keyframes vnVeil { from { opacity: 0; } to { opacity: 1; } }
+.vn-tx-veil { position: absolute; inset: 0; z-index: 50; background: rgba(10, 8, 18, 0.18); animation: vnVeil 200ms cubic-bezier(0.2, 0, 0, 1); }
+.vn-tx { position: absolute; z-index: 51; left: 12px; right: 12px; bottom: 12px; padding: 16px; border-radius: 24px; background: var(--vn-card); color: var(--vn-ink);
+  box-shadow: 0 0 0 1px var(--vn-bd), 0 18px 44px rgba(17, 11, 46, 0.22); animation: vnTxGrow 320ms cubic-bezier(0.05, 0.7, 0.1, 1); }
+.vn-3btn .vn-tx { bottom: 60px; }
+/* the status card already says it: no snackbar repeating "Strategy deployed" / "Swapped" on top */
+#screen:has(.vn-tx) .toast { display: none !important; }
+.vn-wide .vn-tx { left: 50%; right: auto; width: min(560px, calc(100% - 48px)); transform: translateX(-50%); }
+.vn-tx-row { display: flex; align-items: center; gap: 14px; animation: vnTxIn 240ms cubic-bezier(0.2, 0, 0, 1) both; }
+.vn-tx-txt { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.vn-tx-txt b { font-size: 16px; line-height: 22px; font-weight: 600; } .vn-tx-txt span { font-size: 13px; line-height: 18px; color: var(--vn-ink2); }
+.vn-tx-stepchip { height: 24px; padding: 0 8px; border-radius: 12px; background: var(--vn-page); color: var(--vn-ink2); font-size: 12px; font-weight: 600; align-items: center; flex-shrink: 0; }
+.vn-tx-steps { margin-top: 14px; display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--vn-ink2); animation: vnTxIn 240ms cubic-bezier(0.2, 0, 0, 1) 40ms both; }
+.vn-tx-steps span { display: inline-flex; align-items: center; gap: 5px; } .vn-tx-steps em { width: 14px; height: 1px; background: var(--vn-bd); }
+.vn-tx-steps i { width: 8px; height: 8px; border-radius: 50%; background: var(--vn-bd); }
+.vn-tx-steps .on { color: var(--vn-ink); } .vn-tx-steps .on i { background: var(--vn-acc); }
+@keyframes vnLit { to { background: var(--vn-acc); } } @keyframes vnLitTxt { to { color: var(--vn-ink); } }
+.vn-tx-steps .later { animation: vnLitTxt 1ms linear 500ms both; } .vn-tx-steps .later i { animation: vnLit 1ms linear 500ms both; }
+.vn-tx-acts { margin-top: 14px; display: flex; flex-direction: column; gap: 2px; animation: vnTxIn 240ms cubic-bezier(0.2, 0, 0, 1) 80ms both; }
+.vn-tx-btn { height: 48px; border-radius: 24px; border: 0; display: flex; align-items: center; justify-content: center; font: 600 15px 'Plus Jakarta Sans', system-ui, sans-serif; text-decoration: none; cursor: pointer; }
+.vn-tx-tonal { background: var(--vn-tv); color: var(--vn-tvi); } .vn-tx-text { background: transparent; color: var(--vn-ink); height: 40px; }
+.vn-ring { position: relative; width: 52px; height: 52px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; }
+.vn-ring-core { width: 44px; height: 44px; border-radius: 50%; background: var(--vn-tv); color: var(--vn-tvi); display: flex; align-items: center; justify-content: center; font-size: 22px; font-weight: 700; }
+@keyframes vnBreathe { 0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--vn-acc) 35%, transparent); } 50% { box-shadow: 0 0 0 5px color-mix(in srgb, var(--vn-acc) 18%, transparent); } }
+.vn-ring-wait .vn-ring-core { animation: vnBreathe 1600ms ease-in-out infinite; }
+.vn-arc { position: absolute; inset: 0; animation: vnSpin 900ms linear infinite; } @keyframes vnSpin { to { transform: rotate(360deg); } }
+.vn-ring-fail .vn-ring-core { background: #FC5457; color: #FFFFFF; animation: vnNudge 280ms cubic-bezier(0.2, 0, 0, 1) 2; }
+@keyframes vnNudge { 0%, 100% { transform: none; } 25% { transform: translateX(-6px); } 75% { transform: translateX(6px); } }
+.vn-ring-off .vn-ring-core { background: var(--vn-page); color: var(--vn-ink2); }
+/* the Vanna seal: settles with a spring, pulses once, then the tick draws */
+.vn-seal { overflow: visible; }
+.vn-seal-shape, .vn-seal-pulse { transform-box: fill-box; transform-origin: center; }
+@keyframes vnSealIn { from { transform: scale(0.35) rotate(-50deg); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes vnSealPulse { 0% { opacity: 0.6; transform: scale(0.85); } 100% { opacity: 0; transform: scale(1.35); } }
+@keyframes vnTick { from { stroke-dashoffset: 34; } to { stroke-dashoffset: 0; } }
+.vn-seal-shape { animation: vnSealIn 480ms cubic-bezier(0.34, 1.4, 0.64, 1) both; }
+.vn-seal-pulse { opacity: 0; animation: vnSealPulse 700ms cubic-bezier(0.05, 0.7, 0.1, 1) 140ms 1 both; }
+.vn-seal-tick { stroke-dasharray: 34; animation: vnTick 280ms cubic-bezier(0.05, 0.7, 0.1, 1) 220ms both; }
+/* connect: handshake sheet */
+@keyframes vnHsGrow { from { clip-path: inset(calc(100% - 150px) 20px 92px 20px round 28px); } to { clip-path: inset(0 0 0 0 round 28px 28px 0 0); } }
+.vn-hs-sheet { animation: vnHsGrow 340ms cubic-bezier(0.05, 0.7, 0.1, 1) !important; }
+.vn-hs-wrap { padding-top: 20px; text-align: center; animation: vnTxIn 240ms cubic-bezier(0.2, 0, 0, 1) 120ms both; }
+.vn-hs { display: flex; align-items: center; justify-content: center; margin-bottom: 18px; }
+.vn-hs-tile { width: 52px; height: 52px; border-radius: 16px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.vn-hs-v { background: #FFFFFF; box-shadow: 0 2px 10px rgba(47, 27, 97, 0.16); }
+.vn-hs-w { background: #34343D; color: #FFFFFF; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08); }
+@keyframes vnHsL { from { transform: translateX(-46px); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes vnHsR { from { transform: translateX(46px); opacity: 0; } to { transform: none; opacity: 1; } }
+.vn-hs-in .vn-hs-v { animation: vnHsL 360ms cubic-bezier(0.34, 1.4, 0.64, 1) 160ms both; } .vn-hs-in .vn-hs-w { animation: vnHsR 360ms cubic-bezier(0.34, 1.4, 0.64, 1) 160ms both; }
+.vn-hs-bridge { display: flex; gap: 7px; margin: 0 10px; }
+.vn-hs-bridge i { width: 7px; height: 7px; border-radius: 50%; background: var(--vn-bd); }
+@keyframes vnDotIn { from { opacity: 0; transform: scale(0.4); } to { opacity: 1; transform: none; } }
+.vn-hs-in .vn-hs-bridge i { animation: vnDotIn 200ms cubic-bezier(0.2, 0, 0, 1) both; }
+.vn-hs-in .vn-hs-bridge i:nth-child(1) { animation-delay: 320ms; } .vn-hs-in .vn-hs-bridge i:nth-child(2) { animation-delay: 350ms; } .vn-hs-in .vn-hs-bridge i:nth-child(3) { animation-delay: 380ms; }
+.vn-hs-in .vn-hs-bridge i:nth-child(4) { animation-delay: 410ms; } .vn-hs-in .vn-hs-bridge i:nth-child(5) { animation-delay: 440ms; }
+@keyframes vnTravel { 0%, 60%, 100% { background: var(--vn-bd); transform: none; } 20% { background: var(--vn-acc); transform: scale(1.35); } }
+.vn-hs-wait .vn-hs-bridge i { animation: vnTravel 1200ms linear infinite; }
+.vn-hs-wait .vn-hs-bridge i:nth-child(2) { animation-delay: 120ms; } .vn-hs-wait .vn-hs-bridge i:nth-child(3) { animation-delay: 240ms; }
+.vn-hs-wait .vn-hs-bridge i:nth-child(4) { animation-delay: 360ms; } .vn-hs-wait .vn-hs-bridge i:nth-child(5) { animation-delay: 480ms; }
+@keyframes vnFill { from { background: var(--vn-bd); } }
+.vn-hs-linked .vn-hs-bridge i { animation: vnFill 250ms cubic-bezier(0.2, 0, 0, 1) both; }
+.vn-hs-linked .vn-hs-bridge i:nth-child(1) { background: #FC5457; } .vn-hs-linked .vn-hs-bridge i:nth-child(2) { background: #E24D74; animation-delay: 50ms; }
+.vn-hs-linked .vn-hs-bridge i:nth-child(3) { background: #C04595; animation-delay: 100ms; } .vn-hs-linked .vn-hs-bridge i:nth-child(4) { background: #9A3FBE; animation-delay: 150ms; }
+.vn-hs-linked .vn-hs-bridge i:nth-child(5) { background: #703AE6; animation-delay: 200ms; }
+.vn-hs-linked .vn-hs-w { background: transparent; }
+@keyframes vnFall { to { opacity: 0; transform: translateY(10px) scale(0.6); } }
+.vn-hs-fell .vn-hs-bridge i { animation: vnFall 220ms cubic-bezier(0.3, 0, 0.8, 0.15) both; }
+.vn-hs-fell .vn-hs-w { animation: vnNudge 280ms cubic-bezier(0.2, 0, 0, 1) 2; }
+.vn-hs-none .vn-hs-w { background: transparent; border: 2px dashed var(--vn-bd); }
+.vn-hs-none .vn-hs-bridge i { opacity: 0.5; }
+.vn-loader { width: 18px; height: 18px; background: currentColor; display: inline-block; animation: vnShapes 1100ms cubic-bezier(0.2, 0, 0, 1) infinite; }
+@keyframes vnShapes { 0% { border-radius: 50%; transform: rotate(0) scale(0.9); } 33% { border-radius: 30% 70% 50% 50%; transform: rotate(120deg); } 66% { border-radius: 6px; transform: rotate(240deg) scale(0.85); } 100% { border-radius: 50%; transform: rotate(360deg) scale(0.9); } }
+@media (prefers-reduced-motion: reduce) { .vn-tx, .vn-tx *, .vn-hs-sheet, .vn-hs-wrap, .vn-hs * { animation-duration: 1ms !important; animation-iteration-count: 1 !important; } }
+/* ===== end tx-motion ===== */

@@ -1,0 +1,382 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Vanna motion: connect and transactions</title>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root { --page:#F7F7F7; --card:#FFFFFF; --text:#1F1F1F; --text2:#595959; --line:#F0EEF4; --bd:#E5E7EB; --pos:#1C7C83; --neg:#B33C3E;
+  --violet:#703AE6; --coral:#FC5457; --tv:#F1EBFD; --tvI:#5029A3; --bg:#EDEBF3;
+  --e-dec: cubic-bezier(0.05, 0.7, 0.1, 1); --e-acc: cubic-bezier(0.3, 0, 0.8, 0.15); --e-std: cubic-bezier(0.2, 0, 0, 1); --spring: cubic-bezier(0.34, 1.4, 0.64, 1); }
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text); font-family: 'Plus Jakarta Sans', system-ui, sans-serif; font-variant-numeric: tabular-nums; }
+.top { padding: 22px 28px 0; max-width: 1400px; }
+.top h1 { margin: 0; font-size: 24px; font-weight: 600; }
+.top p { margin: 6px 0 0; font-size: 14px; color: var(--text2); max-width: 980px; line-height: 20px; }
+section { padding: 6px 28px 24px; }
+section h2 { margin: 18px 0 4px; font-size: 18px; font-weight: 600; }
+section > p { margin: 0 0 14px; font-size: 13px; color: var(--text2); max-width: 980px; }
+.row { display: flex; gap: 28px; flex-wrap: wrap; align-items: flex-start; }
+figure { margin: 0; width: 392px; display: flex; flex-direction: column; gap: 10px; }
+figcaption { font-size: 13px; line-height: 19px; color: var(--text2); } figcaption b { color: var(--text); }
+.ctrl { display: flex; gap: 6px; flex-wrap: wrap; }
+.ctrl button { height: 30px; padding: 0 12px; border-radius: 15px; border: 1px solid rgba(127,127,127,.3); background: var(--card); font: 600 12px 'Plus Jakarta Sans'; color: var(--text); cursor: pointer; }
+.ctrl button.on { background: var(--tv); color: var(--tvI); border-color: transparent; }
+.phone { position: relative; width: 392px; height: 820px; border-radius: 36px; overflow: hidden; background: var(--page); box-shadow: 0 0 0 9px #0B0B0D, 0 30px 60px -20px rgba(47,27,97,.4); }
+.sb { position: absolute; z-index: 30; top: 0; left: 0; right: 0; height: 28px; display: flex; justify-content: space-between; align-items: center; padding: 0 18px; font-size: 12px; font-weight: 600; }
+.sb.light { color: #fff; }
+.mark { display: block; }
+.ic { display: inline-flex; }
+
+/* ---------- shared: wallet tile, bridge, loading indicator, check ---------- */
+.tile { width: 52px; height: 52px; border-radius: 16px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; position: relative; }
+.tile.v { background: #fff; box-shadow: 0 2px 10px rgba(47,27,97,.14); }
+.tile.w { background: #2B2B33; color: #fff; }
+.tile.w .ok { position: absolute; inset: -2px; display: flex; align-items: center; justify-content: center; opacity: 0; transition: opacity 120ms var(--e-std); }
+.tile.w.done { background: transparent; transition: background 160ms var(--e-std); } .tile.w.done > .ic { opacity: 0; transition: opacity 120ms; }
+.tile.w.done .ok { opacity: 1; }
+/* the seal: settles in with a spring, pulses once, then the tick draws */
+.seal { overflow: visible; }
+.seal .cookie, .seal .pulse { transform-box: fill-box; transform-origin: center; }
+.seal .cookie { transform: scale(.35) rotate(-50deg); opacity: 0; transition: transform 480ms var(--spring), opacity 140ms var(--e-std); }
+.seal .tick { stroke-dasharray: 34; stroke-dashoffset: 34; transition: stroke-dashoffset 280ms var(--e-dec) 220ms; }
+.seal .pulse { opacity: 0; }
+.done .seal .cookie, .okd .seal .cookie { transform: none; opacity: 1; }
+.done .seal .tick, .okd .seal .tick { stroke-dashoffset: 0; }
+.done .seal .pulse, .okd .seal .pulse { animation: sealPulse 700ms var(--e-dec) 140ms 1 both; }
+@keyframes sealPulse { 0% { opacity: .6; transform: scale(.85); } 100% { opacity: 0; transform: scale(1.35); } }
+.okd .ringbox .core { background: transparent !important; }
+.okd .ringbox .core .g1 { position: absolute; }
+.tile.w.none { background: transparent; border: 2px dashed var(--bd); color: var(--text2); }
+.bridge { display: flex; gap: 7px; margin: 0 10px; }
+.bridge i { width: 7px; height: 7px; border-radius: 50%; background: var(--bd); opacity: 0; transform: scale(.4); transition: opacity 200ms var(--e-std), transform 200ms var(--e-std), background 250ms var(--e-std); }
+.shake .bridge i, .in .bridge i { opacity: 1; transform: none; }
+.in .bridge i:nth-child(2) { transition-delay: 30ms; } .in .bridge i:nth-child(3) { transition-delay: 60ms; } .in .bridge i:nth-child(4) { transition-delay: 90ms; } .in .bridge i:nth-child(5) { transition-delay: 120ms; }
+.wait .bridge i { animation: travel 1200ms linear infinite; }
+.wait .bridge i:nth-child(2) { animation-delay: 120ms; } .wait .bridge i:nth-child(3) { animation-delay: 240ms; } .wait .bridge i:nth-child(4) { animation-delay: 360ms; } .wait .bridge i:nth-child(5) { animation-delay: 480ms; }
+@keyframes travel { 0%, 60%, 100% { background: var(--bd); transform: none; } 20% { background: var(--violet); transform: scale(1.35); } }
+.linked .bridge i { animation: none; background: var(--violet); }
+.linked .bridge i:nth-child(1) { background: #FC5457; } .linked .bridge i:nth-child(2) { background: #E24D74; transition-delay: 50ms; } .linked .bridge i:nth-child(3) { background: #C04595; transition-delay: 100ms; }
+.linked .bridge i:nth-child(4) { background: #9A3FBE; transition-delay: 150ms; } .linked .bridge i:nth-child(5) { background: #703AE6; transition-delay: 200ms; }
+.fell .bridge i { animation: none; opacity: 0; transform: translateY(10px) scale(.6); transition: opacity 200ms var(--e-acc), transform 200ms var(--e-acc); }
+.none .bridge i { opacity: .5 !important; background: var(--bd) !important; animation: none !important; transform: none !important; }
+@keyframes nudge { 0%, 100% { transform: none; } 20%, 60% { transform: translateX(-6px); } 40%, 80% { transform: translateX(6px); } }
+.nudge { animation: nudge 280ms var(--e-std) 2; }
+.loader { width: 18px; height: 18px; background: currentColor; animation: shapes 1100ms var(--e-std) infinite; display: inline-block; }
+@keyframes shapes { 0% { border-radius: 50%; transform: rotate(0) scale(.9); } 33% { border-radius: 30% 70% 50% 50%; transform: rotate(120deg) scale(1); } 66% { border-radius: 6px; transform: rotate(240deg) scale(.85); } 100% { border-radius: 50%; transform: rotate(360deg) scale(.9); } }
+.btn { height: 52px; border-radius: 26px; border: 0; display: flex; align-items: center; justify-content: center; gap: 8px; font: 600 16px 'Plus Jakarta Sans'; color: #fff; background: var(--violet); width: 100%;
+  transition: width 300ms var(--e-std), background 250ms var(--e-std), transform 120ms var(--e-std), opacity 200ms var(--e-std); }
+.btn.press { transform: scale(.97); }
+.btn.ghost { background: transparent; color: var(--text); }
+.btn.tonal { background: var(--tv); color: var(--tvI); }
+.swap { position: relative; display: grid; } .swap > * { grid-area: 1 / 1; transition: opacity 180ms var(--e-std), transform 220ms var(--e-std); }
+.swap > .off { opacity: 0; transform: translateY(6px); pointer-events: none; }
+.chip { display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 12px 0 6px; border-radius: 15px; background: var(--tv); color: var(--tvI); font-size: 13px; font-weight: 600; }
+.chip .dot { width: 20px; height: 20px; border-radius: 50%; background: linear-gradient(135deg, #FC5457, #703AE6); }
+.t1 { font-size: 22px; line-height: 28px; font-weight: 600; } .t2 { font-size: 14px; line-height: 20px; color: var(--text2); }
+.fade { transition: opacity 220ms var(--e-std), transform 260ms var(--e-dec); } .fade.off { opacity: 0; transform: translateY(8px); }
+.scrim { position: absolute; inset: 0; background: rgba(10,8,18,.5); opacity: 0; transition: opacity 250ms var(--e-std); pointer-events: none; z-index: 10; } .scrim.on { opacity: 1; }
+
+/* ---------- welcome / home backdrops ---------- */
+.welcome { position: absolute; inset: 0; background: radial-gradient(120% 60% at 30% 30%, #2B1457 0%, #0E0B16 60%), #0E0B16; color: #fff; display: flex; flex-direction: column; align-items: center; transition: opacity 300ms var(--e-std); }
+.welcome h3 { margin: 0; font-size: 28px; line-height: 34px; font-weight: 600; text-align: center; }
+.home { position: absolute; inset: 0; background: var(--page); opacity: 0; transition: opacity 300ms var(--e-std); }
+.home.on { opacity: 1; }
+.home .band { background: linear-gradient(180deg, #1A0B2E, #2A1150); color: #fff; padding: 40px 16px 0; }
+.home .panel { background: linear-gradient(180deg, #5B2BC0, #3B1C82); color: #fff; padding: 18px 16px 20px; border-radius: 0 0 28px 28px; }
+.home .acct { position: absolute; top: 44px; right: 16px; }
+.ghostrow { height: 64px; border-radius: 16px; background: var(--card); margin: 12px 16px 0; box-shadow: 0 1px 2px rgba(17,17,17,.04); }
+
+/* ---------- A: handshake sheet (container transform from the button) ---------- */
+.morph { position: absolute; z-index: 20; background: var(--violet); overflow: hidden;
+  left: 20px; right: 20px; bottom: 92px; height: 56px; border-radius: 28px;
+  transition: left 320ms var(--e-dec), right 320ms var(--e-dec), bottom 320ms var(--e-dec), height 320ms var(--e-dec), border-radius 320ms var(--e-dec), background 200ms var(--e-std), opacity 250ms var(--e-std), transform 120ms var(--e-std); }
+.morph .lbl { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: #fff; font-weight: 600; font-size: 16px; transition: opacity 120ms var(--e-std); }
+.morph.sheet { left: 0; right: 0; bottom: 0; height: 370px; border-radius: 28px 28px 0 0; background: var(--card); }
+.morph.sheet .lbl { opacity: 0; }
+.morph.gone { bottom: -380px; transition: bottom 280ms var(--e-acc); }
+.morph .body { position: absolute; left: 0; right: 0; top: 0; padding: 12px 22px 26px; opacity: 0; transition: opacity 200ms var(--e-std) 120ms; }
+.morph.sheet .body { opacity: 1; }
+.grab { width: 32px; height: 4px; border-radius: 2px; background: var(--bd); margin: 0 auto 20px; }
+.hand { display: flex; align-items: center; justify-content: center; margin-bottom: 18px; }
+.hand .tile { transition: transform 360ms var(--spring), opacity 200ms var(--e-std); }
+.hand:not(.in) .tile.v { transform: translateX(-46px); opacity: 0; } .hand:not(.in) .tile.w { transform: translateX(46px); opacity: 0; }
+.morph .copy { text-align: center; } .morph .copy .t2 { margin-top: 4px; }
+.morph .acts { margin-top: 20px; display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.pill { width: 230px !important; background: var(--tv) !important; color: var(--tvI) !important; }
+.priv { margin-top: 12px; text-align: center; font-size: 12px; color: var(--text2); display: flex; align-items: center; justify-content: center; gap: 6px; }
+.flychip { position: absolute; z-index: 25; left: 50%; top: 600px; transform: translate(-50%, 0); opacity: 0; transition: top 320ms var(--e-std), left 320ms var(--e-std), transform 320ms var(--e-std), opacity 200ms var(--e-std); }
+.flychip.show { opacity: 1; } .flychip.fly { top: 44px; left: calc(100% - 16px); transform: translate(-100%, 0); }
+
+/* ---------- B: button morphs into an inline card ---------- */
+.order { position: absolute; inset: 0; padding: 40px 16px 0; }
+.order .hdr { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; }
+.kv { display: flex; justify-content: space-between; font-size: 14px; min-height: 42px; align-items: center; border-top: 1px solid var(--line); } .kv span { color: var(--text2); } .kv b { font-weight: 600; }
+.ocard { border-radius: 16px; background: var(--card); padding: 4px 16px; box-shadow: 0 1px 2px rgba(17,17,17,.04), 0 8px 24px rgba(17,17,17,.05); }
+.cta { position: absolute; left: 16px; right: 16px; bottom: 28px; height: 56px; border-radius: 28px; background: var(--violet); color: #fff; overflow: hidden;
+  transition: height 320ms var(--e-dec), border-radius 320ms var(--e-dec), background 220ms var(--e-std), box-shadow 220ms var(--e-std), transform 120ms var(--e-std); }
+.cta .face { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; gap: 8px; font-weight: 600; font-size: 16px; transition: opacity 160ms var(--e-std); }
+.cta .inner { position: absolute; inset: 0; padding: 18px; opacity: 0; transition: opacity 200ms var(--e-std) 140ms; color: var(--text); display: flex; flex-direction: column; gap: 14px; }
+.cta.card { height: 176px; border-radius: 20px; background: var(--card); box-shadow: 0 0 0 1px var(--bd), 0 16px 40px rgba(47,27,97,.16); }
+.cta.card .face { opacity: 0; } .cta.card .inner { opacity: 1; }
+.cta.trace::before { content: ''; position: absolute; inset: 0; border-radius: 20px; padding: 2px; background: conic-gradient(from var(--a), transparent 0 60%, #FC5457 75%, #703AE6 90%, transparent 100%);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask-composite: exclude; animation: spin 1400ms linear infinite; }
+@property --a { syntax: '<angle>'; inherits: false; initial-value: 0deg; }
+@keyframes spin { to { --a: 360deg; } }
+.note { position: absolute; left: 16px; right: 16px; bottom: 92px; text-align: center; font-size: 13px; color: var(--text2); }
+
+/* ---------- C: first-run full screen ---------- */
+.fr .stage { position: absolute; left: 0; right: 0; top: 210px; height: 120px; display: flex; align-items: center; justify-content: center; transition: top 380ms var(--e-dec), transform 380ms var(--e-dec); }
+.fr .stage .bigmark { transition: transform 380ms var(--e-dec); }
+.fr .stage .tile.w { position: absolute; left: 50%; margin-left: 40px; opacity: 0; transform: translateX(60px); transition: opacity 250ms var(--e-std), transform 380ms var(--spring); }
+.fr .stage .bridge { position: absolute; left: 50%; margin-left: -34px; opacity: 0; transition: opacity 200ms var(--e-std) 150ms; }
+.fr.hs .stage { top: 120px; } .fr.hs .stage .bigmark { transform: translateX(-74px) scale(.46); } .fr.hs .stage .tile.w { opacity: 1; transform: none; } .fr.hs .stage .bridge { opacity: 1; }
+.fr .copy { position: absolute; left: 24px; right: 24px; top: 400px; text-align: center; }
+.fr .acts { position: absolute; left: 20px; right: 20px; bottom: 40px; display: flex; flex-direction: column; gap: 6px; align-items: center; }
+
+/* ---------- transaction ---------- */
+.tx .rev { position: absolute; inset: 0; padding: 40px 16px 0; }
+.tx .status { position: absolute; left: 16px; right: 16px; top: 272px; border-radius: 20px; background: var(--card); padding: 20px; box-shadow: 0 1px 2px rgba(17,17,17,.04), 0 8px 24px rgba(17,17,17,.06);
+  display: flex; flex-direction: column; align-items: center; text-align: center; gap: 10px; opacity: 0; transform: translateY(16px) scale(.98); transition: opacity 220ms var(--e-std), transform 300ms var(--e-dec), top 300ms var(--e-dec), height 300ms var(--e-dec); }
+.tx .status.on { opacity: 1; transform: none; }
+.ringbox { position: relative; width: 76px; height: 76px; display: flex; align-items: center; justify-content: center; }
+.ringbox .halo { position: absolute; inset: 0; border-radius: 50%; border: 2px solid var(--violet); opacity: .35; }
+.breathe .halo { animation: breathe 1600ms ease-in-out infinite; }
+@keyframes breathe { 0%, 100% { opacity: .35; transform: scale(1); } 50% { opacity: .8; transform: scale(1.04); } }
+.ringbox .core { width: 60px; height: 60px; border-radius: 50%; background: #2B2B33; color: #fff; display: flex; align-items: center; justify-content: center; transition: background 250ms var(--e-std); }
+.ringbox svg.arc { position: absolute; inset: 0; opacity: 0; transition: opacity 200ms var(--e-std); }
+.sent .ringbox svg.arc { opacity: 1; animation: rot 900ms linear infinite; } .sent .halo { animation: none; opacity: 0; }
+@keyframes rot { to { transform: rotate(360deg); } }
+.ringbox .core .glyph { position: absolute; display: flex; transition: opacity 180ms var(--e-std), transform 260ms var(--spring); }
+.okd .ringbox svg.arc, .bad .ringbox svg.arc { opacity: 0; animation: none; }
+.okd .ringbox .core { background: var(--pos); } .bad .ringbox .core { background: var(--coral); }
+.check path { stroke-dasharray: 40; stroke-dashoffset: 40; } .okd .check path { transition: stroke-dashoffset 300ms var(--e-dec) 80ms; stroke-dashoffset: 0; }
+.steps { display: flex; gap: 6px; align-items: center; font-size: 12px; color: var(--text2); }
+.steps span { display: inline-flex; align-items: center; gap: 5px; } .steps i { width: 8px; height: 8px; border-radius: 50%; background: var(--bd); transition: background 120ms var(--e-std); }
+.steps span.lit i { background: var(--violet); } .steps span.lit { color: var(--text); } .steps em { width: 14px; height: 1px; background: var(--bd); }
+.okd .steps span i { background: var(--violet); }
+.tx .scrim.on { opacity: .55; }
+.txc.handoff { background: var(--tv); color: var(--tvI); }
+.txc.card { height: 196px; }
+.txc .inner { gap: 12px; }
+.txc .ringbox { width: 56px; height: 56px; flex-shrink: 0; } .txc .ringbox .core { width: 44px; height: 44px; } .txc .ringbox svg.arc { width: 56px; height: 56px; }
+.txc .ringbox .halo { opacity: 0; }
+.tx .tgo { position: absolute; left: 0; right: 0; bottom: 28px; margin: 0 auto; width: calc(100% - 32px); }
+.wsheet { position: absolute; z-index: 15; left: 0; right: 0; bottom: 0; height: 352px; border-radius: 22px 22px 0 0; background: #1C1C21; color: #fff; padding: 14px 20px 22px; transform: translateY(100%); transition: transform 300ms var(--e-dec); }
+.wsheet.on { transform: none; } .wsheet.off { transform: translateY(100%); transition: transform 250ms var(--e-acc); }
+.wsheet .wh { display: flex; align-items: center; gap: 10px; font-weight: 600; } .wsheet .kv { border-color: rgba(255,255,255,.08); } .wsheet .kv span { color: #A0A0AA; }
+.wsheet .wb { display: flex; gap: 10px; margin-top: 18px; } .wsheet .wb span { flex: 1; height: 48px; border-radius: 24px; display: flex; align-items: center; justify-content: center; font-weight: 600; transition: transform 120ms var(--e-std); }
+.wsheet .rej { background: #2E2E35; } .wsheet .app { background: #AB9FF2; color: #1C1C21; } .wsheet .pressed { transform: scale(.95); }
+.wsheet .tag { font-size: 11px; color: #A0A0AA; margin-top: 2px; }
+.posrow { position: absolute; left: 16px; right: 16px; top: 272px; height: 72px; border-radius: 16px; background: var(--card); box-shadow: 0 1px 2px rgba(17,17,17,.04), 0 8px 24px rgba(17,17,17,.06); display: flex; align-items: center; gap: 12px; padding: 0 16px; opacity: 0; transform: translateY(-40px) scale(.96); transition: opacity 250ms var(--e-std), transform 320ms var(--e-dec); }
+.posrow.on { opacity: 1; transform: none; }
+@media (prefers-reduced-motion: reduce) { *, *::before { animation-duration: 1ms !important; transition-duration: 1ms !important; } }
+</style></head>
+<body>
+<div class="top"><h1>Motion: connecting a wallet and approving a transaction</h1>
+<p>Previews only. With Solana Mobile Wallet Adapter the wallet app (Phantom, Solflare, Seed Vault) draws its own approval screen; Vanna owns the moment before it, the wait while you are in the wallet, and the result. Every animation below follows a real event (wallet answered, Solana confirmed); nothing is a timed fake. Durations and curves are Material 3's. Each phone loops; the buttons jump to other outcomes. The wallet here is shown as "Phantom" with a neutral icon; the app would show the real installed wallet's name and icon.</p></div>
+
+<section><h2>1 · Connect your wallet: three designs</h2>
+<p>All three cut the copy to one title, one line and one button, and name the wallet ("Open Phantom") instead of explaining Mobile Wallet Adapter. Returning users never see any of this: the saved authorisation is reused.</p>
+<div class="row">
+<figure><div class="phone" id="A"></div><div class="ctrl" data-for="A"><button data-run="happy" class="on">Connect</button><button data-run="declined">Declined</button><button data-run="nowallet">No wallet</button></div>
+<figcaption><b>A · Handshake sheet (recommended).</b> The Connect button grows into the sheet (container transform, 320ms). The Vanna mark and the wallet slide together; the dots travel while you are in the wallet, then fill coral→violet when it connects and your address chip flies to the top bar.</figcaption></figure>
+<figure><div class="phone" id="B"></div><div class="ctrl" data-for="B"><button data-run="happy" class="on">Connect in place</button></div>
+<figcaption><b>B · In place, no sheet.</b> For someone who browsed first and taps "Open 3x Long": the button itself opens into a small card, so the trade stays on screen. A light traces its edge while you approve; then it shrinks back to "Confirm in Phantom", one step further on.</figcaption></figure>
+<figure><div class="phone" id="C"></div><div class="ctrl" data-for="C"><button data-run="happy" class="on">First run</button></div>
+<figcaption><b>C · First-run moment.</b> Only once, from Welcome: the big mark slides aside to meet the wallet, waits, connects, then fades through to Portfolio with your account already there.</figcaption></figure>
+</div></section>
+
+<section><h2>2 · Approving a transaction</h2>
+<p>No review step and no separate status screen: the order screen already shows the trade, so the "Open 3x Long" button itself carries the whole transaction. Tap → "Opening Phantom" → the wallet's own sheet → back on the same screen the button opens into a small status card: Sent → Processed → Confirmed (real Solana steps, usually under 2s, not a progress bar) → result. No confetti: a leveraged trade should feel settled, not like a win. Cancelling in the wallet is not an error, so it is neutral, not red.</p>
+<div class="row">
+<figure><div class="phone tx" id="T1"></div><div class="ctrl" data-for="T1"><button data-run="ok" class="on">Approved</button></div>
+<figcaption><b>Approved.</b> The button becomes "Opening Phantom", Phantom's sheet appears on top (mocked, dark), and when you are back the same button opens into the status: the steps light up as Solana answers and the check draws itself, then "View position".</figcaption></figure>
+<figure><div class="phone tx" id="T2"></div><div class="ctrl" data-for="T2"><button data-run="declined" class="on">Declined</button></div>
+<figcaption><b>Declined in the wallet.</b> The button goes back to "Open 3x Long" with everything you entered untouched, and one quiet line: nothing was sent.</figcaption></figure>
+<figure><div class="phone tx" id="T3"></div><div class="ctrl" data-for="T3"><button data-run="failed" class="on">Failed</button></div>
+<figcaption><b>Failed on Solana.</b> In the same place: the ring turns coral with a "!" and a short nudge, says why in plain words and that no funds moved, with "Try again".</figcaption></figure>
+</div></section>
+
+<script>
+var MARK = '__MARK__', IC = __ICONS__;
+function mark(size, fill) {
+  return '<svg class="mark" width="' + size + '" height="' + size + '" viewBox="11 12 232 232"><defs><linearGradient id="g' + size + '" gradientUnits="userSpaceOnUse" x1="31.7" y1="73" x2="222.3" y2="183"><stop offset="0" stop-color="#FC5457"/><stop offset="1" stop-color="#703AE6"/></linearGradient></defs><path fill="' + (fill || 'url(#g' + size + ')') + '" fill-rule="evenodd" d="' + MARK + '"/></svg>';
+}
+function ic(n, s) { return '<span class="ic"><svg width="' + (s || 22) + '" height="' + (s || 22) + '" viewBox="0 -960 960 960" fill="currentColor">' + IC[n] + '</svg></span>'; }
+/* Vanna success seal: an M3 Expressive scalloped shape in the brand gradient, a single soft pulse, and a bold
+   slanted tick with square ends (the Vanna mark's angles) that draws in. Replaces a generic round check. */
+var sealN = 0;
+function cookie(cx, cy, r, amp, lobes) {
+  var d = '';
+  for (var i = 0; i <= 120; i++) { var a = i / 120 * Math.PI * 2, rr = r + amp * Math.cos(lobes * a); d += (i ? 'L' : 'M') + (cx + rr * Math.cos(a)).toFixed(2) + ' ' + (cy + rr * Math.sin(a)).toFixed(2); }
+  return d + 'Z';
+}
+function SEAL(size) {
+  var id = 'sg' + (sealN++);
+  return '<svg class="seal" width="' + size + '" height="' + size + '" viewBox="0 0 56 56" aria-hidden="true"><defs><linearGradient id="' + id + '" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#FC5457"/><stop offset="1" stop-color="#703AE6"/></linearGradient></defs>' +
+    '<circle class="pulse" cx="28" cy="28" r="25" fill="none" stroke="url(#' + id + ')" stroke-width="2"/>' +
+    '<path class="cookie" d="' + cookie(28, 28, 23, 1.8, 9) + '" fill="url(#' + id + ')"/>' +
+    '<path class="tick" d="M17.5 28.5 L25 35.5 L39.5 20" fill="none" stroke="#fff" stroke-width="4.6" stroke-linecap="square" stroke-linejoin="miter"/></svg>';
+}
+var CHECK = SEAL(56);
+var BRIDGE = '<div class="bridge"><i></i><i></i><i></i><i></i><i></i></div>';
+var WALLET = '<div class="tile w">' + ic('wallet', 26) + '<span class="ok">' + SEAL(56) + '</span></div>';
+var SB = function (light) { return '<div class="sb' + (light ? ' light' : '') + '"><span>12:30</span><span>&#9679;&#9679;&#9679; &#9650; &#9646;</span></div>'; };
+function $(root, sel) { return root.querySelector(sel); }
+function cls(el, c, on) { if (el) el.classList.toggle(c, on !== false); }
+
+/* timeline runner: each phone runs one sequence at a time, looping */
+var timers = {};
+function run(id, steps, loopMs) {
+  (timers[id] || []).forEach(clearTimeout); timers[id] = [];
+  steps.forEach(function (s) { timers[id].push(setTimeout(s[1], s[0])); });
+  if (loopMs) timers[id].push(setTimeout(function () { run(id, steps, loopMs); }, loopMs));
+}
+function press(el, then) { cls(el, 'press'); setTimeout(function () { cls(el, 'press', false); if (then) then(); }, 140); }
+
+/* ---------------- A ---------------- */
+function buildA() {
+  var p = document.getElementById('A');
+  p.innerHTML = SB(true) + '<div class="welcome"><div style="margin-top:170px">' + mark(120) + '</div><h3 style="margin-top:56px">Tokenized stocks,<br>with leverage.</h3></div>' +
+    '<div class="home"><div class="band"><div style="display:flex;align-items:center;gap:8px">' + mark(28) + '<b style="font-size:20px">vanna</b></div><div style="height:70px"></div></div><div class="panel"><div style="font-size:13px;opacity:.8">Wallet balance</div><div style="font-size:30px;font-weight:600">$4,812.40</div></div><div class="ghostrow"></div><div class="ghostrow"></div></div>' +
+    '<div class="scrim"></div>' +
+    '<div class="morph"><div class="lbl">Connect wallet</div><div class="body"><div class="grab"></div>' +
+      '<div class="hand"><div class="tile v">' + mark(30) + '</div>' + BRIDGE + WALLET + '</div>' +
+      '<div class="copy swap"><div class="s0"><div class="t1">Connect Phantom</div><div class="t2">You approve in Phantom. Vanna never holds your keys.</div></div>' +
+        '<div class="s1 off"><div class="t1">Waiting for Phantom</div><div class="t2">Approve the request in Phantom to continue.</div></div>' +
+        '<div class="s2 off"><div class="t1">Connected</div></div>' +
+        '<div class="s3 off"><div class="t1">Cancelled in Phantom</div><div class="t2">Nothing was connected.</div></div>' +
+        '<div class="s4 off"><div class="t1">Get a Solana wallet</div><div class="t2">Vanna trades from a wallet app on your phone. Install one, then come back.</div></div></div>' +
+      '<div class="acts"><button class="btn go">' + ic('wallet', 20) + '<span class="gl">Open Phantom</span></button><button class="btn ghost alt" style="height:40px;font-size:14px;opacity:0">Not now</button></div>' +
+      '<div class="priv">' + ic('lock', 14) + 'Only your address is shared</div></div></div>' +
+    '<div class="flychip chip"><span class="dot"></span>7xKX…9fQ2</div>';
+  return p;
+}
+function seqA(kind) {
+  var p = buildA(), m = $(p, '.morph'), hand = $(p, '.hand'), go = $(p, '.go'), alt = $(p, '.alt'), chip = $(p, '.flychip'), w = $(p, '.tile.w');
+  var copy = function (i) { [0, 1, 2, 3, 4].forEach(function (k) { cls($(p, '.s' + k), 'off', k !== i); }); };
+  var steps = [
+    [700, function () { press(m); }],
+    [900, function () { cls(m, 'sheet'); cls($(p, '.scrim'), 'on'); }],
+    [1200, function () { cls(hand, 'in'); if (kind === 'nowallet') { cls(w, 'none'); cls(hand, 'none'); copy(4); $(p, '.gl').textContent = 'Get Phantom'; alt.textContent = 'Get Solflare'; alt.style.opacity = 1; } }]
+  ];
+  if (kind === 'nowallet') return run('A', steps, 0);
+  steps = steps.concat([
+    [2500, function () { press(go, function () { cls(go, 'pill'); go.innerHTML = '<span class="loader"></span>Waiting for Phantom'; cls(hand, 'wait'); copy(1); alt.textContent = 'Cancel'; alt.style.opacity = 1; }); }]
+  ]);
+  if (kind === 'declined') return run('A', steps.concat([
+    [5200, function () { cls(hand, 'wait', false); cls(hand, 'fell'); w.classList.add('nudge'); copy(3); cls(go, 'pill', false); go.innerHTML = 'Try again'; alt.textContent = 'Not now'; }]
+  ]), 0);
+  run('A', steps.concat([
+    [5000, function () { cls(hand, 'wait', false); cls(hand, 'linked'); }],
+    [5250, function () { cls(w, 'done'); copy(2); go.style.opacity = 0; alt.style.opacity = 0; cls(chip, 'show'); }],
+    [6300, function () { cls(m, 'gone'); cls($(p, '.scrim'), 'on', false); cls(chip, 'fly'); cls($(p, '.welcome'), 'off'); $(p, '.welcome').style.opacity = 0; cls($(p, '.home'), 'on'); }]
+  ]), 9600);
+}
+
+/* ---------------- B ---------------- */
+function seqB() {
+  var p = document.getElementById('B');
+  p.innerHTML = SB() + '<div class="order"><div class="hdr"><img alt="" src="__TSLA__" style="width:36px;height:36px;border-radius:50%"><div><div style="font-weight:600">TSLAx-USDC</div><div class="t2" style="font-size:12px">Long · 3x</div></div></div>' +
+    '<div style="font-size:32px;font-weight:600">$1,500.00</div><div class="t2">Position size · 4.24 TSLAx</div>' +
+    '<div class="ocard" style="margin-top:18px"><div class="kv" style="border:0"><span>Collateral</span><b>500 USDC</b></div><div class="kv"><span>Entry price</span><b>$353.59</b></div><div class="kv"><span>Liquidation</span><b>$250.20</b></div><div class="kv"><span>Fee</span><b>$0.75</b></div></div></div>' +
+    '<div class="cta"><div class="face">' + ic('trend', 20) + '<span class="fl">Open 3x Long</span></div><div class="inner">' +
+      '<div style="display:flex;align-items:center;gap:12px">' + WALLET + '<div><div style="font-weight:600;font-size:16px" class="bt">Connect to open this position</div><div class="t2 bs" style="font-size:13px">You approve in Phantom</div></div></div>' +
+      '<button class="btn bgo">' + ic('wallet', 20) + '<span>Open Phantom</span></button></div></div>';
+  var c = $(p, '.cta'), go = $(p, '.bgo'), w = $(p, '.tile.w');
+  run('B', [
+    [800, function () { press(c); }],
+    [1000, function () { cls(c, 'card'); }],
+    [2400, function () { press(go, function () { cls(c, 'trace'); go.innerHTML = '<span class="loader"></span>Waiting for Phantom'; cls(go, 'pill'); go.style.width = '100%'; $(p, '.bt').textContent = 'Approve in Phantom'; $(p, '.bs').textContent = 'Then come back here'; }); }],
+    [5000, function () { cls(c, 'trace', false); cls(w, 'done'); $(p, '.bt').textContent = 'Connected'; $(p, '.bs').textContent = '7xKX…9fQ2'; go.style.opacity = 0; }],
+    [6000, function () { cls(c, 'card', false); $(p, '.fl').textContent = 'Confirm in Phantom'; $(p, '.face').querySelector('.ic').outerHTML = ic('wallet', 20); }]
+  ], 9400);
+}
+
+/* ---------------- C ---------------- */
+function seqC() {
+  var p = document.getElementById('C');
+  p.className = 'phone fr';
+  p.innerHTML = SB(true) + '<div class="welcome"></div>' +
+    '<div class="home"><div class="band"><div style="display:flex;align-items:center;gap:8px">' + mark(28) + '<b style="font-size:20px">vanna</b></div><div style="height:70px"></div></div><div class="panel"><div style="font-size:13px;opacity:.8">Wallet balance</div><div style="font-size:30px;font-weight:600">$4,812.40</div></div><div class="ghostrow"></div><div class="ghostrow"></div><div class="acct chip"><span class="dot"></span>7xKX…9fQ2</div></div>' +
+    '<div class="stage"><span class="bigmark">' + mark(120) + '</span>' + BRIDGE.replace('bridge', 'bridge') + WALLET + '</div>' +
+    '<div class="copy swap" style="color:#fff"><div class="s0"><div class="t1" style="font-size:28px;line-height:34px">Your wallet.<br>Your leverage.</div><div class="t2" style="color:#C9C3DA;margin-top:8px">Connect a Solana wallet to start.</div></div>' +
+      '<div class="s1 off"><div class="t1">Approve in Phantom</div><div class="t2" style="color:#C9C3DA;margin-top:6px">Then come back here.</div></div>' +
+      '<div class="s2 off"><div class="t1">Connected</div><div class="t2" style="color:#C9C3DA;margin-top:6px">7xKX…9fQ2</div></div></div>' +
+    '<div class="acts"><button class="btn cgo">' + ic('wallet', 20) + '<span>Connect Phantom</span></button><button class="btn ghost" style="color:#C9C3DA;height:44px;font-size:14px">Explore first</button></div>';
+  var go = $(p, '.cgo'), st = $(p, '.stage'), w = $(p, '.tile.w');
+  var copy = function (i) { [0, 1, 2].forEach(function (k) { cls($(p, '.s' + k), 'off', k !== i); }); };
+  run('C', [
+    [900, function () { press(go); }],
+    [1100, function () { cls(p, 'hs'); cls(st, 'in'); copy(1); go.innerHTML = '<span class="loader"></span>Waiting for Phantom'; cls(go, 'pill'); }],
+    [1500, function () { cls(st, 'wait'); }],
+    [4600, function () { cls(st, 'wait', false); cls(st, 'linked'); }],
+    [4850, function () { cls(w, 'done'); copy(2); go.style.opacity = 0; }],
+    [6100, function () { ['.welcome', '.stage', '.copy', '.acts'].forEach(function (s) { var e = $(p, s); e.style.transition = 'opacity 150ms'; e.style.opacity = 0; }); }],
+    [6250, function () { cls($(p, '.home'), 'on'); }]
+  ], 9400);
+}
+
+/* ---------------- transactions: everything happens on the order screen, in the button ---------------- */
+var ORDER = '<div class="order"><div class="hdr"><img alt="" src="__TSLA__" style="width:36px;height:36px;border-radius:50%"><div><div style="font-weight:600">TSLAx-USDC</div><div class="t2" style="font-size:12px">Long · 3x</div></div></div>' +
+  '<div style="font-size:32px;font-weight:600">$1,500.00</div><div class="t2">Position size · 4.24 TSLAx</div>' +
+  '<div class="ocard" style="margin-top:18px"><div class="kv" style="border:0"><span>Collateral</span><b>500 USDC</b></div><div class="kv"><span>Entry price</span><b>$353.59</b></div><div class="kv"><span>Liquidation</span><b>$250.20</b></div><div class="kv"><span>Fee</span><b>$0.75</b></div></div></div>';
+function buildT(id) {
+  var p = document.getElementById(id);
+  p.innerHTML = SB() + ORDER +
+    '<div class="note" style="opacity:0;transition:opacity 200ms">Cancelled in Phantom · nothing was sent</div>' +
+    '<div class="cta txc"><div class="face">' + ic('trend', 20) + '<span>Open 3x Long</span></div>' +
+      '<div class="inner"><div style="display:flex;align-items:center;gap:14px">' +
+        '<div class="ringbox"><div class="halo"></div><svg class="arc" viewBox="0 0 76 76"><circle cx="38" cy="38" r="35" fill="none" stroke="#703AE6" stroke-width="4" stroke-linecap="round" stroke-dasharray="60 170"/></svg>' +
+          '<div class="core"><span class="glyph g0">' + ic('wallet', 22) + '</span><span class="glyph g1" style="opacity:0">' + CHECK + '</span><span class="glyph g2" style="opacity:0;font-weight:700;font-size:22px">!</span></div></div>' +
+        '<div class="swap" style="flex:1;text-align:left"><div class="s1"><div style="font-weight:600;font-size:16px">Sent to Solana</div><div class="t2" style="font-size:13px">Usually under 2 seconds</div></div>' +
+          '<div class="s2 off"><div style="font-weight:600;font-size:16px">Position opened</div><div class="t2" style="font-size:13px">Long 3x · 4.24 TSLAx</div></div>' +
+          '<div class="s3 off"><div style="font-weight:600;font-size:16px">Didn’t go through</div><div class="t2" style="font-size:13px">Price moved past your slippage. No funds moved.</div></div></div></div>' +
+        '<div class="steps"><span class="k1"><i></i>Sent</span><em></em><span class="k2"><i></i>Processed</span><em></em><span class="k3"><i></i>Confirmed</span></div>' +
+        '<button class="btn tonal act" style="height:44px;font-size:14px;opacity:0">View position</button></div></div>' +
+    '<div class="scrim"></div>' +
+    '<div class="wsheet"><div class="grab" style="background:#3A3A42"></div><div class="wh"><span class="tile w" style="width:36px;height:36px;border-radius:10px">' + ic('wallet', 20) + '</span><div>Phantom<div class="tag">Wallet app · not drawn by Vanna</div></div></div>' +
+      '<div style="margin-top:16px;display:flex;align-items:center;gap:10px"><span style="width:32px;height:32px;border-radius:9px;background:#fff;display:flex;align-items:center;justify-content:center">' + mark(20) + '</span><div><b>Vanna</b><div class="tag">vanna.finance · Devnet</div></div></div>' +
+      '<div style="margin-top:14px"><div class="kv" style="border:0"><span>Approve transaction</span><b>Long 3x TSLAx</b></div><div class="kv"><span>You send</span><b>500 USDC</b></div><div class="kv"><span>Network fee</span><b>0.00005 SOL</b></div></div>' +
+      '<div class="wb"><span class="rej">Reject</span><span class="app">Approve</span></div></div>';
+  return p;
+}
+function seqT(id, kind) {
+  var p = buildT(id), c = $(p, '.txc'), face = $(p, '.face'), ws = $(p, '.wsheet'), rb = $(p, '.ringbox'), act = $(p, '.act');
+  var copy = function (i) { [1, 2, 3].forEach(function (k) { cls($(p, '.s' + k), 'off', k !== i); }); };
+  var glyph = function (i) { [0, 1, 2].forEach(function (k) { var g = $(p, '.g' + k); g.style.opacity = k === i ? 1 : 0; g.style.transform = k === i ? 'none' : 'scale(.6)'; }); };
+  var steps = [
+    [800, function () { press(c, function () { c.classList.add('handoff'); face.innerHTML = '<span class="loader"></span><span>Opening Phantom</span>'; }); }],
+    [1150, function () { cls($(p, '.scrim'), 'on'); cls(ws, 'on'); }]
+  ];
+  if (kind === 'declined') return run(id, steps.concat([
+    [3300, function () { cls($(p, '.rej'), 'pressed'); }],
+    [3500, function () { cls(ws, 'on', false); cls(ws, 'off'); cls($(p, '.scrim'), 'on', false); }],
+    [3700, function () { c.classList.remove('handoff'); face.innerHTML = ic('trend', 20) + '<span>Open 3x Long</span>'; $(p, '.note').style.opacity = 1; }]
+  ]), 8000);
+  steps = steps.concat([
+    [3300, function () { cls($(p, '.app'), 'pressed'); }],
+    [3500, function () { cls(ws, 'on', false); cls(ws, 'off'); cls($(p, '.scrim'), 'on', false); }],
+    [3650, function () { c.classList.remove('handoff'); cls(c, 'card'); cls(c, 'sent'); cls($(p, '.k1'), 'lit'); }],
+    [4150, function () { cls($(p, '.k2'), 'lit'); }]
+  ]);
+  if (kind === 'failed') return run(id, steps.concat([
+    [5000, function () { cls(c, 'sent', false); cls(c, 'bad'); glyph(2); copy(3); rb.classList.add('nudge'); act.textContent = 'Try again'; act.style.opacity = 1; }]
+  ]), 8600);
+  run(id, steps.concat([
+    [5200, function () { cls($(p, '.k3'), 'lit'); }],
+    [5300, function () { cls(c, 'sent', false); cls(c, 'okd'); glyph(1); copy(2); }],
+    [5700, function () { act.style.opacity = 1; }]
+  ]), 9200);
+}
+
+var SEQ = { A: seqA, B: seqB, C: seqC, T1: function () { seqT('T1', 'ok'); }, T2: function () { seqT('T2', 'declined'); }, T3: function () { seqT('T3', 'failed'); } };
+document.querySelectorAll('.ctrl').forEach(function (c) {
+  c.addEventListener('click', function (e) {
+    var b = e.target.closest('button'); if (!b) return;
+    c.querySelectorAll('button').forEach(function (x) { x.classList.toggle('on', x === b); });
+    var id = c.dataset.for; if (id === 'A') seqA(b.dataset.run); else SEQ[id]();
+  });
+});
+seqA('happy'); seqB(); seqC(); SEQ.T1(); SEQ.T2(); SEQ.T3();
+</script>
+</body></html>

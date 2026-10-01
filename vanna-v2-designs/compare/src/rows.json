@@ -1,0 +1,483 @@
+[
+ [
+  "Start: the opening plays once, then Connect wallet walks through Backpack step by step",
+  [
+   [
+    "V7Welcome",
+    "Welcome \u00b7 opening motion"
+   ],
+   [
+    "V7Spaces",
+    "Choose a space"
+   ],
+   [
+    "V7Connect",
+    "Connect \u00b7 pick Backpack"
+   ],
+   [
+    "V7ConnectApprove",
+    "Connect \u00b7 approve in Backpack"
+   ],
+   [
+    "V7ConnectRpc",
+    "Connect \u00b7 add Vanna RPC"
+   ],
+   [
+    "V7ConnectDone",
+    "Connect \u00b7 connected"
+   ]
+  ]
+ ],
+ [
+  "Home: wallet and margin at a glance, products as tiles, positions as a list",
+  [
+   [
+    "V7Home",
+    "Home \u00b7 Overview"
+   ],
+   [
+    "V7HomeNotif",
+    "Home \u00b7 notifications"
+   ],
+   [
+    "V7Notifications",
+    "Notifications"
+   ],
+   [
+    "V7Lender",
+    "Home \u00b7 Lender"
+   ],
+   [
+    "V7Trader",
+    "Home \u00b7 Trader"
+   ],
+   [
+    "V7TraderHistory",
+    "Trader \u00b7 history"
+   ],
+   [
+    "V7Profile",
+    "Profile"
+   ]
+  ]
+ ],
+ [
+  "Perps: market \u2192 order \u2192 approve \u2192 confirmed, then manage the position (close or add collateral)",
+  [
+   [
+    "V7Perps",
+    "Perps \u00b7 Markets"
+   ],
+   [
+    "V7PerpsMarket",
+    "Perps \u00b7 asset"
+   ],
+   [
+    "V7PerpsOrder",
+    "Order"
+   ],
+   [
+    "V7PerpsOrderSign",
+    "Order \u00b7 approve"
+   ],
+   [
+    "V7PerpsOrderConfirm",
+    "Order \u00b7 confirming"
+   ],
+   [
+    "V7PerpsOrderDone",
+    "Order \u00b7 confirmed"
+   ],
+   [
+    "V7PerpsPositions",
+    "Perps \u00b7 Positions"
+   ],
+   [
+    "V7PerpsClose",
+    "Close \u00b7 all"
+   ],
+   [
+    "V7PerpsClose50",
+    "Close \u00b7 50%"
+   ],
+   [
+    "V7PerpsCloseDone",
+    "Close \u00b7 done"
+   ],
+   [
+    "V7PerpsAdd",
+    "Add collateral"
+   ],
+   [
+    "V7PerpsAddSign",
+    "Add collateral \u00b7 approve"
+   ],
+   [
+    "V7PerpsAddDone",
+    "Add collateral \u00b7 done"
+   ],
+   [
+    "V7PerpsHistory",
+    "Perps \u00b7 History"
+   ]
+  ]
+ ],
+ [
+  "Margin account: created once, before the first Perps or Farm trade",
+  [
+   [
+    "V7MarginCreate",
+    "Create margin account"
+   ],
+   [
+    "V7MarginAgree",
+    "Borrow agreement"
+   ],
+   [
+    "V7MarginSign",
+    "Approve in Backpack"
+   ],
+   [
+    "V7MarginDone",
+    "Margin account active"
+   ]
+  ]
+ ],
+ [
+  "Swap from your wallet via Jupiter: pick, approve, confirming, swapped",
+  [
+   [
+    "V7Swap",
+    "Swap"
+   ],
+   [
+    "V7SwapTokens",
+    "Token dropdown"
+   ],
+   [
+    "V7SwapRoute",
+    "Via picker"
+   ],
+   [
+    "V7SwapSettings",
+    "Settings"
+   ],
+   [
+    "V7SwapSign",
+    "Approve"
+   ],
+   [
+    "V7SwapConfirm",
+    "Confirming"
+   ],
+   [
+    "V7SwapDone",
+    "Swapped"
+   ],
+   [
+    "V7SwapHistory",
+    "Swap \u00b7 History"
+   ]
+  ]
+ ],
+ [
+  "Earn: overall deposit and net earnings graphs, pool tabs as on the web, supply and withdraw flows",
+  [
+   [
+    "V7Earn",
+    "Earn \u00b7 overall deposit"
+   ],
+   [
+    "V7EarnEarnings",
+    "Earn \u00b7 net earnings"
+   ],
+   [
+    "V7EarnVault",
+    "Pool \u00b7 Positions"
+   ],
+   [
+    "V7EarnVaultDetails",
+    "Pool \u00b7 Details"
+   ],
+   [
+    "V7EarnVaultActivity",
+    "Pool \u00b7 Activity"
+   ],
+   [
+    "V7EarnVaultCollateral",
+    "Pool \u00b7 Collateral"
+   ],
+   [
+    "V7EarnVaultAnalytics",
+    "Pool \u00b7 Analytics"
+   ],
+   [
+    "V7EarnVaultManagers",
+    "Pool \u00b7 Managers"
+   ],
+   [
+    "V7EarnSupply",
+    "Supply"
+   ],
+   [
+    "V7EarnSupplySign",
+    "Supply \u00b7 approve"
+   ],
+   [
+    "V7EarnSupplyDone",
+    "Supply \u00b7 done"
+   ],
+   [
+    "V7EarnWithdraw",
+    "Withdraw"
+   ],
+   [
+    "V7EarnWithdrawDone",
+    "Withdraw \u00b7 done"
+   ],
+   [
+    "V7EarnPositions",
+    "Earn \u00b7 Positions"
+   ],
+   [
+    "V7EarnHistory",
+    "Earn \u00b7 History"
+   ]
+  ]
+ ],
+ [
+  "Farm: USDC or SOL Kamino pool, any stock as collateral, leverage, deploy; then Position, close in two approvals, and Position History",
+  [
+   [
+    "V7Farm",
+    "Deploy"
+   ],
+   [
+    "V7FarmPools",
+    "Pool dropdown"
+   ],
+   [
+    "V7FarmTokens",
+    "Collateral dropdown"
+   ],
+   [
+    "V7FarmLev4",
+    "Leverage 4x"
+   ],
+   [
+    "V7FarmSign",
+    "Deploy \u00b7 approve"
+   ],
+   [
+    "V7FarmDone",
+    "Deploy \u00b7 done"
+   ],
+   [
+    "V7FarmPositionsNew",
+    "Position \u00b7 after deploy"
+   ],
+   [
+    "V7FarmPositions",
+    "Position"
+   ],
+   [
+    "V7FarmPosition",
+    "Position detail"
+   ],
+   [
+    "V7FarmClose",
+    "Close \u00b7 all"
+   ],
+   [
+    "V7FarmClose50",
+    "Close \u00b7 50%"
+   ],
+   [
+    "V7FarmCloseSign",
+    "Close \u00b7 approve 1 of 2"
+   ],
+   [
+    "V7FarmCloseStep2",
+    "Close \u00b7 approve 2 of 2"
+   ],
+   [
+    "V7FarmCloseDone",
+    "Close \u00b7 done"
+   ],
+   [
+    "V7FarmHistory",
+    "Position History"
+   ]
+  ]
+ ],
+ [
+  "When things go wrong: every action has a sad path. Not enough balance blocks the button with a clear reason; failed transactions say why (network, price moved, no SOL for fees, a step that did not finish) and offer a retry",
+  [
+   [
+    "V7HomeOffline",
+    "Home \u00b7 offline"
+   ],
+   [
+    "V7ConnectRpcFail",
+    "Connect \u00b7 RPC not set"
+   ],
+   [
+    "V7ConnectDeclined",
+    "Connect \u00b7 declined"
+   ],
+   [
+    "V7ConnectInstall",
+    "Connect \u00b7 no Backpack"
+   ],
+   [
+    "V7MarginFee",
+    "Margin \u00b7 no SOL for fees"
+   ],
+   [
+    "V7MarginRejected",
+    "Margin \u00b7 cancelled"
+   ],
+   [
+    "V7PerpsOrderNoFunds",
+    "Order \u00b7 not enough margin"
+   ],
+   [
+    "V7PerpsOrderRisky",
+    "Order \u00b7 health too low"
+   ],
+   [
+    "V7PerpsOrderFailed",
+    "Order \u00b7 network error"
+   ],
+   [
+    "V7PerpsOrderRejected",
+    "Order \u00b7 cancelled"
+   ],
+   [
+    "V7PerpsCloseFailed",
+    "Close \u00b7 network error"
+   ],
+   [
+    "V7PerpsAddFee",
+    "Add collateral \u00b7 no SOL"
+   ],
+   [
+    "V7SwapNoFunds",
+    "Swap \u00b7 not enough USDC"
+   ],
+   [
+    "V7SwapFailed",
+    "Swap \u00b7 network error"
+   ],
+   [
+    "V7SwapSlippage",
+    "Swap \u00b7 price moved"
+   ],
+   [
+    "V7SwapFee",
+    "Swap \u00b7 no SOL for fees"
+   ],
+   [
+    "V7SwapRejected",
+    "Swap \u00b7 cancelled"
+   ],
+   [
+    "V7EarnSupplyNoFunds",
+    "Supply \u00b7 not enough USDC"
+   ],
+   [
+    "V7EarnSupplyFee",
+    "Supply \u00b7 no SOL for fees"
+   ],
+   [
+    "V7EarnWithdrawOver",
+    "Withdraw \u00b7 more than supplied"
+   ],
+   [
+    "V7EarnWithdrawFailed",
+    "Withdraw \u00b7 network error"
+   ],
+   [
+    "V7FarmNoFunds",
+    "Farm \u00b7 no GOOGLx"
+   ],
+   [
+    "V7FarmFailed",
+    "Deploy \u00b7 network error"
+   ],
+   [
+    "V7FarmRejected",
+    "Deploy \u00b7 cancelled"
+   ],
+   [
+    "V7FarmCloseFailed",
+    "Close \u00b7 step 1 failed"
+   ],
+   [
+    "V7FarmCloseStep2Failed",
+    "Close \u00b7 step 2 failed"
+   ]
+  ]
+ ],
+ [
+  "Dark mode",
+  [
+   [
+    "V7HomeDark",
+    "Home \u00b7 dark"
+   ],
+   [
+    "V7PerpsDark",
+    "Perps \u00b7 dark"
+   ],
+   [
+    "V7PerpsMarketDark",
+    "PerpsMarket \u00b7 dark"
+   ],
+   [
+    "V7PerpsPositionsDark",
+    "PerpsPositions \u00b7 dark"
+   ],
+   [
+    "V7SwapDark",
+    "Swap \u00b7 dark"
+   ],
+   [
+    "V7EarnDark",
+    "Earn \u00b7 dark"
+   ],
+   [
+    "V7EarnVaultDark",
+    "EarnVault \u00b7 dark"
+   ],
+   [
+    "V7FarmDark",
+    "Farm \u00b7 dark"
+   ],
+   [
+    "V7FarmPositionDark",
+    "FarmPosition \u00b7 dark"
+   ],
+   [
+    "V7TraderDark",
+    "Trader \u00b7 dark"
+   ],
+   [
+    "V7LenderDark",
+    "Lender \u00b7 dark"
+   ],
+   [
+    "V7NotificationsDark",
+    "Notifications \u00b7 dark"
+   ],
+   [
+    "V7ProfileDark",
+    "Profile \u00b7 dark"
+   ],
+   [
+    "V7ConnectDark",
+    "Connect \u00b7 dark"
+   ]
+  ]
+ ]
+]

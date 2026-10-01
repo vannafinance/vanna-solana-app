@@ -1,0 +1,4 @@
+# Local only: undo history (node tools/checkpoint.js) and screenshots/videos (regenerate with tools/shots.py, render_motion.py)
+checkpoints/
+renders/
+__pycache__/

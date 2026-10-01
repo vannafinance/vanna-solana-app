@@ -1,0 +1,764 @@
+{
+ "V7Welcome": {
+  "t": 0,
+  "c": 0,
+  "p": {
+   "dark": false
+  }
+ },
+ "V7Connect": {
+  "t": 1,
+  "c": 1,
+  "p": {
+   "dark": false
+  }
+ },
+ "V7ConnectApprove": {
+  "t": 1,
+  "c": 2,
+  "p": {
+   "dark": false
+  }
+ },
+ "V7ConnectRpc": {
+  "t": 1,
+  "c": 3,
+  "p": {
+   "dark": false
+  }
+ },
+ "V7ConnectDone": {
+  "t": 1,
+  "c": 4,
+  "p": {
+   "dark": false
+  }
+ },
+ "V7Home": {
+  "t": 2,
+  "c": 5,
+  "p": {
+   "dark": false,
+   "notificationsOpen": false,
+   "offline": false
+  }
+ },
+ "V7HomeNotif": {
+  "w": "V7Home",
+  "p": {
+   "open": true
+  }
+ },
+ "V7Notifications": {
+  "t": 3,
+  "c": 6,
+  "p": {
+   "dark": false
+  }
+ },
+ "V7Lender": {
+  "t": 4,
+  "c": 7,
+  "p": {
+   "dark": false,
+   "history": false
+  }
+ },
+ "V7Trader": {
+  "t": 5,
+  "c": 8,
+  "p": {
+   "dark": false,
+   "history": false
+  }
+ },
+ "V7TraderHistory": {
+  "w": "V7Trader",
+  "p": {
+   "history": true
+  }
+ },
+ "V7Profile": {
+  "t": 6,
+  "c": 9,
+  "p": {
+   "dark": false
+  }
+ },
+ "V7Perps": {
+  "t": 7,
+  "c": 10,
+  "p": {
+   "dark": false
+  }
+ },
+ "V7PerpsMarket": {
+  "t": 8,
+  "c": 11,
+  "p": {
+   "dark": false
+  }
+ },
+ "V7PerpsOrder": {
+  "t": 9,
+  "c": 12,
+  "p": {
+   "dark": false
+  }
+ },
+ "V7PerpsOrderSign": {
+  "t": 9,
+  "c": 13,
+  "p": {
+   "dark": false
+  }
+ },
+ "V7PerpsOrderConfirm": {
+  "t": 9,
+  "c": 14,
+  "p": {
+   "dark": false
+  }
+ },
+ "V7PerpsOrderDone": {
+  "t": 9,
+  "c": 15,
+  "p": {
+   "dark": false
+  }
+ },
+ "V7PerpsPositions": {
+  "t": 10,
+  "c": 16,
+  "p": {
+   "dark": false,
+   "history": false
+  }
+ },
+ "V7PerpsClose": {
+  "t": 10,
+  "c": 17,
+  "p": {
+   "dark": false,
+   "history": false
+  }
+ },
+ "V7PerpsClose50": {
+  "t": 10,
+  "c": 18,
+  "p": {
+   "dark": false,
+   "history": false
+  }
+ },
+ "V7PerpsCloseDone": {
+  "t": 10,
+  "c": 19,
+  "p": {
+   "dark": false,
+   "history": false
+  }
+ },
+ "V7PerpsAdd": {
+  "t": 10,
+  "c": 20,
+  "p": {
+   "dark": false,
+   "history": false
+  }
+ },
+ "V7PerpsAddSign": {
+  "t": 10,
+  "c": 21,
+  "p": {
+   "dark": false,
+   "history": false
+  }
+ },
+ "V7PerpsAddDone": {
+  "t": 10,
+  "c": 22,
+  "p": {
+   "dark": false,
+   "history": false
+  }
+ },
+ "V7PerpsHistory": {
+  "t": 11,
+  "c": 23,
+  "p": {
+   "dark": false,
+   "history": false
+  }
+ },
+ "V7MarginCreate": {
+  "t": 12,
+  "c": 24,
+  "p": {
+   "dark": false
+  }
+ },
+ "V7MarginAgree": {
+  "t": 12,
+  "c": 25,
+  "p": {
+   "dark": false
+  }
+ },
+ "V7MarginSign": {
+  "t": 12,
+  "c": 26,
+  "p": {
+   "dark": false
+  }
+ },
+ "V7MarginDone": {
+  "t": 12,
+  "c": 27,
+  "p": {
+   "dark": false
+  }
+ },
+ "V7Swap": {
+  "t": 13,
+  "c": 28,
+  "p": {
+   "dark": false
+  }
+ },
+ "V7SwapTokens": {
+  "t": 13,
+  "c": 29,
+  "p": {
+   "dark": false
+  }
+ },
+ "V7SwapRoute": {
+  "t": 13,
+  "c": 30,
+  "p": {
+   "dark": false
+  }
+ },
+ "V7SwapSettings": {
+  "t": 13,
+  "c": 31,
+  "p": {
+   "dark": false
+  }
+ },
+ "V7SwapSign": {
+  "t": 13,
+  "c": 32,
+  "p": {
+   "dark": false
+  }
+ },
+ "V7SwapConfirm": {
+  "t": 13,
+  "c": 33,
+  "p": {
+   "dark": false
+  }
+ },
+ "V7SwapDone": {
+  "t": 13,
+  "c": 34,
+  "p": {
+   "dark": false
+  }
+ },
+ "V7SwapHistory": {
+  "t": 14,
+  "c": 0,
+  "p": {
+   "dark": false
+  }
+ },
+ "V7Earn": {
+  "t": 15,
+  "c": 35,
+  "p": {
+   "dark": false,
+   "earnings": false
+  }
+ },
+ "V7EarnEarnings": {
+  "w": "V7Earn",
+  "p": {
+   "earnings": true
+  }
+ },
+ "V7EarnVault": {
+  "t": 16,
+  "c": 36,
+  "p": {
+   "dark": false
+  }
+ },
+ "V7EarnVaultDetails": {
+  "t": 16,
+  "c": 37,
+  "p": {
+   "dark": false
+  }
+ },
+ "V7EarnVaultActivity": {
+  "t": 16,
+  "c": 38,
+  "p": {
+   "dark": false
+  }
+ },
+ "V7EarnVaultCollateral": {
+  "t": 16,
+  "c": 39,
+  "p": {
+   "dark": false
+  }
+ },
+ "V7EarnVaultAnalytics": {
+  "t": 16,
+  "c": 40,
+  "p": {
+   "dark": false
+  }
+ },
+ "V7EarnVaultManagers": {
+  "t": 16,
+  "c": 41,
+  "p": {
+   "dark": false
+  }
+ },
+ "V7EarnSupply": {
+  "t": 17,
+  "c": 42,
+  "p": {
+   "dark": false
+  }
+ },
+ "V7EarnSupplySign": {
+  "t": 17,
+  "c": 43,
+  "p": {
+   "dark": false
+  }
+ },
+ "V7EarnSupplyDone": {
+  "t": 17,
+  "c": 44,
+  "p": {
+   "dark": false
+  }
+ },
+ "V7EarnWithdraw": {
+  "t": 17,
+  "c": 45,
+  "p": {
+   "dark": false
+  }
+ },
+ "V7EarnWithdrawDone": {
+  "t": 17,
+  "c": 46,
+  "p": {
+   "dark": false
+  }
+ },
+ "V7EarnPositions": {
+  "t": 18,
+  "c": 7,
+  "p": {
+   "dark": false,
+   "history": false
+  }
+ },
+ "V7EarnHistory": {
+  "t": 19,
+  "c": 47,
+  "p": {
+   "dark": false,
+   "history": false
+  }
+ },
+ "V7Farm": {
+  "t": 20,
+  "c": 48,
+  "p": {
+   "dark": false
+  }
+ },
+ "V7FarmPools": {
+  "t": 20,
+  "c": 49,
+  "p": {
+   "dark": false
+  }
+ },
+ "V7FarmTokens": {
+  "t": 20,
+  "c": 50,
+  "p": {
+   "dark": false
+  }
+ },
+ "V7FarmLev4": {
+  "t": 20,
+  "c": 51,
+  "p": {
+   "dark": false
+  }
+ },
+ "V7FarmSign": {
+  "t": 20,
+  "c": 52,
+  "p": {
+   "dark": false
+  }
+ },
+ "V7FarmDone": {
+  "t": 20,
+  "c": 53,
+  "p": {
+   "dark": false
+  }
+ },
+ "V7FarmPositionsNew": {
+  "t": 21,
+  "c": 0,
+  "p": {
+   "dark": false
+  }
+ },
+ "V7FarmPositions": {
+  "t": 22,
+  "c": 0,
+  "p": {
+   "dark": false
+  }
+ },
+ "V7FarmPosition": {
+  "t": 23,
+  "c": 54,
+  "p": {
+   "dark": false
+  }
+ },
+ "V7FarmClose": {
+  "t": 23,
+  "c": 55,
+  "p": {
+   "dark": false
+  }
+ },
+ "V7FarmClose50": {
+  "t": 23,
+  "c": 56,
+  "p": {
+   "dark": false
+  }
+ },
+ "V7FarmCloseSign": {
+  "t": 23,
+  "c": 57,
+  "p": {
+   "dark": false
+  }
+ },
+ "V7FarmCloseStep2": {
+  "t": 23,
+  "c": 58,
+  "p": {
+   "dark": false
+  }
+ },
+ "V7FarmCloseDone": {
+  "t": 23,
+  "c": 59,
+  "p": {
+   "dark": false
+  }
+ },
+ "V7FarmHistory": {
+  "t": 24,
+  "c": 0,
+  "p": {
+   "dark": false
+  }
+ },
+ "V7HomeOffline": {
+  "w": "V7Home",
+  "p": {
+   "offline": true
+  }
+ },
+ "V7ConnectRpcFail": {
+  "t": 1,
+  "c": 60,
+  "p": {
+   "dark": false
+  }
+ },
+ "V7ConnectDeclined": {
+  "t": 1,
+  "c": 61,
+  "p": {
+   "dark": false
+  }
+ },
+ "V7ConnectInstall": {
+  "t": 1,
+  "c": 62,
+  "p": {
+   "dark": false
+  }
+ },
+ "V7MarginFee": {
+  "t": 12,
+  "c": 63,
+  "p": {
+   "dark": false
+  }
+ },
+ "V7MarginRejected": {
+  "t": 12,
+  "c": 64,
+  "p": {
+   "dark": false
+  }
+ },
+ "V7PerpsOrderNoFunds": {
+  "t": 9,
+  "c": 65,
+  "p": {
+   "dark": false
+  }
+ },
+ "V7PerpsOrderRisky": {
+  "t": 9,
+  "c": 66,
+  "p": {
+   "dark": false
+  }
+ },
+ "V7PerpsOrderFailed": {
+  "t": 9,
+  "c": 67,
+  "p": {
+   "dark": false
+  }
+ },
+ "V7PerpsOrderRejected": {
+  "t": 9,
+  "c": 68,
+  "p": {
+   "dark": false
+  }
+ },
+ "V7PerpsCloseFailed": {
+  "t": 10,
+  "c": 69,
+  "p": {
+   "dark": false,
+   "history": false
+  }
+ },
+ "V7PerpsAddFee": {
+  "t": 10,
+  "c": 70,
+  "p": {
+   "dark": false,
+   "history": false
+  }
+ },
+ "V7SwapNoFunds": {
+  "t": 13,
+  "c": 71,
+  "p": {
+   "dark": false
+  }
+ },
+ "V7SwapFailed": {
+  "t": 13,
+  "c": 72,
+  "p": {
+   "dark": false
+  }
+ },
+ "V7SwapSlippage": {
+  "t": 13,
+  "c": 73,
+  "p": {
+   "dark": false
+  }
+ },
+ "V7SwapFee": {
+  "t": 13,
+  "c": 74,
+  "p": {
+   "dark": false
+  }
+ },
+ "V7SwapRejected": {
+  "t": 13,
+  "c": 75,
+  "p": {
+   "dark": false
+  }
+ },
+ "V7EarnSupplyNoFunds": {
+  "t": 17,
+  "c": 76,
+  "p": {
+   "dark": false
+  }
+ },
+ "V7EarnSupplyFee": {
+  "t": 17,
+  "c": 77,
+  "p": {
+   "dark": false
+  }
+ },
+ "V7EarnWithdrawOver": {
+  "t": 17,
+  "c": 78,
+  "p": {
+   "dark": false
+  }
+ },
+ "V7EarnWithdrawFailed": {
+  "t": 17,
+  "c": 79,
+  "p": {
+   "dark": false
+  }
+ },
+ "V7FarmNoFunds": {
+  "t": 20,
+  "c": 80,
+  "p": {
+   "dark": false
+  }
+ },
+ "V7FarmFailed": {
+  "t": 20,
+  "c": 81,
+  "p": {
+   "dark": false
+  }
+ },
+ "V7FarmRejected": {
+  "t": 20,
+  "c": 82,
+  "p": {
+   "dark": false
+  }
+ },
+ "V7FarmCloseFailed": {
+  "t": 23,
+  "c": 83,
+  "p": {
+   "dark": false
+  }
+ },
+ "V7FarmCloseStep2Failed": {
+  "t": 23,
+  "c": 84,
+  "p": {
+   "dark": false
+  }
+ },
+ "V7HomeDark": {
+  "w": "V7Home",
+  "p": {
+   "dark": true
+  }
+ },
+ "V7PerpsDark": {
+  "w": "V7Perps",
+  "p": {
+   "dark": true
+  }
+ },
+ "V7PerpsMarketDark": {
+  "w": "V7PerpsMarket",
+  "p": {
+   "dark": true
+  }
+ },
+ "V7PerpsPositionsDark": {
+  "w": "V7PerpsPositions",
+  "p": {
+   "dark": true
+  }
+ },
+ "V7SwapDark": {
+  "w": "V7Swap",
+  "p": {
+   "dark": true
+  }
+ },
+ "V7EarnDark": {
+  "w": "V7Earn",
+  "p": {
+   "dark": true
+  }
+ },
+ "V7EarnVaultDark": {
+  "w": "V7EarnVault",
+  "p": {
+   "dark": true
+  }
+ },
+ "V7FarmDark": {
+  "w": "V7Farm",
+  "p": {
+   "dark": true
+  }
+ },
+ "V7FarmPositionDark": {
+  "w": "V7FarmPosition",
+  "p": {
+   "dark": true
+  }
+ },
+ "V7TraderDark": {
+  "w": "V7Trader",
+  "p": {
+   "dark": true
+  }
+ },
+ "V7LenderDark": {
+  "w": "V7Lender",
+  "p": {
+   "dark": true
+  }
+ },
+ "V7NotificationsDark": {
+  "w": "V7Notifications",
+  "p": {
+   "dark": true
+  }
+ },
+ "V7ProfileDark": {
+  "w": "V7Profile",
+  "p": {
+   "dark": true
+  }
+ },
+ "V7ConnectDark": {
+  "w": "V7Connect",
+  "p": {
+   "dark": true
+  }
+ },
+ "V7Spaces": {
+  "t": 25,
+  "c": 85,
+  "p": {
+   "dark": false
+  }
+ }
+}

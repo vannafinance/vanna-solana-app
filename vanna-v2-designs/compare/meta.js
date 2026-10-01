@@ -1,0 +1,269 @@
+window.VN_META = {
+ "stamp": 1790854039236,
+ "changes": [
+  {
+   "title": "New Vanna mark on every screen",
+   "detail": "The 2026 logo replaces the old mark on every screen, including the Welcome motion, Connect and the favicon. It is a traced vector (assets/vanna-mark-2026.svg), so it stays sharp at any size, in the brand coral #FC5457 to violet #703AE6.",
+   "date": "30 Sep 2026",
+   "screens": [
+    "V7Welcome",
+    "V7Home",
+    "V7Swap",
+    "V7Farm"
+   ]
+  },
+  {
+   "title": "Android-native components (Material 3)",
+   "date": "30 Sep 2026",
+   "detail": "iOS segmented controls became M3 tabs (Current/History, Supply/Withdraw, vault tabs, Earn hero) or M3 segmented buttons (Long/Short, Auto/Custom). Pill chips became M3 chips (32dp, 8dp corners, tonal when selected, a check mark on filter chips). Appearance is the Android theme radio list. Swap settings fields are M3 outlined text fields. Top app bar icons lost their glass circles. The navigation bar uses a tonal indicator with no divider. Cards and menus use the M3 shape scale (16), inner strips 12. Every tap has a Material ripple, and messages are bottom snackbars.",
+   "screens": [
+    "V7PerpsPositions",
+    "V7PerpsOrder",
+    "V7SwapSettings",
+    "V7Profile",
+    "V7EarnVault",
+    "V7Notifications",
+    "V7Earn"
+   ]
+  },
+  {
+   "title": "Android tablets and foldables",
+   "date": "1 Oct 2026",
+   "detail": "Uses Android window size classes. From 600dp wide the bottom navigation bar becomes a navigation rail, content sits in a centred 720dp column (840dp on expanded screens), bottom sheets are capped at 640dp and centred, charts fill the column and snackbars are capped and centred. Welcome and Connect centre the original composition, and on landscape tablets split into the art on the left and the words and actions on the right. Home shows the four product tiles in one row on expanded screens. Phones are unchanged.",
+   "screens": [
+    "V7Welcome",
+    "V7Home",
+    "V7PerpsMarket",
+    "V7SwapSettings",
+    "V7Connect",
+    "V7Profile"
+   ]
+  },
+  {
+   "title": "Google Material Symbols icons",
+   "date": "1 Oct 2026",
+   "detail": "All 53 icons (287 uses) switched from Phosphor to Material Symbols Rounded, the Android system set: outlined by default, filled when selected, medium weight where the old icon was bold.",
+   "screens": [
+    "V7Home",
+    "V7Perps",
+    "V7Notifications",
+    "V7Earn"
+   ]
+  },
+  {
+   "title": "Logo built into the Home header",
+   "date": "1 Oct 2026",
+   "detail": "The 2026 mark sits directly in the vanna lockup in white, without the white circle around it, on Home, Lender and Trader.",
+   "screens": [
+    "V7Home",
+    "V7Lender",
+    "V7Trader"
+   ]
+  },
+  {
+   "title": "Super-app bottom bar (Swiggy-style)",
+   "date": "1 Oct 2026",
+   "detail": "The selected tab is a filled icon and bold label in the section colour, with no pill: Vanna violet (lighter in dark mode), pink for Farm. Unselected tabs are outlined grey. Also used on the tablet rail.",
+   "screens": [
+    "V7Home",
+    "V7Perps",
+    "V7Farm"
+   ]
+  },
+  {
+   "title": "Welcome and Connect fit any Android screen",
+   "date": "1 Oct 2026",
+   "detail": "The original composition stays exactly as designed wherever it fits. On shorter or narrower screens (short phones, fold cover screens, foldables, 3-button navigation) the actions stay at the bottom, the headline moves up to sit above them, and the logo art scales and centres in the space left. It re-fits on every size change, so rotating, folding or switching navigation mode all work. Landscape tablets keep the art | words split.",
+   "screens": [
+    "V7Welcome",
+    "V7Connect"
+   ]
+  },
+  {
+   "title": "Three spaces: Earn · Trade · Farm",
+   "date": "1 Oct 2026",
+   "detail": "Organised by what people come to do, like a super app. Earn is for lenders (no leverage). Trade holds Perps and Swap (devnet's Perps page; no separate margin account page). Farm is leveraged yield. Each space header shows the Vanna lockup with Earn · Trade · Farm tabs and has no back arrow, because spaces are top level. Switching spaces or bottom tabs replaces the screen instead of stacking it. Trade has one bottom bar: Markets · Swap · Positions · History. First launch and Explore first open a chooser, 'What do you want to do?'. The screens themselves are unchanged.",
+   "screens": [
+    "V7Spaces",
+    "V7Earn",
+    "V7Perps",
+    "V7Swap",
+    "V7Farm"
+   ]
+  },
+  {
+   "title": "Wallet connect and approval via Solana Mobile Wallet Adapter",
+   "date": "1 Oct 2026",
+   "detail": "No Backpack-specific copy anywhere: every flow talks about 'your wallet' (Seed Vault on Seeker, Phantom, Solflare, Backpack and any MWA wallet). Connect is one 'Use installed wallet' option with a 'Get a wallet' fallback, and no custom-RPC step: approve goes straight to 'You're connected · Signed in with Solana'. Approval sheets say 'Confirm in your wallet' with an 'Approve in wallet' button and a Seeker hint (double-tap the side button, then the fingerprint sensor). Tapping it opens a new screen: the wallet's own approval sheet (mocked) showing Vanna, vanna.finance, Devnet, what is being asked and the fee, with Reject and Approve driving the real outcome.",
+   "screens": [
+    "V7Connect",
+    "V7PerpsOrderSign",
+    "V7SwapSign",
+    "V7EarnSupplySign"
+   ]
+  },
+  {
+   "title": "Portfolio is home, with super-app top cards",
+   "date": "1 Oct 2026",
+   "detail": "Every top-level screen shows four cards: Portfolio · Earn · Trade · Farm (each with its colour tile; the current one is white). Portfolio is the start destination and keeps its Overview, Lender and Trader tabs (wallet, margin account, health, all positions). Back from any space or tab returns to Portfolio; Back on Portfolio exits. Detail screens keep the ← and the back gesture. Tapping the current bottom tab again scrolls to the top. The 'What do you want to do?' chooser is only for first-time users.",
+   "screens": [
+    "V7Home",
+    "V7Earn",
+    "V7Perps",
+    "V7Farm",
+    "V7Spaces"
+   ]
+  },
+  {
+   "title": "Folder tabs at the top, and a calmer chooser",
+   "date": "1 Oct 2026",
+   "detail": "The four top cards become Swiggy-style folder tabs (Portfolio · Earn · Trade · Farm) on a dark band in each space's colour, behind the status bar and header. The selected tab is filled in its panel colour and flows into a full-width panel that holds the screen's existing balances and stats, so the tab and its content read as one surface. Icons are plain white, outlined when unselected and filled when selected, with no coloured tiles. The tab shape is exact at any width (tablets included). The first-launch chooser drops its icon tiles and chips for simple rows: a violet outline icon, title, one line of description and a grey detail line, separated by hairlines. Portfolio's bell lost its glass circle, like the other spaces.",
+   "screens": [
+    "V7Home",
+    "V7Lender",
+    "V7Trader",
+    "V7Earn",
+    "V7Perps",
+    "V7Swap",
+    "V7Farm",
+    "V7Spaces"
+   ]
+  },
+  {
+   "title": "Each space has its own colour",
+   "date": "1 Oct 2026",
+   "detail": "Earn and Trade were both violet, like Portfolio, so the four spaces were hard to tell apart. Earn is now Vanna teal (the colour Vanna already uses for earning and gains) and Trade is indigo (Vanna violet shifted towards blue). Portfolio stays violet and Farm stays magenta. White text on every panel stays at 4.5:1 or better. Earn's bottom bar uses teal too, like Farm's uses pink; Trade's bar, buttons and links stay Vanna violet, so indigo only appears in the header. On Earn's teal panel, net earnings are shown in white so they stay readable.",
+   "screens": [
+    "V7Earn",
+    "V7EarnPositions",
+    "V7EarnHistory",
+    "V7Perps",
+    "V7PerpsPositions",
+    "V7PerpsHistory",
+    "V7Swap",
+    "V7Home"
+   ]
+  },
+  {
+   "title": "Vanna logo keeps its brand colours everywhere",
+   "date": "1 Oct 2026",
+   "detail": "The Vanna mark was white on the coloured headers. It now keeps its real coral-to-violet gradient on every screen; only the 'vanna' wordmark is white on dark headers (the usual inverse lockup). Also: the vault's interest rate curve no longer stretches its text and dot on tablets (a stopgap until the live charts replace it).",
+   "screens": [
+    "V7Home",
+    "V7Earn",
+    "V7Perps",
+    "V7Farm",
+    "V7EarnVault"
+   ]
+  },
+  {
+   "title": "Live charts, like the web app",
+   "date": "1 Oct 2026",
+   "detail": "Charts are real now, not pictures. They draw at the screen's actual width (nothing stretches on tablets), show values on the right and dates underneath like the web app, and you can press and drag to read any day: the number and date above the chart follow your finger and return to today when you let go. Earn's deposit / net earnings chart switches range and mode. A vault's Analytics tab shows a live supply APY history (7D / 30D / 90D, average when at rest) and an interest rate curve calculated from Vanna's kink model that you can drag along to see what borrowers pay and lenders earn at any usage. The Supply / Borrow APY tiles there were removed because they repeated the header and the curve.",
+   "screens": [
+    "V7Earn",
+    "V7EarnVault"
+   ]
+  },
+  {
+   "title": "Farm is one panel, no steps, nothing twice",
+   "date": "1 Oct 2026",
+   "detail": "Farm no longer reads as a numbered form (1 Deposit, 2 Set leverage, then a long table). The header now shows the result and updates as you change the amount or the slider: net APY, money a year, health (dot + label) and the liquidation price. Below it: the yield pool, what you deposit, and today's leverage slider with the Vanna mark as the handle; the borrow amount and rate appear once, under the slider. The 7-row table, the profit box and the health / leverage tiles are gone because they repeated each other and the header; pool size and usage moved into 'Pool details and how it works'. With no amount entered, only the rate shows (no made-up health or liquidation). The button still goes straight to the wallet.",
+   "screens": [
+    "V7Farm",
+    "V7FarmLev4",
+    "V7FarmPools",
+    "V7FarmTokens",
+    "V7FarmNoFunds"
+   ]
+  },
+  {
+   "title": "Portfolio shows your assets instead of Explore tiles",
+   "date": "1 Oct 2026",
+   "detail": "The four 'Explore vanna' tiles repeated the top tabs (Earn, Trade, Farm) and Trade's Swap. In their place, 'Your assets' lists what is in your wallet with its value and today's change, built only from data the app already has (balances and prices). The rows add up to the wallet balance in the header, so they explain it instead of repeating it. Your positions stay below as before.",
+   "screens": [
+    "V7Home"
+   ]
+  },
+  {
+   "title": "Smoother menus, swipe to switch asset, trend icons",
+   "date": "1 Oct 2026",
+   "detail": "Dropdown menus now open right under their button (Farm's token menu was opening too low) and move like Material 3 menus: a quick fade and small drop from the button's corner, options following one after another, and a short fade when they close; chevrons rotate smoothly. On Farm you can swipe the token chip left or right to switch between the assets you hold, like switching accounts on an avatar: it follows your finger, slides out and the next asset slides in; small dots show how many you have. Tapping still opens the menu. Long and Short buttons carry trend-up and trend-down icons.",
+   "screens": [
+    "V7Farm",
+    "V7PerpsMarket",
+    "V7PerpsOrder",
+    "V7Earn",
+    "V7Swap"
+   ]
+  },
+  {
+   "title": "Connect and transactions: the approved motion",
+   "date": "1 Oct 2026",
+   "detail": "Connect: the sheet grows out of the Connect button and stays dark like Welcome behind it. The Vanna mark and the wallet slide together over a dotted bridge; one title, one line and one button (\"Open Phantom\") instead of paragraphs about Mobile Wallet Adapter. The wallet opens straight away; while you approve, the dots travel; when it connects they fill coral to violet, the wallet becomes the Vanna seal and the app continues by itself. Cancelling is neutral, and with no wallet it says how to get one. Transactions: no extra Vanna sheet before the wallet any more. The wallet opens the moment you confirm; when you are back, a compact card at the bottom of the same screen shows Sent, Processed and Confirmed as Solana answers, then the Vanna seal (a brand-gradient shape with a slanted tick, instead of a generic check) and the screen's own next step. Failed shows the reason and that no funds moved; cancelled in the wallet says nothing was sent. 'Step 1 of 1' is gone; steps only show for real multi-step flows. Everything follows Light / Dark except the brand gradient and the wallet's own sheet.",
+   "screens": [
+    "V7Connect",
+    "V7ConnectInstall",
+    "V7ConnectDeclined",
+    "V7Farm",
+    "V7PerpsOrder",
+    "V7Swap",
+    "V7EarnSupply",
+    "V7MarginCreate",
+    "V7FarmPosition"
+   ]
+  },
+  {
+   "title": "Swap history is back, under Trade › History",
+   "date": "1 Oct 2026",
+   "detail": "When Swap joined Trade's bottom bar, its history became unreachable. Trade's History now has two chips, Perps and Swaps, and the swap history screen highlights History in the bar. Swap also loses two small repeats: 'You pay · Wallet' / 'You receive · Wallet' are just 'You pay' / 'You receive', and with too little balance the red amount and the 'Not enough USDC' button say it without a second sentence. In Earn and Trade the inner 'Current | History' tabs are gone because the bottom bar already has Positions and History (Portfolio keeps them, like the web app).",
+   "screens": [
+    "V7PerpsHistory",
+    "V7SwapHistory",
+    "V7Swap",
+    "V7SwapNoFunds",
+    "V7PerpsPositions",
+    "V7EarnPositions"
+   ]
+  },
+  {
+   "title": "Each fact once: duplicate cleanup",
+   "date": "1 Oct 2026",
+   "detail": "Numbers and labels that a screen already showed somewhere else are now shown once. History cards keep only Win rate, because the hero already has the closed PnL and the tab already counts the trades. Vault cards say just 'Active' (the APY is in the Supply APY stat) and no longer repeat the token amount under the dollar value; Portfolio > Lender drops 'Supplied 2 assets', which equals 'Current 2'. On a vault, the hero keeps supply APY, total supply, available and utilization, so Details, the Positions card and the Collateral rows stop repeating them; the same 'Collateral / Borrow' chips on every asset become one line, and the Managers tab's vault manager and risk curator now sit in Details (the tab is gone). Error states (not enough margin, not enough USDC, more than you supplied) let the red amount and the disabled button say it, without a third sentence. The order form drops '3x · $1,500.00 position' and the market price that Entry price already shows. The margin account gate says 'needed' once (in the card), the benefit reads 'Up to 5x leverage.', and the agreement sheet loses 'Please review the terms'. Shortcuts that repeat a tab are gone: Open a new position, Supply to another vault, Lender Spot Swap and the Markets hero '2 open positions'. Profile writes 1.10 only in the gauge legend and drops the Margin account balance row (the health formula shows it). The Earn list drops the per-row 'APY' and 'Sorted by supply APY'; vault activity rows drop 'Confirmed'. Portfolio's hero shows Health '1.69 · Safe' instead of Net available, which was just margin account minus total borrowed.",
+   "screens": [
+    "V7PerpsHistory",
+    "V7TraderHistory",
+    "V7EarnPositions",
+    "V7Lender",
+    "V7EarnVault",
+    "V7EarnVaultDetails",
+    "V7EarnVaultActivity",
+    "V7EarnVaultCollateral",
+    "V7EarnVaultManagers",
+    "V7PerpsOrderNoFunds",
+    "V7EarnSupplyNoFunds",
+    "V7EarnWithdrawOver",
+    "V7PerpsOrder",
+    "V7MarginCreate",
+    "V7MarginAgree",
+    "V7PerpsPositions",
+    "V7Perps",
+    "V7Profile",
+    "V7Earn",
+    "V7Home"
+   ]
+  },
+  {
+   "title": "History opens on the right list; positions before assets",
+   "date": "1 Oct 2026",
+   "detail": "Trade has one History with Perps and Swaps, and it now opens where it makes sense: from Swap it opens on your swaps, from Markets or Positions on your perps, and after a swap the success card's 'View in swap history' goes straight there. On Portfolio, Your positions now come before Your assets, because positions carry risk and move with the market while assets sit idle. For developers: when someone has no open positions, show Your assets first so the screen never opens on an empty section.",
+   "screens": [
+    "V7Swap",
+    "V7SwapHistory",
+    "V7PerpsHistory",
+    "V7Home"
+   ]
+  }
+ ]
+};
+if (window.__vnMetaLoaded) window.__vnMetaLoaded(window.VN_META);
