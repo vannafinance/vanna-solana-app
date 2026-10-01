@@ -18,7 +18,7 @@ export function SpaceTabsLayout({ space, tabs }: SpaceTabsLayoutProps) {
     useCallback(() => {
       if (space === "portfolio") return undefined;
       const subscription = BackHandler.addEventListener("hardwareBackPress", () => {
-        router.replace(spaceRoutes.portfolio);
+        router.navigate(spaceRoutes.portfolio);
         return true;
       });
       return () => subscription.remove();
@@ -27,7 +27,7 @@ export function SpaceTabsLayout({ space, tabs }: SpaceTabsLayoutProps) {
 
   return (
     <Tabs
-      screenOptions={{ headerShown: false }}
+      screenOptions={{ headerShown: false, animation: "fade" }}
       tabBar={({ state, navigation }) => (
         <SpaceTabBar
           space={space}

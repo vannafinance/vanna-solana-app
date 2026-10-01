@@ -72,7 +72,7 @@ function FolderTab({ space, label, icon, selected }: { space: Space; label: stri
       accessibilityRole="tab"
       accessibilityLabel={label}
       accessibilityState={{ selected }}
-      onPress={() => !selected && router.replace(spaceRoutes[space])}
+      onPress={() => !selected && router.navigate(spaceRoutes[space])}
       onLayout={(event) => setWidth(event.nativeEvent.layout.width)}
       style={{ flex: 1, height: TAB_HEIGHT, zIndex: selected ? 2 : 1 }}
     >

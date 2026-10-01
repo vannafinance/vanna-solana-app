@@ -8,7 +8,7 @@ const SpaceContext = createContext<Space>("portfolio");
 const byFirstSegment: Record<string, Space> = { earn: "earn", trade: "trade", margin: "trade", farm: "farm" };
 
 export function SpaceScope({ children }: { children: ReactNode }) {
-  const [first = ""] = useSegments();
+  const first = useSegments().find((segment) => !segment.startsWith("(")) ?? "";
   return <SpaceContext.Provider value={byFirstSegment[first] ?? "portfolio"}>{children}</SpaceContext.Provider>;
 }
 
