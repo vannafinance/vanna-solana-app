@@ -10,3 +10,4 @@ export const APP_IDENTITY: AppIdentity = {
   uri: "https://devnet.solana.vanna.finance",
   icon: "favicon.ico",
 };
+export const FORK_FAUCET_ENABLED = process.env.EXPO_PUBLIC_FORK_FAUCET !== "off";
