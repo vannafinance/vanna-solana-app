@@ -6,11 +6,14 @@ import { fetchOraclePrices } from "@/lib/solana/oracle-prices";
 import { fetchPools } from "@/lib/solana/pools-api";
 import { rpcConnection } from "@/lib/solana/rpc";
 
+import { useLiveInterval } from "./use-live-interval";
 import { queryKeys } from "./query-keys";
 
+const LIVE_MS = 10_000;
 const STALE_MS = 12_000;
 
 export function useEarnDeposits(wallet: string | null) {
+  const refetchInterval = useLiveInterval(LIVE_MS);
   return useQuery({
     queryKey: queryKeys.earnDeposits(wallet ?? "none"),
     queryFn: async ({ signal }) => {
@@ -23,6 +26,7 @@ export function useEarnDeposits(wallet: string | null) {
     },
     enabled: wallet !== null,
     staleTime: STALE_MS,
+    refetchInterval,
     retry: 1,
   });
 }

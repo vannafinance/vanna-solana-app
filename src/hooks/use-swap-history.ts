@@ -3,7 +3,7 @@ import { useCallback } from "react";
 
 import { useOraclePrices } from "@/hooks/use-oracle-prices";
 import { useWalletAddress } from "@/hooks/use-wallet-address";
-import { walletTransactionsOptions } from "@/hooks/use-wallet-transactions";
+import { useWalletTransactionsOptions } from "@/hooks/use-wallet-transactions";
 import { toHistoryEntries, volumeSince } from "@/lib/swap/spot-swap-history";
 import { groupHistoryByDay } from "@/lib/swap/group-history";
 import { spotSwapsFrom } from "@/lib/solana/spot-swaps";
@@ -15,7 +15,7 @@ import type { SwapHistory } from "@/types/swap";
 export function useSwapHistory(): Resource<SwapHistory> {
   const wallet = useWalletAddress();
   const transactions = useQuery({
-    ...walletTransactionsOptions(wallet),
+    ...useWalletTransactionsOptions(wallet),
     select: (data) => (wallet === null ? [] : spotSwapsFrom(data, wallet)),
   });
   const prices = useOraclePrices();
