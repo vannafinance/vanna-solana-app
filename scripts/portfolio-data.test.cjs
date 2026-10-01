@@ -370,8 +370,9 @@ test("perps markets come from pool rates, free liquidity and oracle prices, and 
   assert.equal(buildMarkets(pools, {}).length, 0);
 });
 
-const { toTransactionError, isStalePoolError, WALLET_MISMATCH } = loadTs("src/lib/solana/transaction-errors.ts", stubs);
-const { TransactionFailedError, BlockhashExpiredError } = loadTs("src/lib/solana/send-transaction.ts", stubs);
+const sharedModules = new Map();
+const { toTransactionError, isStalePoolError, WALLET_MISMATCH } = loadTs("src/lib/solana/transaction-errors.ts", stubs, sharedModules);
+const { TransactionFailedError, BlockhashExpiredError } = loadTs("src/lib/solana/send-transaction.ts", stubs, sharedModules);
 
 test("wallet and chain failures map to the failure states the card shows", () => {
   const kind = (error) => toTransactionError(error).kind;
