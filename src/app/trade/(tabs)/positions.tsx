@@ -24,16 +24,16 @@ export default function PerpsPositionsScreen() {
               mode="current"
               portfolio={data}
               headerProps={{ onBack: router.back, ...headerProps }}
-              onSelectMode={(mode) => mode === "history" && router.navigate("/perps/history")}
+              onSelectMode={(mode) => mode === "history" && router.navigate("/trade/history")}
             />
           }
-          footer={<NewPositionButton onPress={() => router.navigate("/perps")} />}
+          footer={<NewPositionButton onPress={() => router.navigate("/trade")} />}
           empty={<AppText color="textMuted" style={{ textAlign: "center" }}>No open positions</AppText>}
           renderItem={(position) => (
             <PerpsPositionCard
               position={position}
-              onAddCollateral={() => router.push(`/perps/add-collateral/${position.id}`)}
-              onClose={() => router.push(`/perps/close/${position.id}`)}
+              onAddCollateral={() => router.push(`/trade/add-collateral/${position.id}`)}
+              onClose={() => router.push(`/trade/close/${position.id}`)}
             />
           )}
         />

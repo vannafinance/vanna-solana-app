@@ -18,6 +18,7 @@ import { formatPercent, formatUsd } from "@/format/format-amount";
 import { useHeaderProps } from "@/hooks/use-header-props";
 import { useLenderSummary } from "@/hooks/use-lender-summary";
 import { usePortfolio } from "@/hooks/use-portfolio";
+import { routes } from "@/navigation/routes";
 import { useTheme } from "@/theme/use-theme";
 
 type Tab = "current" | "history";
@@ -75,7 +76,7 @@ export default function Lender() {
                   <SpotList
                     walletBalance={portfolio.status === "ready" ? portfolio.data.walletBalance : 0n}
                     balances={data.spot}
-                    onSwap={() => router.push("/swap")}
+                    onSwap={() => router.push(routes.tradeSwap)}
                   />
                 ) : (
                   <>

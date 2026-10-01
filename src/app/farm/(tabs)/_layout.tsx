@@ -1,13 +1,11 @@
-import { ClockCounterClockwise, Plant, Stack } from "phosphor-react-native";
-
-import { ProductTabsLayout } from "@/components/navigation/product-tabs-layout";
+import { SpaceTabsLayout } from "@/components/navigation/space-tabs-layout";
 
 const TABS = [
-  { key: "index", label: "Deploy", icon: Plant },
-  { key: "positions", label: "Position", icon: Stack },
-  { key: "history", label: "History", icon: ClockCounterClockwise },
+  { key: "index", label: "Deploy", icon: "eco" },
+  { key: "positions", label: "Positions", icon: "layers" },
+  { key: "history", label: "History", icon: "history" },
 ] as const;
 
 export default function FarmTabsLayout() {
-  return <ProductTabsLayout product="farm" tabs={TABS} />;
+  return <SpaceTabsLayout space="farm" tabs={TABS} />;
 }

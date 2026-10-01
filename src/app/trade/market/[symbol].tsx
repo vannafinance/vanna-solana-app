@@ -43,8 +43,8 @@ export default function PerpsMarketScreen() {
             }
             footer={
               <TradeActions
-                onLong={() => router.push(`/perps/order/${market.symbol}?side=long`)}
-                onShort={() => router.push(`/perps/order/${market.symbol}?side=short`)}
+                onLong={() => router.push(`/trade/order/${market.symbol}?side=long`)}
+                onShort={() => router.push(`/trade/order/${market.symbol}?side=short`)}
               />
             }
           >
@@ -53,7 +53,7 @@ export default function PerpsMarketScreen() {
             {position ? (
               <>
                 <SectionHeader title="Your position" />
-                <MarketPositionRow position={position} onPress={() => router.navigate(routes.perpsPositions)} />
+                <MarketPositionRow position={position} onPress={() => router.navigate(routes.tradePositions)} />
               </>
             ) : null}
             <SectionHeader title="Market" />

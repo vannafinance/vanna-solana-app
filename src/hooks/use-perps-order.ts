@@ -64,7 +64,7 @@ export function usePerpsOrder(symbol: string, initialSide: Side) {
 
   const viewPosition = () => {
     flow.close();
-    router.dismissTo(routes.perpsPositions);
+    router.dismissTo(routes.tradePositions);
   };
 
   return {

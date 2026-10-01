@@ -5,7 +5,7 @@ import { AppText } from "@/components/ui/app-text";
 import { Money } from "@/components/ui/money";
 import { type ThemeColor, useTheme } from "@/theme/use-theme";
 
-export type HeroMetric = { label: string; value: string; positive?: boolean };
+export type HeroMetric = { label: string; value: string; positive?: boolean; dot?: boolean };
 
 type HeroMetricsProps = {
   primary: readonly HeroMetric[];
@@ -51,9 +51,12 @@ export function HeroMetrics({ primary, secondary, primaryAccessory }: HeroMetric
             <AppText variant="label" color="onHeroMuted">
               {metric.label}
             </AppText>
-            <AppText variant="title" strong color={metric.positive ? "heroPositive" : "onHero"}>
-              {metric.value}
-            </AppText>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm }}>
+              {metric.dot ? <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: colors.heroPositive }} /> : null}
+              <AppText variant="title" strong color={metric.positive ? "heroPositive" : "onHero"}>
+                {metric.value}
+              </AppText>
+            </View>
           </View>
         ))}
       </View>

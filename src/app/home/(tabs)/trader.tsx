@@ -43,7 +43,7 @@ export default function Trader() {
     if (params.tab === "history") setTab("history");
   }
 
-  const openFlow = (position: Position) => router.push(position.kind === "perp" ? "/perps" : "/farm");
+  const openFlow = (position: Position) => router.push(position.kind === "perp" ? "/trade" : "/farm");
 
   return (
     <Screen

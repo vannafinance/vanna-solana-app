@@ -25,7 +25,7 @@ export default function PerpsHistoryScreen() {
               mode="history"
               portfolio={data}
               headerProps={{ onBack: router.back, ...headerProps }}
-              onSelectMode={(mode) => mode === "current" && router.navigate(routes.perpsPositions)}
+              onSelectMode={(mode) => mode === "current" && router.navigate(routes.tradePositions)}
             />
           }
         />

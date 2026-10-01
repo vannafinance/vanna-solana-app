@@ -75,6 +75,15 @@ export const gradients = {
   farm: diagonalGradient([["#FC5457", -0.2], ["#FF007A", 0.4], ["#8C0043", 1.1]]),
 } as const;
 
+export const spaces = {
+  portfolio: { band: ["#1A0B2E", "#2A1150"], panel: ["#5B2BC0", "#3B1C82"] },
+  earn: { band: ["#04181A", "#0A2E31"], panel: ["#137A82", "#0A464B"] },
+  trade: { band: ["#0B0C2A", "#161A55"], panel: ["#3F3AD8", "#231F86"] },
+  farm: { band: ["#2A0618", "#4A0A2C"], panel: ["#E0006B", "#9A0049"] },
+} as const;
+
+export type Space = keyof typeof spaces;
+
 export type Product = keyof typeof gradients;
 
 export const health = { liquidation: 1.1, safeFrom: 1.5 } as const;

@@ -1,6 +1,6 @@
 import { previewResource } from "@/hooks/preview-resource";
 import { useMarginAccount } from "@/hooks/use-margin-account";
-import { previewAccount, previewPositions } from "@/lib/preview-data/home";
+import { previewAccount, previewPositions, previewSpot } from "@/lib/preview-data/home";
 import type { Portfolio } from "@/types/portfolio";
 import type { Resource } from "@/types/resource";
 
@@ -20,5 +20,6 @@ export function usePortfolio(): Resource<Portfolio> {
     walletAddress: previewAccount.walletAddress,
     marginAddress: previewAccount.marginAddress,
     positions: exists ? previewPositions : [],
+    assets: previewSpot,
   });
 }

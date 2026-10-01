@@ -34,7 +34,7 @@ export default function PerpsMarketsScreen() {
               symbols={data.positions.map((position) => position.symbol)}
               pnl={formatSignedUsd(data.openPnl)}
               pnlPositive={data.openPnl >= 0n}
-              onPress={() => router.navigate(routes.perpsPositions)}
+              onPress={() => router.navigate(routes.tradePositions)}
             />
           </>
         )}
@@ -47,7 +47,7 @@ export default function PerpsMarketsScreen() {
       <MarketSearchField value={query} onChangeText={setQuery} />
       <MarketFilterChips filters={MARKET_FILTERS} value={filter} onChange={setFilter} />
       <ResourceView resource={markets} emptyLabel="No markets match your search">
-        {(list) => <MarketList markets={list} onSelect={(market) => router.push(`/perps/market/${market.symbol}`)} />}
+        {(list) => <MarketList markets={list} onSelect={(market) => router.push(`/trade/market/${market.symbol}`)} />}
       </ResourceView>
     </Screen>
   );

@@ -40,7 +40,7 @@ export default function Notifications() {
         {(items) => (
           <NotificationGroups
             notifications={items}
-            onAction={(item) => router.push(item.action?.target === "farm" ? "/farm" : "/perps")}
+            onAction={(item) => router.push(item.action?.target === "farm" ? "/farm" : "/trade")}
           />
         )}
       </ResourceView>

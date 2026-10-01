@@ -1,13 +1,11 @@
-import { ChartLineUp, Coins, House } from "phosphor-react-native";
+import { SpaceTabsLayout } from "@/components/navigation/space-tabs-layout";
 
-import { ProductTabsLayout } from "@/components/navigation/product-tabs-layout";
-
-const tabs = [
-  { key: "index", label: "Overview", icon: House },
-  { key: "lender", label: "Lender", icon: Coins },
-  { key: "trader", label: "Trader", icon: ChartLineUp },
+const TABS = [
+  { key: "index", label: "Overview", icon: "home" },
+  { key: "lender", label: "Lender", icon: "toll" },
+  { key: "trader", label: "Trader", icon: "trending_up" },
 ] as const;
 
 export default function HomeTabsLayout() {
-  return <ProductTabsLayout product="home" tabs={tabs} />;
+  return <SpaceTabsLayout space="portfolio" tabs={TABS} />;
 }

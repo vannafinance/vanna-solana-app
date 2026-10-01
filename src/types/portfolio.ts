@@ -55,6 +55,7 @@ export type TokenBalance = {
   symbol: AssetSymbol;
   tokens: TokenAmount;
   value: bigint;
+  changeTodayBps: number;
 };
 
 export type LenderVault = {
@@ -94,6 +95,7 @@ export type Portfolio = {
   walletAddress: string;
   marginAddress: string;
   positions: Position[];
+  assets: TokenBalance[];
 };
 
 export type TraderSummary = {
