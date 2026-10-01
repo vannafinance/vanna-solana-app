@@ -1,5 +1,5 @@
 window.VN_META = {
- "stamp": 1790855729485,
+ "stamp": 1790866615318,
  "changes": [
   {
    "title": "New Vanna mark on every screen",
@@ -262,6 +262,20 @@ window.VN_META = {
     "V7SwapHistory",
     "V7PerpsHistory",
     "V7Home"
+   ]
+  },
+  {
+   "title": "Gradient buttons in each space's colours",
+   "date": "1 Oct 2026",
+   "detail": "The selected item in every bottom bar now sits on a short gradient pill with a white icon, in its space's colours (Portfolio coral to violet, Earn teal, Trade violet to indigo, Farm coral to pink), like Current's pill. Main buttons (Supply, Swap, Long, Create margin account and the transaction buttons) use their space's gradient instead of flat violet; the button gradients are a step deeper so white labels stay readable. Short stays red because red means short and loss; Welcome and Connect keep their look. All colours are kept in one place (tools/buttons_gradient.py) so the brand gradients can be swapped in later.",
+   "screens": [
+    "V7Home",
+    "V7Earn",
+    "V7EarnVault",
+    "V7Perps",
+    "V7PerpsMarket",
+    "V7Swap",
+    "V7Farm"
    ]
   }
  ]

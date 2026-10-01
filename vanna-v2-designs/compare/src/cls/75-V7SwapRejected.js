@@ -59,7 +59,7 @@ optsIn: opts('In', inS, outS), optsOut: opts('Out', outS, inS),
 rot: s.rot || 0, flip: function () { self.setState({ inS: outS, outS: inS, amt: Math.min(Math.round(rec * 100) / 100 || 1, B.bal), rot: (s.rot || 0) + 180, dd: '' }); },
 setOpen: setO, toggleSet: function () { self.setState({ setO: !setO, dex: false, dd: '' }); }, modes: modes, presets: presets, slipVal: eff, fieldOp: mode === 'Auto' ? '0.5' : '1', fieldBd: mode === 'Custom' ? '#703AE6' : t.bd,
 slipWarn: warn, warnC: effN >= 5 ? t.neg : t.warn, slipShort: (mode === 'Auto' ? 'Auto ' : '') + eff + '%', slipLong: (mode === 'Auto' ? 'Auto · ' : 'Custom · ') + eff + '%',
-dis: ok ? 'false' : 'true', ctaBg: ok ? '#703AE6' : t.off, ctaFg: ok ? '#FFFFFF' : t.offFg, ctaLabel: ok ? 'Swap · approve in wallet' : (over ? 'Not enough ' + A.sym : 'Enter an amount'),
+dis: ok ? 'false' : 'true', ctaBg: ok ? 'linear-gradient(90deg, #6C63FF, #4B44E0)' : t.off, ctaFg: ok ? '#FFFFFF' : t.offFg, ctaLabel: ok ? 'Swap · approve in wallet' : (over ? 'Not enough ' + A.sym : 'Enter an amount'),
 cta: function () { if (ok) self.setState({ __tx: 'sign', __st: 1, __why: '', dd: '' }); },
 doneText: f2(amt) + ' ' + inS + ' → ' + fu(rec, outS) + ' ' + outS };
 }).call(this);

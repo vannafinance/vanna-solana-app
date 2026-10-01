@@ -29,7 +29,7 @@ var sum = [
 { k: 'Supplied after', v: f2(Math.max(after, 0)) + ' USDC' },
 { k: 'Projected yearly', v: '+' + money(Math.max(after, 0) * 0.0003) }
 ];
-return { t: t, go: function () { if (!over) self.setState({ __tx: 'sign', __st: 1, __why: '' }); }, txTitle: isS ? 'Supplied' : 'Withdrawn', txBody: f2(amt) + ' USDC ' + (isS ? 'is now earning in the USDC vault' : 'is back in your wallet'), modes: modes, quick: quick, sum: sum, amt: f2(amt), amtC: over ? t.neg : t.text, amtLabel: isS ? 'Supply amount' : 'Withdraw amount', balLabel: isS ? 'Wallet 3,120.40 USDC' : 'Supplied 2,500.00 USDC', err: false, dis: over ? 'true' : 'false', ctaBg: over ? t.off : '#703AE6', ctaFg: over ? t.offFg : '#FFFFFF', cta: over ? (isS ? 'Not enough USDC' : 'More than you supplied') : mode + ' · approve in wallet' };
+return { t: t, go: function () { if (!over) self.setState({ __tx: 'sign', __st: 1, __why: '' }); }, txTitle: isS ? 'Supplied' : 'Withdrawn', txBody: f2(amt) + ' USDC ' + (isS ? 'is now earning in the USDC vault' : 'is back in your wallet'), modes: modes, quick: quick, sum: sum, amt: f2(amt), amtC: over ? t.neg : t.text, amtLabel: isS ? 'Supply amount' : 'Withdraw amount', balLabel: isS ? 'Wallet 3,120.40 USDC' : 'Supplied 2,500.00 USDC', err: false, dis: over ? 'true' : 'false', ctaBg: over ? t.off : 'linear-gradient(90deg, #14919A, #0B5F66)', ctaFg: over ? t.offFg : '#FFFFFF', cta: over ? (isS ? 'Not enough USDC' : 'More than you supplied') : mode + ' · approve in wallet' };
 }).call(this);
 var __sw = this.state.__sw === undefined ? !!this.props.switcherOpen : this.state.__sw;
 __v.swOpen = __sw;
