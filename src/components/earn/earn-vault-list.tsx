@@ -8,7 +8,7 @@ import { useTheme } from "@/theme/use-theme";
 import type { VaultSummary } from "@/types/earn";
 import type { Resource } from "@/types/resource";
 
-import { formatSummaryNumber } from "./earn-format";
+import { formatSummaryNumber } from "@/format/format-earn";
 import { VaultRow } from "./vault-row";
 
 type EarnVaultListProps = {

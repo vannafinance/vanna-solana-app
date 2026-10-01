@@ -9,7 +9,7 @@ import { formatPercent, formatSignedPercent, formatSignedUsd, formatUsd } from "
 import type { ClosedSummary } from "@/types/perps";
 import { useTheme } from "@/theme/use-theme";
 
-import { formatTokenSize, sideLabel } from "./format-perps";
+import { formatTokenSize, sideLabel } from "@/format/format-perps";
 import { ListScreen } from "./list-screen";
 
 type PerpsHistoryListProps = {

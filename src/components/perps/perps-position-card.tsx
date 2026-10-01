@@ -1,7 +1,7 @@
 import { formatPercent, formatSignedPercent, formatSignedUsd, formatUsd } from "@/format/format-amount";
 import type { PositionSummary } from "@/types/perps";
 
-import { formatLiquidationPrice, formatTokenSize } from "./format-perps";
+import { formatLiquidationPrice, formatTokenSize } from "@/format/format-perps";
 import { PositionCard } from "./position-card";
 
 type PerpsPositionCardProps = {

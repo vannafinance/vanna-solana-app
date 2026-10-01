@@ -10,7 +10,7 @@ import { useTheme } from "@/theme/use-theme";
 import type { VaultDetail } from "@/types/earn";
 
 import { EarnEventRow } from "./earn-event-row";
-import { formatEarnedAmount, formatFullAmount } from "./earn-format";
+import { formatEarnedAmount, formatFullAmount } from "@/format/format-earn";
 import { EarnStatRow } from "./earn-stat-row";
 
 type PositionsView = "current" | "history";

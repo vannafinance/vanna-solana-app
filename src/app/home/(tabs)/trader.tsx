@@ -18,6 +18,7 @@ import { useHeaderProps } from "@/hooks/use-header-props";
 import { useTraderSummary } from "@/hooks/use-trader-summary";
 import { useTheme } from "@/theme/use-theme";
 import type { Position } from "@/types/portfolio";
+import { routes } from "@/navigation/routes";
 
 type Tab = "current" | "history";
 type Filter = "all" | "perp" | "farm";
@@ -109,7 +110,7 @@ export default function Trader() {
           title="No margin account yet"
           message="Create one to borrow and trade with leverage in Perps and Farm."
           actionLabel="Create margin account"
-          onAction={() => router.push("/margin/create")}
+          onAction={() => router.push(routes.marginCreate)}
         />
       )}
     </Screen>

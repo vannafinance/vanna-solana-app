@@ -10,6 +10,7 @@ import { useMarginAccount } from "./use-margin-account";
 import { useMarketBySymbol } from "./use-perps-markets";
 import { usePerpsPositions } from "./use-perps-positions";
 import { useTransactionFlow } from "./use-transaction-flow";
+import { routes } from "@/navigation/routes";
 
 const DECIMALS = 6;
 const DEFAULT_COLLATERAL = "500.00";
@@ -57,13 +58,13 @@ export function usePerpsOrder(symbol: string, initialSide: Side) {
 
   const submit = () => {
     if (blocked) return;
-    if (!marginAccount.exists) router.push("/margin/create");
+    if (!marginAccount.exists) router.push(routes.marginCreate);
     else flow.start();
   };
 
   const viewPosition = () => {
     flow.close();
-    router.dismissTo("/perps/positions");
+    router.dismissTo(routes.perpsPositions);
   };
 
   return {

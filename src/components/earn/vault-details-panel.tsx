@@ -6,7 +6,7 @@ import { formatCompactUsd, formatPercent, formatUnits } from "@/format/format-am
 import { useTheme } from "@/theme/use-theme";
 import type { VaultDetail } from "@/types/earn";
 
-import { formatSummaryAmount } from "./earn-format";
+import { formatSummaryAmount } from "@/format/format-earn";
 import { EarnStatRow } from "./earn-stat-row";
 import { EarnUsageBar } from "./earn-usage-bar";
 

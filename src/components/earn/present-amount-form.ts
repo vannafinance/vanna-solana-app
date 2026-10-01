@@ -1,7 +1,7 @@
 import { formatPercent, formatToken, formatUsd } from "@/format/format-amount";
 import type { AmountProblem, AmountQuote, EarnMarket } from "@/types/earn";
 
-import { formatFullAmount } from "./earn-format";
+import { formatFullAmount } from "@/format/format-earn";
 
 export type AmountFormMode = "supply" | "withdraw";
 

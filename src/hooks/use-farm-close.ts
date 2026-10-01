@@ -12,6 +12,7 @@ import type { Resource } from "@/types/resource";
 import { TransactionError } from "@/types/transaction";
 
 import { useTransactionFlow } from "./use-transaction-flow";
+import { routes } from "@/navigation/routes";
 
 const CLOSE_STEPS = 2;
 
@@ -44,7 +45,7 @@ export function useFarmClose(id: string) {
     flow.close();
     if (position) replaceFarmPosition(id, reducePosition(position, fractionBps));
     if (destination === "history") router.dismissTo("/farm/history");
-    else if (fractionBps === 10000) router.dismissTo("/farm/positions");
+    else if (fractionBps === 10000) router.dismissTo(routes.farmPositions);
     else router.back();
   };
 

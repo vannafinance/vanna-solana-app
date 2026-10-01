@@ -6,7 +6,7 @@ import { formatSignedUsd, formatUsd } from "@/format/format-amount";
 import type { PositionSummary } from "@/types/perps";
 import { useTheme } from "@/theme/use-theme";
 
-import { formatLiquidationPrice, formatTokenSize, sideLabel } from "./format-perps";
+import { formatLiquidationPrice, formatTokenSize, sideLabel } from "@/format/format-perps";
 
 type MarketPositionRowProps = {
   position: PositionSummary;

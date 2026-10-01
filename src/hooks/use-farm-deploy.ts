@@ -16,6 +16,7 @@ import type { Resource } from "@/types/resource";
 import { previewResource } from "./preview-resource";
 import { useMarginAccount } from "./use-margin-account";
 import { useTransactionFlow } from "./use-transaction-flow";
+import { routes } from "@/navigation/routes";
 
 const DEFAULT_LEVERAGE = 2;
 const LOW_PRECISION_DECIMALS = 6;
@@ -60,7 +61,7 @@ export function useFarmDeploy() {
 
   const finishDeploy = () => {
     flow.close();
-    router.navigate("/farm/positions");
+    router.navigate(routes.farmPositions);
   };
 
   return {
@@ -71,7 +72,7 @@ export function useFarmDeploy() {
     setAmountText,
     fillMax: () => setAmountText(balanceText(data.collateral)),
     setLeverage,
-    deploy: () => (margin.exists ? flow.start() : router.push("/margin/create")),
+    deploy: () => (margin.exists ? flow.start() : router.push(routes.marginCreate)),
     sheet: {
       state: flow.state,
       primaryLabel: flow.done ? "View position" : undefined,

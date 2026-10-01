@@ -8,7 +8,7 @@ import { formatPercent } from "@/format/format-amount";
 import { useTheme } from "@/theme/use-theme";
 import type { VaultDetail } from "@/types/earn";
 
-import { formatSummaryAmount, formatSummaryNumber } from "./earn-format";
+import { formatSummaryAmount, formatSummaryNumber } from "@/format/format-earn";
 import { EarnUsageBar } from "./earn-usage-bar";
 
 type VaultCollateralPanelProps = {

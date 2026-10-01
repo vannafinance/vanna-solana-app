@@ -5,7 +5,7 @@ import { formatSignedUsd, formatUsd } from "@/format/format-amount";
 import type { CloseQuote, PositionSummary } from "@/types/perps";
 import { useTheme } from "@/theme/use-theme";
 
-import { formatLiquidationPrice, formatTokenSize, sideLabel } from "./format-perps";
+import { formatLiquidationPrice, formatTokenSize, sideLabel } from "@/format/format-perps";
 import { GradientButton } from "./gradient-button";
 import { SheetChoiceRow } from "./sheet-choice-row";
 import { SheetHeader } from "./sheet-header";

@@ -8,7 +8,7 @@ import { formatPercent, formatSignedUsd, formatUsd } from "@/format/format-amoun
 import { useTheme } from "@/theme/use-theme";
 import type { EarnPosition } from "@/types/earn";
 
-import { formatSummaryAmount } from "./earn-format";
+import { formatSummaryAmount } from "@/format/format-earn";
 
 type EarnPositionCardProps = {
   position: EarnPosition;

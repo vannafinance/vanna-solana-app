@@ -14,6 +14,7 @@ import { useHeaderProps } from "@/hooks/use-header-props";
 import { MARKET_FILTERS, usePerpsMarkets } from "@/hooks/use-perps-markets";
 import { usePerpsPositions } from "@/hooks/use-perps-positions";
 import { useTheme } from "@/theme/use-theme";
+import { routes } from "@/navigation/routes";
 
 export default function PerpsMarketsScreen() {
   const headerProps = useHeaderProps();
@@ -33,7 +34,7 @@ export default function PerpsMarketsScreen() {
               symbols={data.positions.map((position) => position.symbol)}
               pnl={formatSignedUsd(data.openPnl)}
               pnlPositive={data.openPnl >= 0n}
-              onPress={() => router.navigate("/perps/positions")}
+              onPress={() => router.navigate(routes.perpsPositions)}
             />
           </>
         )}

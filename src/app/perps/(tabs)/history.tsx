@@ -6,6 +6,7 @@ import { AppText } from "@/components/ui/app-text";
 import { ResourceView } from "@/components/ui/resource-view";
 import { useHeaderProps } from "@/hooks/use-header-props";
 import { usePerpsPositions } from "@/hooks/use-perps-positions";
+import { routes } from "@/navigation/routes";
 
 export default function PerpsHistoryScreen() {
   const headerProps = useHeaderProps();
@@ -24,7 +25,7 @@ export default function PerpsHistoryScreen() {
               mode="history"
               portfolio={data}
               headerProps={{ onBack: router.back, ...headerProps }}
-              onSelectMode={(mode) => mode === "current" && router.navigate("/perps/positions")}
+              onSelectMode={(mode) => mode === "current" && router.navigate(routes.perpsPositions)}
             />
           }
         />

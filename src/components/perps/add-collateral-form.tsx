@@ -8,7 +8,7 @@ import { formatUnits, formatUsd } from "@/format/format-amount";
 import type { AddCollateralQuote, PerpsAccount, PositionSummary } from "@/types/perps";
 import { useTheme } from "@/theme/use-theme";
 
-import { formatLiquidationPrice, sideLabel } from "./format-perps";
+import { formatLiquidationPrice, sideLabel } from "@/format/format-perps";
 import { SheetChoiceRow } from "./sheet-choice-row";
 import { SheetHeader } from "./sheet-header";
 import { SheetSectionLabel } from "./sheet-section-label";

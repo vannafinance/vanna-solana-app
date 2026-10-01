@@ -15,6 +15,7 @@ import { TokenIcon } from "@/components/ui/token-icon";
 import { formatUsd } from "@/format/format-amount";
 import { TIMEFRAMES, usePerpsMarket } from "@/hooks/use-perps-markets";
 import { LIQUIDATION_HEALTH } from "@/lib/perps/account-health";
+import { routes } from "@/navigation/routes";
 
 const LIQUIDATION_NOTE = `You borrow from Vanna vaults to open leverage and pay the borrow APY while the position is open. If your account health reaches ${LIQUIDATION_HEALTH.toFixed(2)}, the position is liquidated with a dynamic penalty of 0–15%.`;
 
@@ -52,7 +53,7 @@ export default function PerpsMarketScreen() {
             {position ? (
               <>
                 <SectionHeader title="Your position" />
-                <MarketPositionRow position={position} onPress={() => router.navigate("/perps/positions")} />
+                <MarketPositionRow position={position} onPress={() => router.navigate(routes.perpsPositions)} />
               </>
             ) : null}
             <SectionHeader title="Market" />

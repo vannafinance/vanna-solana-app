@@ -6,7 +6,7 @@ import { formatPercent } from "@/format/format-amount";
 import { useTheme } from "@/theme/use-theme";
 import type { VaultDetail, VaultEventKind } from "@/types/earn";
 
-import { formatSummaryAmount } from "./earn-format";
+import { formatSummaryAmount } from "@/format/format-earn";
 import { EarnStatRow } from "./earn-stat-row";
 
 const EVENT_LABELS: Record<VaultEventKind, string> = {

@@ -7,7 +7,7 @@ import { useTheme } from "@/theme/use-theme";
 import type { EarnHistoryEntry, EarnHistoryGroup } from "@/types/earn";
 
 import { EarnEventRow } from "./earn-event-row";
-import { formatSummaryAmount, formatSummaryNumber } from "./earn-format";
+import { formatSummaryAmount, formatSummaryNumber } from "@/format/format-earn";
 
 function rowFor(entry: EarnHistoryEntry) {
   switch (entry.kind) {

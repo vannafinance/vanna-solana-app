@@ -5,7 +5,7 @@ import { AppText } from "@/components/ui/app-text";
 import { health as healthThresholds } from "@/theme/tokens";
 import { useTheme } from "@/theme/use-theme";
 
-import { formatHealth } from "./format-perps";
+import { formatHealth } from "@/format/format-perps";
 
 const RADIUS = 7;
 const CENTER = 9;

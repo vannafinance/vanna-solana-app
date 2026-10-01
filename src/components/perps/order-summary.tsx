@@ -4,7 +4,7 @@ import { Notice } from "@/components/ui/notice";
 import { formatPercent, formatUsd } from "@/format/format-amount";
 import type { OrderIssue, OrderQuote, PerpsMarket, Side } from "@/types/perps";
 
-import { formatLiquidationPrice, formatOrderTokens } from "./format-perps";
+import { formatLiquidationPrice, formatOrderTokens } from "@/format/format-perps";
 
 type OrderSummaryProps = {
   market: PerpsMarket;
