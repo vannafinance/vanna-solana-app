@@ -7,6 +7,9 @@ export type JupiterQuote = {
   priceImpactBps: number;
 };
 
+// The route needs the full quote response back to build the transaction, so it is kept alongside the parsed figures.
+export type RawJupiterQuote = { quote: JupiterQuote; response: unknown };
+
 const NO_ROUTE_STATUS = 400;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -38,18 +41,23 @@ export class NoRouteError extends Error {
 }
 
 // The web app proxies Jupiter and restricts it to the pools the fork can execute against.
-export async function fetchJupiterQuote(
+export async function fetchRawJupiterQuote(
   inputMint: string,
   outputMint: string,
   amount: bigint,
   slippageBps: number,
   signal?: AbortSignal,
-): Promise<JupiterQuote> {
+): Promise<RawJupiterQuote> {
   const query = new URLSearchParams({ inputMint, outputMint, amount: amount.toString(), slippageBps: String(slippageBps) });
   try {
-    return parseJupiterQuote(await requestJson(`${API_BASE_URL}/api/jupiter/quote?${query}`, { signal }));
+    const response = await requestJson(`${API_BASE_URL}/api/jupiter/quote?${query}`, { signal });
+    return { quote: parseJupiterQuote(response), response };
   } catch (error) {
     if (error instanceof ApiError && error.status === NO_ROUTE_STATUS) throw new NoRouteError();
     throw error;
   }
+}
+
+export async function fetchJupiterQuote(inputMint: string, outputMint: string, amount: bigint, slippageBps: number, signal?: AbortSignal): Promise<JupiterQuote> {
+  return (await fetchRawJupiterQuote(inputMint, outputMint, amount, slippageBps, signal)).quote;
 }

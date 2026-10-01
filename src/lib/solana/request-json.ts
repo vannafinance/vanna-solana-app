@@ -15,12 +15,12 @@ export class ApiError extends Error {
   }
 }
 
-type RequestOptions = { signal?: AbortSignal; timeoutMs?: number };
+type RequestOptions = { signal?: AbortSignal; timeoutMs?: number; body?: unknown };
 
 const DEFAULT_TIMEOUT_MS = 15_000;
 
 // fetch has no timeout of its own, and a cancelled query must also cancel the request.
-export async function requestJson(url: string, { signal, timeoutMs = DEFAULT_TIMEOUT_MS }: RequestOptions = {}): Promise<unknown> {
+export async function requestJson(url: string, { signal, timeoutMs = DEFAULT_TIMEOUT_MS, body }: RequestOptions = {}): Promise<unknown> {
   const controller = new AbortController();
   let timedOut = false;
   const timer = setTimeout(() => {
@@ -31,7 +31,12 @@ export async function requestJson(url: string, { signal, timeoutMs = DEFAULT_TIM
   signal?.addEventListener("abort", forwardAbort);
 
   try {
-    const response = await fetch(url, { signal: controller.signal, headers: { accept: "application/json" } });
+    const response = await fetch(url, {
+      signal: controller.signal,
+      method: body === undefined ? "GET" : "POST",
+      headers: body === undefined ? { accept: "application/json" } : { accept: "application/json", "content-type": "application/json" },
+      body: body === undefined ? undefined : JSON.stringify(body),
+    });
     if (response.status === 429) throw new ApiError("rate-limited", 429);
     if (!response.ok) throw new ApiError("server", response.status);
     try {

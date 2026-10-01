@@ -369,3 +369,23 @@ test("perps markets come from pool rates, free liquidity and oracle prices, and 
   assert.equal(buildMarkets({ TSLAx: pools.TSLAx }, { TSLAx: 357_000_000n }).length, 0);
   assert.equal(buildMarkets(pools, {}).length, 0);
 });
+
+const { toTransactionError, isStalePoolError, WALLET_MISMATCH } = loadTs("src/lib/solana/transaction-errors.ts", stubs);
+const { TransactionFailedError, BlockhashExpiredError } = loadTs("src/lib/solana/send-transaction.ts", stubs);
+
+test("wallet and chain failures map to the failure states the card shows", () => {
+  const kind = (error) => toTransactionError(error).kind;
+  assert.equal(kind(new Error("User declined the request: ERROR_NOT_SIGNED")), "rejected");
+  assert.equal(kind(new Error("Local association cancelled by user")), "rejected");
+  assert.equal(kind(new TransactionFailedError('{"InstructionError":[3,{"Custom":6001}]} Program JUP6 failed')), "price-moved");
+  assert.equal(kind(new TransactionFailedError("custom program error: 0xbbd")), "price-moved");
+  assert.equal(kind(new TransactionFailedError("Attempt to debit an account but found no record of a prior credit")), "no-fee");
+  assert.equal(kind(new BlockhashExpiredError()), "expired");
+  assert.equal(kind(new Error(WALLET_MISMATCH)), "network");
+  assert.equal(kind(new Error("something unexpected")), "network");
+});
+
+test("only stale pool errors trigger a fresh quote retry", () => {
+  assert.equal(isStalePoolError(new Error("custom program error: 0x1771")), true);
+  assert.equal(isStalePoolError(new Error("User declined the request")), false);
+});
