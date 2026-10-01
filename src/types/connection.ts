@@ -1,1 +1,1 @@
-export type ConnectPhase = "pick" | "approving" | "rpc-setup" | "connected" | "declined" | "rpc-not-set";
+export type ConnectPhase = "pick" | "approving" | "connected" | "declined";

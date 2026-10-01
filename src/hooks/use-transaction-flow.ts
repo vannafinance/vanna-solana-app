@@ -1,4 +1,5 @@
 import { useCallback, useState } from "react";
+import { useMobileWallet } from "@wallet-ui/react-native-web3js";
 
 import { previewApproval } from "@/lib/preview-data/approval-outcome";
 import { TransactionError, type TransactionState } from "@/types/transaction";
@@ -17,9 +18,9 @@ type Options = {
   run?: (step: number) => Promise<void>;
 };
 
-const DEFAULT_WALLET = "Backpack";
-
-export function useTransactionFlow({ steps = 1, wallet = DEFAULT_WALLET, success, run = previewApproval }: Options) {
+export function useTransactionFlow({ steps = 1, wallet, success, run = previewApproval }: Options) {
+  const { account } = useMobileWallet();
+  const walletLabel = wallet ?? account?.label ?? "your wallet";
   const [internal, setInternal] = useState<Internal>({ phase: "idle" });
 
   const execute = useCallback(
@@ -53,7 +54,7 @@ export function useTransactionFlow({ steps = 1, wallet = DEFAULT_WALLET, success
       case "idle":
         return null;
       case "signing":
-        return { phase: "signing", step: internal.step, steps, wallet };
+        return { phase: "signing", step: internal.step, steps, wallet: walletLabel };
       case "confirming":
         return { phase: "confirming", title: "Confirming", message: "Waiting for Solana to confirm." };
       case "success":

@@ -3,7 +3,7 @@ import * as WebBrowser from "expo-web-browser";
 
 const DOCS_URL = "https://docs.vanna.finance";
 const SUPPORT_URL = "https://vanna.finance";
-const NETWORK_LABEL = "Solana Devnet";
+const NETWORK_LABEL = "Vanna Surfpool";
 
 export function useAppInfo() {
   return {

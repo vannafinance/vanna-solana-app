@@ -1,11 +1,10 @@
-import { ArrowUpRight, Backpack, Check, LockKey, Prohibit, WifiSlash, type Icon } from "phosphor-react-native";
+import { Wallet, Check, Prohibit, type Icon } from "phosphor-react-native";
 import type { ReactNode } from "react";
-import { Pressable, View } from "react-native";
+import { View } from "react-native";
 
 import { AppText } from "@/components/ui/app-text";
 import { BottomSheet } from "@/components/ui/bottom-sheet";
 import { Button } from "@/components/ui/button";
-import { Pill } from "@/components/ui/pill";
 import { TokenIcon } from "@/components/ui/token-icon";
 import { shortAddress } from "@/format/short-address";
 import { useTheme } from "@/theme/use-theme";
@@ -15,20 +14,17 @@ const MONO = { fontFamily: "monospace" } as const;
 
 type ConnectSheetProps = {
   phase: ConnectPhase;
-  installed: boolean;
+  walletMissing: boolean;
   busy: boolean;
   walletName: string;
   address: string;
-  rpcUrl: string;
+  errorMessage?: string;
   onConnect: () => void;
+  onInstallPhantom: () => void;
+  onInstallSolflare: () => void;
   onAuthorize: () => void;
   onCancel: () => void;
   onRetryAuthorize: () => void;
-  onRpcAdded: () => void;
-  onCheckAgain: () => void;
-  onShowSetup: () => void;
-  onCopyRpc: () => void;
-  onSetupGuide: () => void;
   onContinue: () => void;
   onDismiss: () => void;
 };
@@ -59,7 +55,7 @@ function Headline({ title, message, children }: { title: string; message?: strin
   );
 }
 
-function WalletTile({ size = 44, icon: Glyph = Backpack }: { size?: number; icon?: Icon }) {
+function WalletTile({ size = 44, icon: Glyph = Wallet }: { size?: number; icon?: Icon }) {
   const { colors } = useTheme();
 
   return (
@@ -69,56 +65,26 @@ function WalletTile({ size = 44, icon: Glyph = Backpack }: { size?: number; icon
   );
 }
 
-function PickWallet({ installed, walletName, onConnect }: Pick<ConnectSheetProps, "installed" | "walletName" | "onConnect">) {
-  const { colors, radius, spacing } = useTheme();
+function PickWallet({ walletMissing, errorMessage, onConnect, onInstallPhantom, onInstallSolflare }: Pick<ConnectSheetProps, "walletMissing" | "errorMessage" | "onConnect" | "onInstallPhantom" | "onInstallSolflare">) {
+  const { spacing } = useTheme();
 
   return (
     <View style={{ gap: spacing.lg }}>
-      <View style={{ gap: spacing.sm }}>
-        <AppText variant="heading">Connect a wallet</AppText>
-        <AppText variant="bodyLg" color="textMuted">
-          Vanna connects through Solana Mobile Wallet Adapter. You approve everything in your wallet.
-        </AppText>
-      </View>
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel={installed ? `Connect ${walletName}` : `Install ${walletName}`}
-        onPress={onConnect}
-        style={{
-          flexDirection: "row",
-          alignItems: "center",
-          gap: spacing.md,
-          padding: spacing.md,
-          minHeight: 72,
-          borderRadius: radius.lg,
-          borderWidth: 1,
-          borderColor: colors.border,
-          backgroundColor: colors.background,
-        }}
-      >
-        <WalletTile size={44} />
-        <View style={{ flex: 1 }}>
-          <AppText variant="title">{walletName}</AppText>
-          <AppText variant="body" color="textMuted">
-            {installed ? "Detected on this phone" : "Not installed on this phone"}
-          </AppText>
+      <AppText variant="heading">Connect wallet</AppText>
+      {walletMissing ? <AppText variant="body" color="textMuted">No wallet found. Install a wallet to continue.</AppText> : null}
+      <Button label={walletMissing ? "Try again" : "Connect wallet"} icon={Wallet} onPress={onConnect} />
+      {walletMissing ? (
+        <View style={{ gap: spacing.sm }}>
+          <Button label="Install Phantom" variant="outline" onPress={onInstallPhantom} />
+          <Button label="Install Solflare" variant="outline" onPress={onInstallSolflare} />
         </View>
-        <Pill label={installed ? "Detected" : "Install"} tone={installed ? "teal" : "pink"} />
-      </Pressable>
-      <AppText variant="body" color="textMuted">
-        Vanna supports Backpack today. More wallets are coming.
-      </AppText>
-      <View style={{ flexDirection: "row", gap: spacing.sm, padding: spacing.md, borderRadius: radius.md, backgroundColor: colors.background }}>
-        <LockKey size={16} color={colors.textMuted} style={{ marginTop: 2 }} />
-        <AppText variant="body" color="textMuted" style={{ flex: 1 }}>
-          Vanna only asks to see your address and to request signatures. Your keys never leave Backpack.
-        </AppText>
-      </View>
+      ) : null}
+      {errorMessage ? <AppText variant="body" color="negative">{errorMessage}</AppText> : null}
     </View>
   );
 }
 
-function Approving({ busy, walletName, onAuthorize, onCancel }: Pick<ConnectSheetProps, "busy" | "walletName" | "onAuthorize" | "onCancel">) {
+function Approving({ busy, onAuthorize, onCancel }: Pick<ConnectSheetProps, "busy" | "walletName" | "onAuthorize" | "onCancel">) {
   const { colors, radius, spacing } = useTheme();
 
   return (
@@ -127,68 +93,12 @@ function Approving({ busy, walletName, onAuthorize, onCancel }: Pick<ConnectShee
         <View style={{ width: 126, height: 126, borderRadius: radius.pill, borderWidth: 2, borderColor: colors.purpleTint, alignItems: "center", justifyContent: "center" }}>
           <WalletTile size={84} />
         </View>
-        <Headline title={`Approve in ${walletName}`} message={`${walletName} opened. Approve the connection there, then come back to Vanna.`} />
+        <Headline title="Approve in your wallet" message="Confirm the connection in your wallet." />
       </View>
       <View style={{ gap: spacing.sm }}>
-        <Button label={`Open ${walletName}`} loading={busy} onPress={onAuthorize} />
-        <Button label="Cancel" variant="text" onPress={onCancel} />
+        <Button label="Waiting for wallet" loading={busy} onPress={onAuthorize} />
+        <Button label="Cancel" variant="text" disabled={busy} onPress={onCancel} />
       </View>
-    </View>
-  );
-}
-
-function RpcSetup({ busy, walletName, rpcUrl, onRpcAdded, onCopyRpc, onSetupGuide }: Pick<ConnectSheetProps, "busy" | "walletName" | "rpcUrl" | "onRpcAdded" | "onCopyRpc" | "onSetupGuide">) {
-  const { colors, radius, spacing } = useTheme();
-
-  return (
-    <View style={{ gap: spacing.lg }}>
-      <View style={{ gap: spacing.sm }}>
-        <Pill label="One-time setup" />
-        <AppText variant="heading">{`Point ${walletName} to Vanna's network`}</AppText>
-        <AppText variant="bodyLg" color="textMuted">
-          {`Vanna runs on a Solana mainnet fork. In ${walletName}, open Settings → Solana → RPC → Custom and paste this address.`}
-        </AppText>
-      </View>
-      <View
-        style={{
-          flexDirection: "row",
-          alignItems: "center",
-          gap: spacing.sm,
-          paddingVertical: spacing.sm,
-          paddingLeft: spacing.lg,
-          paddingRight: spacing.sm,
-          borderRadius: radius.lg,
-          borderWidth: 1,
-          borderColor: colors.border,
-          backgroundColor: colors.background,
-        }}
-      >
-        <AppText variant="body" selectable style={[{ flex: 1 }, MONO]}>
-          {rpcUrl}
-        </AppText>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Copy RPC address"
-          onPress={onCopyRpc}
-          style={{ minHeight: 44, paddingHorizontal: spacing.lg, borderRadius: radius.pill, backgroundColor: colors.purpleTint, alignItems: "center", justifyContent: "center" }}
-        >
-          <AppText variant="body" strong style={{ color: colors.onPurpleTint }}>
-            Copy
-          </AppText>
-        </Pressable>
-      </View>
-      <Pressable
-        accessibilityRole="link"
-        accessibilityLabel="Setup guide"
-        onPress={onSetupGuide}
-        style={{ flexDirection: "row", alignItems: "center", gap: 6, minHeight: 44, alignSelf: "flex-start" }}
-      >
-        <AppText variant="bodyLg" strong color="link">
-          Setup guide
-        </AppText>
-        <ArrowUpRight size={16} color={colors.link} />
-      </Pressable>
-      <Button label="I've added it" loading={busy} onPress={onRpcAdded} />
     </View>
   );
 }
@@ -264,37 +174,21 @@ function Failure({ icon: Glyph, tone, title, message, mono, primary, onPrimary, 
 }
 
 export function ConnectSheet(props: ConnectSheetProps) {
-  const { phase, walletName, rpcUrl } = props;
+  const { phase, walletName } = props;
 
   return (
     <BottomSheet visible onDismiss={phase === "pick" ? props.onDismiss : props.onCancel} dismissable={!props.busy}>
-      {phase === "pick" ? <PickWallet installed={props.installed} walletName={walletName} onConnect={props.onConnect} /> : null}
+      {phase === "pick" ? <PickWallet walletMissing={props.walletMissing} errorMessage={props.errorMessage} onConnect={props.onConnect} onInstallPhantom={props.onInstallPhantom} onInstallSolflare={props.onInstallSolflare} /> : null}
       {phase === "approving" ? <Approving busy={props.busy} walletName={walletName} onAuthorize={props.onAuthorize} onCancel={props.onCancel} /> : null}
-      {phase === "rpc-setup" ? (
-        <RpcSetup busy={props.busy} walletName={walletName} rpcUrl={rpcUrl} onRpcAdded={props.onRpcAdded} onCopyRpc={props.onCopyRpc} onSetupGuide={props.onSetupGuide} />
-      ) : null}
       {phase === "connected" ? <Connected walletName={walletName} address={props.address} onContinue={props.onContinue} /> : null}
       {phase === "declined" ? (
         <Failure
           icon={Prohibit}
           tone="neutral"
-          title="Connection declined"
-          message={`${walletName} didn't share your address. Nothing was connected.`}
+          title="Could not connect"
+          message={props.errorMessage ?? "Unlock your wallet and try again."}
           primary="Try again"
           onPrimary={props.onRetryAuthorize}
-        />
-      ) : null}
-      {phase === "rpc-not-set" ? (
-        <Failure
-          icon={WifiSlash}
-          tone="negative"
-          title="Can't reach Vanna's network"
-          message={`${walletName} is still on another RPC, so Vanna can't see your account. Check the custom RPC is exactly `}
-          mono={rpcUrl.replace("https://", "")}
-          primary="Check again"
-          onPrimary={props.onCheckAgain}
-          secondary="Show setup steps"
-          onSecondary={props.onShowSetup}
         />
       ) : null}
     </BottomSheet>

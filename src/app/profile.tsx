@@ -9,6 +9,7 @@ import { DisconnectButton } from "@/components/profile/disconnect-button";
 import { ProfileWalletCard } from "@/components/profile/profile-wallet-card";
 import { SettingsCard } from "@/components/profile/settings-card";
 import { AppText } from "@/components/ui/app-text";
+import { Button } from "@/components/ui/button";
 import { PlainHeader } from "@/components/ui/plain-header";
 import { ResourceView } from "@/components/ui/resource-view";
 import { Screen } from "@/components/ui/screen";
@@ -20,7 +21,7 @@ import { useConnectivity } from "@/hooks/use-connectivity";
 import { useMarginAccount } from "@/hooks/use-margin-account";
 import { usePortfolio } from "@/hooks/use-portfolio";
 import { useShareText } from "@/hooks/use-share-text";
-import { useBackpackInstalled } from "@/hooks/use-wallet-connection";
+import { useWalletConnection } from "@/hooks/use-wallet-connection";
 import { useTheme } from "@/theme/use-theme";
 
 export default function Profile() {
@@ -32,14 +33,14 @@ export default function Profile() {
   const approval = useApprovalOutcome();
   const margin = useMarginAccount();
   const connectivity = useConnectivity();
-  const backpack = useBackpackInstalled();
+  const wallet = useWalletConnection();
 
   return (
     <Screen header={<PlainHeader title="Profile" onBack={() => router.back()} />}>
       <ResourceView resource={portfolio} emptyLabel="No account data">
         {(data) => (
           <View style={{ gap: spacing.lg }}>
-            <ProfileWalletCard address={data.walletAddress} onCopy={() => share(data.walletAddress)} />
+            {wallet.address ? <ProfileWalletCard address={wallet.address} onCopy={() => share(wallet.address)} /> : null}
             {data.health === null ? null : (
               <AccountHealthCard
                 health={data.health}
@@ -60,7 +61,15 @@ export default function Profile() {
       </ResourceView>
       <AppearanceCard value={appearance.preference} onChange={appearance.choose} />
       <SettingsCard network={info.network} onDocs={info.openDocs} onSupport={info.openSupport} />
-      <DisconnectButton onPress={() => router.replace("/welcome")} />
+      {wallet.address ? (
+        <DisconnectButton busy={wallet.checking} onPress={async () => {
+          if (await wallet.disconnect()) {
+            router.dismissAll();
+            router.replace("/welcome");
+          }
+        }} />
+      ) : <Button label="Connect wallet" onPress={() => router.push("/connect")} />}
+      {wallet.errorMessage ? <AppText color="negative">{wallet.errorMessage}</AppText> : null}
       {__DEV__ ? (
         <DeveloperControls
           outcome={approval.outcome}
@@ -69,8 +78,6 @@ export default function Profile() {
           onMarginReset={(reset) => (reset ? margin.reset() : margin.markCreated())}
           offline={!connectivity.online}
           onOffline={connectivity.simulateOffline}
-          backpackMissing={!backpack.installed}
-          onBackpackMissing={(missing) => backpack.setInstalled(!missing)}
         />
       ) : null}
       <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6 }}>

@@ -1,58 +1,95 @@
+import { useMobileWallet } from "@wallet-ui/react-native-web3js";
+import { useQueryClient } from "@tanstack/react-query";
 import * as WebBrowser from "expo-web-browser";
-import { useState, useSyncExternalStore } from "react";
+import { useRef, useState } from "react";
 
-import { useApprovalOutcome } from "@/hooks/use-approval-outcome";
-import { backpackInstalledFlag, previewAccount } from "@/lib/preview-data/home";
 import type { ConnectPhase } from "@/types/connection";
 
-const RPC_URL = "https://rpc-devnet.solana.vanna.finance";
-const WALLET_NAME = "Backpack";
-const INSTALL_URL = "https://backpack.app/download";
-const SETUP_GUIDE_URL = "https://docs.backpack.app/";
-const STEP_DELAY_MS = 900;
+const AUTHORIZATION_FAILED = -1;
 
-const pause = () => new Promise<void>((resolve) => setTimeout(resolve, STEP_DELAY_MS));
-
-// Preview state machine. Mobile Wallet Adapter authorize/reauthorize replaces the pauses later.
 export function useWalletConnection() {
-  const { outcome } = useApprovalOutcome();
-  const installed = useSyncExternalStore(backpackInstalledFlag.subscribe, backpackInstalledFlag.get);
+  const { account, connect, disconnect } = useMobileWallet();
+  const queryClient = useQueryClient();
+  const pending = useRef(false);
   const [phase, setPhase] = useState<ConnectPhase>("pick");
   const [checking, setChecking] = useState(false);
-
-  const checkRpc = async () => {
-    setChecking(true);
-    await pause();
-    setChecking(false);
-    setPhase(outcome === "network" ? "rpc-not-set" : "connected");
-  };
+  const [walletMissing, setWalletMissing] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string>();
 
   const authorize = async () => {
+    if (pending.current) return;
+    pending.current = true;
     setChecking(true);
-    await pause();
-    setChecking(false);
-    setPhase(outcome === "rejected" ? "declined" : "rpc-setup");
+    setPhase("approving");
+    setErrorMessage(undefined);
+    try {
+      await connect();
+      setWalletMissing(false);
+      setPhase("connected");
+    } catch (error) {
+      const code = error !== null && typeof error === "object" && "code" in error ? error.code : undefined;
+      const message = error instanceof Error ? error.message : "";
+      if (code === "ERROR_WALLET_NOT_FOUND") {
+        setWalletMissing(true);
+        setPhase("pick");
+      } else if (code === "ERROR_ASSOCIATION_CANCELLED" || /CancellationException|Local association cancelled by user/i.test(message)) {
+        setPhase("pick");
+      } else {
+        setErrorMessage(code === AUTHORIZATION_FAILED
+          ? "The wallet declined the connection. You can try again."
+          : code === "ERROR_SESSION_TIMEOUT"
+            ? "The wallet did not respond in time. Unlock it and try again."
+            : "Could not connect to your wallet. Unlock it and try again.");
+        setPhase("declined");
+      }
+    } finally {
+      pending.current = false;
+      setChecking(false);
+    }
+  };
+
+  const disconnectWallet = async () => {
+    if (pending.current) return false;
+    pending.current = true;
+    setChecking(true);
+    setErrorMessage(undefined);
+    try {
+      await disconnect();
+      await queryClient.cancelQueries();
+      queryClient.clear();
+      setPhase("pick");
+      return true;
+    } catch {
+      setErrorMessage("Could not clear the wallet session. Try disconnecting again.");
+      return false;
+    } finally {
+      pending.current = false;
+      setChecking(false);
+    }
+  };
+
+  const openWalletDownload = async (url: string) => {
+    setErrorMessage(undefined);
+    try {
+      await WebBrowser.openBrowserAsync(url);
+    } catch {
+      setErrorMessage("Could not open the download page. Try again.");
+    }
   };
 
   return {
-    phase,
+    phase: account ? "connected" as const : phase,
     checking,
-    installed,
-    walletName: WALLET_NAME,
-    address: previewAccount.walletAddress,
-    rpcUrl: RPC_URL,
-    connect: () => (installed ? setPhase("approving") : void WebBrowser.openBrowserAsync(INSTALL_URL)),
+    walletMissing,
+    errorMessage,
+    walletName: "your wallet",
+    address: account?.address.toBase58() ?? "",
+    connect: authorize,
     authorize,
-    cancel: () => setPhase("pick"),
-    retryAuthorize: () => setPhase("approving"),
-    confirmRpcAdded: checkRpc,
-    checkAgain: checkRpc,
-    showSetup: () => setPhase("rpc-setup"),
-    openSetupGuide: () => void WebBrowser.openBrowserAsync(SETUP_GUIDE_URL),
+    disconnect: disconnectWallet,
+    cancel: () => { if (!pending.current) setPhase("pick"); },
+    retryAuthorize: authorize,
+    installPhantom: () => void openWalletDownload("https://phantom.com/download"),
+    installSolflare: () => void openWalletDownload("https://solflare.com/download"),
   };
-}
-
-export function useBackpackInstalled() {
-  const installed = useSyncExternalStore(backpackInstalledFlag.subscribe, backpackInstalledFlag.get);
-  return { installed, setInstalled: backpackInstalledFlag.set };
 }

@@ -14,8 +14,6 @@ type DeveloperControlsProps = {
   onMarginReset: (reset: boolean) => void;
   offline: boolean;
   onOffline: (offline: boolean) => void;
-  backpackMissing: boolean;
-  onBackpackMissing: (missing: boolean) => void;
 };
 
 const outcomes: readonly { value: OutcomeValue; label: string }[] = [
@@ -69,7 +67,6 @@ export function DeveloperControls(props: DeveloperControlsProps) {
       </View>
       <ToggleRow label="Reset margin account" value={props.marginReset} onChange={props.onMarginReset} />
       <ToggleRow label="Simulate offline" value={props.offline} onChange={props.onOffline} />
-      <ToggleRow label="Backpack not installed" value={props.backpackMissing} onChange={props.onBackpackMissing} />
     </Card>
   );
 }

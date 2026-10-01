@@ -22,7 +22,7 @@ async function approveMarginAccount() {
       );
     }
     if (error.kind === "rejected") {
-      throw new TransactionError("rejected", "Cancelled in Backpack", "You declined the request in Backpack. Nothing was sent.");
+      throw new TransactionError("rejected", "Cancelled in your wallet", "You declined the wallet request. Nothing was sent.");
     }
     throw error;
   }

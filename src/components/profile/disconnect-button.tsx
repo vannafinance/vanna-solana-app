@@ -6,9 +6,10 @@ import { useTheme } from "@/theme/use-theme";
 
 type DisconnectButtonProps = {
   onPress: () => void;
+  busy?: boolean;
 };
 
-export function DisconnectButton({ onPress }: DisconnectButtonProps) {
+export function DisconnectButton({ onPress, busy = false }: DisconnectButtonProps) {
   const { colors, radius, spacing } = useTheme();
 
   return (
@@ -16,6 +17,8 @@ export function DisconnectButton({ onPress }: DisconnectButtonProps) {
       accessibilityRole="button"
       accessibilityLabel="Disconnect wallet"
       onPress={onPress}
+      disabled={busy}
+      accessibilityState={{ disabled: busy, busy }}
       style={({ pressed }) => ({
         flexDirection: "row",
         alignItems: "center",
@@ -30,7 +33,7 @@ export function DisconnectButton({ onPress }: DisconnectButtonProps) {
     >
       <SignOut size={18} color={colors.negative} />
       <AppText variant="body" strong color="negative">
-        Disconnect wallet
+        {busy ? "Disconnecting" : "Disconnect wallet"}
       </AppText>
     </Pressable>
   );

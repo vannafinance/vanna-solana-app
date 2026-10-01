@@ -285,4 +285,3 @@ function previewFlag(initial: boolean) {
 }
 
 export const onlineFlag = previewFlag(true);
-export const backpackInstalledFlag = previewFlag(true);
