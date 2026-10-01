@@ -121,7 +121,7 @@ export function SpaceHeader({ space, notificationCount = 0, onNotifications, onA
                   height: 18,
                   paddingHorizontal: 4,
                   borderRadius: radius.pill,
-                  backgroundColor: "#FF007A",
+                  backgroundColor: colors.badge,
                   alignItems: "center",
                   justifyContent: "center",
                 }}

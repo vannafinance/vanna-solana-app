@@ -6,6 +6,10 @@ export type TransactionState =
   | { phase: "success"; title: string; message: string; explorerLabel?: string }
   | { phase: "failure"; kind: FailureKind; title: string; message: string };
 
+export type RunProgress = {
+  signed: () => void;
+};
+
 export class TransactionError extends Error {
   constructor(
     readonly kind: FailureKind,

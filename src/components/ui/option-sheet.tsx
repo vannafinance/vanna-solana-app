@@ -1,4 +1,3 @@
-import { Check } from "phosphor-react-native";
 import type { ReactNode } from "react";
 import { Pressable, ScrollView, View } from "react-native";
 
@@ -6,6 +5,8 @@ import { useTheme } from "@/theme/use-theme";
 
 import { AppText } from "./app-text";
 import { BottomSheet } from "./bottom-sheet";
+import { Icon } from "./icon";
+import { ripple } from "./ripple";
 
 export type Option<T extends string> = {
   value: T;
@@ -24,13 +25,10 @@ type OptionSheetProps<T extends string> = {
 };
 
 export function OptionSheet<T extends string>({ visible, title, options, selected, onSelect, onDismiss }: OptionSheetProps<T>) {
-  const { colors, spacing } = useTheme();
+  const { colors, radius, spacing } = useTheme();
 
   return (
-    <BottomSheet visible={visible} onDismiss={onDismiss}>
-      <AppText variant="title" style={{ marginBottom: spacing.sm }}>
-        {title}
-      </AppText>
+    <BottomSheet visible={visible} title={title} onDismiss={onDismiss}>
       <ScrollView style={{ maxHeight: 420 }}>
         {options.map((option) => {
           const active = option.value === selected;
@@ -40,24 +38,34 @@ export function OptionSheet<T extends string>({ visible, title, options, selecte
               accessibilityRole="button"
               accessibilityState={{ selected: active }}
               accessibilityLabel={option.label}
+              android_ripple={ripple(colors.text)}
               onPress={() => {
                 onSelect(option.value);
                 onDismiss();
               }}
-              style={{ flexDirection: "row", alignItems: "center", gap: spacing.md, minHeight: 64 }}
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                gap: spacing.md,
+                minHeight: 56,
+                paddingHorizontal: 10,
+                borderRadius: radius.sm,
+                overflow: "hidden",
+                backgroundColor: active ? colors.purpleTint : "transparent",
+              }}
             >
               {option.leading}
               <View style={{ flex: 1 }}>
-                <AppText variant="bodyLg" strong>
+                <AppText variant="body" strong>
                   {option.label}
                 </AppText>
                 {option.detail ? (
-                  <AppText variant="label" color="textMuted">
+                  <AppText variant="caption" color="textMuted">
                     {option.detail}
                   </AppText>
                 ) : null}
               </View>
-              {active ? <Check size={20} color={colors.primary} weight="bold" /> : null}
+              {active ? <Icon name="check" size={18} color="link" bold /> : null}
             </Pressable>
           );
         })}

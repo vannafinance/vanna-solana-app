@@ -17,12 +17,10 @@ type SpaceTabBarProps = {
   onSelect: (key: string) => void;
 };
 
-const FARM_ACCENT = "#FF007A";
-
 export function SpaceTabBar({ space, tabs, activeKey, onSelect }: SpaceTabBarProps) {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
-  const accent = space === "farm" ? FARM_ACCENT : space === "earn" ? colors.positive : colors.link;
+  const accent = space === "farm" ? colors.farmAccent : space === "earn" ? colors.positive : colors.link;
 
   return (
     <View

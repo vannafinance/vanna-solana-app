@@ -11,6 +11,9 @@ import { AmountField } from "@/components/ui/amount-field";
 import { AppText } from "@/components/ui/app-text";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { Chip } from "@/components/ui/chip";
+import { DropdownMenu } from "@/components/ui/dropdown-menu";
+import { Snackbar } from "@/components/ui/snackbar";
 import { DetailRow } from "@/components/ui/detail-row";
 import { HeroStat } from "@/components/ui/hero-stat";
 import { ProductHeader } from "@/components/ui/product-header";
@@ -38,6 +41,9 @@ export default function ComponentPreview() {
   const [amount, setAmount] = useState("500.00");
   const [leverage, setLeverage] = useState(3);
   const [tab, setTab] = useState<"earn" | "perps">("earn");
+  const [pool, setPool] = useState("usdc");
+  const [note, setNote] = useState<string | null>(null);
+  const [filter, setFilter] = useState(true);
   const [sheet, setSheet] = useState<keyof typeof sheets | null>(null);
 
   return (
@@ -84,6 +90,21 @@ export default function ComponentPreview() {
             { value: "perps", label: "History", badge: "3" },
           ]}
         />
+
+        <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm }}>
+          <DropdownMenu
+            accessibilityLabel="Pool"
+            label={pool === "usdc" ? "USDC vault" : "SOL vault"}
+            value={pool}
+            onSelect={setPool}
+            options={[
+              { value: "usdc", label: "USDC vault", detail: "Vanna lending pool" },
+              { value: "sol", label: "SOL vault", detail: "Soon", badge: "Soon", disabled: true },
+            ]}
+          />
+          <Chip label="Perps" check selected={filter} onPress={() => setFilter(!filter)} />
+          <Chip label="Message" onPress={() => setNote("Settings saved")} />
+        </View>
 
         <Card>
           <MarketRow symbol="TSLAx" pair="TSLAx-USDC" detail="Borrow 4.77% · Liquidity $24.0K" price="$353.59" watched onPress={noop} />
@@ -149,6 +170,7 @@ export default function ComponentPreview() {
           </View>
         </View>
       </Screen>
+      <Snackbar message={note} onDismiss={() => setNote(null)} />
       <TransactionSheet state={sheet ? sheets[sheet] : null} onPrimary={() => setSheet(null)} onClose={() => setSheet(null)} />
     </>
   );

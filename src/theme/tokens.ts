@@ -65,6 +65,18 @@ export const brand = {
   heroGlass: "rgba(255,255,255,0.16)",
   heroDivider: "rgba(255,255,255,0.24)",
   heroPositive: "#32EEE2",
+  healthWatch: "#FF8AC2",
+  watchlist: "#9F7BEE",
+  unreadDot: "#FF007A",
+  badgeNegative: "#B33C3E",
+  badgePositive: "#1C7C83",
+  badgeInfo: "#2440A9",
+  coral: "#FC5457",
+  badge: "#FF007A",
+  farmAccent: "#FF007A",
+  snackbar: "#2C2C2C",
+  onSnackbar: "#FFFFFF",
+  walletScrim: "rgba(10,8,18,0.18)",
 } as const;
 
 export const gradients = {
@@ -90,7 +102,30 @@ export const health = { liquidation: 1.1, safeFrom: 1.5 } as const;
 
 export const spacing = { xs: 4, sm: 8, md: 12, lg: 16, xl: 24, xxl: 32 } as const;
 
-export const radius = { sm: 12, md: 16, lg: 24, hero: 28, pill: 999 } as const;
+export const radius = { xs: 4, chip: 8, sm: 12, md: 16, lg: 24, hero: 28, sheet: 28, pill: 999 } as const;
+
+export const shadows = {
+  light: {
+    card: { shadowColor: "#111111", shadowOpacity: 0.06, shadowRadius: 12, shadowOffset: { width: 0, height: 4 }, elevation: 1 },
+    menu: { shadowColor: "#111111", shadowOpacity: 0.22, shadowRadius: 20, shadowOffset: { width: 0, height: 16 }, elevation: 8 },
+    floating: { shadowColor: "#110B2E", shadowOpacity: 0.22, shadowRadius: 22, shadowOffset: { width: 0, height: 18 }, elevation: 12 },
+    snackbar: { shadowColor: "#111111", shadowOpacity: 0.24, shadowRadius: 4, shadowOffset: { width: 0, height: 2 }, elevation: 6 },
+  },
+  dark: {
+    card: { elevation: 0 },
+    menu: { shadowColor: "#000000", shadowOpacity: 0.5, shadowRadius: 20, shadowOffset: { width: 0, height: 16 }, elevation: 8 },
+    floating: { shadowColor: "#000000", shadowOpacity: 0.5, shadowRadius: 22, shadowOffset: { width: 0, height: 18 }, elevation: 12 },
+    snackbar: { shadowColor: "#000000", shadowOpacity: 0.4, shadowRadius: 4, shadowOffset: { width: 0, height: 2 }, elevation: 6 },
+  },
+} as const;
+
+export const layout = { sheetMaxWidth: 640, headerHeight: 56, handleWidth: 36, handleHeight: 4 } as const;
+
+export const motion = {
+  standard: [0.2, 0, 0, 1],
+  emphasized: [0.05, 0.7, 0.1, 1],
+  duration: { short: 180, medium: 240, long: 320 },
+} as const;
 
 export const fontSize = { caption: 12, label: 13, body: 14, bodyLg: 16, title: 18, heading: 22, display: 34 } as const;
 

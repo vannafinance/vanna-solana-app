@@ -6,21 +6,23 @@ import { useTheme } from "@/theme/use-theme";
 type CardProps = {
   children: ReactNode;
   padded?: boolean;
+  tone?: "card" | "inset";
   style?: ViewStyle;
 };
 
-export function Card({ children, padded = true, style }: CardProps) {
-  const { colors, radius, spacing, scheme } = useTheme();
+export function Card({ children, padded = true, tone = "card", style }: CardProps) {
+  const { colors, radius, shadow, spacing } = useTheme();
+  const inset = tone === "inset";
 
   return (
     <View
       style={[
         {
-          backgroundColor: colors.surface,
-          borderRadius: radius.lg,
+          backgroundColor: inset ? colors.background : colors.surface,
+          borderRadius: inset ? radius.sm : radius.md,
           padding: padded ? spacing.lg : 0,
-          elevation: scheme === "light" ? 1 : 0,
         },
+        inset ? null : shadow.card,
         style,
       ]}
     >

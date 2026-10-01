@@ -1,4 +1,3 @@
-import { ArrowLeft, Bell, type Icon } from "phosphor-react-native";
 import type { ReactNode } from "react";
 import { Pressable, View } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
@@ -8,13 +7,14 @@ import { type Product } from "@/theme/tokens";
 import { useTheme } from "@/theme/use-theme";
 
 import { AppText } from "./app-text";
+import { Glyph, type GlyphSource } from "./glyph";
 import { IconButton } from "./icon-button";
 import { TokenIcon } from "./token-icon";
 
 type ProductHeaderProps = {
   product: Product;
   title?: string;
-  icon?: Icon;
+  icon?: GlyphSource;
   brand?: ReactNode;
   onBack?: () => void;
   notificationCount?: number;
@@ -27,7 +27,7 @@ type ProductHeaderProps = {
 export function ProductHeader({
   product,
   title,
-  icon: Glyph,
+  icon,
   brand,
   onBack,
   notificationCount = 0,
@@ -55,11 +55,11 @@ export function ProductHeader({
       }}
     >
       <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm, minHeight: 52 }}>
-        {onBack ? <IconButton icon={ArrowLeft} label="Back" tone="glass" onPress={onBack} /> : null}
+        {onBack ? <IconButton icon="arrow_back" label="Back" tone="glass" onPress={onBack} /> : null}
         {brand}
-        {Glyph ? (
+        {icon ? (
           <View style={{ width: 40, height: 40, borderRadius: radius.pill, backgroundColor: colors.onHero, alignItems: "center", justifyContent: "center" }}>
-            <Glyph size={22} color={colors.primary} weight="bold" />
+            <Glyph source={icon} size={22} color={colors.primary} bold />
           </View>
         ) : null}
         {title ? (
@@ -70,7 +70,7 @@ export function ProductHeader({
           <View style={{ flex: 1 }} />
         )}
         <View>
-          <IconButton icon={Bell} label="Notifications" tone="glass" onPress={onNotifications} />
+          <IconButton icon="notifications" label="Notifications" tone="glass" onPress={onNotifications} />
           {notificationCount > 0 ? (
             <View
               pointerEvents="none"
@@ -82,7 +82,7 @@ export function ProductHeader({
                 height: 20,
                 paddingHorizontal: 5,
                 borderRadius: radius.pill,
-                backgroundColor: "#FF007A",
+                backgroundColor: colors.badge,
                 alignItems: "center",
                 justifyContent: "center",
               }}

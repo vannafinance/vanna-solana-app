@@ -20,16 +20,16 @@ export function DetailRow({ label, value, valueColor = "text", last = false }: D
         flexDirection: "row",
         alignItems: "center",
         justifyContent: "space-between",
-        gap: spacing.lg,
+        gap: spacing.md,
         minHeight: 48,
         borderBottomWidth: last ? 0 : 1,
         borderBottomColor: colors.divider,
       }}
     >
-      <AppText variant="bodyLg" color="textMuted">
+      <AppText variant="body" color="textMuted">
         {label}
       </AppText>
-      <AppText variant="bodyLg" color={valueColor} strong style={{ flexShrink: 1, textAlign: "right" }}>
+      <AppText variant="body" color={valueColor} strong style={{ flexShrink: 1, textAlign: "right" }}>
         {value}
       </AppText>
     </View>

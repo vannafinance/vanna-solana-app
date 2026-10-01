@@ -1,5 +1,3 @@
-import type { Space } from "@/theme/tokens";
-
 export const routes = {
   notifications: "/notifications",
   profile: "/profile",
@@ -14,4 +12,4 @@ export const spaceRoutes = {
   earn: "/earn",
   trade: "/trade",
   farm: "/farm",
-} as const satisfies Record<Space, string>;
+} as const;
