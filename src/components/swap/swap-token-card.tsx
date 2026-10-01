@@ -1,87 +1,69 @@
-import { View } from "react-native";
+import type { ReactNode } from "react";
+import { TextInput, View } from "react-native";
 
-import { AmountField } from "@/components/ui/amount-field";
 import { AppText } from "@/components/ui/app-text";
 import { Card } from "@/components/ui/card";
-import { TokenPill } from "@/components/ui/token-pill";
+import { Chip } from "@/components/ui/chip";
 import { useTheme } from "@/theme/use-theme";
-import type { SwapSymbol } from "@/types/swap";
 
 type QuickFill = { label: string; fraction: number };
 
 type SwapTokenCardProps = {
   label: string;
   balance: string;
-  symbol: SwapSymbol;
-  onPressToken: () => void;
+  tokenMenu: ReactNode;
   usdValue: string;
   value: string;
   onChangeText?: (value: string) => void;
+  exceeds?: boolean;
   quickFills?: readonly QuickFill[];
   onQuickFill?: (fraction: number) => void;
-  error?: string;
 };
 
-export function SwapTokenCard({
-  label,
-  balance,
-  symbol,
-  onPressToken,
-  usdValue,
-  value,
-  onChangeText,
-  quickFills,
-  onQuickFill,
-  error,
-}: SwapTokenCardProps) {
-  const { spacing } = useTheme();
-  const tokenSlot = <TokenPill symbol={symbol} onPress={onPressToken} />;
+const AMOUNT = { fontSize: 32, lineHeight: 40 } as const;
 
-  if (onChangeText) {
-    return (
-      <Card>
-        <AmountField
-          label={label}
-          caption={balance}
-          value={value}
-          onChangeText={onChangeText}
-          tokenSlot={tokenSlot}
-          secondary={usdValue}
-          quickFills={quickFills}
-          onQuickFill={onQuickFill}
-          error={error}
-        />
-      </Card>
-    );
-  }
+export function SwapTokenCard({ label, balance, tokenMenu, usdValue, value, onChangeText, exceeds = false, quickFills, onQuickFill }: SwapTokenCardProps) {
+  const { colors, fontFamily } = useTheme();
 
   return (
     <Card>
-      <View style={{ gap: spacing.md }}>
-        <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
-          <AppText variant="body" color="textMuted">
-            {label}
+      <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
+        <AppText variant="caption" color="textMuted">
+          {label}
+        </AppText>
+        <AppText variant="caption" color="textMuted">
+          {balance}
+        </AppText>
+      </View>
+      <View style={{ marginTop: 8, flexDirection: "row", alignItems: "center", gap: 12 }}>
+        {onChangeText ? (
+          <TextInput
+            accessibilityLabel={label}
+            value={value}
+            onChangeText={onChangeText}
+            keyboardType="decimal-pad"
+            placeholder="0.00"
+            placeholderTextColor={colors.textMuted}
+            style={{ flex: 1, minWidth: 0, padding: 0, ...AMOUNT, fontFamily: fontFamily.semibold, color: exceeds ? colors.negative : colors.text }}
+          />
+        ) : (
+          <AppText strong numberOfLines={1} style={{ flex: 1, minWidth: 0, ...AMOUNT }}>
+            {value}
           </AppText>
-          <AppText variant="body" color="textMuted">
-            {balance}
-          </AppText>
-        </View>
-        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: spacing.md }}>
-          <AppText
-            accessibilityLabel={`${label} ${value || "0"}`}
-            numberOfLines={1}
-            adjustsFontSizeToFit
-            variant="display"
-            color={value ? "text" : "textMuted"}
-            style={{ flex: 1, fontSize: 40, lineHeight: 52 }}
-          >
-            {value || "0.00"}
-          </AppText>
-          {tokenSlot}
-        </View>
-        <AppText variant="body" color="textMuted">
+        )}
+        {tokenMenu}
+      </View>
+      <View style={{ marginTop: 6, flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+        <AppText variant="caption" color="textMuted">
           {usdValue}
         </AppText>
+        {quickFills && onQuickFill ? (
+          <View style={{ flexDirection: "row", gap: 6 }}>
+            {quickFills.map((fill) => (
+              <Chip key={fill.label} size="sm" label={fill.label} onPress={() => onQuickFill(fill.fraction)} />
+            ))}
+          </View>
+        ) : null}
       </View>
     </Card>
   );

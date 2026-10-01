@@ -2,10 +2,9 @@ import { View } from "react-native";
 import Svg, { Path } from "react-native-svg";
 
 import { AppText } from "@/components/ui/app-text";
+import { formatHealth } from "@/format/format-perps";
 import { health as healthThresholds } from "@/theme/tokens";
 import { useTheme } from "@/theme/use-theme";
-
-import { formatHealth } from "@/format/format-perps";
 
 const RADIUS = 7;
 const CENTER = 9;
@@ -21,7 +20,7 @@ function arcEnd(health: number) {
 
 export function HealthGauge({ health }: HealthGaugeProps) {
   const { colors } = useTheme();
-  const stroke = health >= healthThresholds.safeFrom ? colors.heroPositive : colors.short;
+  const stroke = health >= healthThresholds.safeFrom ? colors.heroPositive : colors.healthWatch;
 
   return (
     <View accessible accessibilityLabel={`Account health ${formatHealth(health)}`} style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
@@ -29,7 +28,7 @@ export function HealthGauge({ health }: HealthGaugeProps) {
         <Path d="M2 9 A7 7 0 0 1 16 9" fill="none" stroke={colors.heroDivider} strokeWidth={2.5} strokeLinecap="round" />
         <Path d={`M2 9 A7 7 0 0 1 ${arcEnd(health)}`} fill="none" stroke={stroke} strokeWidth={2.5} strokeLinecap="round" />
       </Svg>
-      <AppText variant="caption" color="onHeroMuted">{`Health ${formatHealth(health)}`}</AppText>
+      <AppText variant="caption" color="onHeroSoft">{`Health ${formatHealth(health)}`}</AppText>
     </View>
   );
 }

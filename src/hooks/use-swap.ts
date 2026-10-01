@@ -1,3 +1,4 @@
+import { router } from "expo-router";
 import { useCallback, useMemo, useState } from "react";
 
 import { formatSwapAmount } from "@/format/format-swap-amount";
@@ -5,10 +6,12 @@ import { parseUnits } from "@/format/format-amount";
 import { fractionOfBalance } from "@/lib/swap/fraction-of-balance";
 import { quoteExactIn } from "@/lib/swap/quote";
 import { AUTO_SLIPPAGE_BPS, effectiveSlippageBps } from "@/lib/swap/slippage";
+import { routes } from "@/navigation/routes";
 import { previewSwapDraft, previewSwapRoutes, previewSwapTokens } from "@/lib/preview-data/swap";
 import type { Resource } from "@/types/resource";
 import type { SwapIssue, SwapRouteId, SwapSettings, SwapState, SwapSymbol, SwapToken } from "@/types/swap";
 
+import { usePerpsTabFocus } from "./use-perps-tab-focus";
 import { useTransactionFlow } from "./use-transaction-flow";
 
 function findToken(tokens: readonly SwapToken[], symbol: SwapSymbol): SwapToken {
@@ -18,6 +21,7 @@ function findToken(tokens: readonly SwapToken[], symbol: SwapSymbol): SwapToken 
 }
 
 export function useSwap() {
+  usePerpsTabFocus("swap");
   const tokens = previewSwapTokens;
   const [fromSymbol, setFromSymbol] = useState<SwapSymbol>(previewSwapDraft.from);
   const [toSymbol, setToSymbol] = useState<SwapSymbol>(previewSwapDraft.to);
@@ -47,6 +51,11 @@ export function useSwap() {
           : "",
     },
   });
+
+  const viewHistory = () => {
+    flow.close();
+    router.navigate(routes.tradeHistory);
+  };
 
   const pickToken = useCallback(
     (side: "from" | "to", symbol: SwapSymbol) => {
@@ -86,5 +95,6 @@ export function useSwap() {
     selectRoute,
     saveSettings: setSettings,
     flow,
+    onSheetPrimary: flow.done ? viewHistory : flow.primary,
   };
 }

@@ -1,42 +1,41 @@
-import { router } from "expo-router";
-import { TrendUp } from "phosphor-react-native";
-import { View } from "react-native";
-
 import { BorrowAgreementSheet } from "@/components/margin/borrow-agreement-sheet";
+import { MarginActiveCard } from "@/components/margin/margin-active-card";
 import { MarginIntroCard } from "@/components/margin/margin-intro-card";
 import { AppText } from "@/components/ui/app-text";
 import { Button } from "@/components/ui/button";
-import { ProductHeader } from "@/components/ui/product-header";
 import { Screen } from "@/components/ui/screen";
+import { SpaceHeader } from "@/components/ui/space-header";
 import { TransactionSheet } from "@/components/ui/transaction-sheet";
 import { useHeaderProps } from "@/hooks/use-header-props";
 import { useMarginCreate } from "@/hooks/use-margin-create";
-import { useTheme } from "@/theme/use-theme";
 
 export default function CreateMarginAccount() {
-  const { spacing } = useTheme();
   const header = useHeaderProps();
   const create = useMarginCreate();
-  const success = create.flow.state?.phase === "success";
 
   return (
     <>
       <Screen
+        gap={12}
         header={
-          <ProductHeader product="perps" title="Perps" icon={TrendUp} onBack={() => router.back()} {...header}>
-            <View style={{ marginTop: spacing.lg, gap: spacing.xs }}>
-              <AppText variant="bodyLg" color="onHeroMuted">
-                One-time setup
-              </AppText>
-              <AppText variant="display" color="onHero">
-                Margin account needed
-              </AppText>
-            </View>
-          </ProductHeader>
+          <SpaceHeader space="trade" {...header}>
+            <AppText strong color="onHero" accessibilityRole="header" style={{ fontSize: 28, lineHeight: 36, letterSpacing: -0.56 }}>
+              One-time setup
+            </AppText>
+          </SpaceHeader>
         }
       >
-        <MarginIntroCard />
-        <Button label="Create margin account" onPress={create.openAgreement} />
+        {create.created ? (
+          <>
+            <MarginActiveCard address={create.marginAddress} />
+            <Button label="Open a position" onPress={create.openPosition} />
+          </>
+        ) : (
+          <>
+            <MarginIntroCard />
+            <Button label="Create margin account" onPress={create.openAgreement} />
+          </>
+        )}
       </Screen>
       <BorrowAgreementSheet
         visible={create.agreementOpen}
@@ -50,9 +49,8 @@ export default function CreateMarginAccount() {
       <TransactionSheet
         state={create.flow.state}
         onPrimary={create.onPrimary}
-        onClose={create.onClose}
-        primaryLabel={success ? "Start trading" : undefined}
-        onExplorer={create.openExplorer}
+        onClose={create.flow.close}
+        primaryLabel={create.flow.done ? "Start trading" : undefined}
       />
     </>
   );

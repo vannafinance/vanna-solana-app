@@ -1,6 +1,7 @@
 import { Pressable, View } from "react-native";
 
 import { AppText } from "@/components/ui/app-text";
+import { ripple } from "@/components/ui/ripple";
 import { useTheme } from "@/theme/use-theme";
 
 type TimeframeTabsProps<T extends string> = {
@@ -10,7 +11,7 @@ type TimeframeTabsProps<T extends string> = {
 };
 
 export function TimeframeTabs<T extends string>({ options, value, onChange }: TimeframeTabsProps<T>) {
-  const { colors, radius, minTouchTarget } = useTheme();
+  const { colors, radius } = useTheme();
 
   return (
     <View accessibilityRole="tablist" accessibilityLabel="Chart range" style={{ flexDirection: "row", justifyContent: "space-between" }}>
@@ -22,13 +23,16 @@ export function TimeframeTabs<T extends string>({ options, value, onChange }: Ti
             accessibilityRole="tab"
             accessibilityLabel={option}
             accessibilityState={{ selected }}
+            android_ripple={ripple(colors.link)}
+            hitSlop={{ top: 6, bottom: 6 }}
             onPress={() => onChange(option)}
             style={{
               width: 56,
-              minHeight: minTouchTarget,
+              height: 32,
               alignItems: "center",
               justifyContent: "center",
-              borderRadius: radius.pill,
+              borderRadius: radius.chip,
+              overflow: "hidden",
               backgroundColor: selected ? colors.purpleTint : "transparent",
             }}
           >

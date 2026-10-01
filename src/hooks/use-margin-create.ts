@@ -1,12 +1,13 @@
 import { router } from "expo-router";
-import * as WebBrowser from "expo-web-browser";
 import { useEffect, useState } from "react";
 
+import { shortAddress } from "@/format/short-address";
 import { useMarginAccount } from "@/hooks/use-margin-account";
 import { useTransactionFlow } from "@/hooks/use-transaction-flow";
 import { previewApproval } from "@/lib/preview-data/approval-outcome";
 import { previewAccount } from "@/lib/preview-data/home";
-import { shortAddress } from "@/format/short-address";
+import { previewMarkets } from "@/lib/preview-data/perps";
+import { spaceRoutes } from "@/navigation/routes";
 import { TransactionError } from "@/types/transaction";
 
 async function approveMarginAccount() {
@@ -33,6 +34,7 @@ export function useMarginCreate() {
   const [agreementOpen, setAgreementOpen] = useState(false);
   const [agreed, setAgreed] = useState(false);
   const [openSection, setOpenSection] = useState<number | null>(0);
+  const [created, setCreated] = useState(false);
 
   const flow = useTransactionFlow({
     run: approveMarginAccount,
@@ -42,21 +44,19 @@ export function useMarginCreate() {
     },
   });
 
+  if (flow.done && !created) setCreated(true);
+
   useEffect(() => {
     if (flow.done) markCreated();
   }, [flow.done, markCreated]);
 
-  const finish = () => {
-    flow.close();
-    if (flow.done) router.back();
-  };
-
   return {
     flow,
+    created,
     agreementOpen,
     agreed,
     openSection,
-    marginAddress: previewAccount.marginAddress,
+    marginAddress: shortAddress(previewAccount.marginAddress),
     openAgreement: () => setAgreementOpen(true),
     closeAgreement: () => setAgreementOpen(false),
     toggleAgreed: () => setAgreed((value) => !value),
@@ -65,8 +65,14 @@ export function useMarginCreate() {
       setAgreementOpen(false);
       flow.start();
     },
-    onPrimary: () => (flow.done ? finish() : flow.primary()),
-    onClose: finish,
-    openExplorer: () => void WebBrowser.openBrowserAsync(`https://solscan.io/account/${previewAccount.marginAddress}`),
+    onPrimary: () => {
+      if (!flow.done) {
+        flow.primary();
+        return;
+      }
+      flow.close();
+      router.replace(spaceRoutes.trade);
+    },
+    openPosition: () => router.replace(`/trade/order/${previewMarkets[0].symbol}?side=long`),
   };
 }

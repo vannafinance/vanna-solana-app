@@ -1,4 +1,3 @@
-import { ArrowRight } from "phosphor-react-native";
 import { View } from "react-native";
 
 import { AppText } from "@/components/ui/app-text";
@@ -12,18 +11,20 @@ type SwapHistoryRowProps = {
   group: SwapHistoryGroup;
 };
 
-const ICON_SIZE = 32;
+const ICON_SIZE = 30;
 
 export function SwapHistoryRow({ group }: SwapHistoryRowProps) {
-  const { colors, spacing } = useTheme();
+  const { colors } = useTheme();
   const date = new Date(group.timestamp).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
 
   return (
-    <Card>
-      <AppText variant="bodyLg" color="textMuted" style={{ paddingBottom: spacing.md }}>
-        {date}
-      </AppText>
-      {group.entries.map((entry, index) => {
+    <Card padded={false} style={{ paddingHorizontal: 16 }}>
+      <View style={{ height: 40, justifyContent: "center" }}>
+        <AppText variant="caption" strong color="textMuted">
+          {date}
+        </AppText>
+      </View>
+      {group.entries.map((entry) => {
         const received = `${formatSwapAmount(entry.amountOut.raw, entry.amountOut.decimals, entry.to)} ${entry.to}`;
         const paid = `${formatSwapAmount(entry.amountIn.raw, entry.amountIn.decimals, entry.from)} ${entry.from}`;
         return (
@@ -31,43 +32,29 @@ export function SwapHistoryRow({ group }: SwapHistoryRowProps) {
             key={entry.id}
             accessible
             accessibilityLabel={`${entry.from} to ${entry.to}, received ${received}, paid ${paid}`}
-            style={{
-              flexDirection: "row",
-              alignItems: "center",
-              gap: spacing.md,
-              minHeight: 72,
-              borderTopWidth: 1,
-              borderTopColor: colors.divider,
-              paddingTop: index === 0 ? spacing.md : 0,
-            }}
+            style={{ height: 68, flexDirection: "row", alignItems: "center", gap: 12, borderTopWidth: 1, borderTopColor: colors.divider }}
           >
-            <View style={{ width: ICON_SIZE * 1.6, height: ICON_SIZE }}>
-              <View style={{ position: "absolute", left: 0 }}>
-                <TokenIcon symbol={entry.from} size={ICON_SIZE} />
+            <View style={{ flexDirection: "row" }}>
+              <View style={{ borderRadius: 999, borderWidth: 2, borderColor: colors.surface }}>
+                <TokenIcon symbol={entry.from} size={ICON_SIZE - 4} />
               </View>
-              <View style={{ position: "absolute", right: 0 }}>
-                <TokenIcon symbol={entry.to} size={ICON_SIZE} />
+              <View style={{ marginLeft: -10, borderRadius: 999, borderWidth: 2, borderColor: colors.surface }}>
+                <TokenIcon symbol={entry.to} size={ICON_SIZE - 4} />
               </View>
             </View>
-            <View style={{ flex: 1 }}>
-              <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.xs }}>
-                <AppText variant="bodyLg" strong>
-                  {entry.from}
-                </AppText>
-                <ArrowRight size={14} color={colors.text} weight="bold" />
-                <AppText variant="bodyLg" strong numberOfLines={1} style={{ flexShrink: 1 }}>
-                  {entry.to}
-                </AppText>
-              </View>
-              <AppText variant="body" color="textMuted">
+            <View style={{ flex: 1, gap: 2 }}>
+              <AppText variant="body" strong numberOfLines={1}>
+                {`${entry.from} → ${entry.to}`}
+              </AppText>
+              <AppText variant="caption" color="textMuted" numberOfLines={1}>
                 From wallet
               </AppText>
             </View>
-            <View style={{ alignItems: "flex-end" }}>
-              <AppText variant="bodyLg" strong>
+            <View style={{ alignItems: "flex-end", gap: 2 }}>
+              <AppText variant="body" strong>
                 {`+${received}`}
               </AppText>
-              <AppText variant="body" color="textMuted">
+              <AppText variant="caption" color="textMuted">
                 {paid}
               </AppText>
             </View>

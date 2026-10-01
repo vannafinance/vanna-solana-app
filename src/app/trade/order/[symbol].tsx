@@ -1,22 +1,19 @@
 import { router, useLocalSearchParams } from "expo-router";
-import { Wallet } from "phosphor-react-native";
+import { View } from "react-native";
 
+import { CollateralCard } from "@/components/perps/collateral-card";
 import { LeverageSelector } from "@/components/perps/leverage-selector";
 import { OrderMarketCard } from "@/components/perps/order-market-card";
 import { OrderSummary } from "@/components/perps/order-summary";
+import { SideToggle } from "@/components/perps/side-toggle";
 import { Button } from "@/components/ui/button";
-import { AmountField } from "@/components/ui/amount-field";
-import { Card } from "@/components/ui/card";
 import { PlainHeader } from "@/components/ui/plain-header";
 import { ResourceView } from "@/components/ui/resource-view";
 import { Screen } from "@/components/ui/screen";
-import { SegmentedControl } from "@/components/ui/segmented-control";
-import { TokenPill } from "@/components/ui/token-pill";
 import { TransactionSheet } from "@/components/ui/transaction-sheet";
 import { formatUsd } from "@/format/format-amount";
 import { usePerpsOrder } from "@/hooks/use-perps-order";
 import { LIQUIDATION_HEALTH } from "@/lib/perps/account-health";
-import { useTheme } from "@/theme/use-theme";
 import type { OrderIssue, Side } from "@/types/perps";
 
 const QUICK_FILLS = [
@@ -34,7 +31,6 @@ function ctaLabel(side: Side, issue: OrderIssue, hasMarginAccount: boolean) {
 }
 
 export default function PerpsOrderScreen() {
-  const { colors } = useTheme();
   const params = useLocalSearchParams<{ symbol: string; side?: string }>();
   const order = usePerpsOrder(params.symbol, params.side === "short" ? "short" : "long");
 
@@ -43,44 +39,35 @@ export default function PerpsOrderScreen() {
       <ResourceView resource={order.ticket} emptyLabel="Market not found">
         {({ market, account, quote, issue }) => (
           <Screen
+            gap={12}
+            paddingTop={8}
             header={<PlainHeader title="Open position" onBack={router.back} />}
             footer={
-              <Button
-                icon={Wallet}
-                variant={order.side === "long" ? "primary" : "danger"}
-                disabled={order.blocked}
-                label={ctaLabel(order.side, issue, order.hasMarginAccount)}
-                onPress={order.submit}
-              />
+              <View style={{ paddingTop: 4, paddingBottom: 8 }}>
+                <Button
+                  icon="account_balance_wallet"
+                  variant={order.side === "long" ? "primary" : "danger"}
+                  disabled={order.blocked}
+                  label={ctaLabel(order.side, issue, order.hasMarginAccount)}
+                  onPress={order.submit}
+                />
+              </View>
             }
           >
-            <OrderMarketCard symbol={market.symbol} pair={market.pair} price={formatUsd(market.markPrice)} />
-            <SegmentedControl
-              value={order.side}
-              onChange={order.setSide}
-              activeColor={order.side === "long" ? colors.primary : colors.negative}
-              segments={[
-                { value: "long", label: "Long" },
-                { value: "short", label: "Short" },
-              ]}
+            <OrderMarketCard symbol={market.symbol} pair={market.pair} />
+            <SideToggle value={order.side} onChange={order.setSide} />
+            <CollateralCard
+              caption={`Available ${formatUsd(account.available)}`}
+              value={order.amountText}
+              onChangeText={order.setAmountText}
+              exceeds={issue === "insufficient-margin"}
+              quickFills={QUICK_FILLS}
+              onQuickFill={order.quickFill}
             />
-            <Card>
-              <AmountField
-                label="Collateral"
-                caption={`Available ${formatUsd(account.available)}`}
-                value={order.amountText}
-                onChangeText={order.setAmountText}
-                tokenSlot={<TokenPill symbol="USDC" />}
-                quickFills={QUICK_FILLS}
-                onQuickFill={order.quickFill}
-                error={issue === "insufficient-margin" ? `Only ${formatUsd(account.available)} is available in your margin account. Lower the amount.` : undefined}
-              />
-            </Card>
             <LeverageSelector
               options={Array.from({ length: market.maxLeverage }, (_, index) => index + 1)}
               value={order.leverage}
               onChange={order.setLeverage}
-              summary={`${order.leverage}x · ${formatUsd(quote.size)} position`}
             />
             <OrderSummary market={market} side={order.side} quote={quote} issue={issue} liquidationHealth={LIQUIDATION_HEALTH} />
           </Screen>

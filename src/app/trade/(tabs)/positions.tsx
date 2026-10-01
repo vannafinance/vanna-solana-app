@@ -1,43 +1,76 @@
 import { router } from "expo-router";
+import { FlatList, View } from "react-native";
 
-import { ListScreen } from "@/components/perps/list-screen";
-import { NewPositionButton } from "@/components/perps/new-position-button";
-import { PerpsPortfolioHeader } from "@/components/perps/perps-portfolio-header";
+import { HealthGauge } from "@/components/perps/health-gauge";
 import { PerpsPositionCard } from "@/components/perps/perps-position-card";
+import { TradeHero } from "@/components/perps/trade-hero";
 import { AppText } from "@/components/ui/app-text";
 import { ResourceView } from "@/components/ui/resource-view";
+import { SpaceHeader } from "@/components/ui/space-header";
+import { formatSignedUsd, formatUsd } from "@/format/format-amount";
 import { useHeaderProps } from "@/hooks/use-header-props";
 import { usePerpsPositions } from "@/hooks/use-perps-positions";
+import { usePerpsTabFocus } from "@/hooks/use-perps-tab-focus";
+import { useTheme } from "@/theme/use-theme";
 
 export default function PerpsPositionsScreen() {
+  usePerpsTabFocus("positions");
+  const { colors } = useTheme();
   const headerProps = useHeaderProps();
   const portfolio = usePerpsPositions();
+  const data = portfolio.status === "ready" ? portfolio.data : null;
+
+  const header = (
+    <SpaceHeader space="trade" {...headerProps}>
+      {data ? (
+        <TradeHero
+          label="Open PnL"
+          value={formatSignedUsd(data.openPnl)}
+          valueColor={data.openPnl >= 0n ? "heroPositive" : "short"}
+          accessory={<HealthGauge health={data.account.health} />}
+          stats={[
+            { label: "Margin", value: formatUsd(data.account.margin) },
+            { label: "Available", value: formatUsd(data.account.available) },
+            { label: "Borrowed", value: formatUsd(data.account.borrowed) },
+          ]}
+        />
+      ) : null}
+    </SpaceHeader>
+  );
+
+  if (!data) {
+    return (
+      <View style={{ flex: 1, backgroundColor: colors.background }}>
+        {header}
+        <ResourceView resource={portfolio} emptyLabel="No margin account yet">
+          {() => null}
+        </ResourceView>
+      </View>
+    );
+  }
 
   return (
-    <ResourceView resource={portfolio} emptyLabel="No margin account yet">
-      {(data) => (
-        <ListScreen
-          data={data.positions}
-          keyOf={(position) => position.id}
-          header={
-            <PerpsPortfolioHeader
-              mode="current"
-              portfolio={data}
-              headerProps={{ onBack: router.back, ...headerProps }}
-              onSelectMode={(mode) => mode === "history" && router.navigate("/trade/history")}
-            />
-          }
-          footer={<NewPositionButton onPress={() => router.navigate("/trade")} />}
-          empty={<AppText color="textMuted" style={{ textAlign: "center" }}>No open positions</AppText>}
-          renderItem={(position) => (
-            <PerpsPositionCard
-              position={position}
-              onAddCollateral={() => router.push(`/trade/add-collateral/${position.id}`)}
-              onClose={() => router.push(`/trade/close/${position.id}`)}
-            />
-          )}
-        />
+    <FlatList
+      data={data.positions}
+      keyExtractor={(position) => position.id}
+      ListHeaderComponent={header}
+      ListEmptyComponent={
+        <AppText color="textMuted" style={{ textAlign: "center", padding: 24 }}>
+          No open positions
+        </AppText>
+      }
+      renderItem={({ item, index }) => (
+        <View style={{ paddingHorizontal: 16, paddingTop: index === 0 ? 16 : 12 }}>
+          <PerpsPositionCard
+            position={item}
+            onAddCollateral={() => router.push(`/trade/add-collateral/${item.id}`)}
+            onClose={() => router.push(`/trade/close/${item.id}`)}
+          />
+        </View>
       )}
-    </ResourceView>
+      style={{ backgroundColor: colors.background }}
+      contentContainerStyle={{ paddingBottom: 24 }}
+      showsVerticalScrollIndicator={false}
+    />
   );
 }

@@ -1,11 +1,9 @@
-import { X } from "phosphor-react-native";
 import { View } from "react-native";
 
 import { AppText } from "@/components/ui/app-text";
 import { IconButton } from "@/components/ui/icon-button";
 import { TokenIcon } from "@/components/ui/token-icon";
 import type { PerpsSymbol } from "@/types/perps";
-import { useTheme } from "@/theme/use-theme";
 
 type SheetHeaderProps = {
   symbol: PerpsSymbol;
@@ -15,10 +13,8 @@ type SheetHeaderProps = {
 };
 
 export function SheetHeader({ symbol, title, subtitle, onClose }: SheetHeaderProps) {
-  const { spacing } = useTheme();
-
   return (
-    <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.md }}>
+    <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
       <TokenIcon symbol={symbol} size={36} />
       <View style={{ flex: 1 }}>
         <AppText variant="heading">{title}</AppText>
@@ -26,7 +22,7 @@ export function SheetHeader({ symbol, title, subtitle, onClose }: SheetHeaderPro
           {subtitle}
         </AppText>
       </View>
-      <IconButton icon={X} label="Close" tone="outline" onPress={onClose} />
+      <IconButton icon="close" label="Close" tone="tonal" size={44} onPress={onClose} />
     </View>
   );
 }

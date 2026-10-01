@@ -1,7 +1,8 @@
-import { Star } from "phosphor-react-native";
 import { Pressable, View } from "react-native";
 
 import { AppText } from "@/components/ui/app-text";
+import { Icon } from "@/components/ui/icon";
+import { ripple } from "@/components/ui/ripple";
 import { TokenIcon, type TokenSymbol } from "@/components/ui/token-icon";
 import { useTheme } from "@/theme/use-theme";
 
@@ -15,34 +16,29 @@ export type MarketRowProps = {
 };
 
 export function MarketRow({ symbol, pair, detail, price, watched, onPress }: MarketRowProps) {
-  const { colors, spacing } = useTheme();
+  const { colors } = useTheme();
 
   return (
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={`${pair}, ${detail}, mark price ${price}`}
+      android_ripple={ripple(colors.text)}
       onPress={onPress}
-      style={({ pressed }) => ({
-        flexDirection: "row",
-        alignItems: "center",
-        gap: spacing.md,
-        minHeight: 72,
-        opacity: pressed ? 0.7 : 1,
-      })}
+      style={{ height: 72, flexDirection: "row", alignItems: "center", gap: 12 }}
     >
       <TokenIcon symbol={symbol} size={40} />
       <View style={{ flex: 1, gap: 2 }}>
         <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-          <AppText variant="bodyLg" strong>
+          <AppText variant="body" strong>
             {pair}
           </AppText>
-          {watched ? <Star size={14} weight="fill" color={colors.link} /> : null}
+          {watched ? <Icon name="star" size={14} color="watchlist" filled /> : null}
         </View>
-        <AppText variant="label" color="textMuted" numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.85}>
+        <AppText variant="caption" color="textMuted" numberOfLines={1}>
           {detail}
         </AppText>
       </View>
-      <AppText variant="bodyLg" strong>
+      <AppText variant="body" strong>
         {price}
       </AppText>
     </Pressable>

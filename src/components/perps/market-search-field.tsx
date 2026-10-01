@@ -1,6 +1,6 @@
-import { MagnifyingGlass } from "phosphor-react-native";
 import { TextInput, View } from "react-native";
 
+import { Icon } from "@/components/ui/icon";
 import { useTheme } from "@/theme/use-theme";
 
 type MarketSearchFieldProps = {
@@ -9,23 +9,26 @@ type MarketSearchFieldProps = {
 };
 
 export function MarketSearchField({ value, onChangeText }: MarketSearchFieldProps) {
-  const { colors, fontFamily, fontSize, radius, spacing } = useTheme();
+  const { colors, fontFamily, fontSize, radius, shadow } = useTheme();
 
   return (
     <View
-      style={{
-        minHeight: 48,
-        flexDirection: "row",
-        alignItems: "center",
-        gap: 10,
-        paddingHorizontal: spacing.lg,
-        borderRadius: radius.lg,
-        backgroundColor: colors.surface,
-        borderWidth: 1,
-        borderColor: colors.border,
-      }}
+      style={[
+        {
+          height: 48,
+          flexDirection: "row",
+          alignItems: "center",
+          gap: 10,
+          paddingHorizontal: 16,
+          borderRadius: radius.lg,
+          backgroundColor: colors.surface,
+          borderWidth: 1,
+          borderColor: colors.border,
+        },
+        shadow.card,
+      ]}
     >
-      <MagnifyingGlass size={18} color={colors.textMuted} />
+      <Icon name="search" size={18} color="textMuted" />
       <TextInput
         accessibilityLabel="Search markets"
         value={value}
@@ -34,7 +37,7 @@ export function MarketSearchField({ value, onChangeText }: MarketSearchFieldProp
         placeholderTextColor={colors.textMuted}
         autoCapitalize="none"
         autoCorrect={false}
-        style={{ flex: 1, padding: 0, minHeight: 44, fontSize: fontSize.bodyLg, fontFamily: fontFamily.regular, color: colors.text }}
+        style={{ flex: 1, padding: 0, minHeight: 44, fontSize: fontSize.body, fontFamily: fontFamily.regular, color: colors.text }}
       />
     </View>
   );

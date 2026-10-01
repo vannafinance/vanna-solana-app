@@ -3,14 +3,14 @@ import { View } from "react-native";
 import Svg, { G, Line, Rect, Text as SvgText } from "react-native-svg";
 
 import { formatUnits } from "@/format/format-amount";
-import type { Candle } from "@/types/perps";
 import { useTheme } from "@/theme/use-theme";
+import type { Candle } from "@/types/perps";
 
 const PRICE_DECIMALS = 6;
 const AXIS_WIDTH = 44;
 const GRID_LINES = 4;
 const PAD = 8;
-const BADGE = { width: 46, height: 22 };
+const BADGE = { width: 42, height: 18 };
 
 type PriceChartProps = {
   candles: readonly Candle[];
@@ -74,9 +74,9 @@ export function PriceChart({ candles, height = 184, accessibilityLabel }: PriceC
               </G>
             );
           })}
-          <Line x1={0} y1={lastY} x2={plotWidth} y2={lastY} stroke={colors.primary} strokeWidth={1} strokeDasharray="4 3" />
+          <Line x1={0} y1={lastY} x2={plotWidth} y2={lastY} stroke={colors.primary} strokeWidth={1} strokeDasharray="3 3" />
           <Rect x={width - BADGE.width} y={lastY - BADGE.height / 2} width={BADGE.width} height={BADGE.height} rx={4} fill={colors.primary} />
-          <SvgText x={width - BADGE.width / 2} y={lastY + 4} textAnchor="middle" fontSize={11} fontFamily={fontFamily.semibold} fill={colors.onPrimary}>
+          <SvgText x={width - BADGE.width / 2} y={lastY + 4} textAnchor="middle" fontSize={10} fontFamily={fontFamily.semibold} fill={colors.onPrimary}>
             {formatUnits(last.close, PRICE_DECIMALS, 2)}
           </SvgText>
         </Svg>

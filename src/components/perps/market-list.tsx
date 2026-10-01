@@ -3,8 +3,8 @@ import { View } from "react-native";
 import { AppText } from "@/components/ui/app-text";
 import { Card } from "@/components/ui/card";
 import { formatCompactUsd, formatPercent, formatUsd } from "@/format/format-amount";
-import type { MarketListItem, PerpsMarket } from "@/types/perps";
 import { useTheme } from "@/theme/use-theme";
+import type { MarketListItem, PerpsMarket } from "@/types/perps";
 
 import { MarketRow } from "./market-row";
 
@@ -14,11 +14,11 @@ type MarketListProps = {
 };
 
 export function MarketList({ markets, onSelect }: MarketListProps) {
-  const { colors, spacing } = useTheme();
+  const { colors } = useTheme();
 
   return (
-    <Card>
-      <View style={{ flexDirection: "row", justifyContent: "space-between", paddingBottom: spacing.sm }}>
+    <Card padded={false} style={{ paddingHorizontal: 16 }}>
+      <View style={{ height: 40, flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
         <AppText variant="caption" color="textMuted">
           Market
         </AppText>

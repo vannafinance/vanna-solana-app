@@ -1,9 +1,10 @@
-import { CaretDown, CaretUp, Check } from "phosphor-react-native";
 import { Pressable, ScrollView, View } from "react-native";
 
 import { AppText } from "@/components/ui/app-text";
 import { BottomSheet } from "@/components/ui/bottom-sheet";
 import { Button } from "@/components/ui/button";
+import { Icon } from "@/components/ui/icon";
+import { ripple } from "@/components/ui/ripple";
 import { useTheme } from "@/theme/use-theme";
 
 const sections = [
@@ -54,48 +55,48 @@ type BorrowAgreementSheetProps = {
   onSign: () => void;
 };
 
+const BADGE = 24;
+const ROW_GAP = 10;
+
 export function BorrowAgreementSheet({ visible, openSection, agreed, onToggleSection, onToggleAgreed, onClose, onSign }: BorrowAgreementSheetProps) {
-  const { colors, radius, spacing } = useTheme();
+  const { colors, radius } = useTheme();
 
   return (
     <BottomSheet visible={visible} onDismiss={onClose}>
-      <View style={{ gap: spacing.sm, marginBottom: spacing.md }}>
-        <AppText variant="heading">Review and sign agreement</AppText>
-        <AppText variant="bodyLg" color="textMuted">
-          Please review the terms of borrowing on Vanna before you continue.
-        </AppText>
-      </View>
+      <AppText variant="heading" accessibilityRole="header" style={{ marginTop: 4, marginBottom: 12 }}>
+        Review and sign agreement
+      </AppText>
       <ScrollView style={{ maxHeight: 360 }} showsVerticalScrollIndicator={false}>
         {sections.map((section, index) => {
           const open = openSection === index;
-          const Chevron = open ? CaretUp : CaretDown;
           return (
             <View key={section.title} style={{ borderTopWidth: 1, borderTopColor: colors.divider }}>
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel={section.title}
                 accessibilityState={{ expanded: open }}
+                android_ripple={ripple(colors.text)}
                 onPress={() => onToggleSection(index)}
-                style={{ flexDirection: "row", alignItems: "center", gap: spacing.md, minHeight: 56 }}
+                style={{ height: 48, flexDirection: "row", alignItems: "center", gap: ROW_GAP }}
               >
-                <View style={{ width: 28, height: 28, borderRadius: radius.pill, backgroundColor: colors.purpleTint, alignItems: "center", justifyContent: "center" }}>
-                  <AppText variant="label" strong style={{ color: colors.onPurpleTint }}>
+                <View style={{ width: BADGE, height: BADGE, borderRadius: radius.pill, backgroundColor: colors.purpleTint, alignItems: "center", justifyContent: "center" }}>
+                  <AppText variant="caption" style={{ color: colors.onPurpleTint }}>
                     {index + 1}
                   </AppText>
                 </View>
-                <AppText variant="bodyLg" strong style={{ flex: 1 }}>
+                <AppText variant="body" strong style={{ flex: 1 }}>
                   {section.title}
                 </AppText>
-                <Chevron size={18} color={colors.textMuted} />
+                <Icon name="keyboard_arrow_down" size={14} color="textMuted" rotate={open ? 180 : undefined} />
               </Pressable>
               {open ? (
-                <View style={{ paddingLeft: 28 + spacing.md, paddingBottom: spacing.md, gap: 4 }}>
+                <View style={{ paddingLeft: BADGE + ROW_GAP * 2 + 4, marginBottom: 12 }}>
                   {section.points.map((point) => (
-                    <View key={point} style={{ flexDirection: "row", gap: spacing.sm }}>
-                      <AppText variant="body" color="textMuted">
+                    <View key={point} style={{ flexDirection: "row", gap: 6, marginTop: 4 }}>
+                      <AppText variant="caption" color="textMuted" style={{ lineHeight: 18 }}>
                         •
                       </AppText>
-                      <AppText variant="body" color="textMuted" style={{ flex: 1 }}>
+                      <AppText variant="caption" color="textMuted" style={{ flex: 1, lineHeight: 18 }}>
                         {point}
                       </AppText>
                     </View>
@@ -110,40 +111,43 @@ export function BorrowAgreementSheet({ visible, openSection, agreed, onToggleSec
         accessibilityRole="checkbox"
         accessibilityState={{ checked: agreed }}
         accessibilityLabel="I have read and agree to the Vanna Borrow Agreement."
+        android_ripple={ripple(colors.text)}
         onPress={onToggleAgreed}
         style={{
           flexDirection: "row",
           alignItems: "center",
-          gap: spacing.md,
-          marginTop: spacing.md,
-          padding: spacing.lg,
-          minHeight: 64,
-          borderRadius: radius.lg,
+          gap: 12,
+          marginTop: 8,
+          padding: 12,
+          minHeight: 52,
+          borderRadius: radius.md,
           borderWidth: 1,
-          borderColor: colors.border,
+          borderColor: agreed ? colors.primary : colors.border,
+          backgroundColor: agreed ? colors.purpleTint : "transparent",
+          overflow: "hidden",
         }}
       >
         <View
           style={{
-            width: 28,
-            height: 28,
-            borderRadius: spacing.sm,
+            width: 24,
+            height: 24,
+            borderRadius: radius.chip,
             borderWidth: 2,
-            borderColor: agreed ? colors.primary : colors.text,
+            borderColor: agreed ? colors.primary : colors.textMuted,
             backgroundColor: agreed ? colors.primary : "transparent",
             alignItems: "center",
             justifyContent: "center",
           }}
         >
-          {agreed ? <Check size={16} color={colors.onPrimary} weight="bold" /> : null}
+          {agreed ? <Icon name="check" size={14} color="onPrimary" bold /> : null}
         </View>
-        <AppText variant="bodyLg" style={{ flex: 1 }}>
+        <AppText variant="body" style={{ flex: 1 }}>
           I have read and agree to the Vanna Borrow Agreement.
         </AppText>
       </Pressable>
-      <View style={{ flexDirection: "row", gap: spacing.md, marginTop: spacing.md }}>
-        <Button flex variant="outline" label="Close" onPress={onClose} />
-        <Button flex label="Sign agreement" disabled={!agreed} onPress={onSign} />
+      <View style={{ flexDirection: "row", gap: 8, marginTop: 12 }}>
+        <Button flex size="md" variant="outline" label="Close" onPress={onClose} />
+        <Button flex size="md" label="Sign agreement" disabled={!agreed} onPress={onSign} />
       </View>
     </BottomSheet>
   );

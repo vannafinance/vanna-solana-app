@@ -1,33 +1,34 @@
-import { CaretDown, CaretUp } from "phosphor-react-native";
 import { useState } from "react";
 import { Pressable, View } from "react-native";
 
 import { AppText } from "@/components/ui/app-text";
+import { Icon } from "@/components/ui/icon";
+import { ripple } from "@/components/ui/ripple";
 import { useTheme } from "@/theme/use-theme";
 
 type ExpandableNoteProps = { title: string; body: string };
 
 export function ExpandableNote({ title, body }: ExpandableNoteProps) {
-  const { colors, spacing } = useTheme();
+  const { colors } = useTheme();
   const [open, setOpen] = useState(false);
-  const Caret = open ? CaretUp : CaretDown;
 
   return (
-    <View>
+    <View style={{ borderTopWidth: 1, borderTopColor: colors.divider }}>
       <Pressable
         accessibilityRole="button"
         accessibilityState={{ expanded: open }}
         accessibilityLabel={title}
+        android_ripple={ripple(colors.text)}
         onPress={() => setOpen(!open)}
-        style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", minHeight: 52 }}
+        style={{ height: 52, flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}
       >
         <AppText variant="body" strong>
           {title}
         </AppText>
-        <Caret size={16} color={colors.textMuted} />
+        <Icon name="keyboard_arrow_down" size={16} color="textMuted" rotate={open ? 180 : undefined} />
       </Pressable>
       {open ? (
-        <AppText variant="caption" color="textMuted" style={{ paddingBottom: spacing.lg, lineHeight: 18 }}>
+        <AppText variant="caption" color="textMuted" style={{ marginBottom: 16, lineHeight: 18 }}>
           {body}
         </AppText>
       ) : null}
