@@ -1,5 +1,7 @@
 # Vanna v2 designs (Android)
 
+> **Android redesign, Current vs New:** see `compare/` and the [repository README](../README.md) for how to run the side-by-side comparison.
+
 Native Android designs for Vanna on Solana, 412 × 915 dp, light and dark. This folder is the v7 design set from the Claude Design canvas: 108 screens across 9 flows, including the sad paths, plus a click-through prototype.
 
 ## Start here
