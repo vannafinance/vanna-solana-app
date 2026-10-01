@@ -15,7 +15,7 @@ export function ChipRow<T extends string>({ options, value, onChange }: ChipRowP
   return (
     <View style={{ flexDirection: "row", gap: spacing.sm }}>
       {options.map((option) => (
-        <Chip key={option.value} label={option.label} selected={option.value === value} onPress={() => onChange(option.value)} />
+        <Chip key={option.value} check label={option.label} selected={option.value === value} onPress={() => onChange(option.value)} />
       ))}
     </View>
   );

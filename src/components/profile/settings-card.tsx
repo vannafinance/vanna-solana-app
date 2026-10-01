@@ -1,8 +1,8 @@
-import { ArrowUpRight } from "phosphor-react-native";
 import { Pressable, View } from "react-native";
 
 import { AppText } from "@/components/ui/app-text";
 import { Card } from "@/components/ui/card";
+import { Icon } from "@/components/ui/icon";
 import { TokenIcon } from "@/components/ui/token-icon";
 import { useTheme } from "@/theme/use-theme";
 
@@ -21,13 +21,13 @@ export function SettingsCard({ network, onDocs, onSupport }: SettingsCardProps) 
 
   return (
     <Card padded={false} style={{ paddingHorizontal: spacing.lg }}>
-      <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", minHeight: 56 }}>
-        <AppText variant="bodyLg" color="textMuted">
+      <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", height: 56 }}>
+        <AppText variant="body" color="textMuted">
           Network
         </AppText>
         <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm }}>
           <TokenIcon symbol="SOL" size={20} />
-          <AppText variant="bodyLg" strong>
+          <AppText variant="body" strong>
             {network}
           </AppText>
         </View>
@@ -42,15 +42,15 @@ export function SettingsCard({ network, onDocs, onSupport }: SettingsCardProps) 
             flexDirection: "row",
             alignItems: "center",
             justifyContent: "space-between",
-            minHeight: 56,
+            height: 56,
             borderTopWidth: 1,
             borderTopColor: colors.divider,
           }}
         >
-          <AppText variant="bodyLg" color="textMuted">
+          <AppText variant="body" color="textMuted">
             {link.label}
           </AppText>
-          <ArrowUpRight size={16} color={colors.textMuted} />
+          <Icon name="arrow_outward" size={16} color="textMuted" />
         </Pressable>
       ))}
     </Card>

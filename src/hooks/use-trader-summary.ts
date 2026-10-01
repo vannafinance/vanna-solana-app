@@ -4,11 +4,15 @@ import { previewResource } from "@/hooks/preview-resource";
 import { useMarginAccount } from "@/hooks/use-margin-account";
 import { previewAccount, previewClosedPositions, previewPositions } from "@/lib/preview-data/home";
 import type { Resource } from "@/types/resource";
-import type { TraderSummary } from "@/types/portfolio";
+import type { Position, TraderSummary } from "@/types/portfolio";
 
 import { marginMetrics } from "./margin-metrics";
 
 const BPS = 10_000;
+
+function sumPnl(positions: Position[], kind: Position["kind"]) {
+  return positions.filter((position) => position.kind === kind).reduce((total, position) => total + position.pnl, 0n);
+}
 
 export function useTraderSummary(): { summary: Resource<TraderSummary>; marginExists: boolean; openExplorer: () => void } {
   const { exists } = useMarginAccount();
@@ -21,7 +25,8 @@ export function useTraderSummary(): { summary: Resource<TraderSummary>; marginEx
 
   const metrics = marginMetrics(margin, borrowed);
   const summary = previewResource<TraderSummary>({
-    pnl: current.reduce((total, position) => total + position.pnl, 0n),
+    perpPnl: sumPnl(current, "perp"),
+    farmPnl: sumPnl(current, "farm"),
     margin,
     available: metrics.netAvailable,
     borrowed,

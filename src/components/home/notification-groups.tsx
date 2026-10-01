@@ -21,14 +21,14 @@ export function NotificationGroups({ notifications, onAction }: NotificationGrou
   const { spacing } = useTheme();
 
   return (
-    <View style={{ gap: spacing.lg }}>
+    <>
       {groups.map((group) => {
         const items = notifications.filter((notification) => notification.group === group.key);
         if (items.length === 0) return null;
         return (
           <Card key={group.key} padded={false} style={{ paddingHorizontal: spacing.lg }}>
-            <View style={{ minHeight: 44, justifyContent: "center" }}>
-              <AppText variant="label" strong color="textMuted">
+            <View style={{ height: 44, justifyContent: "center" }}>
+              <AppText variant="caption" strong color="textMuted">
                 {group.label}
               </AppText>
             </View>
@@ -38,6 +38,6 @@ export function NotificationGroups({ notifications, onAction }: NotificationGrou
           </Card>
         );
       })}
-    </View>
+    </>
   );
 }

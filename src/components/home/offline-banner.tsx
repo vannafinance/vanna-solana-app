@@ -1,7 +1,8 @@
-import { WifiSlash } from "phosphor-react-native";
 import { Pressable, View } from "react-native";
 
 import { AppText } from "@/components/ui/app-text";
+import { Icon } from "@/components/ui/icon";
+import { ripple } from "@/components/ui/ripple";
 import { useTheme } from "@/theme/use-theme";
 
 type OfflineBannerProps = {
@@ -15,16 +16,25 @@ export function OfflineBanner({ staleMinutes, onRetry }: OfflineBannerProps) {
   return (
     <View
       accessibilityRole="alert"
-      style={{ flexDirection: "row", alignItems: "center", gap: spacing.md, padding: spacing.md, borderRadius: radius.lg, backgroundColor: colors.pinkTint }}
+      style={{
+        flexDirection: "row",
+        alignItems: "center",
+        gap: spacing.md,
+        paddingVertical: spacing.md,
+        paddingRight: spacing.md,
+        paddingLeft: 14,
+        borderRadius: radius.md,
+        backgroundColor: colors.pinkTint,
+      }}
     >
       <View style={{ width: 36, height: 36, borderRadius: radius.pill, backgroundColor: colors.surface, alignItems: "center", justifyContent: "center" }}>
-        <WifiSlash size={20} color={colors.onPinkTint} weight="bold" />
+        <Icon name="wifi_off" size={18} color="onPinkTint" />
       </View>
-      <View style={{ flex: 1 }}>
-        <AppText variant="bodyLg" strong style={{ color: colors.onPinkTint }}>
+      <View style={{ flex: 1, gap: 2 }}>
+        <AppText variant="body" strong color="onPinkTint">
           You&apos;re offline
         </AppText>
-        <AppText variant="body" style={{ color: colors.onPinkTint }}>
+        <AppText variant="caption" color="onPinkTint">
           {`Balances are from ${staleMinutes} min ago. Trades and swaps are paused.`}
         </AppText>
       </View>
@@ -32,9 +42,11 @@ export function OfflineBanner({ staleMinutes, onRetry }: OfflineBannerProps) {
         accessibilityRole="button"
         accessibilityLabel="Retry"
         onPress={onRetry}
-        style={{ minHeight: 44, paddingHorizontal: spacing.lg, borderRadius: radius.pill, backgroundColor: colors.surface, alignItems: "center", justifyContent: "center" }}
+        hitSlop={{ top: 6, bottom: 6 }}
+        android_ripple={ripple(colors.text)}
+        style={{ height: 32, paddingHorizontal: 14, borderRadius: radius.chip, backgroundColor: colors.surface, alignItems: "center", justifyContent: "center", overflow: "hidden" }}
       >
-        <AppText variant="bodyLg" strong>
+        <AppText variant="body" strong>
           Retry
         </AppText>
       </Pressable>

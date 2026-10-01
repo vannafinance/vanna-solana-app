@@ -25,7 +25,7 @@ import { useWalletConnection } from "@/hooks/use-wallet-connection";
 import { useTheme } from "@/theme/use-theme";
 
 export default function Profile() {
-  const { colors, spacing } = useTheme();
+  const { colors } = useTheme();
   const portfolio = usePortfolio();
   const appearance = useAppearance();
   const info = useAppInfo();
@@ -36,11 +36,11 @@ export default function Profile() {
   const wallet = useWalletConnection();
 
   return (
-    <Screen header={<PlainHeader title="Profile" onBack={() => router.back()} />}>
+    <Screen gap={12} paddingTop={8} header={<PlainHeader title="Profile" onBack={() => router.back()} />}>
+      {wallet.address ? <ProfileWalletCard address={wallet.address} onCopy={() => share(wallet.address)} /> : null}
       <ResourceView resource={portfolio} emptyLabel="No account data">
         {(data) => (
-          <View style={{ gap: spacing.lg }}>
-            {wallet.address ? <ProfileWalletCard address={wallet.address} onCopy={() => share(wallet.address)} /> : null}
+          <>
             {data.health === null ? null : (
               <AccountHealthCard
                 health={data.health}
@@ -51,24 +51,25 @@ export default function Profile() {
                 debt={data.totalBorrowed}
               />
             )}
-            <AccountCard
-              walletBalance={data.walletBalance}
-              marginBalance={data.marginBalance}
-              marginAddress={margin.exists ? data.marginAddress : null}
-            />
-          </View>
+            <AccountCard walletBalance={data.walletBalance} marginAddress={margin.exists ? data.marginAddress : null} />
+          </>
         )}
       </ResourceView>
       <AppearanceCard value={appearance.preference} onChange={appearance.choose} />
       <SettingsCard network={info.network} onDocs={info.openDocs} onSupport={info.openSupport} />
       {wallet.address ? (
-        <DisconnectButton busy={wallet.checking} onPress={async () => {
-          if (await wallet.disconnect()) {
-            router.dismissAll();
-            router.replace("/welcome");
-          }
-        }} />
-      ) : <Button label="Connect wallet" onPress={() => router.push("/connect")} />}
+        <DisconnectButton
+          busy={wallet.checking}
+          onPress={async () => {
+            if (await wallet.disconnect()) {
+              router.dismissAll();
+              router.replace("/welcome");
+            }
+          }}
+        />
+      ) : (
+        <Button label="Connect wallet" onPress={() => router.push("/connect")} />
+      )}
       {wallet.errorMessage ? <AppText color="negative">{wallet.errorMessage}</AppText> : null}
       {__DEV__ ? (
         <DeveloperControls

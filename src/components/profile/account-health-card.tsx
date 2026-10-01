@@ -1,6 +1,5 @@
 import { View } from "react-native";
 
-import { StatPanel } from "@/components/home/stat-panel";
 import { AppText } from "@/components/ui/app-text";
 import { Card } from "@/components/ui/card";
 import { formatUsd } from "@/format/format-amount";
@@ -19,42 +18,62 @@ type AccountHealthCardProps = {
 };
 
 const legend: readonly { label: string; color: ThemeColor }[] = [
-  { label: `Below ${thresholds.liquidation.toFixed(2)}`, color: "negative" },
-  { label: `${thresholds.liquidation.toFixed(2)} to ${thresholds.safeFrom.toFixed(2)}`, color: "warning" },
+  { label: `Below ${thresholds.liquidation.toFixed(2)}`, color: "coral" },
+  { label: `${thresholds.liquidation.toFixed(2)} to ${thresholds.safeFrom.toFixed(2)}`, color: "healthWatch" },
   { label: `Above ${thresholds.safeFrom.toFixed(2)}`, color: "positive" },
 ];
 
 export function AccountHealthCard({ health, leverage, roomBeforeLiquidation, netAvailable, collateral, debt }: AccountHealthCardProps) {
   const { colors, radius, spacing } = useTheme();
+  const facts = [
+    { label: "Room before liquidation", value: formatUsd(roomBeforeLiquidation) },
+    { label: "Net available collateral", value: formatUsd(netAvailable) },
+    { label: "Leverage taken", value: leverage === null ? "None" : `${leverage.toFixed(2)}x` },
+  ];
 
   return (
-    <Card style={{ gap: spacing.md }}>
-      <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
-        <AppText variant="body" strong color="textMuted">
+    <Card padded={false} style={{ paddingHorizontal: spacing.lg, paddingBottom: spacing.lg }}>
+      <View style={{ height: 44, justifyContent: "center" }}>
+        <AppText variant="caption" strong color="textMuted">
           Account health
         </AppText>
-        <AppText variant="body" color="textMuted">{`Liquidation at ${thresholds.liquidation.toFixed(2)}`}</AppText>
       </View>
-      <HealthGauge value={health} />
+      <View style={{ paddingTop: spacing.xs, paddingBottom: spacing.sm }}>
+        <HealthGauge value={health} />
+      </View>
       <View style={{ flexDirection: "row", justifyContent: "center", gap: spacing.lg }}>
         {legend.map((item) => (
           <View key={item.label} style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-            <View style={{ width: 12, height: 4, borderRadius: radius.pill, backgroundColor: colors[item.color] }} />
-            <AppText variant="body" color="textMuted">
+            <View style={{ width: 10, height: 4, borderRadius: 2, backgroundColor: colors[item.color] }} />
+            <AppText variant="caption" color="textMuted">
               {item.label}
             </AppText>
           </View>
         ))}
       </View>
-      <StatPanel
-        stats={[
-          { label: "Room before liquidation", value: formatUsd(roomBeforeLiquidation) },
-          { label: "Net available collateral", value: formatUsd(netAvailable) },
-          { label: "Leverage taken", value: leverage === null ? "None" : `${leverage.toFixed(2)}x` },
-        ]}
-      />
-      <AppText variant="body" color="textMuted">
-        {`Health = collateral ${formatUsd(collateral)} ÷ debt ${formatUsd(debt)}. If it reaches ${thresholds.liquidation.toFixed(2)}, the risk engine liquidates.`}
+      <View style={{ marginTop: spacing.lg, flexDirection: "row", padding: spacing.md, borderRadius: radius.sm, backgroundColor: colors.background }}>
+        {facts.map((fact, index) => (
+          <View
+            key={fact.label}
+            style={{
+              flex: 1,
+              gap: 2,
+              paddingLeft: index === 0 ? 0 : spacing.md,
+              borderLeftWidth: index === 0 ? 0 : 1,
+              borderLeftColor: colors.divider,
+            }}
+          >
+            <AppText variant="caption" color="textMuted">
+              {fact.label}
+            </AppText>
+            <AppText variant="body" strong>
+              {fact.value}
+            </AppText>
+          </View>
+        ))}
+      </View>
+      <AppText variant="caption" color="textMuted" style={{ marginTop: spacing.md, lineHeight: 18 }}>
+        {`Health = collateral ${formatUsd(collateral)} ÷ debt ${formatUsd(debt)}.`}
       </AppText>
     </Card>
   );

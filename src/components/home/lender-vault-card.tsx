@@ -16,42 +16,40 @@ type LenderVaultCardProps = {
   onSupplyMore: () => void;
 };
 
-function suppliedText(vault: LenderVault) {
-  return `${formatToken(vault.supplied, 2).replace(/\.00$/, "")} ${vault.symbol}`;
-}
-
 export function LenderVaultCard({ vault, onWithdraw, onSupplyMore }: LenderVaultCardProps) {
-  const { colors, radius, spacing } = useTheme();
-  const apy = formatPercent(vault.supplyApyBps);
+  const { colors, spacing } = useTheme();
 
   return (
-    <Card style={{ gap: spacing.md }}>
+    <Card>
       <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.md }}>
         <TokenIcon symbol={vault.symbol} size={40} />
-        <View style={{ flex: 1 }}>
-          <AppText variant="title">{vault.name}</AppText>
+        <View style={{ flex: 1, gap: 2 }}>
+          <AppText variant="bodyLg" strong style={{ lineHeight: 20 }}>
+            {vault.name}
+          </AppText>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-            <View style={{ width: 8, height: 8, borderRadius: radius.pill, backgroundColor: colors.positive }} />
-            <AppText variant="body" color="textMuted">{`Active · earning ${apy} APY`}</AppText>
+            <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: colors.positive }} />
+            <AppText variant="caption" color="textMuted">
+              Active
+            </AppText>
           </View>
         </View>
-        <View style={{ alignItems: "flex-end" }}>
-          <AppText variant="title">{formatUsd(vault.value)}</AppText>
-          <AppText variant="body" color="textMuted">
-            {suppliedText(vault)}
-          </AppText>
-        </View>
+        <AppText variant="bodyLg" strong style={{ lineHeight: 20 }}>
+          {formatUsd(vault.value)}
+        </AppText>
       </View>
-      <StatPanel
-        stats={[
-          { label: "Supplied", value: suppliedText(vault) },
-          { label: "Supply APY", value: apy },
-          { label: "Earned", value: formatSignedUsd(vault.earned), color: "positive" },
-        ]}
-      />
-      <View style={{ flexDirection: "row", gap: spacing.md }}>
-        <Button flex size="md" variant="outline" label="Withdraw" onPress={onWithdraw} />
-        <Button flex size="md" variant="dark" label="Supply more" onPress={onSupplyMore} />
+      <View style={{ marginTop: spacing.lg }}>
+        <StatPanel
+          stats={[
+            { label: "Supplied", value: `${formatToken(vault.supplied, 2).replace(/\.00$/, "")} ${vault.symbol}` },
+            { label: "Supply APY", value: formatPercent(vault.supplyApyBps) },
+            { label: "Earned", value: formatSignedUsd(vault.earned), color: "positive" },
+          ]}
+        />
+      </View>
+      <View style={{ marginTop: spacing.lg, flexDirection: "row", gap: spacing.sm }}>
+        <Button flex size="sm" variant="outline" label="Withdraw" onPress={onWithdraw} />
+        <Button flex size="sm" variant="dark" label="Supply more" onPress={onSupplyMore} />
       </View>
     </Card>
   );

@@ -1,6 +1,5 @@
-import { Copy } from "phosphor-react-native";
-import { View } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
+import { View } from "react-native";
 
 import { AppText } from "@/components/ui/app-text";
 import { IconButton } from "@/components/ui/icon-button";
@@ -23,20 +22,20 @@ export function ProfileWalletCard({ address, onCopy }: ProfileWalletCardProps) {
       locations={gradient.locations}
       start={gradient.start}
       end={gradient.end}
-      style={{ flexDirection: "row", alignItems: "center", gap: spacing.lg, padding: spacing.lg, borderRadius: radius.lg }}
+      style={{ flexDirection: "row", alignItems: "center", gap: spacing.lg, paddingVertical: 20, paddingHorizontal: spacing.lg, borderRadius: radius.md }}
     >
-      <View style={{ borderRadius: radius.pill, borderWidth: 2, borderColor: colors.onHero, overflow: "hidden" }}>
-        <TokenIcon symbol="SOL" size={56} />
+      <View style={{ width: 56, height: 56, borderRadius: radius.pill, borderWidth: 2, borderColor: colors.onHero, overflow: "hidden" }}>
+        <TokenIcon symbol="SOL" size={52} />
       </View>
-      <View style={{ flex: 1, gap: 2 }}>
-        <AppText variant="title" color="onHero" style={{ fontFamily: "monospace" }}>
+      <View style={{ flex: 1, gap: 4 }}>
+        <AppText variant="bodyLg" color="onHero" style={{ fontFamily: "monospace", lineHeight: 24 }}>
           {shortAddress(address)}
         </AppText>
-        <AppText variant="body" color="onHeroMuted">
+        <AppText variant="caption" color="onHeroSoft">
           Solana wallet · Mobile Wallet Adapter
         </AppText>
       </View>
-      <IconButton icon={Copy} label="Copy wallet address" tone="glass" onPress={onCopy} />
+      <IconButton icon="content_copy" label="Copy wallet address" tone="glass" size={44} onPress={onCopy} />
     </LinearGradient>
   );
 }

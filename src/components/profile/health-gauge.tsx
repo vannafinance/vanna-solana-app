@@ -6,14 +6,13 @@ import { health as thresholds } from "@/theme/tokens";
 import { useTheme } from "@/theme/use-theme";
 
 const WIDTH = 240;
-const HEIGHT = 136;
+const HEIGHT = 132;
 const CENTER_X = WIDTH / 2;
-const CENTER_Y = 120;
-const RADIUS = 100;
-const STROKE = 18;
+const CENTER_Y = 116;
+const RADIUS = 96;
+const STROKE = 14;
 const MIN = 1;
 const MAX = 2.5;
-const GAP = 0.006;
 
 const fractionOf = (value: number) => Math.max(0, Math.min(1, (value - MIN) / (MAX - MIN)));
 
@@ -46,18 +45,21 @@ export function HealthGauge({ value }: HealthGaugeProps) {
   const marker = pointAt(fractionOf(value));
 
   return (
-    <View accessibilityLabel={`Account health ${value.toFixed(2)}, ${status.label}`} style={{ alignItems: "center" }}>
+    <View accessibilityLabel={`Account health ${value.toFixed(2)}, ${status.label}`} style={{ width: WIDTH, height: HEIGHT, alignSelf: "center" }}>
       <Svg width={WIDTH} height={HEIGHT}>
-        <Path d={arc(0, low - GAP)} stroke={colors.negative} strokeWidth={STROKE} fill="none" />
-        <Path d={arc(low + GAP, mid - GAP)} stroke={colors.warning} strokeWidth={STROKE} fill="none" opacity={0.7} />
-        <Path d={arc(mid + GAP, 1)} stroke={colors.positive} strokeWidth={STROKE} fill="none" />
-        <Circle cx={marker.x} cy={marker.y} r={10} fill={colors.text} stroke={colors.surface} strokeWidth={3} />
+        <Path d={arc(0, low)} stroke={colors.coral} strokeWidth={STROKE} fill="none" />
+        <Path d={arc(low, mid)} stroke={colors.healthWatch} strokeWidth={STROKE} fill="none" />
+        <Path d={arc(mid, 1)} stroke={colors.positive} strokeWidth={STROKE} fill="none" />
+        <Circle cx={marker.x} cy={marker.y} r={11} fill={colors.surface} />
+        <Circle cx={marker.x} cy={marker.y} r={7} fill={colors.text} />
       </Svg>
-      <View style={{ position: "absolute", top: 54, alignItems: "center" }}>
-        <AppText variant="display" style={{ fontSize: 44, lineHeight: 50 }}>
+      <View style={{ position: "absolute", top: 61, left: 0, right: 0, alignItems: "center" }}>
+        <AppText variant="display" style={{ fontSize: 36, lineHeight: 44 }}>
           {value.toFixed(2)}
         </AppText>
-        <AppText variant="bodyLg" strong color={status.color}>
+      </View>
+      <View style={{ position: "absolute", top: 102, left: 0, right: 0, alignItems: "center" }}>
+        <AppText variant="body" strong color={status.color}>
           {status.label}
         </AppText>
       </View>

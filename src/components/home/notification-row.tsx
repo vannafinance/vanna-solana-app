@@ -1,91 +1,70 @@
-import { Image } from "expo-image";
-import { ArrowDown, Check, Coins, Plus, ShieldCheck, TrendUp, Warning, type Icon } from "phosphor-react-native";
 import { Pressable, View } from "react-native";
 
 import { AppText } from "@/components/ui/app-text";
-import { TokenIcon } from "@/components/ui/token-icon";
+import { ripple } from "@/components/ui/ripple";
 import { useTheme } from "@/theme/use-theme";
-import type { AppNotification, NotificationBadge } from "@/types/notification";
+import type { AppNotification } from "@/types/notification";
+
+import { NotificationAvatar } from "./notification-avatar";
 
 type NotificationRowProps = {
   notification: AppNotification;
-  onAction: () => void;
+  menu?: boolean;
+  onAction?: () => void;
 };
 
-const badges: Record<NotificationBadge, { icon: Icon; tone: "negative" | "positive" | "primary" }> = {
-  warning: { icon: Warning, tone: "negative" },
-  gain: { icon: TrendUp, tone: "positive" },
-  earned: { icon: Coins, tone: "primary" },
-  opened: { icon: Plus, tone: "primary" },
-  withdrawn: { icon: ArrowDown, tone: "primary" },
-  closed: { icon: Check, tone: "positive" },
-  safe: { icon: ShieldCheck, tone: "positive" },
-};
-
-export function NotificationRow({ notification, onAction }: NotificationRowProps) {
+export function NotificationRow({ notification, menu = false, onAction }: NotificationRowProps) {
   const { colors, radius, spacing } = useTheme();
-  const { icon: Glyph, tone } = badges[notification.badge];
 
   return (
-    <View style={{ flexDirection: "row", gap: spacing.md, paddingVertical: spacing.md, borderTopWidth: 1, borderTopColor: colors.divider }}>
-      <View style={{ width: 44, height: 44 }}>
-        {notification.icon === "vanna" ? (
-          <View style={{ width: 40, height: 40, borderRadius: radius.pill, backgroundColor: colors.purpleTint, alignItems: "center", justifyContent: "center" }}>
-            <Image source={require("../../../assets/images/vanna-mark.png")} style={{ width: 24, height: 24 }} contentFit="contain" />
-          </View>
-        ) : (
-          <TokenIcon symbol={notification.icon} size={40} />
-        )}
-        <View
-          style={{
-            position: "absolute",
-            right: 0,
-            bottom: 0,
-            width: 20,
-            height: 20,
-            borderRadius: radius.pill,
-            backgroundColor: colors[tone],
-            borderWidth: 2,
-            borderColor: colors.surface,
-            alignItems: "center",
-            justifyContent: "center",
-          }}
-        >
-          <Glyph size={10} color={colors.onPrimary} weight="bold" />
-        </View>
-      </View>
+    <View
+      style={{
+        flexDirection: "row",
+        gap: spacing.md,
+        paddingVertical: menu ? spacing.md : 14,
+        paddingHorizontal: menu ? spacing.lg : 0,
+        borderTopWidth: 1,
+        borderTopColor: colors.divider,
+      }}
+    >
+      <NotificationAvatar icon={notification.icon} badge={notification.badge} />
       <View style={{ flex: 1, gap: 2 }}>
-        <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm }}>
-          <AppText variant="bodyLg" strong style={{ flex: 1 }}>
+        <View style={{ flexDirection: "row", justifyContent: "space-between", gap: spacing.sm }}>
+          <AppText variant="body" strong style={{ flex: 1 }}>
             {notification.title}
           </AppText>
-          <AppText variant="body" color="textMuted">
-            {notification.time}
-          </AppText>
-          {notification.unread ? (
-            <View accessibilityLabel="Unread" style={{ width: 8, height: 8, borderRadius: radius.pill, backgroundColor: colors.warning }} />
-          ) : null}
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+            <AppText variant="caption" color="textMuted">
+              {notification.time}
+            </AppText>
+            {notification.unread ? (
+              <View accessibilityLabel="Unread" style={{ width: 8, height: 8, borderRadius: radius.pill, backgroundColor: colors.unreadDot }} />
+            ) : null}
+          </View>
         </View>
-        <AppText variant="body" color="textMuted">
+        <AppText variant="caption" color="textMuted">
           {notification.message}
         </AppText>
-        {notification.action ? (
+        {!menu && notification.action && onAction ? (
           <Pressable
             accessibilityRole="button"
             accessibilityLabel={notification.action.label}
             onPress={onAction}
+            hitSlop={{ top: 6, bottom: 6 }}
+            android_ripple={ripple(colors.text)}
             style={{
               alignSelf: "flex-start",
               marginTop: spacing.sm,
-              minHeight: 44,
-              paddingHorizontal: spacing.lg,
-              borderRadius: radius.pill,
+              height: 32,
+              paddingHorizontal: 14,
+              borderRadius: radius.chip,
+              overflow: "hidden",
               backgroundColor: colors.background,
               alignItems: "center",
               justifyContent: "center",
             }}
           >
-            <AppText variant="body" strong>
+            <AppText variant="caption" strong>
               {notification.action.label}
             </AppText>
           </Pressable>

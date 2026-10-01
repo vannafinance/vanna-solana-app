@@ -1,5 +1,4 @@
-import { ArrowsDownUp } from "phosphor-react-native";
-import { Pressable, View } from "react-native";
+import { View } from "react-native";
 
 import { AppText } from "@/components/ui/app-text";
 import { Card } from "@/components/ui/card";
@@ -11,42 +10,28 @@ import type { TokenBalance } from "@/types/portfolio";
 type SpotListProps = {
   walletBalance: bigint;
   balances: readonly TokenBalance[];
-  onSwap: () => void;
 };
 
-export function SpotList({ walletBalance, balances, onSwap }: SpotListProps) {
-  const { colors, radius, spacing } = useTheme();
+export function SpotList({ walletBalance, balances }: SpotListProps) {
+  const { colors, spacing } = useTheme();
 
   return (
     <Card padded={false} style={{ paddingHorizontal: spacing.lg, paddingVertical: spacing.xs }}>
-      <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", minHeight: 64 }}>
-        <View>
-          <AppText variant="caption" color="textMuted">
-            Wallet balance
-          </AppText>
-          <AppText variant="bodyLg" strong>
-            {formatUsd(walletBalance)}
-          </AppText>
-        </View>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Swap"
-          onPress={onSwap}
-          style={{ flexDirection: "row", alignItems: "center", gap: 6, minHeight: 44, paddingHorizontal: spacing.md, borderRadius: radius.pill, backgroundColor: colors.background }}
-        >
-          <ArrowsDownUp size={16} color={colors.text} />
-          <AppText variant="body" strong>
-            Swap
-          </AppText>
-        </Pressable>
+      <View style={{ height: 56, justifyContent: "center" }}>
+        <AppText variant="caption" color="textMuted">
+          Wallet balance
+        </AppText>
+        <AppText variant="bodyLg" strong style={{ lineHeight: 24 }}>
+          {formatUsd(walletBalance)}
+        </AppText>
       </View>
       {balances.map((balance) => (
         <View
           key={balance.symbol}
-          style={{ flexDirection: "row", alignItems: "center", gap: spacing.md, minHeight: 64, borderTopWidth: 1, borderTopColor: colors.divider }}
+          style={{ flexDirection: "row", alignItems: "center", gap: spacing.md, height: 64, borderTopWidth: 1, borderTopColor: colors.divider }}
         >
           <TokenIcon symbol={balance.symbol} size={36} />
-          <View style={{ flex: 1 }}>
+          <View style={{ flex: 1, gap: 2 }}>
             <AppText variant="body" strong>
               {balance.symbol}
             </AppText>
@@ -54,7 +39,7 @@ export function SpotList({ walletBalance, balances, onSwap }: SpotListProps) {
               Wallet
             </AppText>
           </View>
-          <View style={{ alignItems: "flex-end" }}>
+          <View style={{ alignItems: "flex-end", gap: 2 }}>
             <AppText variant="body" strong>
               {formatUsd(balance.value)}
             </AppText>

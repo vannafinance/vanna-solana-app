@@ -4,12 +4,12 @@ import type { LenderSummary } from "@/types/portfolio";
 import type { Resource } from "@/types/resource";
 
 export function useLenderSummary(): Resource<LenderSummary> {
-  const averageApy = Math.round(previewVaults.reduce((total, vault) => total + vault.supplyApyBps, 0) / previewVaults.length);
+  const weightedApy = previewVaults.reduce((total, vault) => total + Number(vault.value) * vault.supplyApyBps, 0);
+  const averageApy = Math.round(weightedApy / Number(previewVaults.reduce((total, vault) => total + vault.value, 0n)));
 
   return previewResource({
     portfolio: previewLenderPortfolio,
     totalHoldings: previewAccount.walletBalance + previewLenderPortfolio,
-    suppliedAssets: previewVaults.length,
     avgSupplyApyBps: averageApy,
     vaults: previewVaults,
     spot: previewSpot,
