@@ -1,7 +1,6 @@
 import { formatPercent, formatToken, formatUsd } from "@/format/format-amount";
-import type { AmountProblem, AmountQuote, EarnMarket } from "@/types/earn";
-
 import { formatFullAmount } from "@/format/format-earn";
+import type { AmountProblem, AmountQuote, EarnMarket } from "@/types/earn";
 
 export type AmountFormMode = "supply" | "withdraw";
 
@@ -10,7 +9,7 @@ export type AmountFormView = {
   title: string;
   label: string;
   caption: string;
-  error?: string;
+  over: boolean;
   rows: readonly { label: string; value: string }[];
   note: string;
   cta: { label: string; disabled: boolean };
@@ -24,22 +23,20 @@ const COPY = {
 export function presentAmountForm(mode: AmountFormMode, market: EarnMarket, quote: AmountQuote, problem: AmountProblem | null): AmountFormView {
   const copy = COPY[mode];
   const limit = mode === "supply" ? market.walletBalance : market.supplied;
-  const limitText = formatFullAmount(limit, market.symbol);
-  const place = mode === "supply" ? "in your wallet" : "supplied";
 
   return {
     mode,
     title: `${market.symbol} vault`,
     label: copy.label,
-    caption: `${copy.caption} ${limitText}`,
-    error: problem === "insufficient" ? `You have ${limitText} ${place}. Lower the amount.` : undefined,
+    caption: `${copy.caption} ${formatFullAmount(limit, market.symbol)}`,
+    over: problem === "insufficient",
     rows: [
       { label: "Supply APY", value: formatPercent(market.supplyApyBps) },
       { label: copy.sharesRow, value: `${formatToken({ raw: quote.shares, decimals: market.decimals }, 2)} ${market.shareSymbol}` },
       { label: "Supplied after", value: formatFullAmount({ raw: quote.suppliedAfter, decimals: market.decimals }, market.symbol) },
       { label: "Projected yearly", value: `+${formatUsd(quote.projectedYearlyUsd)}` },
     ],
-    note: `Supplied ${market.symbol} is lent to Vanna traders and farmers. You can withdraw anytime the vault has free liquidity.`,
+    note: `Supplied ${market.symbol} is lent to Vanna traders and farmers. You can withdraw any time the vault has free liquidity.`,
     cta:
       problem === "empty"
         ? { label: "Enter an amount", disabled: true }

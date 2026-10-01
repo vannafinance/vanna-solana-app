@@ -5,10 +5,9 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { TokenIcon } from "@/components/ui/token-icon";
 import { formatPercent, formatSignedUsd, formatUsd } from "@/format/format-amount";
+import { formatSummaryAmount } from "@/format/format-earn";
 import { useTheme } from "@/theme/use-theme";
 import type { EarnPosition } from "@/types/earn";
-
-import { formatSummaryAmount } from "@/format/format-earn";
 
 type EarnPositionCardProps = {
   position: EarnPosition;
@@ -16,60 +15,46 @@ type EarnPositionCardProps = {
   onSupplyMore: () => void;
 };
 
-function Stat({ label, value, positive = false }: { label: string; value: string; positive?: boolean }) {
-  return (
-    <View style={{ flex: 1, gap: 2 }}>
-      <AppText variant="caption" color="textMuted">
-        {label}
-      </AppText>
-      <AppText strong color={positive ? "positive" : "text"}>
-        {value}
-      </AppText>
-    </View>
-  );
-}
-
 export function EarnPositionCard({ position, onWithdraw, onSupplyMore }: EarnPositionCardProps) {
-  const { colors, radius, spacing } = useTheme();
-  const supplied = formatSummaryAmount(position.supplied, position.symbol);
+  const { colors } = useTheme();
+  const stats = [
+    { label: "Supplied", value: formatSummaryAmount(position.supplied, position.symbol), color: "text" },
+    { label: "Supply APY", value: formatPercent(position.supplyApyBps), color: "text" },
+    { label: "Earned", value: formatSignedUsd(position.earnedUsd), color: "positive" },
+  ] as const;
 
   return (
     <Card>
-      <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.md }}>
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
         <TokenIcon symbol={position.symbol} size={40} />
         <View style={{ flex: 1, gap: 2 }}>
-          <AppText variant="bodyLg" strong>{`${position.symbol} vault`}</AppText>
+          <AppText variant="bodyLg" strong style={{ lineHeight: 20 }}>{`${position.symbol} vault`}</AppText>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-            <View style={{ width: 6, height: 6, borderRadius: radius.pill, backgroundColor: colors.positive }} />
-            <AppText variant="caption" color="textMuted">{`Active · earning ${formatPercent(position.supplyApyBps)} APY`}</AppText>
+            <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: colors.positive }} />
+            <AppText variant="caption" color="textMuted" style={{ lineHeight: 16 }}>
+              Active
+            </AppText>
           </View>
         </View>
-        <View style={{ alignItems: "flex-end", gap: 2 }}>
-          <AppText variant="bodyLg" strong>
-            {formatUsd(position.valueUsd)}
-          </AppText>
-          <AppText variant="caption" color="textMuted">
-            {supplied}
-          </AppText>
-        </View>
+        <AppText variant="bodyLg" strong style={{ lineHeight: 20 }}>
+          {formatUsd(position.valueUsd)}
+        </AppText>
       </View>
-      <View
-        style={{
-          flexDirection: "row",
-          gap: spacing.sm,
-          marginTop: spacing.lg,
-          padding: spacing.md,
-          borderRadius: radius.md,
-          backgroundColor: colors.background,
-        }}
-      >
-        <Stat label="Supplied" value={supplied} />
-        <Stat label="Supply APY" value={formatPercent(position.supplyApyBps)} />
-        <Stat label="Earned" value={formatSignedUsd(position.earnedUsd)} positive />
+      <View style={{ marginTop: 16, padding: 12, flexDirection: "row", gap: 8, borderRadius: 12, backgroundColor: colors.background }}>
+        {stats.map((stat) => (
+          <View key={stat.label} style={{ flex: 1, gap: 2 }}>
+            <AppText variant="caption" color="textMuted" style={{ lineHeight: 16 }}>
+              {stat.label}
+            </AppText>
+            <AppText variant="body" strong color={stat.color} style={{ lineHeight: 20 }}>
+              {stat.value}
+            </AppText>
+          </View>
+        ))}
       </View>
-      <View style={{ flexDirection: "row", gap: spacing.sm, marginTop: spacing.lg }}>
-        <Button flex size="md" variant="outline" label="Withdraw" onPress={onWithdraw} />
-        <Button flex size="md" variant="dark" label="Supply more" onPress={onSupplyMore} />
+      <View style={{ marginTop: 16, flexDirection: "row", gap: 8 }}>
+        <Button label="Withdraw" variant="outline" size="sm" flex onPress={onWithdraw} />
+        <Button label="Supply more" variant="dark" size="sm" flex onPress={onSupplyMore} />
       </View>
     </Card>
   );

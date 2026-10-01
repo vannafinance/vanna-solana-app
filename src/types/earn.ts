@@ -18,9 +18,13 @@ export type OverviewMode = "deposit" | "earnings";
 
 export type OverviewRange = "1W" | "1M" | "3M" | "All";
 
+export type UsdPoint = { at: number; usd: bigint };
+
 export type EarnOverview = {
   value: bigint;
-  series: readonly bigint[];
+  points: readonly UsdPoint[];
+  stepMs: number;
+  now: number;
 };
 
 export type PoolFilterOption = {
@@ -45,11 +49,18 @@ export type VaultCollateralAsset = {
 
 export type VaultContract = { label: string; address: string };
 
-export type RateCurve = {
-  baseBps: number;
-  kinkUtilizationBps: number;
-  kinkRateBps: number;
-  maxRateBps: number;
+export type ApyRange = "7D" | "30D" | "90D";
+
+export type ApyPoint = { at: number; apyPercent: number };
+
+export type ApyHistory = { stepMs: number; points: readonly ApyPoint[] };
+
+export type RateSample = { utilization: number; borrow: number; lender: number };
+
+export type VaultAnalytics = {
+  now: number;
+  apy: Record<ApyRange, ApyHistory>;
+  curve: { samples: readonly RateSample[]; kink: RateSample; current: RateSample };
 };
 
 export type VaultPositionEvent = {
@@ -94,7 +105,6 @@ export type VaultDetail = VaultSummary & {
   otherSuppliers: TokenAmount;
   activity: readonly VaultActivityEntry[];
   collateralAssets: readonly VaultCollateralAsset[];
-  rateCurve: RateCurve;
   managers: readonly { label: string; value: string }[];
   position?: VaultPosition;
 };

@@ -1,12 +1,13 @@
-import { Wallet } from "phosphor-react-native";
+import { ScrollView, TextInput, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { AmountField } from "@/components/ui/amount-field";
+import { AppText } from "@/components/ui/app-text";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { Chip } from "@/components/ui/chip";
 import { DetailRow } from "@/components/ui/detail-row";
-import { Notice } from "@/components/ui/notice";
+import { Icon } from "@/components/ui/icon";
 import { PlainHeader } from "@/components/ui/plain-header";
-import { Screen } from "@/components/ui/screen";
 import { SegmentedControl } from "@/components/ui/segmented-control";
 import { TokenPill } from "@/components/ui/token-pill";
 import { TransactionSheet } from "@/components/ui/transaction-sheet";
@@ -14,23 +15,20 @@ import { useTheme } from "@/theme/use-theme";
 import type { EarnAsset } from "@/types/earn";
 import type { TransactionState } from "@/types/transaction";
 
-import { type AmountFormMode, type AmountFormView } from "./present-amount-form";
-
-const QUICK_FILLS = [
-  { label: "25%", fraction: 0.25 },
-  { label: "50%", fraction: 0.5 },
-  { label: "Max", fraction: 1 },
-] as const;
+import type { AmountFormMode, AmountFormView } from "./present-amount-form";
 
 const MODES = [
   { value: "supply", label: "Supply" },
   { value: "withdraw", label: "Withdraw" },
 ] as const;
 
+type QuickFill = { label: string; fraction: number; selected: boolean };
+
 type EarnAmountScreenProps = {
   view: AmountFormView;
   symbol: EarnAsset;
   value: string;
+  fills: readonly QuickFill[];
   onChangeText: (value: string) => void;
   onQuickFill: (fraction: number) => void;
   onModeChange: (mode: AmountFormMode) => void;
@@ -46,6 +44,7 @@ export function EarnAmountScreen({
   view,
   symbol,
   value,
+  fills,
   onChangeText,
   onQuickFill,
   onModeChange,
@@ -56,35 +55,59 @@ export function EarnAmountScreen({
   onTransactionClose,
   onViewPositions,
 }: EarnAmountScreenProps) {
-  const { spacing } = useTheme();
+  const { colors, fontFamily } = useTheme();
+  const insets = useSafeAreaInsets();
   const succeeded = transaction?.phase === "success";
 
   return (
-    <>
-      <Screen
-        header={<PlainHeader title={view.title} onBack={onBack} />}
-        footer={<Button label={view.cta.label} icon={Wallet} disabled={view.cta.disabled} onPress={onSubmit} />}
-      >
-        <SegmentedControl segments={MODES} value={view.mode} onChange={onModeChange} />
-        <Card>
-          <AmountField
-            label={view.label}
-            caption={view.caption}
-            value={value}
-            onChangeText={onChangeText}
-            tokenSlot={<TokenPill symbol={symbol} />}
-            quickFills={QUICK_FILLS}
-            onQuickFill={onQuickFill}
-            error={view.error}
-          />
-        </Card>
-        <Card style={{ paddingVertical: spacing.xs }}>
-          {view.rows.map((row) => (
-            <DetailRow key={row.label} label={row.label} value={row.value} />
-          ))}
-          <Notice message={view.note} />
-        </Card>
-      </Screen>
+    <View style={{ flex: 1, backgroundColor: colors.background }}>
+      <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 24 }}>
+        <PlainHeader title={view.title} onBack={onBack} />
+        <View style={{ paddingTop: 8, paddingHorizontal: 16, gap: 12 }}>
+          <SegmentedControl segments={MODES} value={view.mode} onChange={onModeChange} />
+          <Card>
+            <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
+              <AppText variant="caption" color="textMuted" style={{ lineHeight: 16 }}>
+                {view.label}
+              </AppText>
+              <AppText variant="caption" color="textMuted" style={{ lineHeight: 16 }}>
+                {view.caption}
+              </AppText>
+            </View>
+            <View style={{ marginTop: 8, flexDirection: "row", alignItems: "center", gap: 12 }}>
+              <TextInput
+                accessibilityLabel={view.label}
+                value={value}
+                onChangeText={onChangeText}
+                keyboardType="decimal-pad"
+                placeholder="0.00"
+                placeholderTextColor={colors.textMuted}
+                style={{ flex: 1, padding: 0, fontSize: 32, lineHeight: 40, fontFamily: fontFamily.semibold, color: view.over ? colors.negative : colors.text }}
+              />
+              <TokenPill symbol={symbol} />
+            </View>
+            <View style={{ marginTop: 12, flexDirection: "row", gap: 8 }}>
+              {fills.map((fill) => (
+                <Chip key={fill.label} flex size="sm" label={fill.label} selected={fill.selected} onPress={() => onQuickFill(fill.fraction)} />
+              ))}
+            </View>
+          </Card>
+          <Card padded={false} style={{ paddingVertical: 4, paddingHorizontal: 16 }}>
+            {view.rows.map((row) => (
+              <DetailRow key={row.label} label={row.label} value={row.value} />
+            ))}
+            <View style={{ paddingVertical: 12, flexDirection: "row", gap: 8 }}>
+              <Icon name="info" size={16} color="textMuted" />
+              <AppText variant="caption" color="textMuted" style={{ flex: 1, lineHeight: 16 }}>
+                {view.note}
+              </AppText>
+            </View>
+          </Card>
+        </View>
+      </ScrollView>
+      <View style={{ paddingTop: 12, paddingHorizontal: 16, paddingBottom: Math.max(insets.bottom, 12) + 12, backgroundColor: colors.background, borderTopWidth: 1, borderTopColor: colors.divider }}>
+        <Button label={view.cta.label} icon="account_balance_wallet" disabled={view.cta.disabled} onPress={onSubmit} />
+      </View>
       <TransactionSheet
         state={transaction}
         primaryLabel={succeeded ? "View my positions" : undefined}
@@ -94,6 +117,6 @@ export function EarnAmountScreen({
         }}
         onClose={onTransactionClose}
       />
-    </>
+    </View>
   );
 }

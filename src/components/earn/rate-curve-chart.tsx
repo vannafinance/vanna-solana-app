@@ -1,58 +1,110 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { View } from "react-native";
+import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Svg, { Circle, Line, Path, Text as SvgText } from "react-native-svg";
+import { scheduleOnRN } from "react-native-worklets";
 
-import { AppText } from "@/components/ui/app-text";
-import { formatPercent } from "@/format/format-amount";
 import { useTheme } from "@/theme/use-theme";
-import type { RateCurve } from "@/types/earn";
+import type { RateSample } from "@/types/earn";
 
-const HEIGHT = 140;
-const PAD_TOP = 14;
-const PAD_BOTTOM = 10;
-const FULL_UTILIZATION_BPS = 10_000;
+import { niceTicks } from "./chart-scale";
 
 type RateCurveChartProps = {
-  curve: RateCurve;
-  utilizationBps: number;
-  borrowApyBps: number;
+  samples: readonly RateSample[];
+  kink: RateSample;
+  current: RateSample;
+  onScrub: (sample: RateSample | null) => void;
 };
 
-export function RateCurveChart({ curve, utilizationBps, borrowApyBps }: RateCurveChartProps) {
-  const { colors, fontFamily, fontSize } = useTheme();
-  const [width, setWidth] = useState(0);
+const HEIGHT = 168;
+const PAD_TOP = 28;
+const PAD_BOTTOM = 26;
+const PAD_RIGHT = 44;
+const LABEL_SIZE = 11;
 
-  const x = (bps: number) => (bps / FULL_UTILIZATION_BPS) * width;
-  const y = (rateBps: number) => PAD_TOP + (1 - rateBps / curve.maxRateBps) * (HEIGHT - PAD_TOP - PAD_BOTTOM);
-  const nowX = x(utilizationBps);
-  const kinkX = x(curve.kinkUtilizationBps);
-  const textProps = { fill: colors.textMuted, fontSize: fontSize.label, fontFamily: fontFamily.regular } as const;
+export function RateCurveChart({ samples, kink, current, onScrub }: RateCurveChartProps) {
+  const { colors, fontFamily } = useTheme();
+  const [width, setWidth] = useState(0);
+  const [cursor, setCursor] = useState<RateSample | null>(null);
+
+  const plot = useMemo(() => {
+    const chartWidth = Math.max(width - PAD_RIGHT, 1);
+    const chartHeight = HEIGHT - PAD_TOP - PAD_BOTTOM;
+    const ticks = niceTicks(0, samples[samples.length - 1].borrow, 3);
+    const top = ticks[ticks.length - 1];
+    const x = (utilization: number) => utilization * chartWidth;
+    const y = (rate: number) => PAD_TOP + (1 - rate / top) * chartHeight;
+    const trace = (rateOf: (sample: RateSample) => number) =>
+      samples.map((sample, index) => `${index === 0 ? "M" : "L"}${x(sample.utilization).toFixed(1)} ${y(rateOf(sample)).toFixed(1)}`).join(" ");
+    return { chartWidth, chartHeight, ticks, x, y, borrowPath: trace((sample) => sample.borrow), lenderPath: trace((sample) => sample.lender) };
+  }, [samples, width]);
+
+  const scrub = useMemo(() => {
+    const move = (touchX: number) => {
+      const fraction = Math.min(Math.max(touchX / plot.chartWidth, 0), 1);
+      const sample = samples[Math.round(fraction * (samples.length - 1))];
+      setCursor(sample);
+      onScrub(sample);
+    };
+    const release = () => {
+      setCursor(null);
+      onScrub(null);
+    };
+    return Gesture.Pan()
+      .minDistance(0)
+      .failOffsetY([-16, 16])
+      .onBegin((event) => scheduleOnRN(move, event.x))
+      .onUpdate((event) => scheduleOnRN(move, event.x))
+      .onFinalize(() => scheduleOnRN(release));
+  }, [plot.chartWidth, samples, onScrub]);
+
+  const baseline = PAD_TOP + plot.chartHeight;
+  const nowX = plot.x(current.utilization);
+  const label = `Interest rate curve. Borrow rate ${(current.borrow * 100).toFixed(2)}% at ${Math.round(current.utilization * 100)}% utilization; kink at ${Math.round(kink.utilization * 100)}%.`;
+  const bottomLabels = [
+    { x: 0, anchor: "start", text: "0%" },
+    { x: plot.chartWidth / 2, anchor: "middle", text: "50%" },
+    { x: plot.chartWidth, anchor: "end", text: "100% used" },
+  ] as const;
 
   return (
-    <View>
-      <View onLayout={(event) => setWidth(event.nativeEvent.layout.width)} style={{ height: HEIGHT }}>
+    <GestureDetector gesture={scrub}>
+      <View accessibilityRole="image" accessibilityLabel={label} onLayout={(event) => setWidth(event.nativeEvent.layout.width)} style={{ height: HEIGHT }}>
         {width > 0 ? (
           <Svg width={width} height={HEIGHT}>
-            <Line x1={0} y1={HEIGHT - PAD_BOTTOM} x2={width} y2={HEIGHT - PAD_BOTTOM} stroke={colors.divider} strokeWidth={1} />
-            <Path
-              d={`M${x(0)} ${y(curve.baseBps)} L${kinkX} ${y(curve.kinkRateBps)} L${x(FULL_UTILIZATION_BPS)} ${y(curve.maxRateBps)}`}
-              stroke={colors.primary}
-              strokeWidth={2.5}
-              fill="none"
-              strokeLinejoin="round"
-              strokeLinecap="round"
-            />
-            <Line x1={nowX} y1={0} x2={nowX} y2={HEIGHT - PAD_BOTTOM} stroke={colors.negative} strokeWidth={1.5} strokeDasharray="3 4" />
-            <Circle cx={nowX} cy={y(borrowApyBps)} r={5} fill={colors.negative} />
-            <SvgText x={nowX + 8} y={PAD_TOP} {...textProps}>{`Now · ${formatPercent(utilizationBps, 1)}`}</SvgText>
-            <SvgText x={kinkX} y={y(curve.kinkRateBps) - 8} textAnchor="middle" {...textProps}>{`Kink ${formatPercent(curve.kinkUtilizationBps, 0)}`}</SvgText>
+            {plot.ticks.map((tick) => (
+              <Line key={tick} x1={0} x2={plot.chartWidth} y1={plot.y(tick)} y2={plot.y(tick)} stroke={colors.divider} strokeWidth={1} />
+            ))}
+            {plot.ticks.map((tick) => (
+              <SvgText key={`label-${tick}`} x={width} y={plot.y(tick) + 4} textAnchor="end" fontSize={LABEL_SIZE} fill={colors.textMuted} fontFamily={fontFamily.regular}>
+                {`${Math.round(tick * 100)}%`}
+              </SvgText>
+            ))}
+            <Path d={plot.lenderPath} fill="none" stroke={colors.positive} strokeWidth={2} strokeDasharray="5 4" />
+            <Path d={plot.borrowPath} fill="none" stroke={colors.link} strokeWidth={2.5} strokeLinejoin="round" />
+            <Line x1={plot.x(kink.utilization)} x2={plot.x(kink.utilization)} y1={PAD_TOP} y2={baseline} stroke={colors.divider} strokeWidth={1} strokeDasharray="2 3" />
+            <SvgText x={plot.x(kink.utilization) - 8} y={plot.y(kink.borrow) - 10} textAnchor="end" fontSize={LABEL_SIZE} fill={colors.textMuted} fontFamily={fontFamily.regular}>
+              {`Kink ${Math.round(kink.utilization * 100)}%`}
+            </SvgText>
+            {bottomLabels.map(({ x, anchor, text }) => (
+              <SvgText key={text} x={x} y={HEIGHT - 6} textAnchor={anchor} fontSize={LABEL_SIZE} fill={colors.textMuted} fontFamily={fontFamily.regular}>
+                {text}
+              </SvgText>
+            ))}
+            <Line x1={nowX} x2={nowX} y1={PAD_TOP - 10} y2={baseline} stroke={colors.coral} strokeWidth={1.5} strokeDasharray="4 4" />
+            <Circle cx={nowX} cy={plot.y(current.borrow)} r={5} fill={colors.coral} stroke={colors.surface} strokeWidth={2} />
+            <SvgText x={nowX + 6} y={PAD_TOP - 12} fontSize={LABEL_SIZE} fill={colors.text} fontFamily={fontFamily.semibold}>
+              Now
+            </SvgText>
+            {cursor ? (
+              <>
+                <Line x1={plot.x(cursor.utilization)} x2={plot.x(cursor.utilization)} y1={PAD_TOP} y2={baseline} stroke={colors.text} strokeWidth={1} strokeDasharray="3 3" opacity={0.5} />
+                <Circle cx={plot.x(cursor.utilization)} cy={plot.y(cursor.borrow)} r={5} fill={colors.link} stroke={colors.surface} strokeWidth={2} />
+              </>
+            ) : null}
           </Svg>
         ) : null}
       </View>
-      <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
-        <AppText color="textMuted">0% utilization</AppText>
-        <AppText color="textMuted">100%</AppText>
-      </View>
-    </View>
+    </GestureDetector>
   );
 }

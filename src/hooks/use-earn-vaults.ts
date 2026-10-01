@@ -1,7 +1,7 @@
 import { useState } from "react";
 
-import { scaleSeries } from "@/lib/earn/overview-series";
-import { previewOverviewShapes, previewVaultCategories, previewVaults } from "@/lib/preview-data/earn";
+import { previewVaultCategories, previewVaults } from "@/lib/preview-data/earn";
+import { previewOverviewSeries } from "@/lib/preview-data/earn-series";
 import type { EarnOverview, OverviewMode, OverviewRange, PoolFilterOption, VaultSummary } from "@/types/earn";
 import type { Resource } from "@/types/resource";
 
@@ -17,8 +17,7 @@ export function useEarnVaults() {
   const overview: Resource<EarnOverview> = (() => {
     if (portfolio.status !== "ready") return portfolio;
     const value = mode === "deposit" ? portfolio.data.summary.suppliedUsd : portfolio.data.earnedUsd;
-    const shape = previewOverviewShapes[mode][range];
-    return previewResource({ value, series: scaleSeries(shape.levels, value, shape.endLevel) });
+    return previewResource({ value, ...previewOverviewSeries(mode, range) });
   })();
 
   const summaries: VaultSummary[] = previewVaults.map(
