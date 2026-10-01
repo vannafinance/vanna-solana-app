@@ -308,3 +308,14 @@ test("an unknown-size withdrawal resets that asset to its current deposit, so th
   assert.ok(afterWithdraw.every((point) => point.usd === 0n));
   assert.ok(series.points.some((point) => point.usd > 0n));
 });
+
+const { parseJupiterQuote } = loadTs("src/lib/solana/jupiter-quote.ts", stubs);
+
+test("a Jupiter quote keeps integer amounts and converts price impact to basis points", () => {
+  const quote = parseJupiterQuote({ outAmount: "70459485", otherAmountThreshold: "70107188", priceImpactPct: "0.0010831435098131170515079349" });
+  assert.equal(quote.amountOut, 70_459_485n);
+  assert.equal(quote.minReceived, 70_107_188n);
+  assert.equal(quote.priceImpactBps, 11);
+  assert.throws(() => parseJupiterQuote({ outAmount: 70459485, otherAmountThreshold: "1", priceImpactPct: "0" }), { kind: "invalid-response" });
+  assert.throws(() => parseJupiterQuote(null), { kind: "invalid-response" });
+});

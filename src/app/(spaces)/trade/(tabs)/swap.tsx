@@ -28,6 +28,9 @@ const QUICK_FILLS = [
 function ctaLabel(issue: SwapIssue | null, symbol: string) {
   if (issue === "no-amount") return "Enter an amount";
   if (issue === "insufficient-balance") return `Not enough ${symbol}`;
+  if (issue === "quoting") return "Finding the best price";
+  if (issue === "no-route") return "No route for this pair";
+  if (issue === "quote-failed") return "Price unavailable, try again";
   return "Swap · approve in wallet";
 }
 

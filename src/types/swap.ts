@@ -8,7 +8,6 @@ export type SwapToken = {
   decimals: number;
   priceUsd: bigint;
   balance: bigint;
-  depthUsd: bigint;
 };
 
 export type SwapRouteId = "jupiter" | "raydium";
@@ -35,7 +34,7 @@ export type SwapQuote = {
   slippageBps: number;
 };
 
-export type SwapIssue = "no-amount" | "insufficient-balance";
+export type SwapIssue = "no-amount" | "insufficient-balance" | "quoting" | "no-route" | "quote-failed";
 
 export type SwapState = {
   tokens: readonly SwapToken[];

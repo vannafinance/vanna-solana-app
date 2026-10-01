@@ -1,17 +1,18 @@
 import { router } from "expo-router";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useState } from "react";
 
 import { formatSwapAmount } from "@/format/format-swap-amount";
 import { parseUnits } from "@/format/format-amount";
 import { fractionOfBalance } from "@/lib/swap/fraction-of-balance";
-import { quoteExactIn } from "@/lib/swap/quote";
+import { defaultSwapSettings, swapRoutes } from "@/lib/swap/routes";
 import { AUTO_SLIPPAGE_BPS, effectiveSlippageBps } from "@/lib/swap/slippage";
 import { routes } from "@/navigation/routes";
-import { previewSwapDraft, previewSwapRoutes, previewSwapTokens } from "@/lib/preview-data/swap";
 import type { Resource } from "@/types/resource";
 import type { SwapIssue, SwapRouteId, SwapSettings, SwapState, SwapSymbol, SwapToken } from "@/types/swap";
 
 import { usePerpsTabFocus } from "./use-perps-tab-focus";
+import { useSwapQuote } from "./use-swap-quote";
+import { useSwapTokens } from "./use-swap-tokens";
 import { useTransactionFlow } from "./use-transaction-flow";
 
 function findToken(tokens: readonly SwapToken[], symbol: SwapSymbol): SwapToken {
@@ -20,33 +21,40 @@ function findToken(tokens: readonly SwapToken[], symbol: SwapSymbol): SwapToken 
   return token;
 }
 
+const DEFAULT_FROM: SwapSymbol = "USDC";
+const DEFAULT_TO: SwapSymbol = "TSLAx";
+
 export function useSwap() {
   usePerpsTabFocus("swap");
-  const tokens = previewSwapTokens;
-  const [fromSymbol, setFromSymbol] = useState<SwapSymbol>(previewSwapDraft.from);
-  const [toSymbol, setToSymbol] = useState<SwapSymbol>(previewSwapDraft.to);
-  const [amountText, setAmountText] = useState(previewSwapDraft.amountText);
-  const [settings, setSettings] = useState<SwapSettings>(previewSwapDraft.settings);
+  const tokens = useSwapTokens();
+  const [fromSymbol, setFromSymbol] = useState<SwapSymbol>(DEFAULT_FROM);
+  const [toSymbol, setToSymbol] = useState<SwapSymbol>(DEFAULT_TO);
+  const [amountText, setAmountText] = useState("");
+  const [settings, setSettings] = useState<SwapSettings>(defaultSwapSettings);
   const [routeId, setRouteId] = useState<SwapRouteId>("jupiter");
 
-  const from = findToken(tokens, fromSymbol);
-  const to = findToken(tokens, toSymbol);
+  const list = tokens.status === "ready" ? tokens.data : null;
+  const from = list ? findToken(list, fromSymbol) : null;
+  const to = list ? findToken(list, toSymbol) : null;
   const slippageBps = effectiveSlippageBps(settings);
-  const amountIn = parseUnits(amountText, from.decimals);
+  const amountIn = from ? parseUnits(amountText, from.decimals) : null;
 
-  const { quote, issue } = useMemo(() => {
-    if (amountIn === null || amountIn === 0n) return { quote: null, issue: "no-amount" as SwapIssue };
-    return {
-      quote: quoteExactIn(amountIn, from, to, slippageBps),
-      issue: amountIn > from.balance ? ("insufficient-balance" as SwapIssue) : null,
-    };
-  }, [amountIn, from, to, slippageBps]);
+  const placeholder: SwapToken = { symbol: fromSymbol, name: "", decimals: 0, priceUsd: 1n, balance: 0n };
+  const live = useSwapQuote(from ?? placeholder, to ?? placeholder, from && to ? amountIn : null, slippageBps);
+  const quote = live.quote;
+  const issue: SwapIssue | null = (() => {
+    if (amountIn === null || amountIn === 0n) return "no-amount";
+    if (from && amountIn > from.balance) return "insufficient-balance";
+    if (live.noRoute) return "no-route";
+    if (live.failed) return "quote-failed";
+    return quote === null || live.loading ? "quoting" : null;
+  })();
 
   const flow = useTransactionFlow({
     success: {
       title: "Swapped",
       message:
-        amountIn !== null && quote
+        amountIn !== null && quote && from && to
           ? `${formatSwapAmount(amountIn, from.decimals, from.symbol)} ${from.symbol} → ${formatSwapAmount(quote.amountOut, to.decimals, to.symbol)} ${to.symbol}`
           : "",
     },
@@ -70,20 +78,25 @@ export function useSwap() {
   const flip = useCallback(() => {
     setFromSymbol(toSymbol);
     setToSymbol(fromSymbol);
-    setAmountText(quote ? fractionOfBalance(quote.amountOut, to.decimals, 1) : "");
-  }, [fromSymbol, toSymbol, quote, to.decimals]);
+    setAmountText(quote && to ? fractionOfBalance(quote.amountOut, to.decimals, 1) : "");
+  }, [fromSymbol, toSymbol, quote, to]);
 
-  const fill = useCallback((fraction: number) => setAmountText(fractionOfBalance(from.balance, from.decimals, fraction)), [from]);
+  const fill = useCallback((fraction: number) => from && setAmountText(fractionOfBalance(from.balance, from.decimals, fraction)), [from]);
 
   const selectRoute = useCallback((id: SwapRouteId) => {
-    if (previewSwapRoutes.some((route) => route.id === id && route.available)) setRouteId(id);
+    if (swapRoutes.some((route) => route.id === id && route.available)) setRouteId(id);
   }, []);
 
-  const route = previewSwapRoutes.find((candidate) => candidate.id === routeId) ?? previewSwapRoutes[0];
-  const swap: Resource<SwapState> = {
-    status: "ready",
-    data: { tokens, from, to, amountText, quote, issue, settings, slippageBps, autoSlippageBps: AUTO_SLIPPAGE_BPS, route, routes: previewSwapRoutes },
-  };
+  const route = swapRoutes.find((candidate) => candidate.id === routeId) ?? swapRoutes[0];
+  const swap: Resource<SwapState> =
+    tokens.status !== "ready" || !from || !to
+      ? tokens.status === "ready" ? { status: "empty" } : tokens
+      : {
+          status: "ready",
+          stale: tokens.stale,
+          refresh: tokens.refresh,
+          data: { tokens: tokens.data, from, to, amountText, quote, issue, settings, slippageBps, autoSlippageBps: AUTO_SLIPPAGE_BPS, route, routes: swapRoutes },
+        };
 
   return {
     swap,
