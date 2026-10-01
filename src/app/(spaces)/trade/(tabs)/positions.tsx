@@ -25,8 +25,8 @@ export default function PerpsPositionsScreen() {
       {data ? (
         <TradeHero
           label="Open PnL"
-          value={formatSignedUsd(data.openPnl)}
-          valueColor={data.openPnl >= 0n ? "heroPositive" : "short"}
+          value={data.positionsAvailable ? formatSignedUsd(data.openPnl) : "—"}
+          valueColor={!data.positionsAvailable || data.openPnl >= 0n ? "heroPositive" : "short"}
           accessory={<HealthGauge health={data.account.health} />}
           stats={[
             { label: "Margin", value: formatUsd(data.account.margin) },
@@ -56,7 +56,7 @@ export default function PerpsPositionsScreen() {
       ListHeaderComponent={header}
       ListEmptyComponent={
         <AppText color="textMuted" style={{ textAlign: "center", padding: 24 }}>
-          No open positions
+          {data.positionsAvailable ? "No open positions" : "Your positions are unavailable right now. Balances above are live."}
         </AppText>
       }
       renderItem={({ item, index }) => (

@@ -14,10 +14,11 @@ type PerpsHistoryListProps = {
   header: ReactNode;
   closed: readonly ClosedSummary[];
   winRateBps: number;
+  available?: boolean;
   onOpenExplorer: () => void;
 };
 
-export function PerpsHistoryList({ header, closed, winRateBps, onOpenExplorer }: PerpsHistoryListProps) {
+export function PerpsHistoryList({ header, closed, winRateBps, available = true, onOpenExplorer }: PerpsHistoryListProps) {
   const { colors, radius } = useTheme();
   const [openId, setOpenId] = useState<string | null>(closed[0]?.id ?? null);
 
@@ -43,7 +44,7 @@ export function PerpsHistoryList({ header, closed, winRateBps, onOpenExplorer }:
                 Win rate
               </AppText>
               <AppText variant="bodyLg" strong style={{ lineHeight: 24 }}>
-                {formatPercent(winRateBps, 0)}
+                {available ? formatPercent(winRateBps, 0) : "—"}
               </AppText>
             </View>
           </View>
@@ -52,7 +53,7 @@ export function PerpsHistoryList({ header, closed, winRateBps, onOpenExplorer }:
       ListEmptyComponent={
         <View style={{ marginHorizontal: 16, padding: 24, borderBottomLeftRadius: radius.md, borderBottomRightRadius: radius.md, backgroundColor: colors.surface }}>
           <AppText color="textMuted" style={{ textAlign: "center" }}>
-            No closed positions yet
+            {available ? "No closed positions yet" : "Your trade history is unavailable right now."}
           </AppText>
         </View>
       }

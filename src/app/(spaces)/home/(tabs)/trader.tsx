@@ -63,7 +63,7 @@ export default function Trader() {
                   <HeroMetrics
                     size="large"
                     accessory={data.health === null ? undefined : <HeroHealth health={data.health} />}
-                    primary={[{ label: "Trader portfolio", value: formatSignedUsd(headline), positive: headline >= 0n, plain: true }]}
+                    primary={[{ label: "Trader portfolio", value: headline === null ? "—" : formatSignedUsd(headline), positive: headline !== null && headline >= 0n, plain: true }]}
                     secondary={[
                       { label: "Margin", value: formatUsd(data.margin) },
                       { label: "Available", value: formatUsd(data.available) },
@@ -84,19 +84,27 @@ export default function Trader() {
                 <>
                   <SegmentedControl
                     segments={[
-                      { value: "current", label: "Current", badge: String(visible.length) },
-                      { value: "history", label: "History", badge: String(data.history.length) },
+                      { value: "current", label: "Current", badge: data.positionsAvailable ? String(visible.length) : undefined },
+                      { value: "history", label: "History", badge: data.positionsAvailable ? String(data.history.length) : undefined },
                     ]}
                     value={tab}
                     onChange={setTab}
                   />
                   {tab === "history" ? (
-                    <TraderHistoryList history={data.history} winRateBps={data.winRateBps} onExplorer={openExplorer} />
+                    data.positionsAvailable ? (
+                      <TraderHistoryList history={data.history} winRateBps={data.winRateBps} onExplorer={openExplorer} />
+                    ) : (
+                      <EmptyCard title="History unavailable" message="We can't load your trade history right now." />
+                    )
                   ) : (
                     <>
                       <ChipRow options={filters} value={filter} onChange={setFilter} />
                       {visible.length === 0 ? (
-                        <EmptyCard title="No open positions" message="Positions you open in Perps or Farm show up here." />
+                        data.positionsAvailable ? (
+                          <EmptyCard title="No open positions" message="Positions you open in Perps or Farm show up here." />
+                        ) : (
+                          <EmptyCard title="Positions unavailable" message="We can't load your positions right now. The balances above are live." />
+                        )
                       ) : (
                         visible.map((position) => (
                           <TraderPositionCard

@@ -350,3 +350,22 @@ test("a healthy account and an acknowledged warning are not unread, and no margi
   assert.equal(deriveNotifications({ ...base, health: 1.2, hasMarginAccount: true, healthAcknowledged: true })[0].unread, false);
   assert.equal(deriveNotifications({ ...base, health: null, hasMarginAccount: false, healthAcknowledged: false }).length, 0);
 });
+
+const { buildMarkets } = loadTs("src/lib/perps/build-markets.ts", stubs);
+
+test("perps markets come from pool rates, free liquidity and oracle prices, and need the USDC pool", () => {
+  const pools = parsePools({
+    USDC: { totalSupply: "55000", totalBorrowed: "3556", utilizationRate: "6", supplyAPY: "0.05", borrowAPY: "0.81", exchangeRate: "1" },
+    TSLAx: { totalSupply: "110", totalBorrowed: "42", utilizationRate: "38", supplyAPY: "1.82", borrowAPY: "4.77", exchangeRate: "1" },
+  });
+  const [market, ...rest] = buildMarkets(pools, { TSLAx: 357_000_000n, USDC: 1_000_000n });
+  assert.equal(rest.length, 0);
+  assert.equal(market.symbol, "TSLAx");
+  assert.equal(market.tokenBorrowBps, 477);
+  assert.equal(market.usdcBorrowBps, 81);
+  assert.equal(market.liquidityUsd, 68n * 357_000_000n);
+  assert.equal(market.maxLeverage, 5);
+  assert.equal(market.kind, "xStocks");
+  assert.equal(buildMarkets({ TSLAx: pools.TSLAx }, { TSLAx: 357_000_000n }).length, 0);
+  assert.equal(buildMarkets(pools, {}).length, 0);
+});

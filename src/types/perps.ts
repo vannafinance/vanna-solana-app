@@ -68,6 +68,7 @@ export type PerpsAccount = {
 
 export type PerpsPortfolio = {
   account: PerpsAccount;
+  positionsAvailable: boolean;
   positions: PositionSummary[];
   openPnl: bigint;
   closed: ClosedSummary[];

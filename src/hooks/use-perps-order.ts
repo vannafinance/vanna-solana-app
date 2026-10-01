@@ -13,7 +13,6 @@ import { useTransactionFlow } from "./use-transaction-flow";
 import { routes } from "@/navigation/routes";
 
 const DECIMALS = 6;
-const DEFAULT_COLLATERAL = "500.00";
 const DEFAULT_LEVERAGE = 3;
 
 export type OrderTicket = {
@@ -29,7 +28,7 @@ export function usePerpsOrder(symbol: string, initialSide: Side) {
   const portfolio = usePerpsPositions();
   const marginAccount = useMarginAccount();
   const [side, setSide] = useState(initialSide);
-  const [amountText, setAmountText] = useState(DEFAULT_COLLATERAL);
+  const [amountText, setAmountText] = useState("");
   const [leverage, setLeverage] = useState(DEFAULT_LEVERAGE);
 
   const ticket = combineResources(market, portfolio, (perpsMarket, data): OrderTicket => {

@@ -1,12 +1,12 @@
 import { useMemo, useState, useSyncExternalStore } from "react";
 
 import { usdToTokens } from "@/lib/perps/position-math";
-import { summarizePosition } from "@/lib/perps/summarize-portfolio";
-import { getWatchlist, previewCandles, previewMarkets, previewPositions, subscribeWatchlist, toggleWatchlist } from "@/lib/preview-data/perps";
+import { getWatchlist, subscribeWatchlist, toggleWatchlist } from "@/lib/perps/watchlist-store";
 import type { Candle, MarketKind, MarketListItem, PerpsMarket, PositionSummary, Timeframe } from "@/types/perps";
 import type { Resource } from "@/types/resource";
 
-import { previewResource } from "./preview-resource";
+import { useMarketList } from "./use-market-list";
+import { usePerpsPositions } from "./use-perps-positions";
 
 export type MarketFilter = "All" | MarketKind | "Watchlist";
 
@@ -30,39 +30,50 @@ function matches(item: MarketListItem, filter: MarketFilter, query: string) {
 
 export function usePerpsMarkets() {
   const watched = useSyncExternalStore(subscribeWatchlist, getWatchlist);
+  const list = useMarketList();
   const [filter, setFilter] = useState<MarketFilter>("All");
   const [query, setQuery] = useState("");
 
   const markets = useMemo<Resource<MarketListItem[]>>(() => {
-    const visible = previewMarkets.map((market) => ({ ...market, watched: watched.has(market.symbol) })).filter((item) => matches(item, filter, query));
-    return visible.length === 0 ? { status: "empty" } : previewResource(visible);
-  }, [watched, filter, query]);
+    if (list.status !== "ready") return list;
+    const visible = list.data.map((market) => ({ ...market, watched: watched.has(market.symbol) })).filter((item) => matches(item, filter, query));
+    return visible.length === 0 ? { status: "empty" } : { ...list, data: visible };
+  }, [list, watched, filter, query]);
 
   return { markets, filter, setFilter, query, setQuery, toggleWatch: toggleWatchlist };
 }
 
 export function useMarketBySymbol(symbol: string): Resource<PerpsMarket> {
-  const market = previewMarkets.find((candidate) => candidate.symbol === symbol);
-  return market ? previewResource(market) : { status: "empty" };
+  const list = useMarketList();
+  if (list.status !== "ready") return list;
+  const market = list.data.find((candidate) => candidate.symbol === symbol);
+  return market ? { ...list, data: market } : { status: "empty" };
 }
 
+// No candle source exists for these markets yet, so the chart receives none and says so.
 export function usePerpsMarket(symbol: string) {
   const watched = useSyncExternalStore(subscribeWatchlist, getWatchlist);
+  const list = useMarketList();
+  const portfolio = usePerpsPositions();
   const [timeframe, setTimeframe] = useState<Timeframe>("1D");
 
   const detail = useMemo<Resource<MarketDetail>>(() => {
-    const market = previewMarkets.find((candidate) => candidate.symbol === symbol);
+    if (list.status !== "ready") return list;
+    const market = list.data.find((candidate) => candidate.symbol === symbol);
     if (!market) return { status: "empty" };
-    const open = previewPositions.find((position) => position.symbol === market.symbol);
-    return previewResource({
-      market,
-      markets: previewMarkets,
-      liquidityTokens: usdToTokens(market.liquidityUsd, market.markPrice),
-      candles: previewCandles(timeframe, market.markPrice),
-      watched: watched.has(market.symbol),
-      position: open ? summarizePosition(open, market.markPrice) : null,
-    });
-  }, [symbol, timeframe, watched]);
+    const open = portfolio.status === "ready" ? portfolio.data.positions.find((position) => position.symbol === market.symbol) : undefined;
+    return {
+      ...list,
+      data: {
+        market,
+        markets: list.data,
+        liquidityTokens: usdToTokens(market.liquidityUsd, market.markPrice),
+        candles: [],
+        watched: watched.has(market.symbol),
+        position: open ?? null,
+      },
+    };
+  }, [list, portfolio, symbol, watched]);
 
   return { detail, timeframe, setTimeframe, toggleWatch: toggleWatchlist };
 }

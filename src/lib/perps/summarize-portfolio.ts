@@ -51,6 +51,7 @@ export function summarizePortfolio({ margin, borrowed, markets, positions, close
 
   return {
     account: buildAccount(margin, borrowed),
+    positionsAvailable: true,
     positions: open,
     openPnl: open.reduce((sum, position) => sum + position.pnl, 0n),
     closed: history,

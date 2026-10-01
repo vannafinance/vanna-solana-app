@@ -3,12 +3,13 @@ import * as WebBrowser from "expo-web-browser";
 import { useCallback, useState } from "react";
 
 import { enterTradeTab, tradeTabBefore } from "@/lib/perps/trade-tab-focus";
-import { previewAccount } from "@/lib/preview-data/home";
+import { useMarginAccount } from "@/hooks/use-margin-account";
 
 export type HistoryView = "perps" | "swaps";
 
 export function usePerpsHistoryView() {
   const [view, setView] = useState<HistoryView>("perps");
+  const { address } = useMarginAccount();
 
   useFocusEffect(
     useCallback(() => {
@@ -20,6 +21,8 @@ export function usePerpsHistoryView() {
   return {
     view,
     setView,
-    openExplorer: () => void WebBrowser.openBrowserAsync(`https://solscan.io/account/${previewAccount.marginAddress}`),
+    openExplorer: () => {
+      if (address !== null) void WebBrowser.openBrowserAsync(`https://solscan.io/account/${address}`);
+    },
   };
 }

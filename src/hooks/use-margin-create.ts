@@ -5,8 +5,7 @@ import { shortAddress } from "@/format/short-address";
 import { useMarginAccount } from "@/hooks/use-margin-account";
 import { useTransactionFlow } from "@/hooks/use-transaction-flow";
 import { previewApproval } from "@/lib/preview-data/approval-outcome";
-import { previewAccount } from "@/lib/preview-data/home";
-import { previewMarkets } from "@/lib/preview-data/perps";
+import { DEFAULT_MARKET } from "@/lib/perps/build-markets";
 import { spaceRoutes } from "@/navigation/routes";
 import { TransactionError } from "@/types/transaction";
 
@@ -30,7 +29,7 @@ async function approveMarginAccount() {
 }
 
 export function useMarginCreate() {
-  const { markCreated } = useMarginAccount();
+  const { markCreated, address } = useMarginAccount();
   const [agreementOpen, setAgreementOpen] = useState(false);
   const [agreed, setAgreed] = useState(false);
   const [openSection, setOpenSection] = useState<number | null>(0);
@@ -40,7 +39,7 @@ export function useMarginCreate() {
     run: approveMarginAccount,
     success: {
       title: "Margin account active",
-      message: `Account ${shortAddress(previewAccount.marginAddress)} is ready. You can now trade Perps and Farm.`,
+      message: address === null ? "Your margin account is ready. You can now trade Perps and Farm." : `Account ${shortAddress(address)} is ready. You can now trade Perps and Farm.`,
     },
   });
 
@@ -56,7 +55,7 @@ export function useMarginCreate() {
     agreementOpen,
     agreed,
     openSection,
-    marginAddress: shortAddress(previewAccount.marginAddress),
+    marginAddress: address === null ? "" : shortAddress(address),
     openAgreement: () => setAgreementOpen(true),
     closeAgreement: () => setAgreementOpen(false),
     toggleAgreed: () => setAgreed((value) => !value),
@@ -73,6 +72,6 @@ export function useMarginCreate() {
       flow.close();
       router.replace(spaceRoutes.trade);
     },
-    openPosition: () => router.replace(`/trade/order/${previewMarkets[0].symbol}?side=long`),
+    openPosition: () => router.replace(`/trade/order/${DEFAULT_MARKET}?side=long`),
   };
 }

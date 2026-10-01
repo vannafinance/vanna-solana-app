@@ -106,15 +106,16 @@ export type Portfolio = {
 };
 
 export type TraderSummary = {
-  perpPnl: bigint;
-  farmPnl: bigint;
+  positionsAvailable: boolean;
+  perpPnl: bigint | null;
+  farmPnl: bigint | null;
   margin: bigint;
   available: bigint;
   borrowed: bigint;
   health: number | null;
   current: Position[];
   history: ClosedPosition[];
-  realizedPnl: bigint;
+  realizedPnl: bigint | null;
   winRateBps: number;
   explorerUrl: string;
 };

@@ -18,7 +18,6 @@ import { useAppearance } from "@/hooks/use-appearance";
 import { useAppInfo } from "@/hooks/use-app-info";
 import { useApprovalOutcome } from "@/hooks/use-approval-outcome";
 import { useConnectivity } from "@/hooks/use-connectivity";
-import { useMarginAccount } from "@/hooks/use-margin-account";
 import { usePortfolio } from "@/hooks/use-portfolio";
 import { useShareText } from "@/hooks/use-share-text";
 import { useWalletConnection } from "@/hooks/use-wallet-connection";
@@ -31,7 +30,6 @@ export default function Profile() {
   const info = useAppInfo();
   const share = useShareText();
   const approval = useApprovalOutcome();
-  const margin = useMarginAccount();
   const connectivity = useConnectivity();
   const wallet = useWalletConnection();
 
@@ -75,8 +73,6 @@ export default function Profile() {
         <DeveloperControls
           outcome={approval.outcome}
           onOutcome={approval.setOutcome}
-          marginReset={!margin.exists}
-          onMarginReset={(reset) => (reset ? margin.reset() : margin.markCreated())}
           offline={!connectivity.online}
           onOffline={connectivity.simulateOffline}
         />

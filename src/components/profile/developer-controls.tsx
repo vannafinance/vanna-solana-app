@@ -10,8 +10,6 @@ export type OutcomeValue = "success" | "network" | "rejected" | "no-fee" | "pric
 type DeveloperControlsProps = {
   outcome: OutcomeValue;
   onOutcome: (outcome: OutcomeValue) => void;
-  marginReset: boolean;
-  onMarginReset: (reset: boolean) => void;
   offline: boolean;
   onOffline: (offline: boolean) => void;
 };
@@ -65,7 +63,6 @@ export function DeveloperControls(props: DeveloperControlsProps) {
           <Chip key={option.value} label={option.label} selected={props.outcome === option.value} onPress={() => props.onOutcome(option.value)} />
         ))}
       </View>
-      <ToggleRow label="Reset margin account" value={props.marginReset} onChange={props.onMarginReset} />
       <ToggleRow label="Simulate offline" value={props.offline} onChange={props.onOffline} />
     </Card>
   );

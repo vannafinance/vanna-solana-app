@@ -71,7 +71,15 @@ export default function PerpsMarketScreen() {
               {formatUsd(market.markPrice)}
             </AppText>
             <View style={{ marginTop: 16, marginHorizontal: -4 }}>
-              <PriceChart candles={candles} lastPrice={market.markPrice} accessibilityLabel={`${market.pair} price, ${timeframe} candles`} />
+              {candles.length === 0 ? (
+                <View style={{ height: 184, alignItems: "center", justifyContent: "center" }}>
+                  <AppText variant="body" color="textMuted">
+                    Price chart unavailable
+                  </AppText>
+                </View>
+              ) : (
+                <PriceChart candles={candles} lastPrice={market.markPrice} accessibilityLabel={`${market.pair} price, ${timeframe} candles`} />
+              )}
             </View>
             <View style={{ marginTop: 8 }}>
               <TimeframeTabs options={TIMEFRAMES} value={timeframe} onChange={setTimeframe} />
