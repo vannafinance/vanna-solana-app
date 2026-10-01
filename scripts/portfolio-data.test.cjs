@@ -192,3 +192,55 @@ test("lender history groups by day and words supplies and withdrawals", () => {
   assert.equal(groups[0].items[0].title, "Withdrew SOL");
   assert.equal(groups[1].items[0].title, "Supplied 9.99 SOL");
 });
+
+const { decodeSpotSwap } = loadTs("src/lib/solana/spot-swaps.ts", stubs);
+const { toHistoryEntries, volumeSince } = loadTs("src/lib/swap/spot-swap-history.ts", stubs);
+
+const WALLET = "2iyYKhNcD5fiPNphQQDq1KVqVVR3iXrwy6UFkYuhF98e";
+const OPENAI_MINT = "PreweJYECqtQwBtpxHL171nL2K6umo692gTm7Q3rpgF";
+
+function jupiterSwap({ solLamports, openaiRaw, fee = 5000 }) {
+  return {
+    signature: "sigSwap",
+    blockTime: 1_790_000_000,
+    tx: {
+      meta: {
+        err: null,
+        fee,
+        logMessages: ["Program JUP6LkbZbjS1jKKwapdHNy74zcZ3tLUZoi5QNyVTaV4 invoke [1]"],
+        preBalances: [10_000_000_000],
+        postBalances: [10_000_000_000 - solLamports - fee],
+        preTokenBalances: [{ accountIndex: 3, mint: OPENAI_MINT, owner: WALLET, uiTokenAmount: { amount: "0", decimals: 9 } }],
+        postTokenBalances: [{ accountIndex: 3, mint: OPENAI_MINT, owner: WALLET, uiTokenAmount: { amount: String(openaiRaw), decimals: 9 } }],
+      },
+      transaction: { message: { accountKeys: [{ pubkey: { toBase58: () => WALLET } }] } },
+    },
+  };
+}
+
+test("a Jupiter swap is read from token and lamport changes with the fee added back", () => {
+  const swap = decodeSpotSwap(jupiterSwap({ solLamports: 18_744_465_367, openaiRaw: 923_256_828 }), WALLET);
+  assert.equal(swap.from, "SOL");
+  assert.equal(swap.to, "OPENAI");
+  assert.equal(swap.amountIn, 18_744_465_367n);
+  assert.equal(swap.amountOut, 923_256_828n);
+  assert.equal(swap.timestamp, 1_790_000_000_000);
+});
+
+test("a transaction without Jupiter is not a swap", () => {
+  const tx = jupiterSwap({ solLamports: 1_000_000_000, openaiRaw: 1 });
+  tx.tx.meta.logMessages = ["Program 11111111111111111111111111111111 invoke [1]"];
+  assert.equal(decodeSpotSwap(tx, WALLET), null);
+});
+
+test("swap volume values the sold token at the oracle price and counts only the last 30 days", () => {
+  const swaps = [
+    { signature: "a", timestamp: 9_999_999_000, from: "SOL", to: "USDC", amountIn: 2_000_000_000n, decimalsIn: 9, amountOut: 1n, decimalsOut: 6 },
+    { signature: "b", timestamp: 1_000, from: "SOL", to: "USDC", amountIn: 5_000_000_000n, decimalsIn: 9, amountOut: 1n, decimalsOut: 6 },
+  ];
+  const entries = toHistoryEntries(swaps, { SOL: 100_000_000n });
+  assert.equal(entries[0].valueUsd, 200_000_000n);
+  assert.equal(volumeSince(entries, 10_000_000_000), 200_000_000n);
+  const month = 30 * 24 * 60 * 60 * 1000;
+  assert.equal(volumeSince(entries, 1_000 + month), 700_000_000n);
+});

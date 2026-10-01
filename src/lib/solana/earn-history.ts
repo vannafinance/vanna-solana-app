@@ -1,10 +1,10 @@
-import type { Connection, ParsedTransactionWithMeta, PartiallyDecodedInstruction, ParsedInstruction } from "@solana/web3.js";
+import type { ParsedInstruction, ParsedTransactionWithMeta, PartiallyDecodedInstruction } from "@solana/web3.js";
 import { PublicKey } from "@solana/web3.js";
 
 import { type AssetSymbol, assetByMint } from "./assets";
 import { VANNA_PROGRAM_ID } from "./config";
 import { decodeBase58 } from "./base58";
-import { ApiError } from "./request-json";
+import type { WalletTransaction } from "./wallet-transactions";
 
 export type EarnEvent = {
   kind: "supply" | "withdraw";
@@ -18,10 +18,6 @@ const SUPPLY = [52, 247, 77, 250, 74, 122, 100, 33];
 const REDEEM = [22, 48, 40, 70, 164, 48, 75, 224];
 const UNDERLYING_MINT_INDEX = 4;
 const LENDER_TOKEN_ACCOUNT_INDEX = 5;
-
-const PAGE_SIZE = 1000;
-const CONCURRENCY = 8;
-export const DEFAULT_MAX_SIGNATURES = 1000;
 
 const matches = (data: Uint8Array, discriminator: readonly number[]) => discriminator.every((byte, index) => data[index] === byte);
 
@@ -67,31 +63,8 @@ export function decodeEarnEvents(tx: ParsedTransactionWithMeta, signature: strin
   return events;
 }
 
-// Newest first. Failed transactions are dropped before they are fetched.
-export async function fetchEarnEvents(connection: Connection, wallet: string, maxSignatures = DEFAULT_MAX_SIGNATURES): Promise<EarnEvent[]> {
-  const owner = new PublicKey(wallet);
-  const signatures: { signature: string; blockTime: number }[] = [];
-  let before: string | undefined;
-
-  try {
-    while (signatures.length < maxSignatures) {
-      const page = await connection.getSignaturesForAddress(owner, { limit: Math.min(PAGE_SIZE, maxSignatures - signatures.length), before }, "confirmed");
-      signatures.push(...page.filter((entry) => !entry.err).map((entry) => ({ signature: entry.signature, blockTime: entry.blockTime ?? 0 })));
-      if (page.length < PAGE_SIZE) break;
-      before = page[page.length - 1].signature;
-    }
-
-    const events: EarnEvent[] = [];
-    for (let i = 0; i < signatures.length; i += CONCURRENCY) {
-      const batch = await Promise.all(
-        signatures.slice(i, i + CONCURRENCY).map((entry) =>
-          connection.getParsedTransaction(entry.signature, { commitment: "confirmed", maxSupportedTransactionVersion: 0 }).then((tx) => ({ tx, ...entry })),
-        ),
-      );
-      for (const { tx, signature, blockTime } of batch) if (tx) events.push(...decodeEarnEvents(tx, signature, blockTime));
-    }
-    return events.sort((a, b) => b.timestamp - a.timestamp);
-  } catch {
-    throw new ApiError("network");
-  }
+export function earnEventsFrom(transactions: readonly WalletTransaction[]): EarnEvent[] {
+  return transactions
+    .flatMap(({ tx, signature, blockTime }) => decodeEarnEvents(tx, signature, blockTime))
+    .sort((a, b) => b.timestamp - a.timestamp);
 }
