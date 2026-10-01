@@ -7,6 +7,12 @@ import type { ConnectPhase } from "@/types/connection";
 
 const AUTHORIZATION_FAILED = -1;
 
+const ELLIPSIS_FALLBACK = "..";
+
+function walletLabel(label: string | undefined) {
+  return label && !label.includes(ELLIPSIS_FALLBACK) ? label : undefined;
+}
+
 export function useWalletConnection() {
   const { account, connect, disconnect } = useMobileWallet();
   const queryClient = useQueryClient();
@@ -14,6 +20,7 @@ export function useWalletConnection() {
   const [phase, setPhase] = useState<ConnectPhase>("pick");
   const [checking, setChecking] = useState(false);
   const [walletMissing, setWalletMissing] = useState(false);
+  const [declinedByWallet, setDeclinedByWallet] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string>();
 
   const authorize = async () => {
@@ -22,6 +29,7 @@ export function useWalletConnection() {
     setChecking(true);
     setPhase("approving");
     setErrorMessage(undefined);
+    setDeclinedByWallet(false);
     try {
       await connect();
       setWalletMissing(false);
@@ -35,6 +43,7 @@ export function useWalletConnection() {
       } else if (code === "ERROR_ASSOCIATION_CANCELLED" || /CancellationException|Local association cancelled by user/i.test(message)) {
         setPhase("pick");
       } else {
+        setDeclinedByWallet(code === AUTHORIZATION_FAILED);
         setErrorMessage(code === AUTHORIZATION_FAILED
           ? "The wallet declined the connection. You can try again."
           : code === "ERROR_SESSION_TIMEOUT"
@@ -81,8 +90,9 @@ export function useWalletConnection() {
     phase: account ? "connected" as const : phase,
     checking,
     walletMissing,
+    declinedByWallet,
     errorMessage,
-    walletName: "your wallet",
+    walletName: walletLabel(account?.label),
     address: account?.address.toBase58() ?? "",
     connect: authorize,
     authorize,
