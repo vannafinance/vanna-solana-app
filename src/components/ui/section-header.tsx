@@ -10,11 +10,11 @@ type SectionHeaderProps = {
 
 export function SectionHeader({ title, actionLabel, onAction }: SectionHeaderProps) {
   return (
-    <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+    <View style={{ flexDirection: "row", alignItems: "baseline", justifyContent: "space-between" }}>
       <AppText variant="heading">{title}</AppText>
       {actionLabel && onAction ? (
         <Pressable accessibilityRole="button" accessibilityLabel={actionLabel} onPress={onAction} hitSlop={12}>
-          <AppText variant="bodyLg" color="link" strong>
+          <AppText variant="body" color="link" strong>
             {actionLabel}
           </AppText>
         </Pressable>

@@ -4,6 +4,7 @@ export const routes = {
   marginCreate: "/margin/create",
   tradeSwap: "/trade/swap",
   tradePositions: "/trade/positions",
+  tradeHistory: "/trade/history",
   farmPositions: "/farm/positions",
 } as const;
 

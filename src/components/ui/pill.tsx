@@ -9,10 +9,12 @@ type PillTone = "purple" | "teal" | "pink" | "long" | "short";
 type PillProps = {
   label: string;
   tone?: PillTone;
+  shape?: "pill" | "tag";
 };
 
-export function Pill({ label, tone = "purple" }: PillProps) {
+export function Pill({ label, tone = "purple", shape = "pill" }: PillProps) {
   const { colors, radius } = useTheme();
+  const tag = shape === "tag";
 
   const palette = {
     purple: { bg: colors.purpleTint, fg: colors.onPurpleTint },
@@ -23,8 +25,17 @@ export function Pill({ label, tone = "purple" }: PillProps) {
   }[tone];
 
   return (
-    <View style={{ alignSelf: "flex-start", paddingHorizontal: 10, paddingVertical: 3, borderRadius: radius.pill, backgroundColor: palette.bg }}>
-      <AppText variant="label" strong style={{ color: palette.fg }}>
+    <View
+      style={{
+        alignSelf: "flex-start",
+        height: tag ? 20 : 22,
+        paddingHorizontal: 8,
+        borderRadius: tag ? radius.tag : 11,
+        backgroundColor: palette.bg,
+        justifyContent: "center",
+      }}
+    >
+      <AppText variant="caption" strong style={{ color: palette.fg, lineHeight: tag ? 20 : 16 }}>
         {label}
       </AppText>
     </View>

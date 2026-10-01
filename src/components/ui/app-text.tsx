@@ -3,13 +3,13 @@ import { Text, type TextProps } from "react-native";
 import { type ThemeColor, useTheme } from "@/theme/use-theme";
 
 const variants = {
-  display: { size: "display", weight: "semibold" },
-  heading: { size: "heading", weight: "semibold" },
-  title: { size: "title", weight: "semibold" },
-  bodyLg: { size: "bodyLg", weight: "regular" },
-  body: { size: "body", weight: "regular" },
-  label: { size: "label", weight: "regular" },
-  caption: { size: "caption", weight: "regular" },
+  display: { size: "display", weight: "semibold", line: 40 },
+  heading: { size: "heading", weight: "semibold", line: 28 },
+  title: { size: "title", weight: "semibold", line: 24 },
+  bodyLg: { size: "bodyLg", weight: "regular", line: 22 },
+  body: { size: "body", weight: "regular", line: 20 },
+  label: { size: "label", weight: "regular", line: 16 },
+  caption: { size: "caption", weight: "regular", line: 16 },
 } as const;
 
 export type TextVariant = keyof typeof variants;
@@ -32,6 +32,7 @@ export function AppText({ variant = "body", color = "text", strong, style, ...re
         {
           color: colors[color],
           fontSize: fontSize[spec.size],
+          lineHeight: spec.line,
           fontFamily: fontFamily[weight],
           fontVariant: ["tabular-nums"],
         },

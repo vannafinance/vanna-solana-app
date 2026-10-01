@@ -150,7 +150,7 @@ export function SpaceHeader({ space, notificationCount = 0, onNotifications, onA
       {children ? (
         <LinearGradient
           colors={panel}
-          style={{ borderBottomLeftRadius: radius.hero, borderBottomRightRadius: radius.hero, paddingHorizontal: spacing.lg, paddingTop: 20, paddingBottom: spacing.xl }}
+          style={{ borderBottomLeftRadius: radius.hero, borderBottomRightRadius: radius.hero, paddingHorizontal: spacing.lg, paddingTop: 20, paddingBottom: 20 }}
         >
           {children}
         </LinearGradient>

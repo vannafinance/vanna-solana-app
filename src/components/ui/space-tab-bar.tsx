@@ -1,7 +1,8 @@
+import { LinearGradient } from "expo-linear-gradient";
 import { Pressable, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import type { Space } from "@/theme/tokens";
+import { horizontalGradient, type Space, spaceGradients } from "@/theme/tokens";
 import { useTheme } from "@/theme/use-theme";
 
 import { AppText } from "./app-text";
@@ -18,7 +19,7 @@ type SpaceTabBarProps = {
 };
 
 export function SpaceTabBar({ space, tabs, activeKey, onSelect }: SpaceTabBarProps) {
-  const { colors } = useTheme();
+  const { colors, shadow } = useTheme();
   const insets = useSafeAreaInsets();
   const accent = space === "farm" ? colors.farmAccent : space === "earn" ? colors.positive : colors.link;
 
@@ -39,9 +40,19 @@ export function SpaceTabBar({ space, tabs, activeKey, onSelect }: SpaceTabBarPro
             onPress={() => onSelect(key)}
             style={{ flex: 1, alignItems: "center", gap: 4, minHeight: 56 }}
           >
-            <View style={{ width: 64, height: 32, alignItems: "center", justifyContent: "center" }}>
-              <Icon name={icon} size={22} filled={active} color={active ? accent : colors.textMuted} />
-            </View>
+            {active ? (
+              <LinearGradient
+                colors={spaceGradients[space].nav}
+                {...horizontalGradient}
+                style={{ width: 64, height: 32, borderRadius: 16, alignItems: "center", justifyContent: "center", ...shadow.pill }}
+              >
+                <Icon name={icon} size={22} filled color="onHero" />
+              </LinearGradient>
+            ) : (
+              <View style={{ width: 64, height: 32, alignItems: "center", justifyContent: "center" }}>
+                <Icon name={icon} size={22} color={colors.textMuted} />
+              </View>
+            )}
             <AppText variant="caption" strong={active} style={{ color: active ? accent : colors.textMuted }}>
               {label}
             </AppText>

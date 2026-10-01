@@ -9,6 +9,7 @@ import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import { ResourceView } from "@/components/ui/resource-view";
+import { SpaceScope } from "@/components/ui/space-scope";
 import { useWalletSession } from "@/hooks/use-wallet-session";
 import { APP_IDENTITY, CHAIN, RPC_URL } from "@/lib/solana/config";
 import { walletCache } from "@/lib/solana/wallet-cache";
@@ -21,7 +22,11 @@ function Navigation() {
   const session = useWalletSession();
   return (
     <ResourceView resource={session} emptyLabel="No wallet session">
-      {() => <Stack screenOptions={{ headerShown: false, animation: "slide_from_right" }} />}
+      {() => (
+        <SpaceScope>
+          <Stack screenOptions={{ headerShown: false, animation: "slide_from_right" }} />
+        </SpaceScope>
+      )}
     </ResourceView>
   );
 }

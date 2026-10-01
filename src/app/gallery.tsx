@@ -1,9 +1,7 @@
-import { ArrowsLeftRight, HandCoins, Plant, TrendUp } from "phosphor-react-native";
 import { useState } from "react";
 import { View } from "react-native";
 
 import { VaultRow } from "@/components/earn/vault-row";
-import { ProductTile } from "@/components/home/product-tile";
 import { LeverageSelector } from "@/components/perps/leverage-selector";
 import { MarketRow } from "@/components/perps/market-row";
 import { PositionCard } from "@/components/perps/position-card";
@@ -73,15 +71,6 @@ export default function ComponentPreview() {
           Every design-system piece with placeholder props. Replaced by real screens as hooks land.
         </AppText>
 
-        <View style={{ flexDirection: "row", gap: spacing.lg }}>
-          <ProductTile product="perps" title="Perps" tagline="Long or short up to 5x" icon={TrendUp} onPress={noop} />
-          <ProductTile product="swap" title="Swap" tagline="Any token, in seconds" icon={ArrowsLeftRight} onPress={noop} />
-        </View>
-        <View style={{ flexDirection: "row", gap: spacing.lg }}>
-          <ProductTile product="earn" title="Earn" tagline="Lend, withdraw anytime" icon={HandCoins} onPress={noop} />
-          <ProductTile product="farm" title="Farm" tagline="Yield in one click" icon={Plant} onPress={noop} />
-        </View>
-
         <SegmentedControl
           value={tab}
           onChange={setTab}
@@ -128,7 +117,7 @@ export default function ComponentPreview() {
           />
         </Card>
 
-        <LeverageSelector options={[1, 2, 3, 4, 5]} value={leverage} onChange={setLeverage} summary={`${leverage}x`} />
+        <LeverageSelector options={[1, 2, 3, 4, 5]} value={leverage} onChange={setLeverage} />
 
         <Card>
           <DetailRow label="Entry price" value="$353.59" />

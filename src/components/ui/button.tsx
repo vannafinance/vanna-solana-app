@@ -1,10 +1,13 @@
+import { LinearGradient } from "expo-linear-gradient";
 import { ActivityIndicator, Pressable, StyleSheet } from "react-native";
 
+import { horizontalGradient, spaceGradients } from "@/theme/tokens";
 import { useTheme } from "@/theme/use-theme";
 
 import { AppText } from "./app-text";
 import { Glyph, type GlyphSource } from "./glyph";
 import { ripple } from "./ripple";
+import { useSpace } from "./space-scope";
 
 export type ButtonVariant = "primary" | "tonal" | "dark" | "outline" | "text" | "danger";
 
@@ -13,13 +16,13 @@ type ButtonProps = {
   onPress: () => void;
   variant?: ButtonVariant;
   icon?: GlyphSource;
-  size?: "md" | "lg";
+  size?: "sm" | "md" | "lg";
   loading?: boolean;
   disabled?: boolean;
   flex?: boolean;
 };
 
-const HEIGHT = { lg: 56, md: 48 } as const;
+const HEIGHT = { lg: 56, md: 48, sm: 44 } as const;
 
 export function Button({
   label,
@@ -32,6 +35,7 @@ export function Button({
   flex = false,
 }: ButtonProps) {
   const { colors } = useTheme();
+  const space = useSpace();
   const inactive = disabled || loading;
   const height = HEIGHT[size];
 
@@ -43,7 +47,8 @@ export function Button({
     text: { bg: "transparent", fg: colors.text, border: "transparent" },
     danger: { bg: colors.negative, fg: colors.onPrimary, border: "transparent" },
   }[variant];
-  const background = disabled && variant !== "text" ? colors.disabled : palette.bg;
+  const gradient = variant === "primary" && !disabled ? spaceGradients[space].cta : null;
+  const background = disabled && variant !== "text" ? colors.disabled : gradient ? "transparent" : palette.bg;
   const foreground = disabled ? colors.onDisabled : palette.fg;
 
   return (
@@ -67,6 +72,7 @@ export function Button({
         },
       ]}
     >
+      {gradient ? <LinearGradient colors={gradient} {...horizontalGradient} style={StyleSheet.absoluteFill} /> : null}
       {loading ? (
         <ActivityIndicator color={foreground} />
       ) : (

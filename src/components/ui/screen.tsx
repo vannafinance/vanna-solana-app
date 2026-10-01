@@ -7,10 +7,12 @@ import { useTheme } from "@/theme/use-theme";
 type ScreenProps = {
   header?: ReactNode;
   footer?: ReactNode;
+  gap?: number;
+  paddingTop?: number;
   children: ReactNode;
 };
 
-export function Screen({ header, footer, children }: ScreenProps) {
+export function Screen({ header, footer, gap, paddingTop, children }: ScreenProps) {
   const { colors, spacing } = useTheme();
   const insets = useSafeAreaInsets();
 
@@ -22,7 +24,7 @@ export function Screen({ header, footer, children }: ScreenProps) {
         keyboardShouldPersistTaps="handled"
       >
         {header}
-        <View style={{ padding: spacing.lg, gap: spacing.lg }}>{children}</View>
+        <View style={{ padding: spacing.lg, paddingTop: paddingTop ?? spacing.lg, gap: gap ?? spacing.lg }}>{children}</View>
       </ScrollView>
       {footer ? (
         <View style={{ paddingHorizontal: spacing.lg, paddingTop: spacing.sm, paddingBottom: Math.max(insets.bottom, spacing.lg) }}>
