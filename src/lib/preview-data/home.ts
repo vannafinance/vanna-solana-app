@@ -164,10 +164,10 @@ export const previewVaults: LenderVault[] = [
 export const previewLenderPortfolio = 2_677_870_000n;
 
 export const previewSpot: TokenBalance[] = [
-  { symbol: "USDC", tokens: { raw: 3_120_400_000n, decimals: 6 }, value: 3_120_330_000n, changeTodayBps: 0 },
+  { symbol: "USDC", tokens: { raw: 3_120_400_000n, decimals: 6 }, value: 3_120_400_000n, changeTodayBps: 0 },
   { symbol: "ANTHROPIC", tokens: { raw: 960_000n, decimals: 6 }, value: 1_001_060_000n, changeTodayBps: 240 },
   { symbol: "TSLAx", tokens: { raw: 1_250_000n, decimals: 6 }, value: 441_990_000n, changeTodayBps: 120 },
-  { symbol: "SOL", tokens: { raw: 2_100_000_000n, decimals: 9 }, value: 249_020_000n, changeTodayBps: -80 },
+  { symbol: "SOL", tokens: { raw: 2_100_000_000n, decimals: 9 }, value: 248_950_000n, changeTodayBps: -80 },
 ];
 
 export const previewLenderHistory: LenderActivityGroup[] = [

@@ -45,7 +45,7 @@ export function ClosePositionForm({ position, quote, fractionsBps, onSelectFract
         {closingAll ? null : <DetailRow label="Liquidation price" value={`Unchanged · ${formatLiquidationPrice(quote.liquidationPrice)}`} last />}
       </View>
       <View style={{ marginTop: 16 }}>
-        <Button label={`Close ${closingAll ? "all" : `${quote.fractionBps / 100}%`} · approve in wallet`} onPress={onSubmit} />
+        <Button brand label={`Close ${closingAll ? "all" : `${quote.fractionBps / 100}%`} · approve in wallet`} onPress={onSubmit} />
       </View>
     </View>
   );

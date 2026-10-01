@@ -58,7 +58,7 @@ export function usePerpsMarket(symbol: string) {
       market,
       markets: previewMarkets,
       liquidityTokens: usdToTokens(market.liquidityUsd, market.markPrice),
-      candles: previewCandles(market.symbol, timeframe, market.markPrice),
+      candles: previewCandles(timeframe, market.markPrice),
       watched: watched.has(market.symbol),
       position: open ? summarizePosition(open, market.markPrice) : null,
     });

@@ -1,7 +1,7 @@
 import { LinearGradient } from "expo-linear-gradient";
 import { ActivityIndicator, Pressable, StyleSheet } from "react-native";
 
-import { horizontalGradient, spaceGradients } from "@/theme/tokens";
+import { brandGradient, horizontalGradient, spaceGradients } from "@/theme/tokens";
 import { useTheme } from "@/theme/use-theme";
 
 import { AppText } from "./app-text";
@@ -20,6 +20,7 @@ type ButtonProps = {
   loading?: boolean;
   disabled?: boolean;
   flex?: boolean;
+  brand?: boolean;
 };
 
 const HEIGHT = { lg: 56, md: 48, sm: 44 } as const;
@@ -33,6 +34,7 @@ export function Button({
   loading = false,
   disabled = false,
   flex = false,
+  brand = false,
 }: ButtonProps) {
   const { colors } = useTheme();
   const space = useSpace();
@@ -43,11 +45,11 @@ export function Button({
     primary: { bg: colors.primary, fg: colors.onPrimary, border: "transparent" },
     tonal: { bg: colors.purpleTint, fg: colors.onPurpleTint, border: "transparent" },
     dark: { bg: colors.chipActive, fg: colors.onChipActive, border: "transparent" },
-    outline: { bg: "transparent", fg: colors.text, border: colors.border },
+    outline: { bg: colors.surface, fg: colors.text, border: colors.border },
     text: { bg: "transparent", fg: colors.text, border: "transparent" },
-    danger: { bg: colors.negative, fg: colors.onPrimary, border: "transparent" },
+    danger: { bg: colors.badgeNegative, fg: colors.onPrimary, border: "transparent" },
   }[variant];
-  const gradient = variant === "primary" && !disabled ? spaceGradients[space].cta : null;
+  const gradient = variant === "primary" && !disabled ? (brand ? brandGradient : spaceGradients[space].cta) : null;
   const background = disabled && variant !== "text" ? colors.disabled : gradient ? "transparent" : palette.bg;
   const foreground = disabled ? colors.onDisabled : palette.fg;
 

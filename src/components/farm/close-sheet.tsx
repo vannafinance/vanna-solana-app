@@ -8,7 +8,7 @@ import { Icon } from "@/components/ui/icon";
 import { IconButton } from "@/components/ui/icon-button";
 import { TokenIcon } from "@/components/ui/token-icon";
 import { formatUsd } from "@/format/format-amount";
-import { horizontalGradient, spaceGradients } from "@/theme/tokens";
+import { brandGradient, horizontalGradient } from "@/theme/tokens";
 import { useTheme } from "@/theme/use-theme";
 import { EXIT_FRACTIONS_BPS, type CloseView, type ExitFractionBps } from "@/types/farm";
 
@@ -96,7 +96,7 @@ export function CloseSheet({ visible, view, onSelectFraction, onConfirm, onDismi
                 onPress={() => onSelectFraction(fraction)}
                 style={{ flex: 1, height: 48, borderRadius: radius.md, overflow: "hidden", alignItems: "center", justifyContent: "center", backgroundColor: colors.background }}
               >
-                {selected ? <LinearGradient colors={spaceGradients.farm.cta} {...horizontalGradient} style={{ position: "absolute", top: 0, right: 0, bottom: 0, left: 0 }} /> : null}
+                {selected ? <LinearGradient colors={brandGradient} {...horizontalGradient} style={{ position: "absolute", top: 0, right: 0, bottom: 0, left: 0 }} /> : null}
                 <AppText variant="bodyLg" strong style={{ color: selected ? colors.onPrimary : colors.text }}>
                   {label}
                 </AppText>
@@ -137,7 +137,7 @@ export function CloseSheet({ visible, view, onSelectFraction, onConfirm, onDismi
           </AppText>
         </View>
         <View style={{ marginTop: 16 }}>
-          <Button label={`${all ? "Close all" : `Close ${quote.fractionBps / 100}%`} · approve in wallet`} onPress={onConfirm} />
+          <Button brand label={`${all ? "Close all" : `Close ${quote.fractionBps / 100}%`} · approve in wallet`} onPress={onConfirm} />
         </View>
       </ScrollView>
     </BottomSheet>

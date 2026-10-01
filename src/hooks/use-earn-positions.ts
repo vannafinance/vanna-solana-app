@@ -19,7 +19,7 @@ export function useEarnPositions(): Resource<EarnPortfolio> {
           },
         ]
       : [],
-  );
+  ).sort((a, b) => (a.valueUsd === b.valueUsd ? 0 : a.valueUsd > b.valueUsd ? -1 : 1));
 
   return previewResource({
     summary: summarizePortfolio(positions, previewWalletUsd),

@@ -106,6 +106,8 @@ export const spaceGradients = {
   farm: { nav: ["#FC5457", "#FF007A"], cta: ["#E2087A", "#B0005A"] },
 } as const satisfies Record<Space, { nav: readonly [string, string]; cta: readonly [string, string] }>;
 
+export const brandGradient = ["#FC5457", "#703AE6"] as const;
+
 export const horizontalGradient = { start: { x: 0, y: 0.5 }, end: { x: 1, y: 0.5 } } as const;
 
 export type Product = keyof typeof gradients;

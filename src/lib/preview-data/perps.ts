@@ -28,38 +28,54 @@ export const previewClosedPositions: readonly ClosedPosition[] = [
 
 export const previewAccount = { margin: usd(10_592, 29), borrowed: usd(6_271, 92) } as const;
 
-const candleShape: Record<Timeframe, { swing: number; drift: number; period: number }> = {
-  "1H": { swing: 0.012, drift: 0.004, period: 5.5 },
-  "4H": { swing: 0.025, drift: 0.01, period: 7 },
-  "1D": { swing: 0.09, drift: 0.07, period: 9 },
-  "1W": { swing: 0.12, drift: -0.04, period: 11 },
-  "1M": { swing: 0.18, drift: 0.12, period: 13 },
-};
+// Open, high, low and close in cents of a TSLAx day chart from the design prototype; every market and range reuses its shape, scaled by the mark price over its 353.59 mark.
+const CANDLE_SHAPE: readonly (readonly [number, number, number, number])[] = [
+  [31776, 31878, 31324, 31603],
+  [31721, 31961, 31038, 31214],
+  [31332, 31564, 30747, 30810],
+  [30927, 31002, 30818, 30880],
+  [31018, 31360, 30884, 30971],
+  [31096, 31368, 30409, 30790],
+  [30912, 31261, 30519, 31073],
+  [31191, 31544, 30499, 30652],
+  [30770, 30861, 30201, 30362],
+  [30480, 31073, 30224, 30959],
+  [31077, 31501, 30833, 31320],
+  [31442, 31513, 30798, 30924],
+  [31041, 31540, 30880, 31340],
+  [31458, 31843, 31305, 31635],
+  [31752, 32499, 31615, 32200],
+  [32322, 32715, 31965, 32479],
+  [32601, 33116, 32204, 32962],
+  [33084, 33281, 32322, 32636],
+  [32754, 32978, 32291, 32354],
+  [32475, 33076, 32224, 32758],
+  [32876, 33595, 32581, 33434],
+  [33552, 33992, 33344, 33740],
+  [33858, 34750, 33642, 34369],
+  [34487, 34836, 34192, 34766],
+  [34884, 35540, 34546, 35139],
+  [35257, 35445, 34750, 35033],
+  [35151, 35367, 34471, 34581],
+  [34699, 34770, 33933, 34251],
+  [34373, 34510, 33752, 33941],
+  [34059, 34691, 33850, 34612],
+  [34730, 35218, 34392, 34856],
+  [34978, 35665, 34781, 35520],
+  [35638, 35999, 35123, 35512],
+  [35630, 35744, 35096, 35229],
+];
 
-const CANDLE_COUNT = 34;
+const SHAPE_MARK_CENTS = 35359;
 
-// Deterministic stand-in for an OHLC feed: seeded by symbol so every reload draws the same chart, anchored on the mark price.
-export function previewCandles(symbol: PerpsSymbol, timeframe: Timeframe, markPrice: bigint): Candle[] {
-  const seed = [...symbol].reduce((sum, char) => sum + char.charCodeAt(0), 0);
-  const { swing, drift, period } = candleShape[timeframe];
-  const mark = Number(markPrice) / 1e6;
-  const raw = Array.from({ length: CANDLE_COUNT + 1 }, (_, index) => {
-    const t = index / CANDLE_COUNT;
-    return drift * t + swing * (0.6 * Math.sin(index / period + seed) + 0.4 * Math.sin(index / (period / 2.3) + seed * 0.7));
-  });
-  const anchor = raw[CANDLE_COUNT];
-  const toPrice = (value: number) => BigInt(Math.round(mark * (1 + value - anchor) * 1e6));
+const RANGE_AMPLITUDE: Record<Timeframe, number> = { "1H": 0.2, "4H": 0.45, "1D": 1, "1W": 1.3, "1M": 1.8 };
 
-  return raw.slice(1).map((close, index) => {
-    const open = raw[index];
-    const wick = swing * 0.25 * (0.5 + Math.abs(Math.sin(index * 1.7 + seed)));
-    return {
-      open: toPrice(open),
-      close: toPrice(close),
-      high: toPrice(Math.max(open, close) + wick),
-      low: toPrice(Math.min(open, close) - wick),
-    };
-  });
+export function previewCandles(timeframe: Timeframe, markPrice: bigint): Candle[] {
+  const amplitude = RANGE_AMPLITUDE[timeframe];
+  const mark = Number(markPrice);
+  const scale = (cents: number) => BigInt(Math.round(mark * (1 + (cents / SHAPE_MARK_CENTS - 1) * amplitude)));
+
+  return CANDLE_SHAPE.map(([open, high, low, close]) => ({ open: scale(open), high: scale(high), low: scale(low), close: scale(close) }));
 }
 
 const listeners = new Set<() => void>();
