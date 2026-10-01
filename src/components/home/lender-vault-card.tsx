@@ -43,7 +43,7 @@ export function LenderVaultCard({ vault, onWithdraw, onSupplyMore }: LenderVault
           stats={[
             { label: "Supplied", value: `${formatToken(vault.supplied, 2).replace(/\.00$/, "")} ${vault.symbol}` },
             { label: "Supply APY", value: formatPercent(vault.supplyApyBps) },
-            { label: "Earned", value: formatSignedUsd(vault.earned), color: "positive" },
+            { label: "Earned", value: vault.earned === null ? "—" : formatSignedUsd(vault.earned), color: vault.earned === null ? undefined : "positive" },
           ]}
         />
       </View>

@@ -80,3 +80,43 @@ test("wallet value is the sum of priced holdings, largest first", () => {
 test("an unpriced holding makes the wallet value unavailable instead of understating it", () => {
   assert.throws(() => valueHoldings([{ symbol: "OPENAI", raw: 1n, decimals: 9 }], {}), { name: "MissingPriceError" });
 });
+
+const { parsePools } = loadTs("src/lib/solana/pools-api.ts", stubs);
+const { readTokenAmount } = loadTs("src/lib/solana/earn-deposits.ts", { ...stubs, "./config": { ...stubs["./config"], VANNA_PROGRAM_ID: "BZ812nUv4Qhr2p1JVgmoJGjYTGk1brAXckyhFSCNH3Zg" } });
+const { valueDeposits, averageApyBps } = loadTs("src/lib/portfolio/value-deposits.ts", stubs);
+
+const pool = (rate, apy) => ({ totalSupply: "1", totalBorrowed: "0", utilizationRate: "1", supplyAPY: apy, borrowAPY: "1", exchangeRate: rate });
+
+test("pool exchange rate keeps nine decimals as an integer", () => {
+  const pools = parsePools({ USDC: pool("1.0000007", "0.05"), SOL: pool("1", "0.08") });
+  assert.equal(pools.USDC.exchangeRate, 1_000_000_700n);
+  assert.equal(pools.SOL.exchangeRate, 1_000_000_000n);
+  assert.throws(() => parsePools({ USDC: pool("abc", "0.05") }), { kind: "invalid-response" });
+});
+
+test("token account amount is read little-endian at offset 64", () => {
+  const data = new Uint8Array(165);
+  new DataView(data.buffer).setBigUint64(64, 2_500_000_000n, true);
+  assert.equal(readTokenAmount(data), 2_500_000_000n);
+  assert.throws(() => readTokenAmount(new Uint8Array(10)), { kind: "invalid-response" });
+});
+
+test("deposits are valued through the exchange rate and price, with a value-weighted APY", () => {
+  const pools = parsePools({ USDC: pool("1.0000007", "0.05"), SOL: pool("1.0000062", "0.08") });
+  const deposits = valueDeposits(
+    [
+      { symbol: "USDC", shares: 1_000_000_000n, decimals: 6 },
+      { symbol: "SOL", shares: 1_000_000_000n, decimals: 9 },
+    ],
+    pools,
+    { USDC: 1_000_000n, SOL: 100_000_000n },
+  );
+  assert.equal(deposits[0].symbol, "USDC");
+  assert.equal(deposits[0].supplied, 1_000_000_700n);
+  assert.equal(deposits[0].value, 1_000_000_700n);
+  assert.equal(deposits[0].supplyApyBps, 5);
+  assert.equal(deposits[1].value, 100_000_620n);
+  assert.equal(averageApyBps([]), null);
+  assert.ok(averageApyBps(deposits) > 5 && averageApyBps(deposits) < 8);
+  assert.throws(() => valueDeposits([{ symbol: "OPENAI", shares: 1n, decimals: 9 }], pools, {}), { name: "MissingPriceError" });
+});

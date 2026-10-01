@@ -66,12 +66,12 @@ export type TokenBalance = {
 
 export type LenderVault = {
   id: string;
-  symbol: "USDC" | "SOL";
+  symbol: AssetSymbol;
   name: string;
   value: bigint;
   supplied: TokenAmount;
   supplyApyBps: number;
-  earned: bigint;
+  earned: bigint | null;
 };
 
 export type LenderActivity = {
@@ -121,9 +121,9 @@ export type TraderSummary = {
 
 export type LenderSummary = {
   portfolio: bigint;
-  totalHoldings: bigint;
-  avgSupplyApyBps: number;
+  totalHoldings: bigint | null;
+  avgSupplyApyBps: number | null;
   vaults: LenderVault[];
-  spot: TokenBalance[];
-  history: LenderActivityGroup[];
+  spot: TokenBalance[] | null;
+  history: LenderActivityGroup[] | null;
 };

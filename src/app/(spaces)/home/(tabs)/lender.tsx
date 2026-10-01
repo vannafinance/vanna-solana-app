@@ -2,6 +2,7 @@ import { router } from "expo-router";
 import { useState } from "react";
 
 import { ChipRow } from "@/components/home/chip-row";
+import { EmptyCard } from "@/components/home/empty-card";
 import { HeroMetrics } from "@/components/home/hero-metrics";
 import { LenderHistoryList } from "@/components/home/lender-history-list";
 import { LenderVaultCard } from "@/components/home/lender-vault-card";
@@ -11,7 +12,7 @@ import { ResourceView } from "@/components/ui/resource-view";
 import { Screen } from "@/components/ui/screen";
 import { SegmentedControl } from "@/components/ui/segmented-control";
 import { SpaceHeader } from "@/components/ui/space-header";
-import { formatPercent, formatUsd } from "@/format/format-amount";
+import { formatPercent, formatUsd, formatUsdOrDash } from "@/format/format-amount";
 import { useHeaderProps } from "@/hooks/use-header-props";
 import { useLenderSummary } from "@/hooks/use-lender-summary";
 import { useNotificationMenu } from "@/hooks/use-notification-menu";
@@ -45,8 +46,8 @@ export default function Lender() {
                   size="large"
                   primary={[{ label: "Lender portfolio", value: formatUsd(data.portfolio) }]}
                   secondary={[
-                    { label: "Total holdings", value: formatUsd(data.totalHoldings) },
-                    { label: "Avg supply APY", value: formatPercent(data.avgSupplyApyBps) },
+                    { label: "Total holdings", value: formatUsdOrDash(data.totalHoldings) },
+                    { label: "Avg supply APY", value: data.avgSupplyApyBps === null ? "—" : formatPercent(data.avgSupplyApyBps) },
                   ]}
                 />
               )}
@@ -60,18 +61,28 @@ export default function Lender() {
               <SegmentedControl
                 segments={[
                   { value: "current", label: "Current", badge: String(data.vaults.length) },
-                  { value: "history", label: "History", badge: String(data.history.reduce((count, group) => count + group.items.length, 0)) },
+                  { value: "history", label: "History", badge: data.history === null ? undefined : String(data.history.reduce((count, group) => count + group.items.length, 0)) },
                 ]}
                 value={tab}
                 onChange={setTab}
               />
               {tab === "history" ? (
-                <LenderHistoryList groups={data.history} />
+                data.history === null ? (
+                  <EmptyCard title="History unavailable" message="We can't load your activity right now. Try again later." />
+                ) : (
+                  <LenderHistoryList groups={data.history} />
+                )
               ) : (
                 <>
                   <ChipRow options={views} value={view} onChange={setView} />
                   {view === "spot" ? (
-                    <SpotList walletBalance={portfolio.status === "ready" ? portfolio.data.walletBalance : null} balances={data.spot} />
+                    data.spot === null ? (
+                      <EmptyCard title="Balances unavailable" message="We can't read your wallet right now. Try again later." />
+                    ) : (
+                      <SpotList walletBalance={portfolio.status === "ready" ? portfolio.data.walletBalance : null} balances={data.spot} />
+                    )
+                  ) : data.vaults.length === 0 ? (
+                    <EmptyCard title="Nothing supplied yet" message="Supply to a vault in Earn and your deposits show up here." actionLabel="Browse vaults" onAction={() => router.push("/earn")} />
                   ) : (
                     data.vaults.map((vault) => (
                       <LenderVaultCard key={vault.id} vault={vault} onWithdraw={() => router.push("/earn")} onSupplyMore={() => router.push("/earn")} />
