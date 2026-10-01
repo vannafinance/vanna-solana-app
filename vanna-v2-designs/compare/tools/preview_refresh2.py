@@ -10,8 +10,8 @@ CMP = os.path.dirname(HERE)
 sys.path.insert(0, HERE)
 from preview_refresh import (V, ic, mark, WORDMARK, HERO, nav, PORT_BODY, MARKETS, VAULTS, SOL, CSS, stats, ORDER)  # noqa: E402
 
-RAYS = {'portfolio': ('', 'rgba(252,84,87,.62)'), 'earn': ('', 'rgba(64,240,226,.62)'),
-        'trade': ('', 'rgba(255,40,150,.78)'), 'farm': ('', 'rgba(255,150,70,.8)')}
+RAYS = {'portfolio': ('', 'rgba(196,160,255,.75)'), 'earn': ('', 'rgba(110,236,226,.6)'),   # own-colour glow: light violet,
+        'trade': ('', 'rgba(130,170,255,.8)'), 'farm': ('', 'rgba(255,120,190,.72)')}               # aqua, light blue, light pink
 ICON = dict(portfolio='pie_chart', earn='savings', trade='candlestick_chart', farm='psychiatry')
 
 
@@ -50,8 +50,8 @@ def header2(active, hero, icons=False, gid='x', logo='tile'):
     return ('<div class="hd2" style="--ray:%s">' % ray +
             '<div class="band" style="background:%s">' % t['band'] +
             '<div class="sb"><span>12:30</span><span>&#9679;&#9679;&#9679; &#9650; &#9646;</span></div>'
-            '<div class="hdr" style="height:58px">' + ('<span class="logo-tile">' + mark(30, gid) + '</span>') + WORDMARK.replace('width="77.2" height="18"', 'width="82" height="19"') +
-            '<span style="flex:1"></span><span class="glass">' + ic('notifications', 22) + '<i class="badge">3</i></span>'
+            '<div class="hdr" style="height:58px">' + ('<span class="logo-tile"><img src="' + FAVICON + '" alt="Vanna"></span>') + WORDMARK.replace('width="77.2" height="18"', 'width="82" height="19"') +
+            '<span style="flex:1"></span><span class="bell">' + ic('notifications', 24) + '<i class="badge">3</i></span>'
             '<span class="glass avatar"><img src="' + SOL + '" alt=""></span></div>' + tabs2(active, icons) + '</div>'
             '<div class="panel" style="background:radial-gradient(110%% 90%% at 100%% 0%%, %s, transparent 60%%), linear-gradient(180deg,%s 0%%,%s 100%%)">%s</div>'
             % (glow, t['panel'][0], t['panel'][1], hero) +
@@ -74,6 +74,9 @@ CSS2 = r'''
 .hd2{position:relative;overflow:hidden;border-radius:0 0 28px 28px;isolation:isolate}
 .hd2 .panel{border-radius:0}
 .hd2 .hdr{position:relative;z-index:21}
+.bell{position:relative;width:40px;height:40px;display:flex;align-items:center;justify-content:center;color:#fff}
+.bell .badge{position:absolute;top:4px;right:4px;min-width:16px;height:16px;border-radius:8px;background:#FF007A;color:#fff;font-style:normal;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;box-shadow:0 0 0 2px rgba(255,255,255,.85)}
+.hd2 .logo-tile img{width:30px;height:30px;display:block}
 .rays{position:absolute;inset:-10% -10% 0 0;z-index:20;pointer-events:none;mix-blend-mode:screen;opacity:.55;transform-origin:100% 0;
   background:conic-gradient(from 198deg at 100% 0%, transparent 0deg, var(--ray) 5deg, transparent 11deg, transparent 19deg, var(--ray) 23deg, transparent 28deg,
     transparent 37deg, var(--ray) 40deg, transparent 45deg, transparent 56deg, var(--ray) 58deg, transparent 62deg, transparent 360deg);
@@ -91,6 +94,9 @@ CSS2 = r'''
 '''
 
 
+FAVICON = 'data:image/png;base64,' + __import__('base64').b64encode(open(os.path.join(os.path.dirname(CMP), 'assets', 'vanna-favicon-256.png'), 'rb').read()).decode()   # the user's logo, as given
+
+
 WHITE_MARK = ('<svg width="32" height="32" viewBox="11 12 232 232" aria-hidden="true" style="flex-shrink:0"><path fill="#FFFFFF" fill-rule="evenodd" d="%s"/></svg>'
               % __import__('json').load(open(os.path.join(HERE, 'mark.json')))['d'])
 
@@ -101,10 +107,10 @@ def ph(inner, cap, dark=False):
 
 def main():
     s1 = ''.join([
-        ph(screen2('portfolio', PORT_BODY), '<b>Portfolio:</b> the coral glow on the right, as in your screenshot.'),
-        ph(screen2('trade', MARKETS), '<b>Trade:</b> the same kind of glow in pink, on indigo-violet.'),
-        ph(screen2('earn', '<div class="h2">Vaults</div>' + VAULTS), '<b>Earn:</b> an aqua glow on teal.'),
-        ph(screen2('farm', '<div class="card" style="height:140px"></div><div class="card" style="height:140px"></div>'), '<b>Farm:</b> a warm orange-coral glow on magenta.'),
+        ph(screen2('portfolio', PORT_BODY), '<b>Portfolio:</b> a lighter violet glow on the violet header.'),
+        ph(screen2('trade', MARKETS), '<b>Trade:</b> a light blue glow on the blue header.'),
+        ph(screen2('earn', '<div class="h2">Vaults</div>' + VAULTS), '<b>Earn:</b> a light aqua glow on teal.'),
+        ph(screen2('farm', '<div class="card" style="height:140px"></div><div class="card" style="height:140px"></div>'), '<b>Farm:</b> a light pink glow on magenta.'),
     ])
     s2 = ''.join([
         ph(screen2('portfolio', PORT_BODY, icons=True), '<b>With icons:</b> each tab gets its icon in a soft glass square above the label (Swiggy has pictures there).'),
@@ -117,14 +123,14 @@ def main():
         ph(screen2('portfolio', PORT_BODY, hero=PANEL_B, gid='pb'), '<b>B · Two numbers, joined:</b> the same two balances with a thin divider, and the rest as glass chips instead of a stats row.'),
     ])
     s4 = ''.join([
-        ph(screen2('portfolio', PORT_BODY, gid='lg1'), '<b>Light mode.</b> The Vanna mark in its own coral to violet gradient, straight on the header, no tile behind it.'),
+        ph(screen2('portfolio', PORT_BODY, gid='lg1'), '<b>Light mode.</b> Your logo exactly as given (favicon), no tile, no glow.'),
         ph(screen2('portfolio', PORT_BODY, gid='lg2'), '<b>Dark mode.</b> Identical: the header is a brand surface.', dark=True),
         ph(screen2('trade', MARKETS, gid='lg3'), '<b>On Trade.</b>'),
         ph(screen2('farm', '<div class="card" style="height:140px"></div>', gid='lg4'), '<b>On Farm.</b>'),
     ])
     page = ('<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Vanna refresh v2</title>'
             '<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet"><style>' + CSS + CSS2 + '</style></head><body>'
-            '<div class="top"><h1>Refresh v2: vibrant glow in every space, calmer spacing, tighter tabs</h1><p>Previews only. Every space gets the same rich glow that makes Portfolio\'s panel look alive on the right side, each in a tone that suits its colour. The tabs sit lower to give the top some air, overlap more (no gaps between them) and get a soft highlight edge. Colours are placeholders until the brand gradients arrive.</p></div>'
+            '<div class="top"><h1>Refresh v2: vibrant glow in every space, calmer spacing, tighter tabs</h1><p>Previews only. Every space gets a rich glow on the right side in a lighter shade of its own colour (violet on violet, blue on blue). The tabs sit lower to give the top some air, overlap more (no gaps between them) and get a soft highlight edge. Colours are placeholders until the brand gradients arrive.</p></div>'
             '<section id="r1"><h2>1 · Portfolio\'s vibrant glow in every space (text-only tabs)</h2><div class="row-wrap">' + s1 + '</div></section>'
             '<section id="r2"><h2>2 · The same tabs with icons</h2><div class="row-wrap">' + s2 + '</div></section>'
             '<section id="r3"><h2>3 · Portfolio panel: closing the gap</h2><div class="row-wrap">' + s3 + '</div></section>'
