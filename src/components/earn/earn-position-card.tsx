@@ -20,7 +20,7 @@ export function EarnPositionCard({ position, onWithdraw, onSupplyMore }: EarnPos
   const stats = [
     { label: "Supplied", value: formatSummaryAmount(position.supplied, position.symbol), color: "text" },
     { label: "Supply APY", value: formatPercent(position.supplyApyBps), color: "text" },
-    { label: "Earned", value: formatSignedUsd(position.earnedUsd), color: "positive" },
+    { label: "Earned", value: position.earnedUsd === null ? "—" : formatSignedUsd(position.earnedUsd), color: position.earnedUsd === null ? "text" : "positive" },
   ] as const;
 
   return (

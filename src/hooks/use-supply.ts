@@ -1,16 +1,12 @@
 import { formatToken } from "@/format/format-amount";
 import { quoteSupply } from "@/lib/earn/quote";
-import { previewMarket } from "@/lib/preview-data/earn";
-import type { EarnMarket } from "@/types/earn";
-import type { Resource } from "@/types/resource";
-
-import { previewResource } from "./preview-resource";
 import { useEarnAmount } from "./use-earn-amount";
+import { useEarnMarket } from "./use-earn-market";
 import { useTransactionFlow } from "./use-transaction-flow";
 
 export function useSupply(id: string) {
-  const found = previewMarket(id);
-  const market: Resource<EarnMarket> = found ? previewResource(found) : { status: "empty" };
+  const market = useEarnMarket(id);
+  const found = market.status === "ready" ? market.data : undefined;
   const input = useEarnAmount(found?.decimals ?? 0, found?.walletBalance.raw ?? 0n);
   const quote = found ? quoteSupply(found, input.amount) : null;
 

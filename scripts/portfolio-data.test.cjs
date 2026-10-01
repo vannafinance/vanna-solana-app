@@ -244,3 +244,67 @@ test("swap volume values the sold token at the oracle price and counts only the 
   const month = 30 * 24 * 60 * 60 * 1000;
   assert.equal(volumeSince(entries, 1_000 + month), 700_000_000n);
 });
+
+const { buildVaultSummaries, buildMarket } = loadTs("src/lib/earn/build-vaults.ts", stubs);
+const { buildOverviewSeries } = loadTs("src/lib/earn/overview-series.ts", stubs);
+const { groupEarnHistory } = loadTs("src/lib/earn/group-history.ts", stubs);
+
+const livePools = parsePools({
+  USDC: { totalSupply: "55000.040459", totalBorrowed: "3556.423539", utilizationRate: "6.47", supplyAPY: "0.05", borrowAPY: "0.81", exchangeRate: "1.0000007" },
+  SOL: { totalSupply: "369.991919928", totalBorrowed: "28.631317665", utilizationRate: "7.74", supplyAPY: "0.08", borrowAPY: "0.97", exchangeRate: "1.0000062" },
+});
+
+test("vault summaries value pool totals at the oracle price and skip unpriced vaults", () => {
+  const vaults = buildVaultSummaries(livePools, { USDC: 999_900n, SOL: 118_000_000n }, []);
+  const usdc = vaults.find((vault) => vault.symbol === "USDC");
+  assert.equal(usdc.supplyApyBps, 5);
+  assert.equal(usdc.suppliedUsd, 54_994_540_454n);
+  assert.equal(usdc.category, "Stablecoins");
+  assert.equal(buildVaultSummaries(livePools, { USDC: 999_900n }, []).some((vault) => vault.symbol === "SOL"), false);
+});
+
+test("a market carries wallet balance, deposit and a six-decimal exchange rate", () => {
+  const deposit = { symbol: "USDC", decimals: 6, supplied: 2_500_000_000n, value: 2_500_000_000n, supplyApyBps: 5 };
+  const market = buildMarket("usdc", livePools, { USDC: 999_900n }, 3_120_400_000n, deposit);
+  assert.equal(market.shareExchangeRate, 1_000_000n);
+  assert.equal(market.walletBalance.raw, 3_120_400_000n);
+  assert.equal(market.supplied.raw, 2_500_000_000n);
+  assert.equal(buildMarket("usdc", livePools, {}, 0n, undefined), null);
+  assert.equal(buildMarket("nope", livePools, { USDC: 1n }, 0n, undefined), null);
+});
+
+test("overview deposit series steps up at each supply and ends at the current value", () => {
+  const DAY = 24 * 60 * 60 * 1000;
+  const now = 100 * DAY;
+  const events = [{ kind: "supply", symbol: "USDC", amount: 1_000_000_000n, signature: "a", timestamp: now - 10 * DAY }];
+  const series = buildOverviewSeries(events, { USDC: 1_000_000n }, new Map([["USDC", 1_000_700_000n]]), "deposit", "1M", now, 1_000_700_000n);
+  assert.equal(series.points[0].usd, 0n);
+  assert.equal(series.points[series.points.length - 1].usd, 1_000_700_000n);
+  assert.ok(series.points.some((point) => point.usd === 1_000_000_000n));
+  const flat = buildOverviewSeries(events, { USDC: 1_000_000n }, new Map(), "earnings", "1M", now, 700_000n);
+  assert.ok(flat.points.every((point) => point.usd === 700_000n));
+});
+
+test("earn history rows value known amounts at today's price and leave unknown ones empty", () => {
+  const events = [
+    { kind: "withdraw", symbol: "SOL", amount: null, signature: "b", timestamp: 2_000 },
+    { kind: "supply", symbol: "SOL", amount: 2_000_000_000n, signature: "a", timestamp: 1_000 },
+  ];
+  const [group] = groupEarnHistory(events, { SOL: 100_000_000n }, 3_000);
+  assert.equal(group.entries[0].amount, null);
+  assert.equal(group.entries[0].usd, null);
+  assert.equal(group.entries[1].usd, 200_000_000n);
+});
+
+test("an unknown-size withdrawal resets that asset to its current deposit, so the series does not spike", () => {
+  const DAY = 24 * 60 * 60 * 1000;
+  const now = 100 * DAY;
+  const events = [
+    { kind: "supply", symbol: "SOL", amount: 9_990_000_000n, signature: "a", timestamp: now - 20 * DAY },
+    { kind: "withdraw", symbol: "SOL", amount: null, signature: "b", timestamp: now - 10 * DAY },
+  ];
+  const series = buildOverviewSeries(events, { SOL: 100_000_000n }, new Map(), "deposit", "1M", now, 0n);
+  const afterWithdraw = series.points.filter((point) => point.at > now - 10 * DAY);
+  assert.ok(afterWithdraw.every((point) => point.usd === 0n));
+  assert.ok(series.points.some((point) => point.usd > 0n));
+});

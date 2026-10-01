@@ -13,7 +13,7 @@ type EarnPortfolioPanelProps = {
 export function EarnPortfolioPanel({ summary }: EarnPortfolioPanelProps) {
   const { colors } = useTheme();
   const stats = [
-    { label: "Total holdings", value: formatUsd(summary.totalHoldingsUsd) },
+    { label: "Total holdings", value: summary.totalHoldingsUsd === null ? "—" : formatUsd(summary.totalHoldingsUsd) },
     { label: "Supplied", value: `${summary.assetCount} ${summary.assetCount === 1 ? "asset" : "assets"}` },
     { label: "Avg supply APY", value: formatPercent(summary.averageSupplyApyBps) },
   ];

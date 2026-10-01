@@ -23,9 +23,9 @@ function rowView(entry: EarnHistoryEntry): RowView {
     case "interest":
       return { icon: "toll", tone: "teal", title: "Interest paid", detail: `${entry.asset} vault · ${entry.when}`, value: formatSignedUsd(entry.usd), positive: true };
     case "withdraw":
-      return { icon: "arrow_downward", tone: "purple", title: `Withdrew ${formatSummaryAmount(entry.amount, entry.asset)}`, detail: `${entry.asset} vault · to wallet`, value: formatUsd(entry.usd) };
+      return { icon: "arrow_downward", tone: "purple", title: entry.amount === null ? `Withdrew ${entry.asset}` : `Withdrew ${formatSummaryAmount(entry.amount, entry.asset)}`, detail: `${entry.asset} vault · to wallet`, value: entry.usd === null ? "—" : formatUsd(entry.usd) };
     case "supply":
-      return { icon: "arrow_upward", tone: "purple", title: `Supplied ${formatSummaryAmount(entry.amount, entry.asset)}`, detail: `${entry.asset} vault · from wallet`, value: formatUsd(entry.usd) };
+      return { icon: "arrow_upward", tone: "purple", title: entry.amount === null ? `Supplied ${entry.asset}` : `Supplied ${formatSummaryAmount(entry.amount, entry.asset)}`, detail: `${entry.asset} vault · from wallet`, value: entry.usd === null ? "—" : formatUsd(entry.usd) };
     case "shares":
       return { icon: "toll", tone: "teal", title: `Received v${entry.asset}`, detail: "Vault shares minted", value: `${formatSummaryNumber(entry.shares, entry.asset)} v${entry.asset}` };
   }

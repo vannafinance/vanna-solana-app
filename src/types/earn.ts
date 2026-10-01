@@ -115,19 +115,19 @@ export type EarnPosition = {
   supplied: TokenAmount;
   valueUsd: bigint;
   supplyApyBps: number;
-  earnedUsd: bigint;
+  earnedUsd: bigint | null;
 };
 
 export type EarnPortfolioSummary = {
   suppliedUsd: bigint;
-  totalHoldingsUsd: bigint;
+  totalHoldingsUsd: bigint | null;
   assetCount: number;
   averageSupplyApyBps: number;
 };
 
 export type EarnHistoryEntry =
   | { id: string; kind: "interest"; asset: EarnAsset; usd: bigint; when: string }
-  | { id: string; kind: "supply" | "withdraw"; asset: EarnAsset; amount: TokenAmount; usd: bigint }
+  | { id: string; kind: "supply" | "withdraw"; asset: EarnAsset; amount: TokenAmount | null; usd: bigint | null }
   | { id: string; kind: "shares"; asset: EarnAsset; shares: TokenAmount };
 
 export type EarnHistoryGroup = {
@@ -152,7 +152,7 @@ export type AmountProblem = "empty" | "insufficient";
 export type EarnPortfolio = {
   summary: EarnPortfolioSummary;
   positions: readonly EarnPosition[];
-  earnedUsd: bigint;
+  earnedUsd: bigint | null;
 };
 
 export type AmountQuote = {

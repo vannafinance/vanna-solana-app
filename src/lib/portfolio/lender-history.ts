@@ -6,7 +6,7 @@ import type { LenderActivityGroup } from "@/types/portfolio";
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 const decimalsOf = new Map(assets.map((asset) => [asset.symbol, asset.decimals]));
 
-function dayLabel(timestamp: number, now: Date): string {
+export function dayLabel(timestamp: number, now: Date): string {
   const date = new Date(timestamp);
   const sameDay = date.getFullYear() === now.getFullYear() && date.getMonth() === now.getMonth() && date.getDate() === now.getDate();
   return sameDay ? "Today" : `${MONTHS[date.getMonth()]} ${date.getDate()}`;
