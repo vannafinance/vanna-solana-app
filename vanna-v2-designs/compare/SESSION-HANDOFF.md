@@ -80,7 +80,8 @@ Nothing half-edited on disk. Waiting on the user for decisions on two preview pa
 **Late 2 Oct (pushed b82fe74):**
 - `previews/onboarding.html` (`tools/preview_onboard.py`): the user picked option 4 (dark colour tiles). Section o3 has 4a badge / 4b eyebrow / 4c white strip. Section o4 has calmer 4a versions, because the user liked 4a but found it "overwhelming": too many pills on three full gradients. "Calm, dark tiles" is recommended. The page glow is pure radial gradients in the top-right corner (blurred blobs rendered inconsistently in screenshots).
 - `previews/marginflow.html` (`tools/marginflow_template.html` + `preview_marginflow.py --video`): margin flows A/B/C in motion, video at `renders/marginflow.mp4`. Unverified: whether account creation and the first trade can share one wallet approval (A); fallback is "Step 1 of 2".
-- Awaiting: the 4a pick (calmer vs dark tiles), margin A/B/C.
+- **Built:** the chooser V7Spaces uses dark tiles via `tools/chooser_dark.py` (run after spaces.py). The audience is plain coloured words on the right of the name (L4 with no hairline): the user found the pill "AI made". Pushed as 23d0ebc.
+- Margin B is liked as a concept but felt empty. Section m2 in `previews/marginflow.html` (video `renders/marginflow-b.mp4`) has an envelope (the wax Vanna seal gets the tick, the flap opens, the card rises) and a 3D card (a ghost flips to the real card, collateral coins light up), plus an "unlocks" list. Awaiting: envelope or card, then build into V7MarginCreate.
 
 ## 8. Open questions (blocked on the user)
 
