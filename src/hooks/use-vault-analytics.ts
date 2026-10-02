@@ -1,27 +1,32 @@
-import { VANNA_RATE_MODEL, rateAt, sampleCurve } from "@/lib/earn/rate-model";
-import { previewVaults } from "@/lib/preview-data/earn";
-import { PREVIEW_NOW, previewApyHistory } from "@/lib/preview-data/earn-series";
+import { buildVaultAnalytics } from "@/lib/earn/vault-analytics";
+import type { AssetSymbol } from "@/lib/solana/assets";
+import type { VaultReserve } from "@/lib/solana/vault-accounts";
 import type { VaultAnalytics } from "@/types/earn";
 import type { Resource } from "@/types/resource";
 
-import { previewResource } from "./preview-resource";
+import { usePools } from "./use-pools";
+import { useVaultAccounts } from "./use-vault-accounts";
 
 export function useVaultAnalytics(id: string): Resource<VaultAnalytics> {
-  const vault = previewVaults.find((candidate) => candidate.id === id);
-  if (!vault) return { status: "empty" };
+  const pools = usePools();
+  const accounts = useVaultAccounts();
+  const { refetch: refetchPools } = pools;
+  const { refetch: refetchAccounts } = accounts;
 
-  const utilization = vault.utilizationBps / 10_000;
-  return previewResource({
-    now: PREVIEW_NOW,
-    apy: {
-      "7D": previewApyHistory(utilization, "7D"),
-      "30D": previewApyHistory(utilization, "30D"),
-      "90D": previewApyHistory(utilization, "90D"),
-    },
-    curve: {
-      samples: sampleCurve(VANNA_RATE_MODEL),
-      kink: rateAt(VANNA_RATE_MODEL, VANNA_RATE_MODEL.kink),
-      current: rateAt(VANNA_RATE_MODEL, utilization),
-    },
-  });
+  const failed = [pools, accounts].find((query) => query.data === undefined && query.isError);
+  if (failed?.error) {
+    return {
+      status: "error",
+      error: failed.error,
+      retry: () => {
+        void refetchPools();
+        void refetchAccounts();
+      },
+    };
+  }
+  if (pools.data === undefined || accounts.data === undefined) return { status: "loading" };
+
+  const reserves: Partial<Record<AssetSymbol, VaultReserve>> = Object.fromEntries(Object.entries(accounts.data).map(([symbol, chain]) => [symbol, chain.reserve]));
+  const analytics = buildVaultAnalytics(id, pools.data, reserves);
+  return analytics ? { status: "ready", data: analytics } : { status: "empty" };
 }

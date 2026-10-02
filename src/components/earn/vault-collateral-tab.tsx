@@ -11,9 +11,9 @@ import { FactCard, SectionTitle } from "./fact-card";
 
 type CapUsageProps = {
   label: string;
-  usageBps: number;
+  usageBps: number | null;
   used: TokenAmount;
-  cap: TokenAmount;
+  cap: TokenAmount | null;
   symbol: EarnAsset;
   first?: boolean;
 };
@@ -28,15 +28,23 @@ function CapUsage({ label, usageBps, used, cap, symbol, first = false }: CapUsag
           {label}
         </AppText>
         <AppText variant="body" strong>
-          {formatPercent(usageBps, 1)}
+          {usageBps === null ? "No cap" : formatPercent(usageBps, 1)}
         </AppText>
       </View>
-      <View style={{ marginTop: 8, height: 8, borderRadius: 4, overflow: "hidden", backgroundColor: colors.divider }}>
-        <View style={{ width: `${Math.min(usageBps / 100, 100)}%`, minWidth: 6, height: 8, borderRadius: 4, backgroundColor: colors.primary }} />
-      </View>
-      <AppText variant="caption" color="textMuted" style={{ marginTop: 6 }}>
-        {`${formatSummaryAmount(used, symbol)} of ${formatSummaryAmount(cap, symbol)}`}
-      </AppText>
+      {usageBps === null || cap === null ? (
+        <AppText variant="caption" color="textMuted" style={{ marginTop: 6 }}>
+          {`${formatSummaryAmount(used, symbol)} in use, with no limit set`}
+        </AppText>
+      ) : (
+        <>
+          <View style={{ marginTop: 8, height: 8, borderRadius: 4, overflow: "hidden", backgroundColor: colors.divider }}>
+            <View style={{ width: `${Math.min(usageBps / 100, 100)}%`, minWidth: 6, height: 8, borderRadius: 4, backgroundColor: colors.primary }} />
+          </View>
+          <AppText variant="caption" color="textMuted" style={{ marginTop: 6 }}>
+            {`${formatSummaryAmount(used, symbol)} of ${formatSummaryAmount(cap, symbol)}`}
+          </AppText>
+        </>
+      )}
     </View>
   );
 }
@@ -54,15 +62,20 @@ export function VaultCollateralTab({ vault }: { vault: VaultDetail }) {
       <FactCard>
         <View style={{ minHeight: 36, paddingVertical: 8, justifyContent: "center" }}>
           <AppText variant="caption" color="textMuted" style={{ lineHeight: 16 }}>
-            Every asset below works as collateral and can be borrowed, uncapped per margin account
+            What each asset can do on a margin account, and the bonus a liquidator earns on it
           </AppText>
         </View>
         {vault.collateralAssets.map((asset) => (
-          <View key={asset.symbol} style={{ height: 60, flexDirection: "row", alignItems: "center", gap: 10, borderTopWidth: 1, borderTopColor: colors.divider }}>
+          <View key={asset.symbol} style={{ minHeight: 60, flexDirection: "row", alignItems: "center", gap: 10, borderTopWidth: 1, borderTopColor: colors.divider }}>
             <TokenIcon symbol={asset.symbol} size={28} />
-            <AppText variant="body" strong style={{ flex: 1 }}>
-              {asset.symbol}
-            </AppText>
+            <View style={{ flex: 1 }}>
+              <AppText variant="body" strong>
+                {asset.symbol}
+              </AppText>
+              <AppText variant="caption" color="textMuted">
+                {[asset.collateral ? "Collateral" : null, asset.borrow ? "Borrowable" : null].filter(Boolean).join(" · ") || "Not enabled"}
+              </AppText>
+            </View>
             <AppText variant="caption" color="textMuted">
               {formatBonus(asset.liquidationBonusBps)}
             </AppText>

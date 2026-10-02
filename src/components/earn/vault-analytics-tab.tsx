@@ -1,35 +1,26 @@
-import { useCallback, useMemo, useState } from "react";
+import { useState } from "react";
 import { View } from "react-native";
 import Svg, { Line } from "react-native-svg";
 
 import { AppText } from "@/components/ui/app-text";
 import { Card } from "@/components/ui/card";
 import { ResourceView } from "@/components/ui/resource-view";
-import { formatAxisPercent, formatChartDate, formatRatePercent } from "@/format/format-earn";
+import { formatPercent } from "@/format/format-amount";
+import { formatRatePercent } from "@/format/format-earn";
 import { useTheme } from "@/theme/use-theme";
-import type { ApyRange, RateSample, VaultAnalytics } from "@/types/earn";
+import type { RateSample, VaultAnalytics } from "@/types/earn";
 import type { Resource } from "@/types/resource";
 
-import { type ChartPoint, LiveChart } from "./live-chart";
-import { RangeChips } from "./range-chips";
-import { RateCurveChart } from "./rate-curve-chart";
 import { SectionTitle } from "./fact-card";
-
-const RANGES = [
-  { value: "7D", label: "7D" },
-  { value: "30D", label: "30D" },
-  { value: "90D", label: "90D" },
-] as const;
-
-const SPAN_LABEL: Record<ApyRange, string> = { "7D": "7 days", "30D": "30 days", "90D": "90 days" };
+import { RateCurveChart } from "./rate-curve-chart";
 
 export function VaultAnalyticsTab({ analytics }: { analytics: Resource<VaultAnalytics> }) {
   return (
     <ResourceView resource={analytics} emptyLabel="No analytics for this vault">
       {(data) => (
         <View>
-          <SectionTitle title="Supply APY history" marginTop={16} marginBottom={8} />
-          <ApyHistoryCard analytics={data} />
+          <SectionTitle title="Rates today" marginTop={16} marginBottom={8} />
+          <RatesCard analytics={data} />
           <SectionTitle title="Interest rate curve" marginTop={20} marginBottom={8} />
           <RateCurveCard analytics={data} />
         </View>
@@ -38,40 +29,29 @@ export function VaultAnalyticsTab({ analytics }: { analytics: Resource<VaultAnal
   );
 }
 
-function ApyHistoryCard({ analytics }: { analytics: VaultAnalytics }) {
-  const { colors } = useTheme();
-  const [range, setRange] = useState<ApyRange>("30D");
-  const [scrubbed, setScrubbed] = useState<ChartPoint | null>(null);
-  const history = analytics.apy[range];
-  const points = useMemo(() => history.points.map((point) => ({ at: point.at, value: point.apyPercent, text: formatRatePercent(point.apyPercent) })), [history]);
-  const average = points.reduce((total, point) => total + point.value, 0) / points.length;
-  const formatDate = useCallback((at: number) => formatChartDate(at, "axis", history.stepMs, analytics.now), [history.stepMs, analytics.now]);
+function RatesCard({ analytics }: { analytics: VaultAnalytics }) {
+  const stats = [
+    { label: "Supply APY", value: formatPercent(analytics.supplyApyBps), color: "positive" },
+    { label: "Borrow APY", value: formatPercent(analytics.borrowApyBps), color: "text" },
+  ] as const;
 
   return (
     <Card>
-      <AppText strong color="positive" style={{ fontSize: 24, lineHeight: 32 }}>
-        {scrubbed?.text ?? formatRatePercent(average)}
-      </AppText>
-      <AppText variant="caption" color="textMuted" style={{ lineHeight: 16 }}>
-        {scrubbed ? formatChartDate(scrubbed.at, "head", history.stepMs, analytics.now) : `Average, last ${SPAN_LABEL[range]}`}
-      </AppText>
-      <View style={{ marginTop: 12 }}>
-        <LiveChart
-          points={points}
-          label={`Supply APY over ${range}`}
-          line={colors.positive}
-          ink={colors.text}
-          inkMuted={colors.textMuted}
-          grid={colors.divider}
-          ring={colors.surface}
-          formatAxis={formatAxisPercent}
-          formatDate={formatDate}
-          onScrub={setScrubbed}
-        />
+      <View style={{ flexDirection: "row", gap: 24 }}>
+        {stats.map((stat) => (
+          <View key={stat.label}>
+            <AppText strong color={stat.color} style={{ fontSize: 24, lineHeight: 32 }}>
+              {stat.value}
+            </AppText>
+            <AppText variant="caption" color="textMuted">
+              {stat.label}
+            </AppText>
+          </View>
+        ))}
       </View>
-      <View style={{ marginTop: 10 }}>
-        <RangeChips ranges={RANGES} value={range} onChange={setRange} tone="surface" />
-      </View>
+      <AppText variant="caption" color="textMuted" style={{ marginTop: 12 }}>
+        Rate history is not recorded yet, so only today’s rates are shown.
+      </AppText>
     </Card>
   );
 }

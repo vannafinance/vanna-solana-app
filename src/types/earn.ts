@@ -32,14 +32,6 @@ export type PoolFilterOption = {
   count: number;
 };
 
-export type VaultEventKind = "supply" | "borrow" | "repay" | "withdraw";
-
-export type VaultActivityEntry = {
-  kind: VaultEventKind;
-  amount: TokenAmount;
-  when: string;
-};
-
 export type VaultCollateralAsset = {
   symbol: EarnAsset;
   collateral: boolean;
@@ -49,23 +41,20 @@ export type VaultCollateralAsset = {
 
 export type VaultContract = { label: string; address: string };
 
-export type ApyRange = "7D" | "30D" | "90D";
-
-export type ApyPoint = { at: number; apyPercent: number };
-
-export type ApyHistory = { stepMs: number; points: readonly ApyPoint[] };
-
 export type RateSample = { utilization: number; borrow: number; lender: number };
 
+// The rates are read from the reserve today. Nothing records a history of them, so none is shown.
 export type VaultAnalytics = {
-  now: number;
-  apy: Record<ApyRange, ApyHistory>;
+  supplyApyBps: number;
+  borrowApyBps: number;
   curve: { samples: readonly RateSample[]; kink: RateSample; current: RateSample };
 };
 
+// A supply or withdrawal the connected wallet made in this vault. A withdrawal's size is unknown when the transaction
+// does not show it.
 export type VaultPositionEvent = {
   kind: "supply" | "withdraw";
-  amount: TokenAmount;
+  amount: TokenAmount | null;
   date: string;
   signature: string;
 };
@@ -74,10 +63,11 @@ export type VaultPosition = {
   supplied: TokenAmount;
   shares: TokenAmount;
   valueUsd: bigint;
-  earnedUsd: bigint;
-  earned: TokenAmount;
-  events: readonly VaultPositionEvent[];
+  // Interest earned in the vault's own token; null when the history does not show what was supplied.
+  earned: TokenAmount | null;
 };
+
+export type VaultLimit = { label: string; value: string };
 
 export type VaultDetail = VaultSummary & {
   name: string;
@@ -95,17 +85,15 @@ export type VaultDetail = VaultSummary & {
   oracleMaxAgeSeconds: number;
   shareExchangeRate: bigint;
   reserveFactorBps: number;
-  supplyCap: TokenAmount;
-  borrowCap: TokenAmount;
+  // A cap of zero on the reserve means there is none.
+  supplyCap: TokenAmount | null;
+  borrowCap: TokenAmount | null;
+  supplyCapUsageBps: number | null;
+  borrowCapUsageBps: number | null;
   contracts: readonly VaultContract[];
-  supplyCapUsageBps: number;
-  borrowCapUsageBps: number;
-  topSuppliers: TokenAmount;
-  topSuppliersShareBps: number;
-  otherSuppliers: TokenAmount;
-  activity: readonly VaultActivityEntry[];
+  limits: readonly VaultLimit[];
   collateralAssets: readonly VaultCollateralAsset[];
-  managers: readonly { label: string; value: string }[];
+  activity: readonly VaultPositionEvent[];
   position?: VaultPosition;
 };
 

@@ -35,9 +35,10 @@ type VaultScreenProps = {
   onSupply: () => void;
   onWithdraw: () => void;
   onCopyAddress: (contract: VaultContract) => void;
+  onOpenTransaction: (signature: string) => void;
 };
 
-export function VaultScreen({ vault, analytics, onBack, onSupply, onWithdraw, onCopyAddress }: VaultScreenProps) {
+export function VaultScreen({ vault, analytics, onBack, onSupply, onWithdraw, onCopyAddress, onOpenTransaction }: VaultScreenProps) {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const tabs = vault.position ? TABS : TABS.filter((tab) => tab.value !== "positions");
@@ -85,7 +86,7 @@ export function VaultScreen({ vault, analytics, onBack, onSupply, onWithdraw, on
         <View style={{ paddingHorizontal: 20 }}>
           {tab === "positions" && vault.position ? <VaultPositionTab vault={vault} position={vault.position} /> : null}
           {tab === "details" ? <VaultDetailsTab vault={vault} onCopyAddress={onCopyAddress} /> : null}
-          {tab === "activity" ? <VaultActivityTab vault={vault} /> : null}
+          {tab === "activity" ? <VaultActivityTab vault={vault} onOpenTransaction={onOpenTransaction} /> : null}
           {tab === "collateral" ? <VaultCollateralTab vault={vault} /> : null}
           {tab === "analytics" ? <VaultAnalyticsTab analytics={analytics} /> : null}
         </View>

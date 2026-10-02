@@ -7,10 +7,8 @@ export type RateModel = {
   kink: number;
 };
 
-// Vanna's kinked model fitted to the devnet pools. slope2 is a placeholder until the protocol publishes it.
-export const VANNA_RATE_MODEL: RateModel = { base: 0, slope1: 0.1, slope2: 0.6, kink: 0.8 };
-
 export function borrowRate(model: RateModel, utilization: number): number {
+  if (model.kink === 0) return model.base;
   if (utilization <= model.kink) return model.base + (model.slope1 * utilization) / model.kink;
   return model.base + model.slope1 + (model.slope2 * (utilization - model.kink)) / (1 - model.kink);
 }

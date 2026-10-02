@@ -8,6 +8,8 @@ import { MissingPriceError } from "./value-holdings";
 export type ValuedDeposit = {
   symbol: AssetSymbol;
   decimals: number;
+  // Vault share tokens held.
+  shares: bigint;
   supplied: bigint;
   value: bigint;
   supplyApyBps: number;
@@ -25,6 +27,7 @@ export function valueDeposits(shares: readonly ShareBalance[], pools: Partial<Re
       return {
         symbol,
         decimals,
+        shares: amount,
         supplied,
         value: (supplied * price) / 10n ** BigInt(decimals),
         supplyApyBps: Math.round(pool.supplyApyPercent * 100),
