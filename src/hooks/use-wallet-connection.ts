@@ -8,6 +8,8 @@ import type { ConnectPhase } from "@/types/connection";
 const AUTHORIZATION_FAILED = -1;
 
 const ELLIPSIS_FALLBACK = "..";
+// Backpack on Android rejects the app's identity during authorize, which no app setting can fix.
+const IDENTITY_REJECTED = /identity verification failed/i;
 
 function walletLabel(label: string | undefined) {
   return label && !label.includes(ELLIPSIS_FALLBACK) ? label : undefined;
@@ -44,11 +46,13 @@ export function useWalletConnection() {
         setPhase("pick");
       } else {
         setDeclinedByWallet(code === AUTHORIZATION_FAILED);
-        setErrorMessage(code === AUTHORIZATION_FAILED
-          ? "The wallet declined the connection. You can try again."
-          : code === "ERROR_SESSION_TIMEOUT"
-            ? "The wallet did not respond in time. Unlock it and try again."
-            : "Could not connect to your wallet. Unlock it and try again.");
+        setErrorMessage(IDENTITY_REJECTED.test(message)
+          ? "This wallet could not verify Vanna. Backpack on Android has a known problem with this. Connect with Phantom or Solflare instead."
+          : code === AUTHORIZATION_FAILED
+            ? "The wallet declined the connection. You can try again."
+            : code === "ERROR_SESSION_TIMEOUT"
+              ? "The wallet did not respond in time. Unlock it and try again."
+              : "Could not connect to your wallet. Unlock it and try again.");
         setPhase("declined");
       }
     } finally {
