@@ -1,10 +1,10 @@
 import { router } from "expo-router";
+import { lazy, Suspense } from "react";
 import { View } from "react-native";
 
 import { AccountCard } from "@/components/profile/account-card";
 import { AccountHealthCard } from "@/components/profile/account-health-card";
 import { AppearanceCard } from "@/components/profile/appearance-card";
-import { DeveloperControls } from "@/components/profile/developer-controls";
 import { DisconnectButton } from "@/components/profile/disconnect-button";
 import { FaucetCard } from "@/components/profile/faucet-card";
 import { ProfileWalletCard } from "@/components/profile/profile-wallet-card";
@@ -24,6 +24,9 @@ import { usePortfolio } from "@/hooks/use-portfolio";
 import { useShareText } from "@/hooks/use-share-text";
 import { useWalletConnection } from "@/hooks/use-wallet-connection";
 import { useTheme } from "@/theme/use-theme";
+
+// Metro folds __DEV__ before it collects dependencies, so a release build never contains the preview switches.
+const DeveloperControls = __DEV__ ? lazy(() => import("@/components/profile/developer-controls").then((module) => ({ default: module.DeveloperControls }))) : null;
 
 export default function Profile() {
   const { colors } = useTheme();
@@ -73,13 +76,10 @@ export default function Profile() {
         <Button label="Connect wallet" onPress={() => router.push("/connect")} />
       )}
       {wallet.errorMessage ? <AppText color="negative">{wallet.errorMessage}</AppText> : null}
-      {__DEV__ ? (
-        <DeveloperControls
-          outcome={approval.outcome}
-          onOutcome={approval.setOutcome}
-          offline={!connectivity.online}
-          onOffline={connectivity.simulateOffline}
-        />
+      {DeveloperControls ? (
+        <Suspense fallback={null}>
+          <DeveloperControls outcome={approval.outcome} onOutcome={approval.setOutcome} offline={!connectivity.online} onOffline={connectivity.simulateOffline} />
+        </Suspense>
       ) : null}
       <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6 }}>
         <VannaWordmark color={colors.textMuted} height={10} />
