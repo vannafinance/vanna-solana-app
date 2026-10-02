@@ -2,7 +2,6 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useMobileWallet } from "@wallet-ui/react-native-web3js";
 import { router } from "expo-router";
 
-import { previewApproval } from "@/lib/preview-data/approval-outcome";
 import { FORK_FAUCET_ENABLED } from "@/lib/solana/config";
 import { explorerTransactionUrl } from "@/lib/solana/explorer";
 import * as WebBrowser from "expo-web-browser";
@@ -23,7 +22,7 @@ type Options = {
   steps?: number;
   wallet?: string;
   success: { title: string; message: string };
-  run?: (step: number, progress: RunProgress) => Promise<void>;
+  run: (step: number, progress: RunProgress) => Promise<void>;
 };
 
 const CONFIRMING_COPY: Record<ConfirmStage, { title: string; message: string }> = {
@@ -32,7 +31,7 @@ const CONFIRMING_COPY: Record<ConfirmStage, { title: string; message: string }> 
   processed: { title: "Processed by Solana", message: "Waiting for final confirmation" },
 };
 
-export function useTransactionFlow({ steps = 1, wallet, success, run = previewApproval }: Options) {
+export function useTransactionFlow({ steps = 1, wallet, success, run }: Options) {
   const { account } = useMobileWallet();
   const walletLabel = wallet ?? account?.label ?? DEFAULT_WALLET;
   const [internal, setInternal] = useState<Internal>({ phase: "idle" });

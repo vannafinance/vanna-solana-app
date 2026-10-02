@@ -1,3 +1,4 @@
+import { Redirect } from "expo-router";
 import { useState } from "react";
 import { View } from "react-native";
 
@@ -34,7 +35,7 @@ const sheets: Record<string, TransactionState> = {
   rejected: { phase: "failure", kind: "rejected", title: "Request cancelled", message: "You cancelled the request in your wallet. Nothing was sent." },
 };
 
-export default function ComponentPreview() {
+function ComponentPreview() {
   const { colors, spacing } = useTheme();
   const [amount, setAmount] = useState("500.00");
   const [leverage, setLeverage] = useState(3);
@@ -163,4 +164,9 @@ export default function ComponentPreview() {
       <TransactionSheet state={sheet ? sheets[sheet] : null} onPrimary={() => setSheet(null)} onClose={() => setSheet(null)} />
     </>
   );
+}
+
+// The design-system preview carries sample figures, so it exists in development builds only.
+export default function Gallery() {
+  return __DEV__ ? <ComponentPreview /> : <Redirect href="/" />;
 }

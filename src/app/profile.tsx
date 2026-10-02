@@ -17,7 +17,6 @@ import { Screen } from "@/components/ui/screen";
 import { VannaWordmark } from "@/components/ui/vanna-wordmark";
 import { useAppearance } from "@/hooks/use-appearance";
 import { useAppInfo } from "@/hooks/use-app-info";
-import { useApprovalOutcome } from "@/hooks/use-approval-outcome";
 import { useConnectivity } from "@/hooks/use-connectivity";
 import { useFaucet } from "@/hooks/use-faucet";
 import { usePortfolio } from "@/hooks/use-portfolio";
@@ -35,7 +34,6 @@ export default function Profile() {
   const appearance = useAppearance();
   const info = useAppInfo();
   const share = useShareText();
-  const approval = useApprovalOutcome();
   const connectivity = useConnectivity();
   const wallet = useWalletConnection();
   const faucet = useFaucet();
@@ -79,7 +77,7 @@ export default function Profile() {
       {wallet.errorMessage ? <AppText color="negative">{wallet.errorMessage}</AppText> : null}
       {DeveloperControls ? (
         <Suspense fallback={null}>
-          <DeveloperControls outcome={approval.outcome} onOutcome={approval.setOutcome} offline={!connectivity.online} onOffline={connectivity.simulateOffline} />
+          <DeveloperControls offline={!connectivity.online} onOffline={connectivity.simulateOffline} />
         </Suspense>
       ) : null}
       <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6 }}>
