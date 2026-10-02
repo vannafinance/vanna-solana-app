@@ -62,6 +62,68 @@ def chooser_tiles():
             '<p class="note dk">' + NOTE + '</p></div></div>')
 
 
+def dark_page(inner):
+    """Option 4's page, refined: near-black, with a soft coral-violet glow living in the top-right corner."""
+    return ('<div class="pd2">' + SB + '<div class="pad"><img class="logo" src="' + LOGO + '"><h1>' + TITLE + '</h1><p class="sub">' + SUB + '</p>' + inner +
+            '<p class="note dk2">' + ic('info', 18) + NOTE + '</p></div></div>')
+
+
+def tile_bg(g):
+    return 'background:radial-gradient(120%% 90%% at 100%% 0%%, rgba(255,255,255,.22), transparent 55%%), linear-gradient(150deg,%s,%s)' % g
+
+
+def chooser_tiles_badge():
+    """4a: the audience is a solid white badge at the top of each tile; the rest of the meta are glass chips."""
+    out = ''
+    for _, name, icon, text, meta, g, tint, ink in SPACES:
+        who, *facts = meta.split(' · ')
+        out += ('<div class="tl2" style="%s"><div class="tlh"><span class="tli">%s</span><b>%s</b><span class="who" style="color:%s">%s</span></div>'
+                '<span class="d">%s</span><div class="fx">%s<span class="go">%s</span></div></div>'
+                % (tile_bg(g), ic(icon, 22), name, ink, who, text, ''.join('<i>%s</i>' % f for f in facts), ic('arrow_forward', 20)))
+    return dark_page('<div class="tiles">' + out + '</div>')
+
+
+def chooser_badge_calm(dark):
+    """4a, calmer: one badge is the only pill; the facts become a quiet line; no arrow button (the whole tile is the button).
+    dark=True keeps the colour to the icon, a soft corner tint and the badge, on a dark tile."""
+    out = ''
+    for _, name, icon, text, meta, g, tint, ink in SPACES:
+        who, *facts = meta.split(' · ')
+        if dark:
+            bg = 'background:radial-gradient(90%% 120%% at 0%% 0%%, %s55, transparent 60%%), #1A1721' % g[0]
+            icon_html = '<span class="tli" style="background:linear-gradient(150deg,%s,%s)">%s</span>' % (g[0], g[1], ic(icon, 22))
+            badge = '<span class="who" style="background:%s;color:%s">%s</span>' % (tint, ink, who)
+        else:
+            bg = 'background:linear-gradient(150deg,%s,%s)' % g
+            icon_html = '<span class="tli">%s</span>' % ic(icon, 22)
+            badge = '<span class="who" style="color:%s">%s</span>' % (ink, who)
+        out += ('<div class="tl5%s" style="%s"><div class="tlh">%s<b>%s</b>%s</div><span class="d">%s</span><span class="q">%s</span></div>'
+                % (' dk' if dark else '', bg, icon_html, name, badge, text, ' · '.join(facts)))
+    return dark_page('<div class="tiles calm">' + out + '</div>')
+
+
+def chooser_tiles_eyebrow():
+    """4b: the audience reads first, as a bold eyebrow over the name; the facts sit on a darker band along the bottom."""
+    out = ''
+    for _, name, icon, text, meta, g, tint, ink in SPACES:
+        who, *facts = meta.split(' · ')
+        out += ('<div class="tl3" style="%s"><div class="top3"><div class="tlh"><span class="tli">%s</span><div><em>%s</em><b>%s</b></div><span class="chev">%s</span></div>'
+                '<span class="d">%s</span></div><div class="band">%s</div></div>'
+                % (tile_bg(g), ic(icon, 22), who, name, ic('arrow_forward', 20), text, '<span class="sep"></span>'.join('<span>%s</span>' % f for f in facts)))
+    return dark_page('<div class="tiles">' + out + '</div>')
+
+
+def chooser_tiles_strip():
+    """4c: a white strip closes each tile and carries the whole line in the space's own colour, the audience in bold."""
+    out = ''
+    for _, name, icon, text, meta, g, tint, ink in SPACES:
+        who, *facts = meta.split(' · ')
+        out += ('<div class="tl4"><div class="tlc" style="%s"><div class="tlh"><span class="tli">%s</span><b>%s</b><span class="chev">%s</span></div><span class="d">%s</span></div>'
+                '<div class="strip" style="color:%s"><b>%s</b>%s</div></div>'
+                % (tile_bg(g), ic(icon, 22), name, ic('arrow_forward', 20), text, ink, who, ''.join('<span>· %s</span>' % f for f in facts)))
+    return dark_page('<div class="tiles">' + out + '</div>')
+
+
 # ---------------------------------------------------------------- margin account
 ORDER = ('<div class="ord">' + SB + '<div class="obar">' + ic('arrow_back', 24) + '<b>Open position</b></div>'
          '<div class="oc"><div class="orow"><img src="' + TSLA + '"><div><b>TSLAx-USDC</b><span>Long 3x</span></div></div></div>'
@@ -102,7 +164,7 @@ CSS = r'''
 section{padding:6px 28px 26px}section h2{margin:18px 0 12px;font-size:18px;font-weight:600}.row{display:flex;gap:26px;flex-wrap:wrap;align-items:flex-start}
 figure{margin:0;width:392px;display:flex;flex-direction:column;gap:10px}figcaption{font-size:13px;line-height:19px;color:var(--t2)}figcaption b{color:var(--text)}
 .ph{position:relative;width:392px;height:820px;border-radius:36px;overflow:hidden;box-shadow:0 0 0 9px #0B0B0D,0 30px 60px -20px rgba(47,27,97,.4)}
-.ph>.pw,.ph>.pv,.ph>.pd,.ph>.ord{position:absolute;inset:0}
+.ph>.pw,.ph>.pv,.ph>.pd,.ph>.pd2,.ph>.ord{position:absolute;inset:0}
 .sb{height:30px;display:flex;justify-content:space-between;align-items:center;padding:0 22px;font-size:12px;font-weight:600}
 .pad{position:relative;padding:28px 20px 0}.logo{width:36px;height:36px;display:block}
 h1{margin:22px 0 0;font-size:28px;line-height:34px;font-weight:700;letter-spacing:-.015em}.sub{margin:8px 0 22px;font-size:15px;line-height:22px;color:var(--t2)}
@@ -128,6 +190,31 @@ h1{margin:22px 0 0;font-size:28px;line-height:34px;font-weight:700;letter-spacin
 .tlh{display:flex;align-items:center;gap:10px}.tlh b{font-size:19px;font-weight:700}.tlh .chev{margin-left:auto;color:#fff;opacity:.9}
 .tli{width:36px;height:36px;border-radius:12px;background:rgba(255,255,255,.2);display:flex;align-items:center;justify-content:center}
 .tl span{font-size:14px;line-height:20px;color:rgba(255,255,255,.92)}.tl small{font-size:12px;color:rgba(255,255,255,.75);font-weight:600}.note.dk{color:#B9B7C6}
+/* option 4, refined: dark page with life in the top-right corner */
+.pd2{background:radial-gradient(56% 21% at 100% 0%,rgba(252,84,87,.55),rgba(252,84,87,0) 72%),radial-gradient(44% 17% at 72% 0%,rgba(112,58,230,.55),rgba(112,58,230,0) 72%),radial-gradient(34% 14% at 100% 17%,rgba(226,8,122,.22),rgba(226,8,122,0) 72%),#0E0C13;color:#fff;overflow:hidden}.pd2 .sub{color:#B9B7C6}.pd2 .pad{z-index:1}
+.note.dk2{color:#A9A7B6}.note.dk2 svg{color:#C9B8FF}
+.tl2,.tl3,.tl4{border-radius:22px;color:#fff;box-shadow:0 16px 30px -18px rgba(0,0,0,.8)}
+.tl2 .d,.tl3 .d,.tl4 .d{font-size:14px;line-height:20px;color:rgba(255,255,255,.94)}
+/* 4a badge */
+.tl2{padding:14px 16px 14px;display:flex;flex-direction:column;gap:8px}
+.tl2 .tlh b{font-size:19px;font-weight:700}
+.who{margin-left:auto;height:26px;padding:0 10px;border-radius:13px;background:#fff;font-size:12.5px;font-weight:700;display:inline-flex;align-items:center;box-shadow:0 4px 10px -4px rgba(0,0,0,.35)}
+.fx{display:flex;align-items:center;gap:6px;flex-wrap:wrap}.fx i{font-style:normal;height:26px;padding:0 10px;border-radius:13px;background:rgba(255,255,255,.18);box-shadow:inset 0 0 0 1px rgba(255,255,255,.28);font-size:12.5px;font-weight:600;display:inline-flex;align-items:center}
+.fx .go{margin-left:auto;width:34px;height:34px;border-radius:50%;background:rgba(255,255,255,.18);display:flex;align-items:center;justify-content:center}
+/* 4a calmer */
+.tiles.calm{gap:14px}.tl5{border-radius:22px;padding:16px;display:flex;flex-direction:column;gap:6px;color:#fff}
+.tl5 .tlh{margin-bottom:4px}.tl5 .tlh b{font-size:19px;font-weight:700}.tl5 .d{font-size:14px;line-height:20px;color:rgba(255,255,255,.92)}
+.tl5 .q{font-size:12.5px;font-weight:600;color:rgba(255,255,255,.72)}
+.tl5.dk{box-shadow:inset 0 0 0 1px rgba(255,255,255,.07)}.tl5.dk .d{color:#D9D7E3}.tl5.dk .q{color:#9A98A8}
+/* 4b eyebrow + band */
+.tl3{overflow:hidden}.top3{padding:14px 16px 12px;display:flex;flex-direction:column;gap:8px}
+.tl3 .tlh>div{display:flex;flex-direction:column}.tl3 em{font-style:normal;font-size:11.5px;font-weight:800;letter-spacing:.09em;text-transform:uppercase;color:#fff;opacity:.95}
+.tl3 .tlh b{font-size:19px;line-height:22px;font-weight:700}.tl3 .chev{margin-left:auto;color:#fff}
+.band{display:flex;align-items:center;gap:10px;padding:9px 16px;background:rgba(10,6,24,.28);font-size:12.5px;font-weight:700;color:#fff}.band .sep{width:4px;height:4px;border-radius:50%;background:rgba(255,255,255,.6)}
+/* 4c white strip */
+.tl4{overflow:hidden;background:#fff}.tlc{padding:14px 16px 12px;display:flex;flex-direction:column;gap:8px}
+.tl4 .tlh b{font-size:19px;font-weight:700}.tl4 .chev{margin-left:auto;color:#fff}
+.strip{display:flex;align-items:center;gap:6px;padding:9px 16px;font-size:13px;font-weight:600}.strip b{font-weight:800}
 /* margin */
 .ord{background:#F7F7F7}.obar{height:56px;display:flex;align-items:center;gap:14px;padding:0 16px}.obar b{font-size:20px;font-weight:600}
 .oc{margin:10px 16px 0;background:#fff;border-radius:18px;padding:4px 16px;box-shadow:0 1px 2px rgba(17,17,17,.04),0 8px 24px rgba(17,17,17,.05)}
@@ -168,9 +255,17 @@ def main():
           fig(margin_inline_done(), '<b>A · Done.</b> The same balanced sheet as every transaction: the seal, "Margin account opened" and the trade.') +
           fig(margin_screen(), '<b>B · One screen.</b> If someone opens Trade before trading: a calm one-screen page, no scrolling, no agreements, one button.') +
           fig(margin_banner(), '<b>C · Banner.</b> A small card on top of Markets; the markets stay visible and usable.'))
+    s3 = (fig(chooser_tiles_badge(), '<b>4a · Audience badge.</b> "For lenders", "For traders", "Leveraged yield" sit in a solid white badge on each tile, in the space\'s own colour; the other facts are small glass chips.') +
+          fig(chooser_tiles_eyebrow(), '<b>4b · Audience first.</b> The audience is the first thing you read, in bold capitals above the name; the facts sit on a darker band along the bottom of the tile.') +
+          fig(chooser_tiles_strip(), '<b>4c · White strip.</b> Each tile ends in a white strip carrying the whole line in the space\'s colour, the audience in bold. The most legible of the three.'))
+    s4 = (fig(chooser_tiles_badge(), '<b>4a · as sent.</b> Four to five pills per tile on three full-strength gradients: everything is equally loud.') +
+          fig(chooser_badge_calm(False), '<b>4a · calmer.</b> The badge is the only pill. Facts become one quiet line, the arrow button goes (the whole tile is the button), more air between tiles.') +
+          fig(chooser_badge_calm(True), '<b>4a · calm, dark tiles.</b> Colour lives in the icon, a soft corner tint and the badge; the page stays dark and the badge is the brightest thing on each tile.'))
     page = ('<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Vanna onboarding</title>'
             '<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet"><style>' + CSS + '</style></head><body>'
             '<div class="top"><h1>First launch and the margin account</h1><p>Previews only. The chooser keeps your exact words. The margin account follows how Vanna really works: the first margin action creates it, with no terms step.</p></div>'
+            '<section id="o4"><h2>4a, calmer</h2><div class="row">' + s4 + '</div></section>'
+            '<section id="o3"><h2>Option 4, refined: the audience you can’t miss</h2><div class="row">' + s3 + '</div></section>'
             '<section id="o1"><h2>"What do you want to do?": four looks</h2><div class="row">' + s1 + '</div></section>'
             '<section id="o2"><h2>Margin account without agreements</h2><div class="row">' + s2 + '</div></section></body></html>')
     out = os.path.join(CMP, 'previews', 'onboarding.html')
@@ -179,7 +274,7 @@ def main():
     with sync_playwright() as p:
         b = p.chromium.launch(); pg = b.new_page(viewport={'width': 1760, 'height': 1000})
         pg.goto('file:///' + out.replace('\\', '/'), wait_until='networkidle'); pg.wait_for_timeout(900)
-        for sid in ('o1', 'o2'):
+        for sid in ('o4', 'o3', 'o1', 'o2'):
             pg.locator('#' + sid + ' .row').screenshot(path=os.path.join(CMP, 'renders', 'onboarding-%s.png' % sid))
         b.close()
     print(out)

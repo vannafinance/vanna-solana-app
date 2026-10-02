@@ -1,0 +1,237 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Vanna margin account: motion</title>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root { --page:#F7F7F7; --card:#FFFFFF; --text:#1F1F1F; --text2:#5F5F68; --line:#EFEDF4; --bd:#E3E1EA; --pos:#1C7C83;
+  --acc:#4B44E0; --tv:#ECEBFE; --tvI:#3A33C4; --grad:linear-gradient(90deg,#6C63FF,#4B44E0); --bg:#EDEBF3;
+  --dec:cubic-bezier(.05,.7,.1,1); --acc-e:cubic-bezier(.3,0,.8,.15); --std:cubic-bezier(.2,0,0,1); --spring:cubic-bezier(.34,1.4,.64,1); }
+* { box-sizing:border-box; }
+body { margin:0; background:var(--bg); color:var(--text); font-family:'Plus Jakarta Sans',system-ui,sans-serif; font-variant-numeric:tabular-nums; }
+.top { padding:22px 28px 0; max-width:1300px; } .top h1 { margin:0; font-size:24px; font-weight:600; }
+.top p { margin:6px 0 0; font-size:14px; line-height:20px; color:var(--text2); max-width:1100px; }
+section { padding:6px 28px 26px; } section h2 { margin:18px 0 12px; font-size:18px; font-weight:600; }
+.row { display:flex; gap:28px; flex-wrap:wrap; align-items:flex-start; }
+figure { margin:0; width:392px; display:flex; flex-direction:column; gap:10px; }
+figcaption { font-size:13px; line-height:19px; color:var(--text2); } figcaption b { color:var(--text); }
+.phone { position:relative; width:392px; height:820px; border-radius:36px; overflow:hidden; background:var(--page); box-shadow:0 0 0 9px #0B0B0D,0 30px 60px -20px rgba(47,27,97,.4); }
+.ic { display:inline-flex; }
+
+/* shared screen parts */
+.sbar { height:30px; display:flex; justify-content:space-between; align-items:center; padding:0 22px; font-size:12px; font-weight:600; }
+.hdr { height:118px; color:#fff; border-radius:0 0 24px 24px; background:radial-gradient(110% 90% at 100% 0%, rgba(130,170,255,.6), transparent 60%), linear-gradient(180deg,#221D8C,#3A33C4); }
+.hdr .sbar { padding-top:6px; }
+.brand { margin:10px 18px 0; display:flex; align-items:center; gap:8px; font-size:22px; font-weight:700; } .brand img { width:28px; height:28px; }
+.c { margin:10px 16px 0; background:var(--card); border-radius:18px; padding:4px 16px; box-shadow:0 1px 2px rgba(17,17,17,.04),0 8px 24px rgba(17,17,17,.05); }
+.kv { display:flex; justify-content:space-between; align-items:center; font-size:14px; padding:12px 0; } .kv+.kv { border-top:1px solid var(--line); } .kv span { color:var(--text2); } .kv b { font-weight:600; }
+.cta { position:absolute; left:16px; right:16px; bottom:28px; height:56px; border-radius:28px; border:0; background:var(--grad); color:#fff; font:600 15.5px 'Plus Jakarta Sans';
+  display:flex; align-items:center; justify-content:center; gap:10px; box-shadow:0 10px 24px -12px rgba(75,68,224,.8);
+  transition:background 240ms var(--std), color 240ms var(--std), box-shadow 240ms var(--std), transform 120ms var(--std); }
+.cta.tonal { background:var(--tv); color:var(--tvI); box-shadow:none; }
+.press { transform:scale(.97) !important; }
+.loader { width:16px; height:16px; background:currentColor; display:inline-block; animation:shapes 1100ms var(--std) infinite; }
+@keyframes shapes { 0%{border-radius:50%;transform:rotate(0) scale(.9)} 33%{border-radius:30% 70% 50% 50%;transform:rotate(120deg)} 66%{border-radius:5px;transform:rotate(240deg) scale(.85)} 100%{border-radius:50%;transform:rotate(360deg) scale(.9)} }
+.fadein { animation:fadein 260ms var(--std) both; } @keyframes fadein { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:none} }
+
+/* status glyphs and the Vanna seal (same as the transaction sheet) */
+.g { position:relative; flex-shrink:0; border-radius:50%; display:flex; align-items:center; justify-content:center; }
+.g-wait { background:var(--tv); color:var(--tvI); animation:breathe 1600ms ease-in-out infinite; }
+@keyframes breathe { 0%,100%{box-shadow:0 0 0 0 rgba(75,68,224,.28)} 50%{box-shadow:0 0 0 7px rgba(75,68,224,.1)} }
+.g-arc { background:var(--tv); color:var(--tvI); } .g-arc svg.spin { position:absolute; inset:-3px; animation:spin 900ms linear infinite; }
+@keyframes spin { to { transform:rotate(360deg); } }
+.seal { overflow:visible; } .seal .sh,.seal .pu { transform-box:fill-box; transform-origin:center; }
+.seal .sh { animation:sealIn 480ms var(--spring) both; } .seal .tk { stroke-dasharray:34; animation:tick 280ms var(--dec) 220ms both; }
+.seal .pu { opacity:0; animation:pulse 700ms var(--dec) 140ms both; }
+@keyframes sealIn { from{transform:scale(.35) rotate(-50deg);opacity:0} to{transform:none;opacity:1} }
+@keyframes tick { from{stroke-dashoffset:34} to{stroke-dashoffset:0} }
+@keyframes pulse { 0%{opacity:.6;transform:scale(.85)} 100%{opacity:0;transform:scale(1.35)} }
+.btn { height:50px; border-radius:25px; border:0; font:600 15px 'Plus Jakarta Sans'; display:flex; align-items:center; justify-content:center; gap:8px; flex:1; }
+.btn.fill { background:var(--grad); color:#fff; } .btn.out { background:transparent; color:var(--text); box-shadow:inset 0 0 0 1.5px var(--bd); } .btn.text { background:transparent; color:var(--text2); height:44px; }
+.steps { display:flex; align-items:center; gap:6px; font-size:12px; color:var(--text2); }
+.steps span { display:inline-flex; align-items:center; gap:5px; } .steps em { width:14px; height:1px; background:var(--bd); }
+.steps i { width:7px; height:7px; border-radius:50%; background:var(--bd); } .steps .on { color:var(--text); } .steps .on i { background:var(--acc); }
+
+/* the wallet's own sheet (mocked, it is not drawn by Vanna) */
+.wscrim { position:absolute; inset:0; z-index:58; background:rgba(8,6,16,.45); opacity:0; pointer-events:none; transition:opacity 250ms; } .wscrim.on { opacity:1; }
+.wal { position:absolute; z-index:60; left:0; right:0; bottom:0; border-radius:22px 22px 0 0; background:#17171B; color:#fff; padding:12px 20px 22px;
+  transform:translateY(105%); transition:transform 300ms var(--dec); } .wal.on { transform:none; } .wal.off { transform:translateY(105%); transition:transform 240ms var(--acc-e); }
+.wal .gr { width:32px; height:4px; border-radius:2px; background:#3A3A42; margin:0 auto 16px; } .wal .who { display:flex; align-items:center; gap:10px; font-weight:600; }
+.wal .who span { width:36px; height:36px; border-radius:10px; background:#2A2A31; display:flex; align-items:center; justify-content:center; } .wal small { display:block; font-size:11px; color:#9C9CA6; font-weight:500; }
+.wal h4 { margin:18px 0 6px; font-size:19px; } .wal .kv { border-color:#2A2A31; } .wal .kv span { color:#9C9CA6; }
+.wal .wb { display:flex; gap:10px; margin-top:16px; } .wal .wb span { flex:1; height:48px; border-radius:24px; display:flex; align-items:center; justify-content:center; font-weight:600; transition:transform 120ms; }
+.wal .rej { background:#2A2A31; } .wal .app { background:#F2F2F3; color:#17171B; }
+
+/* A · inside the first trade */
+.obar { height:56px; display:flex; align-items:center; gap:14px; padding:0 16px; } .obar b { font-size:20px; font-weight:600; }
+.orow { display:flex; gap:12px; align-items:center; padding:10px 0; } .orow img { width:40px; height:40px; border-radius:50%; } .orow b { display:block; font-size:16px; } .orow span { font-size:13px; color:#703AE6; font-weight:600; }
+.first { position:absolute; left:16px; right:16px; bottom:100px; display:flex; gap:12px; padding:14px; border-radius:18px; background:#F1EBFD;
+  opacity:0; transform:translateY(14px); transition:opacity 280ms var(--std), transform 420ms var(--dec); } .first.on { opacity:1; transform:none; }
+.first .fi { width:36px; height:36px; border-radius:12px; background:#fff; color:#5029A3; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+.first b { display:block; font-size:14.5px; color:#3B1C82; } .first span { font-size:13px; line-height:18px; color:#4C3D7A; }
+.first.glint { animation:glint 900ms var(--std); } @keyframes glint { 40%{ box-shadow:0 0 0 3px rgba(112,58,230,.28); } }
+.a-scrim { position:absolute; inset:0; z-index:39; background:rgba(17,14,32,.22); opacity:0; transition:opacity 240ms; pointer-events:none; } .a-scrim.on { opacity:1; }
+.a { position:absolute; z-index:40; left:0; right:0; bottom:0; border-radius:28px 28px 0 0; background:var(--card); padding:12px 20px 26px; overflow:hidden;
+  transform:translateY(105%); transition:transform 340ms var(--dec), height 300ms var(--std); box-shadow:0 -10px 30px -12px rgba(17,11,46,.25); }
+.a.on { transform:none; } .a .gr { width:32px; height:4px; border-radius:2px; background:var(--bd); margin:0 auto 18px; }
+.a .in { display:flex; flex-direction:column; align-items:center; text-align:center; }
+.a h3 { margin:16px 0 0; font-size:20px; line-height:26px; font-weight:600; } .a p { margin:6px 0 0; font-size:14px; line-height:20px; color:var(--text2); max-width:300px; }
+.a .acts { margin-top:20px; display:flex; gap:10px; width:100%; } .a .steps { margin-top:14px; }
+.chip { margin-top:10px; height:26px; padding:0 10px; border-radius:13px; background:var(--tv); color:var(--tvI); font-size:12px; font-weight:700; display:inline-flex; align-items:center; }
+.list { margin-top:14px; display:flex; flex-direction:column; gap:8px; width:100%; max-width:280px; }
+.li { display:flex; align-items:center; gap:10px; font-size:14px; font-weight:600; text-align:left; opacity:0; transform:translateX(-8px); animation:liIn 320ms var(--dec) both; }
+.li i { width:22px; height:22px; border-radius:50%; background:var(--tv); color:var(--tvI); display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+@keyframes liIn { to { opacity:1; transform:none; } }
+
+/* B · one screen */
+.ms { padding:26px 22px 0; text-align:center; display:flex; flex-direction:column; align-items:center; }
+.ms h3 { margin:20px 0 0; font-size:22px; line-height:28px; } .ms p { margin:8px 0 0; font-size:14.5px; line-height:21px; color:var(--text2); }
+.slot { position:relative; width:230px; height:132px; border-radius:22px; border:2px dashed #B9B4F2; display:flex; align-items:center; justify-content:center;
+  background:repeating-linear-gradient(135deg,rgba(90,82,240,.05) 0 10px,transparent 10px 20px); transition:border-color 300ms, background 300ms; }
+.slot.filled { border-style:solid; border-color:#CFCBFA; background:#F4F2FE; }
+.slot.filled::after { content:''; position:absolute; inset:-2px; border-radius:22px; box-shadow:0 0 0 0 rgba(75,68,224,.35); animation:ring 700ms var(--dec) both; }
+@keyframes ring { from{ box-shadow:0 0 0 0 rgba(75,68,224,.4); } to{ box-shadow:0 0 0 18px rgba(75,68,224,0); } }
+.mcard { position:relative; width:180px; height:100px; border-radius:16px; background:linear-gradient(135deg,#fff,#F1EBFD); box-shadow:0 14px 30px -14px rgba(75,68,224,.6); padding:12px;
+  display:flex; flex-direction:column; gap:7px; opacity:.7; transform:rotate(-6deg) translateY(-16px); animation:bob 2400ms ease-in-out infinite; }
+@keyframes bob { 0%,100%{ transform:rotate(-6deg) translateY(-16px); } 50%{ transform:rotate(-4deg) translateY(-24px); } }
+.mcard.in { animation:drop 560ms var(--spring) both; opacity:1; } @keyframes drop { from{ transform:rotate(-6deg) translateY(-24px); opacity:.7; } to{ transform:none; opacity:1; } }
+.mcard img { width:24px; height:24px; } .mcard span { font-size:12px; font-weight:600; color:#3A33C4; text-align:left; } .mcard i { height:7px; border-radius:4px; background:#DCD6FA; width:70%; }
+.mcard .badge { position:absolute; right:-14px; top:-14px; display:flex; }
+.facts { display:flex; gap:8px; flex-wrap:wrap; justify-content:center; margin-top:16px; }
+.facts>span { height:30px; padding:0 10px; border-radius:15px; background:#fff; box-shadow:inset 0 0 0 1px var(--bd); display:inline-flex; align-items:center; gap:6px; font-size:12.5px; font-weight:600;
+  opacity:0; transform:translateY(8px); animation:liIn 300ms var(--dec) both; } .facts svg { color:#4B44E0; }
+.txt { display:flex; flex-direction:column; align-items:center; }
+.foot { position:absolute; left:0; right:0; bottom:8px; text-align:center; font-size:12px; color:var(--text2); margin:0; transition:opacity 200ms; }
+
+/* C · banner on Markets */
+.ban { margin:14px 16px 0; border-radius:18px; background:#fff; box-shadow:0 0 0 1.5px #D9D3FB; overflow:hidden;
+  transition:height 340ms var(--std), margin 340ms var(--std), opacity 240ms, box-shadow 240ms; }
+.ban .bi { display:flex; align-items:center; gap:12px; padding:14px 14px 14px 16px; min-height:72px; }
+.ban .bt { flex:1; min-width:0; } .ban b { display:block; font-size:15px; } .ban .bt span { font-size:13px; color:var(--text2); }
+.ban .bb { flex-shrink:0; height:40px; padding:0 18px; border-radius:20px; border:0; background:var(--grad); color:#fff; font:600 14px 'Plus Jakarta Sans'; display:flex; align-items:center; gap:8px; transition:transform 120ms; }
+.ban.enter { animation:banIn 420ms var(--dec) both; } @keyframes banIn { from{ opacity:0; transform:translateY(-16px); } to{ opacity:1; transform:none; } }
+.ban.shine { position:relative; } .ban.shine::before { content:''; position:absolute; inset:0; background:linear-gradient(100deg,transparent 30%,rgba(108,99,255,.12) 50%,transparent 70%); transform:translateX(-100%); animation:shine 1400ms var(--std) 500ms; }
+@keyframes shine { to { transform:translateX(100%); } }
+.ban.gone { height:0 !important; margin-top:0; opacity:0; box-shadow:none; }
+.mk { display:flex; align-items:center; justify-content:space-between; padding:12px 0; font-size:14px; } .mk+.mk { border-top:1px solid var(--line); }
+.mk span { display:flex; align-items:center; gap:10px; } .mk img { width:32px; height:32px; border-radius:50%; } .mk small { display:block; font-size:12px; color:var(--pos); font-weight:600; text-align:right; }
+@media (prefers-reduced-motion: reduce) { *,*::before,*::after { animation-duration:1ms !important; transition-duration:1ms !important; } }
+</style></head>
+<body>
+<div class="top"><h1>Margin account: the three flows in motion</h1>
+<p>Previews only. No agreements anywhere: Vanna's first margin action creates the account. Each phone plays its flow on a loop; the wallet sheet is the wallet's own (mocked). "Phantom" is the example wallet name.</p></div>
+<section id="m1"><h2>A · B · C</h2><div class="row">
+<figure><div class="phone" data-flow="A"></div><figcaption><b>A · Inside the first trade (recommended).</b> The note slides in under the order, the button says it opens the account too, one approval, and the sheet ticks off both: account opened, position placed.</figcaption></figure>
+<figure><div class="phone" data-flow="B"></div><figcaption><b>B · One screen.</b> The account card hovers over its empty slot. After the approval it drops in with a spring, the slot lights up, the seal lands on the card and the button becomes "Start trading".</figcaption></figure>
+<figure><div class="phone" data-flow="C"></div><figcaption><b>C · Banner.</b> A small card slides in on top of Markets. It shows the approval and the seal in place, then folds away and the list moves up.</figcaption></figure>
+</div></section>
+
+<script>
+var IC = __ICONS__, LOGO = '__LOGO__', IMG = __IMG__, WNAME = 'Phantom';
+function ic(n, s) { return '<span class="ic"><svg width="' + (s || 22) + '" height="' + (s || 22) + '" viewBox="0 -960 960 960" fill="currentColor">' + IC[n] + '</svg></span>'; }
+var sealN = 0;
+function seal(size) {
+  var id = 'sg' + (sealN++), d = '';
+  for (var i = 0; i <= 120; i++) { var a = i / 120 * Math.PI * 2, r = 23 + 1.8 * Math.cos(9 * a); d += (i ? 'L' : 'M') + (28 + r * Math.cos(a)).toFixed(2) + ' ' + (28 + r * Math.sin(a)).toFixed(2); }
+  return '<svg class="seal" width="' + size + '" height="' + size + '" viewBox="0 0 56 56"><defs><linearGradient id="' + id + '" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#FC5457"/><stop offset="1" stop-color="#703AE6"/></linearGradient></defs>' +
+    '<circle class="pu" cx="28" cy="28" r="25" fill="none" stroke="url(#' + id + ')" stroke-width="2"/><path class="sh" d="' + d + 'Z" fill="url(#' + id + ')"/>' +
+    '<path class="tk" d="M17.5 28.5 L25 35.5 L39.5 20" fill="none" stroke="#fff" stroke-width="4.6" stroke-linecap="square" stroke-linejoin="miter"/></svg>';
+}
+function glyph(kind, size) {
+  var s = size + 'px', inner = Math.round(size * .46);
+  if (kind === 'wait') return '<span class="g g-wait" style="width:' + s + ';height:' + s + '">' + ic('wallet', inner) + '</span>';
+  if (kind === 'arc') return '<span class="g g-arc" style="width:' + s + ';height:' + s + '"><svg class="spin" width="' + (size + 6) + '" height="' + (size + 6) + '" viewBox="0 0 52 52"><circle cx="26" cy="26" r="24" fill="none" stroke="#4B44E0" stroke-width="2.5" stroke-linecap="round" stroke-dasharray="36 120"/></svg>' + ic('wallet', inner) + '</span>';
+  return '<span class="g" style="width:' + s + ';height:' + s + '">' + seal(size) + '</span>';
+}
+function steps(n) { return '<div class="steps">' + ['Sent', 'Processed', 'Confirmed'].map(function (t, i) { return '<span class="' + (i < n ? 'on' : '') + '"><i></i>' + t + '</span>'; }).join('<em></em>') + '</div>'; }
+function q(p, s) { return p.querySelector(s); }
+function press(el) { if (!el) return; el.classList.add('press'); setTimeout(function () { el.classList.remove('press'); }, 150); }
+function morph(box, inner, html) {
+  var h0 = box.offsetHeight; box.style.height = h0 + 'px';
+  inner.innerHTML = html; inner.classList.remove('fadein'); void inner.offsetWidth; inner.classList.add('fadein');
+  var cs = getComputedStyle(box), h1 = inner.offsetHeight + parseFloat(cs.paddingTop) + parseFloat(cs.paddingBottom) + (q(box, '.gr') ? 22 : 0);
+  requestAnimationFrame(function () { box.style.height = h1 + 'px'; });
+}
+var SB = '<div class="sbar"><span>12:30</span><span>&#9679;&#9679;&#9679; &#9650; &#9646;</span></div>';
+function wallet(rows) {
+  return '<div class="wscrim"></div><div class="wal"><div class="gr"></div><div class="who"><span>' + ic('wallet', 20) + '</span><div>' + WNAME + '<small>Wallet app, not drawn by Vanna</small></div></div>' +
+    '<h4>Sign 1 transaction</h4>' + rows.map(function (r) { return '<div class="kv"><span>' + r[0] + '</span><b>' + r[1] + '</b></div>'; }).join('') +
+    '<div class="kv"><span>Network fee</span><b>≈ 0.00005 SOL</b></div><div class="wb"><span class="rej">Reject</span><span class="app">Approve</span></div></div>';
+}
+function walletCtl(p) {
+  var wal = q(p, '.wal'), ws = q(p, '.wscrim');
+  return { up: function () { wal.classList.remove('off'); wal.classList.add('on'); ws.classList.add('on'); },
+           approve: function () { press(q(wal, '.app')); },
+           down: function () { wal.classList.remove('on'); wal.classList.add('off'); ws.classList.remove('on'); } };
+}
+var TRADE_HDR = '<div class="hdr">' + SB + '<div class="brand"><img src="' + LOGO + '" alt="">vanna</div></div>';
+
+var FLOWS = {
+  A: function (p) {
+    p.innerHTML = SB + '<div class="obar">' + ic('arrow_back', 24) + '<b>Open position</b></div>' +
+      '<div class="c"><div class="orow"><img src="' + IMG.tsla + '"><div><b>TSLAx-USDC</b><span>Long 3x</span></div></div></div>' +
+      '<div class="c"><div class="kv"><span>Collateral</span><b>500 USDC</b></div><div class="kv"><span>Position size</span><b>$1,500.00</b></div><div class="kv"><span>Liquidation</span><b>$250.20</b></div></div>' +
+      '<div class="first"><span class="fi">' + ic('wallet', 20) + '</span><div><b>Your first trade</b><span>Vanna also opens your margin account, once, in the same approval. It holds your collateral for Trade and Farm.</span></div></div>' +
+      '<button class="cta">Open account &amp; Long 3x · approve in wallet</button>' +
+      '<div class="a-scrim"></div><div class="a"><div class="gr"></div><div class="in"></div></div>' +
+      wallet([['Create margin account', 'Once'], ['Long 3x TSLAx', '500 USDC']]);
+    var box = q(p, '.a'), inner = q(p, '.a .in'), scrim = q(p, '.a-scrim'), W = walletCtl(p), first = q(p, '.first');
+    function show(html) { if (!box.classList.contains('on')) { inner.innerHTML = html; box.style.height = ''; box.classList.add('on'); scrim.classList.add('on'); } else morph(box, inner, html); }
+    return [
+      [300, function () { first.classList.add('on'); }], [1000, function () { first.classList.add('glint'); }],
+      [1900, function () { press(q(p, '.cta')); }],
+      [2100, function () { show(glyph('wait', 64) + '<h3>Approve in ' + WNAME + '</h3><p>Your wallet is open. Nothing moves until you approve there.</p><span class="chip">1 approval · account + trade</span><div class="acts"><button class="btn text">Cancel</button></div>'); }],
+      [2600, W.up], [4100, W.approve], [4300, W.down],
+      [4500, function () { show(glyph('arc', 64) + '<h3>Sent to Solana</h3><p>Usually under 2 seconds.</p>' + steps(1)); }],
+      [5000, function () { var s = q(p, '.a .steps'); if (s) s.outerHTML = steps(2); }],
+      [5500, function () { show(glyph('seal', 64) + '<h3>Margin account opened</h3>' +
+        '<div class="list"><div class="li"><i>' + ic('check', 14) + '</i>Margin account · 3pLm…Uw2c</div><div class="li" style="animation-delay:260ms"><i>' + ic('check', 14) + '</i>Long 3x TSLAx · $1,500.00</div></div>' +
+        '<div class="acts"><button class="btn out">Done</button><button class="btn fill">View position</button></div>'); }],
+      [9200, function () { box.classList.remove('on'); scrim.classList.remove('on'); }]
+    ];
+  },
+  B: function (p) {
+    p.innerHTML = TRADE_HDR + '<div class="ms"><div class="slot"><div class="mcard"><img src="' + LOGO + '"><span>Margin account</span><i></i><i style="width:45%"></i></div></div>' +
+      '<div class="txt"><h3>Oh no, you don’t have a margin account yet</h3><p>It holds the collateral behind your trades. Open it once, then trade and farm from it.</p></div>' +
+      '<div class="facts"><span style="animation-delay:300ms">' + ic('bolt', 16) + 'Up to 5x</span><span style="animation-delay:380ms">' + ic('swap', 16) + 'Trade + Farm</span><span style="animation-delay:460ms">' + ic('lock_open', 16) + 'Withdraw anytime</span></div></div>' +
+      '<button class="cta">Open margin account</button><p class="foot">One approval in your wallet. No forms, no agreements.</p>' +
+      wallet([['Create margin account', 'Once']]);
+    var cta = q(p, '.cta'), W = walletCtl(p), card = q(p, '.mcard'), slot = q(p, '.slot'), txt = q(p, '.txt'), foot = q(p, '.foot');
+    return [
+      [1700, function () { press(cta); }], [1850, function () { cta.classList.add('tonal'); cta.innerHTML = '<span class="loader"></span>Waiting for ' + WNAME; }],
+      [2300, W.up], [3800, W.approve], [4000, W.down],
+      [4200, function () { cta.innerHTML = '<span class="loader"></span>Opening on Solana'; }],
+      [5000, function () { card.classList.add('in'); }], [5250, function () { slot.classList.add('filled'); }],
+      [5500, function () { card.insertAdjacentHTML('beforeend', '<span class="badge">' + seal(40) + '</span>'); foot.style.opacity = 0;
+        txt.innerHTML = '<h3>Your margin account is open</h3><p>Trade and Farm now use it. Withdraw anytime.</p>'; txt.classList.remove('fadein'); void txt.offsetWidth; txt.classList.add('fadein');
+        cta.classList.remove('tonal'); cta.innerHTML = 'Start trading' + ic('arrow_forward', 20); }],
+      [8000, function () { press(cta); }]
+    ];
+  },
+  C: function (p) {
+    var mk = [[IMG.tsla, 'TSLAx-USDC', '$372.40', '+2.14%'], [IMG.goog, 'GOOGLx-USDC', '$339.93', '+0.82%'], [IMG.aapl, 'AAPLx-USDC', '$332.37', '+1.05%']];
+    p.innerHTML = TRADE_HDR + '<div class="ban"><div class="bi"><div class="bt"><b>Open your margin account</b><span>One tap, then go long or short up to 5x.</span></div><button class="bb">Open</button></div></div>' +
+      '<div class="c" style="margin-top:12px">' + mk.map(function (m) { return '<div class="mk"><span><img src="' + m[0] + '"><b>' + m[1] + '</b></span><b>' + m[2] + '<small>' + m[3] + '</small></b></div>'; }).join('') + '</div>' +
+      wallet([['Create margin account', 'Once']]);
+    var ban = q(p, '.ban'), bi = q(p, '.ban .bi'), W = walletCtl(p);
+    function set(html) { bi.innerHTML = html; bi.classList.remove('fadein'); void bi.offsetWidth; bi.classList.add('fadein'); }
+    ban.style.opacity = 0;
+    return [
+      [300, function () { ban.style.opacity = ''; ban.classList.add('enter', 'shine'); }],
+      [1900, function () { press(q(ban, '.bb')); }],
+      [2050, function () { set(glyph('wait', 40) + '<div class="bt"><b>Approve in ' + WNAME + '</b><span>Nothing moves until you approve.</span></div>'); }],
+      [2400, W.up], [3900, W.approve], [4100, W.down],
+      [4300, function () { set(glyph('arc', 40) + '<div class="bt"><b>Opening on Solana</b><span>Usually under 2 seconds.</span></div>'); }],
+      [5100, function () { set(glyph('seal', 40) + '<div class="bt"><b>Margin account opened</b><span>Tap any market to go long or short.</span></div>'); }],
+      [7300, function () { ban.style.height = ban.offsetHeight + 'px'; void ban.offsetWidth; ban.classList.add('gone'); }]
+    ];
+  }
+};
+
+function play(p) {
+  var T = FLOWS[p.dataset.flow](p);
+  T.forEach(function (t) { setTimeout(t[1], t[0]); });
+  setTimeout(function () { play(p); }, 10200);
+}
+document.querySelectorAll('.phone').forEach(play);
+</script>
+</body></html>
