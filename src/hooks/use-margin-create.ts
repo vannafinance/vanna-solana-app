@@ -1,42 +1,27 @@
 import { router } from "expo-router";
+import { PublicKey } from "@solana/web3.js";
 import { useEffect, useState } from "react";
 
 import { shortAddress } from "@/format/short-address";
 import { useMarginAccount } from "@/hooks/use-margin-account";
 import { useTransactionFlow } from "@/hooks/use-transaction-flow";
-import { previewApproval } from "@/lib/preview-data/approval-outcome";
+import { useWalletSigner } from "@/hooks/use-wallet-signer";
 import { DEFAULT_MARKET } from "@/lib/perps/build-markets";
+import { createMarginAccount } from "@/lib/solana/margin-transactions";
+import { marginAddress } from "@/lib/solana/program-accounts";
 import { spaceRoutes } from "@/navigation/routes";
-import { TransactionError } from "@/types/transaction";
-
-async function approveMarginAccount() {
-  try {
-    await previewApproval();
-  } catch (error) {
-    if (!(error instanceof TransactionError)) throw error;
-    if (error.kind === "no-fee") {
-      throw new TransactionError(
-        "no-fee",
-        "Not enough SOL for fees",
-        "Every Solana transaction needs a tiny SOL fee, about 0.00001 SOL. Add a little SOL to your wallet, then try again.",
-      );
-    }
-    if (error.kind === "rejected") {
-      throw new TransactionError("rejected", "Cancelled in your wallet", "You declined the wallet request. Nothing was sent.");
-    }
-    throw error;
-  }
-}
 
 export function useMarginCreate() {
-  const { markCreated, address } = useMarginAccount();
+  const { markCreated, exists } = useMarginAccount();
+  const signer = useWalletSigner();
+  const address = signer.owner === null ? null : marginAddress(new PublicKey(signer.owner)).toBase58();
   const [agreementOpen, setAgreementOpen] = useState(false);
   const [agreed, setAgreed] = useState(false);
   const [openSection, setOpenSection] = useState<number | null>(0);
   const [created, setCreated] = useState(false);
 
   const flow = useTransactionFlow({
-    run: approveMarginAccount,
+    run: (_step, progress) => signer.execute(({ connection, owner, hooks }) => createMarginAccount(connection, owner, hooks), progress),
     success: {
       title: "Margin account active",
       message: address === null ? "Your margin account is ready. You can now trade Perps and Farm." : `Account ${shortAddress(address)} is ready. You can now trade Perps and Farm.`,
@@ -51,7 +36,7 @@ export function useMarginCreate() {
 
   return {
     flow,
-    created,
+    created: created || exists,
     agreementOpen,
     agreed,
     openSection,

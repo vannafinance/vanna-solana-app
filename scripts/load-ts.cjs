@@ -22,7 +22,7 @@ function loadTs(file, stubs = {}, cache = new Map()) {
     }
     return require(specifier);
   };
-  runInNewContext(compiled, { module, exports: module.exports, require: resolve, BigInt, Math, Number, Uint8Array, DataView, Array, Error, RangeError, Set, Map, Promise, setTimeout, clearTimeout, console, TextEncoder });
+  runInNewContext(compiled, { module, exports: module.exports, require: resolve, BigInt, Math, Number, Uint8Array, DataView, Array, Error, RangeError, Set, Map, Promise, setTimeout, clearTimeout, console, TextEncoder, Buffer, Date });
   return module.exports;
 }
 

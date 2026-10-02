@@ -3,7 +3,7 @@ import { type Connection, VersionedTransaction } from "@solana/web3.js";
 import { API_BASE_URL } from "./config";
 import { fetchRawJupiterQuote } from "./jupiter-quote";
 import { ApiError, requestJson } from "./request-json";
-import { sendAndConfirm, TransactionFailedError } from "./send-transaction";
+import { type SigningHooks, simulateSignAndSend } from "./send-transaction";
 import { isStalePoolError } from "./transaction-errors";
 
 export type SwapRequest = {
@@ -14,10 +14,7 @@ export type SwapRequest = {
   slippageBps: number;
 };
 
-export type SwapHooks = {
-  sign: (transaction: VersionedTransaction) => Promise<VersionedTransaction>;
-  onSigned: () => void;
-};
+export type SwapHooks = SigningHooks;
 
 const MAX_ATTEMPTS = 2;
 
@@ -35,13 +32,7 @@ async function attempt(connection: Connection, request: SwapRequest, hooks: Swap
   const latest = await connection.getLatestBlockhash("confirmed");
   transaction.message.recentBlockhash = latest.blockhash;
 
-  // Simulating first surfaces a bad route before the wallet is asked to sign anything.
-  const simulation = await connection.simulateTransaction(transaction, { sigVerify: false, commitment: "confirmed" });
-  if (simulation.value.err) throw new TransactionFailedError(`${JSON.stringify(simulation.value.err)} ${simulation.value.logs?.join(" ") ?? ""}`);
-
-  const signed = await hooks.sign(transaction);
-  hooks.onSigned();
-  return sendAndConfirm(connection, signed, latest.lastValidBlockHeight);
+  return simulateSignAndSend(connection, transaction, latest.lastValidBlockHeight, hooks);
 }
 
 // A pool the fork cloned earlier can drift from Jupiter's live quote. One retry with a fresh quote covers that, but

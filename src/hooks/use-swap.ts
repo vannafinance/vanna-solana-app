@@ -11,9 +11,7 @@ import type { Resource } from "@/types/resource";
 import type { SwapIssue, SwapRouteId, SwapSettings, SwapState, SwapSymbol, SwapToken } from "@/types/swap";
 
 import { assets } from "@/lib/solana/assets";
-import { rpcConnection } from "@/lib/solana/rpc";
 import { executeWalletSwap } from "@/lib/solana/swap-execution";
-import { toTransactionError, WALLET_MISMATCH } from "@/lib/solana/transaction-errors";
 import { TransactionError } from "@/types/transaction";
 
 import { usePerpsTabFocus } from "./use-perps-tab-focus";
@@ -61,20 +59,15 @@ export function useSwap() {
   const mintOf = (symbol: SwapSymbol) => assets.find((asset) => asset.symbol === symbol)?.mint;
 
   const flow = useTransactionFlow({
-    run: async (_step, progress) => {
-      const inputMint = mintOf(fromSymbol);
-      const outputMint = mintOf(toSymbol);
-      if (signer.owner === null || inputMint === undefined || outputMint === undefined || amountIn === null || amountIn === 0n) {
-        throw new TransactionError("network", "Something went wrong", "The swap could not be prepared. Nothing left your wallet.");
-      }
-      if (signer.mismatch) throw toTransactionError(new Error(WALLET_MISMATCH));
-      try {
-        await executeWalletSwap(rpcConnection, { owner: signer.owner, inputMint, outputMint, amount: amountIn, slippageBps }, { sign: signer.sign, onSigned: progress.signed });
-        signer.refreshAfterTransaction();
-      } catch (error) {
-        throw toTransactionError(error);
-      }
-    },
+    run: (_step, progress) =>
+      signer.execute(({ connection, owner, hooks }) => {
+        const inputMint = mintOf(fromSymbol);
+        const outputMint = mintOf(toSymbol);
+        if (inputMint === undefined || outputMint === undefined || amountIn === null || amountIn === 0n) {
+          throw new TransactionError("network", "Something went wrong", "The swap could not be prepared. Nothing left your wallet.");
+        }
+        return executeWalletSwap(connection, { owner: owner.toBase58(), inputMint, outputMint, amount: amountIn, slippageBps }, hooks);
+      }, progress),
     success: {
       title: "Swapped",
       message:

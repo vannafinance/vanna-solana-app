@@ -6,6 +6,7 @@ import type { PoolStats } from "@/lib/solana/pools-api";
 import type { ValuedDeposit } from "@/lib/portfolio/value-deposits";
 import type { EarnMarket, VaultSummary } from "@/types/earn";
 
+import { spendableBalance } from "./spendable-balance";
 import { vaultId, vaultMeta } from "./vault-meta";
 
 type Pools = Partial<Record<AssetSymbol, PoolStats>>;
@@ -54,7 +55,7 @@ export function buildMarket(id: string, pools: Pools, prices: OraclePrices, wall
     priceUsd: price,
     supplyApyBps: Math.round(pool.supplyApyPercent * 100),
     shareExchangeRate: pool.exchangeRate / POOL_RATE_TO_UI_RATE,
-    walletBalance: { raw: walletRaw, decimals: asset.decimals },
+    walletBalance: { raw: spendableBalance(asset.symbol, walletRaw), decimals: asset.decimals },
     supplied: { raw: deposit?.supplied ?? 0n, decimals: asset.decimals },
   };
 }

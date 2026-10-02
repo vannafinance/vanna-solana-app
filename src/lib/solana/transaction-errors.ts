@@ -1,7 +1,8 @@
 import { TransactionError } from "@/types/transaction";
 
+import { VANNA_PROGRAM_ID } from "./config";
 import { ApiError } from "./request-json";
-import { BlockhashExpiredError, TransactionFailedError } from "./send-transaction";
+import { BlockhashExpiredError, ConfirmationLostError, isNetworkFailure, TransactionFailedError } from "./send-transaction";
 
 export const WALLET_MISMATCH = "wallet-mismatch";
 
@@ -9,6 +10,22 @@ const REJECTED = /cancel|declin|reject|denied|ERROR_NOT_SIGNED|ERROR_ASSOCIATION
 const NO_FEE = /insufficient (lamports|funds for fee)|attempt to debit an account but found no record|0x1\b.*lamports|insufficient funds for rent/i;
 const PRICE_MOVED = /0x1771|6001|SlippageToleranceExceeded|0xbbd|3005|AccountNotEnoughKeys|bin_array/i;
 const NOT_ENOUGH_TOKENS = /insufficient funds|custom program error: 0x1\b/i;
+
+// Vanna program errors a lender or margin user can hit; codes are the program's custom error numbers.
+const PROGRAM_ERRORS: Record<number, { title: string; message: string }> = {
+  6004: { title: "Action paused", message: "Vanna has paused this action for now. Nothing was sent." },
+  6015: { title: "Vault is full", message: "This vault has reached its supply cap. Nothing was sent. Try a smaller amount." },
+  6018: { title: "Not enough free liquidity", message: "Borrowers are using most of this vault. Withdraw a smaller amount, or try again later." },
+  6020: { title: "Not enough supplied", message: "You have less supplied in this vault than the amount requested. Nothing was sent." },
+  6045: { title: "Amount too small", message: "The vault needs a larger first deposit. Nothing was sent." },
+};
+
+function programError(text: string): { title: string; message: string } | null {
+  const hex = /custom program error: 0x([0-9a-f]+)/i.exec(text);
+  const json = /"Custom":(\d+)/.exec(text);
+  const code = hex ? Number.parseInt(hex[1], 16) : json ? Number(json[1]) : null;
+  return code === null ? null : (PROGRAM_ERRORS[code] ?? null);
+}
 
 function textOf(error: unknown): string {
   if (error instanceof Error) {
@@ -28,11 +45,19 @@ export function toTransactionError(error: unknown): TransactionError {
   if (error instanceof BlockhashExpiredError) {
     return new TransactionError("expired", "Request expired", "The transaction was not confirmed in time. Nothing was sent. Try again.");
   }
+  if (error instanceof ConfirmationLostError) {
+    return new TransactionError("network", "Could not confirm", "Your connection dropped after this was sent, so we can't tell if it went through. Check your Portfolio before trying again.");
+  }
+  if (isNetworkFailure(error)) {
+    return new TransactionError("network", "Can't reach Solana", "Your connection dropped before this was sent. Nothing left your wallet. Check your connection and try again.");
+  }
   const text = textOf(error);
   if (text.includes(WALLET_MISMATCH)) {
     return new TransactionError("network", "Wrong wallet", "This build is showing another wallet's data. Disconnect the developer wallet override to send transactions.");
   }
   if (REJECTED.test(text)) return new TransactionError("rejected", "Request cancelled", "You cancelled the request in your wallet. Nothing was sent.");
+  const program = text.includes(VANNA_PROGRAM_ID) ? programError(text) : null;
+  if (program) return new TransactionError("network", program.title, program.message);
   if (PRICE_MOVED.test(text)) return new TransactionError("price-moved", "Price moved", "The price moved past your slippage limit before this confirmed. Nothing was sent. Try again.");
   if (NO_FEE.test(text)) return new TransactionError("no-fee", "Not enough SOL for fees", "Your wallet needs a little SOL to pay network fees. Add some SOL and try again.");
   if (NOT_ENOUGH_TOKENS.test(text)) return new TransactionError("network", "Not enough balance", "Your wallet does not hold enough of this token. Nothing was sent.");

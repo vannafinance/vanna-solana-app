@@ -1,9 +1,15 @@
 import { useMobileWallet } from "@wallet-ui/react-native-web3js";
 import { useQueryClient } from "@tanstack/react-query";
-import type { VersionedTransaction } from "@solana/web3.js";
+import { type Connection, PublicKey, type VersionedTransaction } from "@solana/web3.js";
 import { useCallback } from "react";
 
 import { DEV_WALLET_ADDRESS } from "@/lib/solana/config";
+import { rpcConnection } from "@/lib/solana/rpc";
+import type { SigningHooks } from "@/lib/solana/send-transaction";
+import { toTransactionError, WALLET_MISMATCH } from "@/lib/solana/transaction-errors";
+import { type RunProgress, TransactionError } from "@/types/transaction";
+
+type SigningContext = { connection: Connection; owner: PublicKey; hooks: SigningHooks };
 
 // The wallet signs only. In development builds a developer wallet override can show another address's data, in
 // which case that address cannot be the signer and transactions are refused instead of sent from the wrong account.
@@ -22,5 +28,20 @@ export function useWalletSigner() {
     }
   }, [queryClient]);
 
-  return { owner, mismatch, sign, refreshAfterTransaction };
+  // Runs one signed transaction flow and turns every failure into the error the approval sheet renders.
+  const execute = useCallback(
+    async (task: (context: SigningContext) => Promise<unknown>, progress: RunProgress) => {
+      if (owner === null) throw new TransactionError("network", "Wallet not connected", "Connect your wallet and try again. Nothing was sent.");
+      if (mismatch) throw toTransactionError(new Error(WALLET_MISMATCH));
+      try {
+        await task({ connection: rpcConnection, owner: new PublicKey(owner), hooks: { sign, onSigned: progress.signed } });
+        refreshAfterTransaction();
+      } catch (error) {
+        throw toTransactionError(error);
+      }
+    },
+    [owner, mismatch, sign, refreshAfterTransaction],
+  );
+
+  return { owner, mismatch, sign, refreshAfterTransaction, execute };
 }

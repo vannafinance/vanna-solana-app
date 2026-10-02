@@ -47,6 +47,7 @@
     "typecheck": "tsc --noEmit",
     "test:wallet": "node --test scripts/wallet-cache.test.cjs scripts/wallet-connection.test.cjs",
     "test:portfolio": "node --test scripts/portfolio-data.test.cjs",
+    "test:transactions": "node --test scripts/transactions.test.cjs",
     "check:data-layer": "node scripts/check-data-layer.mjs"
   },
   "private": true

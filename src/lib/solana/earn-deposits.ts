@@ -1,22 +1,16 @@
 import { type Connection, PublicKey } from "@solana/web3.js";
 
 import { type AssetSymbol, assets } from "./assets";
-import { VANNA_PROGRAM_ID } from "./config";
+import { associatedTokenAddress, shareMintAddress, TOKEN_PROGRAM } from "./program-accounts";
 import { ApiError } from "./request-json";
 
 export type ShareBalance = { symbol: AssetSymbol; shares: bigint; decimals: number };
 
-const TOKEN_PROGRAM = new PublicKey("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
-const ASSOCIATED_TOKEN_PROGRAM = new PublicKey("ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL");
 const TOKEN_ACCOUNT_AMOUNT_OFFSET = 64;
 const TOKEN_ACCOUNT_MIN_SIZE = 72;
 
-const encoder = new TextEncoder();
-const programId = new PublicKey(VANNA_PROGRAM_ID);
-
 function shareAccountFor(owner: PublicKey, underlyingMint: string) {
-  const [shareMint] = PublicKey.findProgramAddressSync([encoder.encode("share_mint"), new PublicKey(underlyingMint).toBytes()], programId);
-  return PublicKey.findProgramAddressSync([owner.toBytes(), TOKEN_PROGRAM.toBytes(), shareMint.toBytes()], ASSOCIATED_TOKEN_PROGRAM)[0];
+  return associatedTokenAddress(owner, shareMintAddress(new PublicKey(underlyingMint)), TOKEN_PROGRAM);
 }
 
 export function readTokenAmount(data: Uint8Array): bigint {

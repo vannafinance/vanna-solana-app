@@ -17,3 +17,11 @@ export function fractionOf(balance: bigint, fraction: number): bigint {
   if (fraction >= 1) return balance;
   return (balance * BigInt(Math.round(fraction * Number(BPS)))) / BPS;
 }
+
+// Redeeming the whole position is exact. A partial amount rounds up to a whole share so the wallet receives at least
+// what was typed, and never asks for more shares than the wallet holds.
+export function sharesToRedeem(amount: bigint, supplied: bigint, held: bigint, exchangeRate: bigint): bigint {
+  if (amount >= supplied) return held;
+  const wanted = (amount * EXCHANGE_RATE_SCALE + exchangeRate - 1n) / exchangeRate;
+  return wanted > held ? held : wanted;
+}
