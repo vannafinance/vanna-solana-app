@@ -48,7 +48,7 @@ export function AddCollateralForm({ position, account, quote, presets, insuffici
         </AppText>
       </View>
       <AppText variant="caption" color={insufficient ? "negative" : "textMuted"}>
-        {`From your margin account · ${formatUsd(account.available)} available`}
+        {`From your wallet · ${formatUsd(account.available)} USDC available`}
       </AppText>
       <SheetChoiceRow
         selectedTone="primary"
@@ -65,12 +65,12 @@ export function AddCollateralForm({ position, account, quote, presets, insuffici
           value={`${formatLiquidationPrice(position.liquidationPrice)} → ${formatLiquidationPrice(quote.liquidationAfter)}`}
           valueColor="positive"
         />
-        <DetailRow label="Margin available" value={`${formatUsd(account.available)} → ${formatUsd(quote.availableAfter)}`} valueColor={insufficient ? "negative" : "text"} last />
+        <DetailRow label="Wallet USDC" value={`${formatUsd(account.available)} → ${formatUsd(quote.availableAfter)}`} valueColor={insufficient ? "negative" : "text"} last />
       </View>
       <View style={{ marginTop: 16 }}>
         <Button
           disabled={insufficient}
-          label={insufficient ? "Not enough margin available" : `Add ${formatUsd(quote.amount)} · approve in wallet`}
+          label={insufficient ? "Not enough USDC in your wallet" : `Add ${formatUsd(quote.amount)} · approve in wallet`}
           onPress={onSubmit}
         />
       </View>
