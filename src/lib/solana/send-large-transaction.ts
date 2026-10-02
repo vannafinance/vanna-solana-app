@@ -56,6 +56,7 @@ async function createLookupTable(connection: Connection, payer: PublicKey, addre
 
   const latest = await connection.getLatestBlockhash("confirmed");
   const unsigned = groups.map((group) => new VersionedTransaction(new TransactionMessage({ payerKey: payer, recentBlockhash: latest.blockhash, instructions: group }).compileToV0Message()));
+  hooks.onPrepared?.();
   const signed = await hooks.signAll(unsigned);
   for (const transaction of signed) await sendAndConfirm(connection, transaction, latest.lastValidBlockHeight);
 

@@ -7,6 +7,7 @@ import { derivePositions } from "@/lib/perps/derive-positions";
 import { withoutFarm } from "@/lib/perps/without-farm";
 import { summarizePortfolio } from "@/lib/perps/summarize-portfolio";
 import { marginSwapsFrom } from "@/lib/solana/margin-activity";
+import type { WalletTransaction } from "@/lib/solana/wallet-transactions";
 import type { PerpsPortfolio } from "@/types/perps";
 import type { Resource } from "@/types/resource";
 
@@ -23,10 +24,8 @@ export function usePerpsPositions(): Resource<PerpsPortfolio> {
   const markets = useMarketList();
   const farm = useFarmState();
   const margin = account.data?.address ?? null;
-  const activity = useQuery({
-    ...useWalletTransactionsOptions(wallet),
-    select: (transactions) => (margin === null ? [] : marginSwapsFrom(transactions, margin)),
-  });
+  const select = useCallback((transactions: WalletTransaction[]) => (margin === null ? [] : marginSwapsFrom(transactions, margin)), [margin]);
+  const activity = useQuery({ ...useWalletTransactionsOptions(wallet), select });
   const { refetch: refetchAccount } = account;
   const { refetch: refetchActivity } = activity;
   const retry = useCallback(() => {

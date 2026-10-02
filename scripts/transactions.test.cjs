@@ -285,3 +285,26 @@ test("refreshing the history only fetches transactions it has not seen", async (
   assert.equal(second.map((entry) => entry.signature).join(","), "sigC,sigB,sigA");
   assert.equal(fetched.join(","), "sigB,sigA,sigC");
 });
+
+test("the wallet is only asked once the transaction has been built and checked, and that is announced first", async () => {
+  const { simulateSignAndSend } = sendModule(async () => 0);
+  const order = [];
+  const connection = {
+    simulateTransaction: async () => {
+      order.push("simulated");
+      return { value: { err: null } };
+    },
+    sendRawTransaction: async () => "sig",
+    getSignatureStatuses: async () => ({ value: [{ confirmationStatus: "confirmed", err: null }] }),
+  };
+  const hooks = {
+    onPrepared: () => order.push("prepared"),
+    sign: async () => {
+      order.push("signing");
+      return { serialize: () => new Uint8Array([1]) };
+    },
+    onSigned: () => order.push("signed"),
+  };
+  await simulateSignAndSend(connection, {}, 100, hooks);
+  assert.equal(order.join(","), "simulated,prepared,signing,signed");
+});

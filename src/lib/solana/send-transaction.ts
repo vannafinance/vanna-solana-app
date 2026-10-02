@@ -92,6 +92,8 @@ export type SigningHooks = {
   sign: (transaction: VersionedTransaction) => Promise<VersionedTransaction>;
   // Several transactions approved in one wallet prompt.
   signAll: (transactions: VersionedTransaction[]) => Promise<VersionedTransaction[]>;
+  // Called when the transaction is built and checked, right before the wallet is asked to sign.
+  onPrepared?: () => void;
   onSigned: () => void;
   onSent?: (signature: string) => void;
   onProcessed?: () => void;
@@ -107,6 +109,7 @@ export async function simulateSignAndSend(connection: Connection, transaction: V
   }
   if (simulation.value.err) throw new TransactionFailedError(`${JSON.stringify(simulation.value.err)} ${simulation.value.logs?.join(" ") ?? ""}`);
 
+  hooks.onPrepared?.();
   const signed = await hooks.sign(transaction);
   hooks.onSigned();
   return sendAndConfirm(connection, signed, lastValidBlockHeight, hooks);

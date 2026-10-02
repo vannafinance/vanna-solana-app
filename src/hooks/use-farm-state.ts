@@ -9,6 +9,7 @@ import { marginActivityFrom } from "@/lib/solana/margin-history";
 import type { OraclePrices } from "@/lib/solana/oracle-prices";
 import { marginAddress } from "@/lib/solana/program-accounts";
 import { rpcConnection } from "@/lib/solana/rpc";
+import type { WalletTransaction } from "@/lib/solana/wallet-transactions";
 import { assets } from "@/lib/solana/assets";
 import type { FarmPosition, PoolSymbol, UnplacedFarmPosition } from "@/types/farm";
 import type { Resource } from "@/types/resource";
@@ -48,10 +49,9 @@ export function useFarmState(): Resource<FarmState> {
     refetchInterval,
     retry: 1,
   });
-  const history = useQuery({
-    ...useWalletTransactionsOptions(wallet),
-    select: (data) => (wallet === null ? null : deriveFarm(marginActivityFrom(data, marginAddress(new PublicKey(wallet)).toBase58()))),
-  });
+  // A stable selector, so the history is read through only when it changes and not on every render.
+  const select = useCallback((data: WalletTransaction[]) => (wallet === null ? null : deriveFarm(marginActivityFrom(data, marginAddress(new PublicKey(wallet)).toBase58()))), [wallet]);
+  const history = useQuery({ ...useWalletTransactionsOptions(wallet), select });
 
   const { refetch: refetchChain } = chain;
   const { refetch: refetchHistory } = history;

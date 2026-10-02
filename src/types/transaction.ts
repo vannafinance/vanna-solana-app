@@ -4,12 +4,14 @@ export type FailureKind = "network" | "rejected" | "no-fee" | "price-moved" | "e
 export type ConfirmStage = "sending" | "sent" | "processed";
 
 export type TransactionState =
-  | { phase: "signing"; step: number; steps: number; wallet: string }
+  // prepared: the transaction is built and checked, and the wallet is being asked. Before that the app is still working.
+  | { phase: "signing"; step: number; steps: number; wallet: string; prepared: boolean }
   | { phase: "confirming"; stage: ConfirmStage; title: string; message: string; signature?: string }
   | { phase: "success"; title: string; message: string; explorerLabel?: string; signature?: string }
   | { phase: "failure"; kind: FailureKind; title: string; message: string; actionLabel?: string };
 
 export type RunProgress = {
+  prepared: () => void;
   signed: () => void;
   sent: (signature?: string) => void;
   processed: () => void;

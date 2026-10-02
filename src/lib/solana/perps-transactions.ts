@@ -51,6 +51,14 @@ export async function fetchPerpsQuote(input: AssetInfo, output: AssetInfo, amoun
   throw last;
 }
 
+// A token that charges a Token-2022 transfer fee loses it on the deposit, on the borrow and again on the swap's first
+// leg, so the vault holds less than deposit plus borrow and the quote must be sized from what really arrives.
+async function vaultSizes(connection: Connection, base: AssetInfo, collateral: bigint, borrow: bigint): Promise<{ vaultAmount: bigint; swapAmount: bigint }> {
+  const [depositFee, borrowFee] = await Promise.all([inputTransferFee(connection, base, collateral), borrow > 0n ? inputTransferFee(connection, base, borrow) : Promise.resolve(0n)]);
+  const vaultAmount = collateral - depositFee + (borrow - borrowFee);
+  return { vaultAmount, swapAmount: vaultAmount - (await inputTransferFee(connection, base, vaultAmount)) };
+}
+
 async function depositAndBorrow(connection: Connection, owner: PublicKey, state: MarginState, asset: AssetInfo, deposit: bigint, borrow: bigint): Promise<TransactionInstruction[]> {
   const mint = new PublicKey(asset.mint);
   const source = associatedTokenAddress(owner, mint, tokenProgramOf(asset));
@@ -77,16 +85,12 @@ export async function buildOpenPosition(connection: Connection, owner: PublicKey
   const base = side === "long" ? usdcAsset() : stock;
   const target = side === "long" ? stock : usdcAsset();
   const borrow = collateral * BigInt(leverage - 1);
-  const state = await fetchMarginState(connection, marginAddress(owner));
-  const depositBorrow = await depositAndBorrow(connection, owner, state, base, collateral, borrow);
 
-  // A token that charges a Token-2022 transfer fee loses it on the deposit, on the borrow and again on the swap's first
-  // leg, so the vault holds less than deposit plus borrow and the quote must be sized from what really arrives.
-  const [depositFee, borrowFee] = await Promise.all([inputTransferFee(connection, base, collateral), borrow > 0n ? inputTransferFee(connection, base, borrow) : Promise.resolve(0n)]);
-  const vaultAmount = collateral - depositFee + (borrow - borrowFee);
-  const swapAmount = vaultAmount - (await inputTransferFee(connection, base, vaultAmount));
-
-  const { response } = await fetchPerpsQuote(base, target, swapAmount);
+  // The account read and the fee sizing do not depend on each other, and neither do the deposit and borrow instructions
+  // and the route quote, so each pair waits together instead of one after the other.
+  const [state, sizes] = await Promise.all([fetchMarginState(connection, marginAddress(owner)), vaultSizes(connection, base, collateral, borrow)]);
+  const [depositBorrow, { response }] = await Promise.all([depositAndBorrow(connection, owner, state, base, collateral, borrow), fetchPerpsQuote(base, target, sizes.swapAmount)]);
+  const { vaultAmount } = sizes;
   const swap = await buildMarginSwap(connection, {
     quote: response,
     owner,

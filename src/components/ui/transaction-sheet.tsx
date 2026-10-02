@@ -53,7 +53,10 @@ export function TransactionSheet({ state, onPrimary, onClose, primaryLabel, onEx
             shadow.floating,
           ]}
         >
-          {state.phase === "signing" ? (
+          {state.phase === "signing" && !state.prepared ? (
+            <StatusRow ring="arc" title="Preparing your transaction" detail="Checking it on the network before your wallet opens." chip={state.steps > 1 ? `Step ${state.step} of ${state.steps}` : undefined} />
+          ) : null}
+          {state.phase === "signing" && state.prepared ? (
             <StatusRow ring="wait" title={`Approve in ${state.wallet}`} detail="Nothing moves until you approve." chip={state.steps > 1 ? `Step ${state.step} of ${state.steps}` : undefined} />
           ) : null}
           {state.phase === "confirming" ? <StatusRow ring="arc" title={state.title} detail={state.message} /> : null}

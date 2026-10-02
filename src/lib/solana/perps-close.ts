@@ -43,7 +43,7 @@ async function buildCloseLong(connection: Connection, owner: PublicKey, request:
   const { stock } = request;
   const usdc = usdcAsset();
   const percent = BigInt(request.exitPercent);
-  const snapshot = await fetchAccountSnapshot(owner.toBase58());
+  const [snapshot, state] = await Promise.all([fetchAccountSnapshot(owner.toBase58()), fetchMarginState(connection, marginAddress(owner))]);
   const held = snapshot.collateralBalances[stock.symbol] ?? 0n;
   if (held <= 0n) throw new NoPositionError("long");
 
@@ -54,7 +54,6 @@ async function buildCloseLong(connection: Connection, owner: PublicKey, request:
   // Repay-all reads the exact debt on-chain, which is only right when this long is the account's only USDC borrower.
   const soleBorrower = percent === 100n && usdcDebt > 0n && targetDebt * 1000n >= usdcDebt * 999n;
 
-  const state = await fetchMarginState(connection, marginAddress(owner));
   const { quote, response } = await fetchPerpsQuote(stock, usdc, net);
   const swap = await buildMarginSwap(connection, { quote: response, owner, state, grossAmountIn: gross });
   const guaranteed = quote.minReceived;
@@ -86,7 +85,7 @@ async function buildCloseShort(connection: Connection, owner: PublicKey, request
   const usdc = usdcAsset();
   const percent = BigInt(request.exitPercent);
   if (stockPrice <= 0n) throw new NoPositionError("short");
-  const snapshot = await fetchAccountSnapshot(owner.toBase58());
+  const [snapshot, state] = await Promise.all([fetchAccountSnapshot(owner.toBase58()), fetchMarginState(connection, marginAddress(owner))]);
   const stockDebt = snapshot.borrowedBalances[stock.symbol] ?? 0n;
   if (stockDebt <= 0n) throw new NoPositionError("short");
 
@@ -99,7 +98,6 @@ async function buildCloseShort(connection: Connection, owner: PublicKey, request
   let usdcToSwap = min((stockPrice * vaultNeeded * 101n) / (100n * scale), usdcAvailable);
   if (usdcToSwap <= 0n) throw new NoPositionError("short");
 
-  const state = await fetchMarginState(connection, marginAddress(owner));
   let quote;
   let vaultReceives = 0n;
   for (let attempt = 0; ; attempt++) {

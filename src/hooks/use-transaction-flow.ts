@@ -13,7 +13,7 @@ export const DEFAULT_WALLET = "your wallet";
 
 type Internal =
   | { phase: "idle" }
-  | { phase: "signing"; step: number }
+  | { phase: "signing"; step: number; prepared: boolean }
   | { phase: "confirming"; step: number; stage: ConfirmStage; signature?: string }
   | { phase: "success"; signature?: string }
   | { phase: "failure"; step: number; error: TransactionError };
@@ -53,9 +53,12 @@ export function useTransactionFlow({ steps = 1, wallet, success, run }: Options)
       signature.current = undefined;
       try {
         for (; step <= steps; step++) {
-          setInternal({ phase: "signing", step });
+          setInternal({ phase: "signing", step, prepared: false });
           const stepNumber = step;
           await run(stepNumber, {
+            prepared: () => {
+              if (live()) setInternal((current) => (current.phase === "signing" ? { ...current, prepared: true } : current));
+            },
             signed: () => {
               if (live()) setInternal({ phase: "confirming", step: stepNumber, stage: "sending" });
             },
@@ -102,7 +105,7 @@ export function useTransactionFlow({ steps = 1, wallet, success, run }: Options)
       case "idle":
         return null;
       case "signing":
-        return { phase: "signing", step: internal.step, steps, wallet: walletLabel };
+        return { phase: "signing", step: internal.step, steps, wallet: walletLabel, prepared: internal.prepared };
       case "confirming":
         return { phase: "confirming", stage: internal.stage, signature: internal.signature, ...CONFIRMING_COPY[internal.stage] };
       case "success":

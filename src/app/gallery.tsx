@@ -28,7 +28,7 @@ import type { TransactionState } from "@/types/transaction";
 const noop = () => undefined;
 
 const sheets: Record<string, TransactionState> = {
-  signing: { phase: "signing", step: 1, steps: 1, wallet: "Backpack" },
+  signing: { phase: "signing", step: 1, steps: 1, wallet: "Backpack", prepared: true },
   confirming: { phase: "confirming", stage: "sent", title: "Confirming", message: "Waiting for Solana to confirm." },
   success: { phase: "success", title: "Your long is open", message: "4.2422 TSLAx long at $353.59 · 3x · liq. $259.30" },
   network: { phase: "failure", kind: "network", title: "Network error", message: "Solana did not confirm this in time. Nothing left your wallet. Check your connection and try again." },

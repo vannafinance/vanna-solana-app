@@ -4,20 +4,23 @@ import { useCallback } from "react";
 import { useAccountSnapshot } from "@/hooks/use-account-snapshot";
 import { useWalletAddress } from "@/hooks/use-wallet-address";
 import { marginActivityFrom } from "@/lib/solana/margin-history";
+import type { WalletTransaction } from "@/lib/solana/wallet-transactions";
 import type { HistoryStrategy, MarginActivity } from "@/types/margin-history";
 import type { Resource } from "@/types/resource";
 
 import { useWalletTransactionsOptions } from "./use-wallet-transactions";
 
 // Every action of the margin account of the given kinds, one entry per transaction, newest first.
+// `strategies` must be a constant: a new array on each render would make the selector recompute every time.
 export function useMarginActivity(strategies: readonly HistoryStrategy[]): Resource<MarginActivity[]> {
   const wallet = useWalletAddress();
   const account = useAccountSnapshot(wallet);
   const margin = account.data?.address ?? null;
-  const transactions = useQuery({
-    ...useWalletTransactionsOptions(wallet),
-    select: (data) => (margin === null ? [] : marginActivityFrom(data, margin).filter((entry) => strategies.includes(entry.strategy))),
-  });
+  const select = useCallback(
+    (data: WalletTransaction[]) => (margin === null ? [] : marginActivityFrom(data, margin).filter((entry) => strategies.includes(entry.strategy))),
+    [margin, strategies],
+  );
+  const transactions = useQuery({ ...useWalletTransactionsOptions(wallet), select });
   const { refetch } = transactions;
   const retry = useCallback(() => void refetch(), [refetch]);
 
@@ -27,7 +30,9 @@ export function useMarginActivity(strategies: readonly HistoryStrategy[]): Resou
   return { status: "ready", stale: transactions.isError, refresh: retry, data: transactions.data };
 }
 
+const PERPS_STRATEGIES: readonly HistoryStrategy[] = ["perps", "unclassified"];
+
 // Farm transactions have their own tab, so Trade lists only perps and unclassified ones, as on the web app.
 export function usePerpsActivity(): Resource<MarginActivity[]> {
-  return useMarginActivity(["perps", "unclassified"]);
+  return useMarginActivity(PERPS_STRATEGIES);
 }
