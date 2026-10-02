@@ -4,11 +4,13 @@ import { useCallback } from "react";
 import { useAccountSnapshot } from "@/hooks/use-account-snapshot";
 import { useWalletAddress } from "@/hooks/use-wallet-address";
 import { derivePositions } from "@/lib/perps/derive-positions";
+import { withoutFarm } from "@/lib/perps/without-farm";
 import { summarizePortfolio } from "@/lib/perps/summarize-portfolio";
 import { marginSwapsFrom } from "@/lib/solana/margin-activity";
 import type { PerpsPortfolio } from "@/types/perps";
 import type { Resource } from "@/types/resource";
 
+import { useFarmState } from "./use-farm-state";
 import { useMarketList } from "./use-market-list";
 import { useWalletTransactionsOptions } from "./use-wallet-transactions";
 
@@ -19,6 +21,7 @@ export function usePerpsPositions(): Resource<PerpsPortfolio> {
   const wallet = useWalletAddress();
   const account = useAccountSnapshot(wallet);
   const markets = useMarketList();
+  const farm = useFarmState();
   const margin = account.data?.address ?? null;
   const activity = useQuery({
     ...useWalletTransactionsOptions(wallet),
@@ -35,13 +38,13 @@ export function usePerpsPositions(): Resource<PerpsPortfolio> {
   if (account.data === undefined) return account.isError ? { status: "error", error: account.error, retry } : { status: "loading" };
 
   const snapshot = account.data;
-  const ready = markets.status === "ready" && activity.data !== undefined ? { markets: markets.data, swaps: activity.data } : null;
+  // Farm positions share the margin account's balances, so they are read first and taken out of what perps sees.
+  const ready = markets.status === "ready" && activity.data !== undefined && farm.status === "ready" ? { markets: markets.data, swaps: activity.data, farm: farm.data.positions } : null;
   const derived =
     ready === null
       ? null
       : derivePositions({
-          collateral: snapshot.collateralBalances,
-          debt: snapshot.borrowedBalances,
+          ...withoutFarm({ collateral: snapshot.collateralBalances, debt: snapshot.borrowedBalances }, ready.farm),
           prices: Object.fromEntries(ready.markets.map((market) => [market.symbol, market.markPrice])),
           swaps: ready.swaps,
         });

@@ -60,6 +60,7 @@ export function deriveFarm(activity: readonly MarginActivity[]): FarmDerived {
         pool: funding.asset,
         collateral: { raw: (previous?.collateral.raw ?? 0n) + stockDeposit.amount.raw, decimals: stockDeposit.amount.decimals },
         borrowed: { raw: (previous?.borrowed.raw ?? 0n) + (borrow?.amount.raw ?? 0n), decimals: funding.amount.decimals },
+        openedAt: previous?.openedAt ?? item.at,
       });
       poolOf.set(stockDeposit.asset, funding.asset);
       entries.push(entry(stockDeposit.asset, funding.asset, [action("deposit", stockDeposit), ...(poolDeposit ? [action("deposit", poolDeposit)] : []), ...(borrow ? [action("borrow", borrow)] : [])]));

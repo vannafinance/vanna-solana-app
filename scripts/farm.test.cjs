@@ -207,7 +207,7 @@ test("activity from perps is not part of Farm", () => {
 });
 
 const prices = { USDC: 999_955n, SOL: 150_000_000n, TSLAx: 372_140_000n, GOOGLx: 340_000_000n };
-const attribution = (stock, collateral, borrowed) => ({ stock, pool: "USDC", collateral: amount(collateral, 8), borrowed: amount(borrowed, 6) });
+const attribution = (stock, collateral, borrowed) => ({ stock, pool: "USDC", collateral: amount(collateral, 8), borrowed: amount(borrowed, 6), openedAt: 1_700_000_000 });
 
 test("a position reads its debt, supply and rates from the chain and its stock from history", () => {
   const live = [{ pool: "USDC", supplied: 699_999_999n, debt: 700_000_010n, borrowRateBps: 602 }];
@@ -245,4 +245,36 @@ test("closing returns the stock only for the whole position and never repays mor
   const whole = closeQuote(position, 10000);
   assert.equal(whole.collateralReturned.raw, 200_000_000n);
   assert.equal(whole.healthAfter, null);
+});
+
+const { withoutFarm } = load("src/lib/perps/without-farm.ts");
+const { toPortfolioFarmPosition } = load("src/lib/farm/portfolio-position.ts");
+
+test("farm amounts are taken out of the margin balances before perps positions are read", () => {
+  const farm = [
+    {
+      collateralSymbol: "TSLAx",
+      poolSymbol: "USDC",
+      collateral: amount(200_000_000n, 8),
+      principal: amount(600_000_000n, 6),
+      interest: amount(5_000_000n, 6),
+    },
+  ];
+  const { collateral, debt } = withoutFarm({ collateral: { TSLAx: 500_000_000n }, debt: { USDC: 1_000_000_000n } }, farm);
+  assert.equal(collateral.TSLAx, 300_000_000n);
+  assert.equal(debt.USDC, 395_000_000n);
+  assert.equal(withoutFarm({ collateral: { TSLAx: 100_000_000n }, debt: {} }, farm).collateral.TSLAx, 0n);
+});
+
+test("a farm position is listed on Home with its health, debt and the price that would liquidate it", () => {
+  const live = [{ pool: "USDC", supplied: 700_000_000n, debt: 700_000_010n, borrowRateBps: 602 }];
+  const [position] = composePositions(live, [attribution("TSLAx", 200_000_000n, 700_000_000n)], prices, { USDC: 498, SOL: null });
+  const listed = toPortfolioFarmPosition(position);
+  assert.equal(listed.kind, "farm");
+  assert.equal(listed.pool, "USDC");
+  assert.equal(listed.venue, "Kamino");
+  assert.ok(listed.health > 2 && listed.health < 2.2);
+  // Kamino's supply alone covers 100% of the debt, so only the extra 10% must come from the stock: 70 USD over 2 TSLAx.
+  assert.ok(listed.liquidationPrice > 34_000_000n && listed.liquidationPrice < 36_000_000n);
+  assert.ok(listed.liquidationAwayBps > 9000);
 });

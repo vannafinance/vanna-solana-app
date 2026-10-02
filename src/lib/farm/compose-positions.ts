@@ -49,6 +49,7 @@ export function composePositions(live: readonly KaminoPosition[], attributions: 
           supplyApyBps: supplyApyBps[kamino.pool] ?? 0,
           borrowApyBps: kamino.borrowRateBps,
           poolShareBps: Number((share * 10_000n) / SHARE_SCALE),
+          openedAt: attribution.openedAt,
         },
       ];
     });

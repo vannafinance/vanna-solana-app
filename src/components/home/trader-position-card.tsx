@@ -85,7 +85,7 @@ function FarmDetails({ position }: { position: FarmPosition }) {
         <StatPanel
           stats={[
             { label: "Collateral", value: formatUsd(position.collateral), sub: tokenText(position.sizeTokens, position.symbol) },
-            { label: "Borrowed", value: formatUsd(position.borrowed), sub: "USDC" },
+            { label: "Borrowed", value: formatUsd(position.borrowed), sub: position.pool },
             { label: "Liq. price", value: formatUsd(position.liquidationPrice), sub: `${formatPercent(position.liquidationAwayBps, 0)} away` },
           ]}
         />

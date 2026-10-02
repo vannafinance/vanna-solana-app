@@ -37,6 +37,7 @@ export type FarmPosition = {
   borrowApyBps: number;
   // Which part of the pool's single Kamino position is this stock's, in basis points. Closing it exits that part only.
   poolShareBps: number;
+  openedAt: number;
 };
 
 // What the margin account's own history says went into a position: the stock deposited and the pool asset borrowed for it.
@@ -45,6 +46,8 @@ export type FarmAttribution = {
   pool: PoolSymbol;
   collateral: TokenAmount;
   borrowed: TokenAmount;
+  // Unix seconds of the first transaction that opened it.
+  openedAt: number;
 };
 
 export type FarmPositionView = {

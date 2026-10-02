@@ -28,6 +28,8 @@ export type PerpPosition = PositionBase & {
 
 export type FarmPosition = PositionBase & {
   kind: "farm";
+  // The pool asset borrowed and supplied to Kamino.
+  pool: string;
   health: number;
   borrowed: bigint;
   netAprBps: number;
