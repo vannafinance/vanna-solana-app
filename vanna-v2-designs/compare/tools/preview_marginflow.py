@@ -41,10 +41,11 @@ def shots(out, video):
             pg.wait_for_timeout(t)
             pg.locator('#m1 .row').screenshot(path=os.path.join(renders, 'marginflow-%s.png' % name))
             pg.locator('#m2 .row').screenshot(path=os.path.join(renders, 'marginflow-b-%s.png' % name))
+            pg.locator('#m3 .row').screenshot(path=os.path.join(renders, 'marginflow-env-%s.png' % name))
             pg.close()
         print('errors:', errs[:3])
         if video:
-            for sid, name, ms in (('m1', 'marginflow.mp4', 10400), ('m2', 'marginflow-b.mp4', 11200)):
+            for sid, name, ms in (('m1', 'marginflow.mp4', 10400), ('m2', 'marginflow-b.mp4', 11200), ('m3', 'marginflow-env.mp4', 11200)):
                 with tempfile.TemporaryDirectory() as tmp:
                     ctx = b.new_context(viewport={'width': 1300, 'height': 860}, record_video_dir=tmp, record_video_size={'width': 1300, 'height': 860})
                     pg = ctx.new_page(); pg.goto('file:///' + out.replace('\\', '/'), wait_until='networkidle')
