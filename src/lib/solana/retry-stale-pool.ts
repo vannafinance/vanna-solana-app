@@ -9,7 +9,7 @@ const MAX_ATTEMPTS = 2;
 export async function withStalePoolRetry<T>(hooks: SigningHooks, run: (hooks: SigningHooks) => Promise<T>): Promise<T> {
   let signed = false;
   const tracked: SigningHooks = {
-    sign: hooks.sign,
+    ...hooks,
     onSigned: () => {
       signed = true;
       hooks.onSigned();

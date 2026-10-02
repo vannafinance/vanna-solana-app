@@ -34,7 +34,7 @@ export function useWalletSigner() {
       if (owner === null) throw new TransactionError("network", "Wallet not connected", "Connect your wallet and try again. Nothing was sent.");
       if (mismatch) throw toTransactionError(new Error(WALLET_MISMATCH));
       try {
-        await task({ connection: rpcConnection, owner: new PublicKey(owner), hooks: { sign, onSigned: progress.signed } });
+        await task({ connection: rpcConnection, owner: new PublicKey(owner), hooks: { sign, onSigned: progress.signed, onSent: progress.sent, onProcessed: progress.processed } });
         refreshAfterTransaction();
       } catch (error) {
         throw toTransactionError(error);

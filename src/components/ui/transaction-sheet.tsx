@@ -1,10 +1,10 @@
 import { useEffect, useState } from "react";
 import { Modal, View } from "react-native";
-import Animated, { Easing, FadeIn, FadeInDown } from "react-native-reanimated";
+import Animated, { cancelAnimation, Easing, FadeIn, FadeInDown, useAnimatedStyle, useSharedValue, withRepeat, withTiming } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useTheme } from "@/theme/use-theme";
-import type { TransactionState } from "@/types/transaction";
+import type { ConfirmStage, TransactionState } from "@/types/transaction";
 
 import { AppText } from "./app-text";
 import { Button } from "./button";
@@ -18,7 +18,7 @@ type TransactionSheetProps = {
   onExplorer?: () => void;
 };
 
-const PROCESSED_AFTER_MS = 500;
+const SLOW_AFTER_MS = 12_000;
 
 export function TransactionSheet({ state, onPrimary, onClose, primaryLabel, onExplorer }: TransactionSheetProps) {
   const { colors, motion, radius, shadow } = useTheme();
@@ -57,12 +57,12 @@ export function TransactionSheet({ state, onPrimary, onClose, primaryLabel, onEx
           {state.phase === "signing" ? (
             <StatusRow ring="wait" title={`Approve in ${state.wallet}`} detail="Nothing moves until you approve." chip={state.steps > 1 ? `Step ${state.step} of ${state.steps}` : undefined} />
           ) : null}
-          {confirming ? <StatusRow ring="arc" title="Sent to Solana" detail="Usually under 2 seconds" /> : null}
+          {state.phase === "confirming" ? <StatusRow ring="arc" title={state.title} detail={state.message} /> : null}
           {state.phase === "success" ? <StatusRow ring="seal" title={state.title} detail={state.message} /> : null}
           {state.phase === "failure" ? (
             <StatusRow ring={rejected ? "off" : "fail"} title={state.title} detail={state.message} />
           ) : null}
-          {confirming || state.phase === "success" ? <Progress complete={state.phase === "success"} /> : null}
+          {state.phase === "confirming" || state.phase === "success" ? <Progress stage={state.phase === "success" ? "success" : state.stage} /> : null}
           <Actions
             state={state}
             primaryLabel={primaryLabel}
@@ -111,32 +111,91 @@ function StatusRow({ ring, title, detail, chip }: StatusRowProps) {
 }
 
 const STEPS = ["Sent", "Processed", "Confirmed"] as const;
+type Stage = ConfirmStage | "success";
+// How far along each stage is: nothing reached the network yet, accepted, processed by a validator, confirmed.
+const LEVEL: Record<Stage, number> = { sending: 0, sent: 1, processed: 2, success: 3 };
+const TRACK_WIDTH = 280;
+const TRACK_HEIGHT = 4;
+const SWEEP_WIDTH = 72;
+const MIN_FILL = 0.04;
 
-function Progress({ complete }: { complete: boolean }) {
-  const { colors } = useTheme();
-  const [processed, setProcessed] = useState(complete);
+// True once the view has been on screen for `delayMs`. Every transaction mounts a fresh progress view.
+function useElapsed(delayMs: number) {
+  const [elapsed, setElapsed] = useState(false);
 
   useEffect(() => {
-    if (complete) return;
-    const timer = setTimeout(() => setProcessed(true), PROCESSED_AFTER_MS);
+    const timer = setTimeout(() => setElapsed(true), delayMs);
     return () => clearTimeout(timer);
-  }, [complete]);
+  }, [delayMs]);
 
-  const lit = (index: number) => complete || index === 0 || (index === 1 && processed);
+  return elapsed;
+}
+
+// Centered progress for a transaction on its way. The bar fills as each real stage arrives from the network, and a soft
+// sweep keeps moving along it while the next stage is awaited, so a slow confirmation never looks frozen.
+function Progress({ stage }: { stage: Stage }) {
+  const { colors } = useTheme();
+  const level = LEVEL[stage];
+  const waiting = stage !== "success";
+  const slow = useElapsed(SLOW_AFTER_MS) && waiting;
+  const fill = useSharedValue(Math.max(level / 3, MIN_FILL));
+  const sweep = useSharedValue(0);
+
+  useEffect(() => {
+    fill.value = withTiming(Math.max(level / 3, MIN_FILL), { duration: 420, easing: Easing.out(Easing.cubic) });
+  }, [level, fill]);
+
+  useEffect(() => {
+    if (!waiting) {
+      cancelAnimation(sweep);
+      sweep.value = 0;
+      return;
+    }
+    sweep.value = 0;
+    sweep.value = withRepeat(withTiming(1, { duration: 1300, easing: Easing.inOut(Easing.ease) }), -1);
+    return () => cancelAnimation(sweep);
+  }, [waiting, sweep]);
+
+  const fillStyle = useAnimatedStyle(() => ({ width: `${fill.value * 100}%` }));
+  const sweepStyle = useAnimatedStyle(() => ({
+    opacity: waiting ? 0.5 : 0,
+    transform: [{ translateX: -SWEEP_WIDTH + sweep.value * (TRACK_WIDTH + SWEEP_WIDTH) }],
+  }));
+
+  const label = stage === "success" ? "Sent, processed and confirmed" : stage === "processed" ? "Sent and processed" : stage === "sent" ? "Sent" : "Sending";
 
   return (
-    <View accessibilityLabel={complete ? "Sent, processed and confirmed" : processed ? "Sent and processed" : "Sent"} style={{ marginTop: 14, flexDirection: "row", alignItems: "center", gap: 6 }}>
-      {STEPS.map((step, index) => (
-        <View key={step} style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-          {index > 0 ? <View style={{ width: 14, height: 1, backgroundColor: colors.border }} /> : null}
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 5 }}>
-            <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: lit(index) ? colors.link : colors.border }} />
-            <AppText variant="caption" style={{ color: lit(index) ? colors.text : colors.textMuted }}>
-              {step}
-            </AppText>
-          </View>
-        </View>
-      ))}
+    <View
+      accessibilityRole="progressbar"
+      accessibilityLabel={label}
+      accessibilityValue={{ min: 0, max: 3, now: level }}
+      style={{ marginTop: 18, alignItems: "center", gap: 10 }}
+    >
+      <View style={{ width: "100%", maxWidth: TRACK_WIDTH, height: TRACK_HEIGHT, borderRadius: TRACK_HEIGHT / 2, overflow: "hidden", backgroundColor: colors.border }}>
+        <Animated.View style={[{ height: TRACK_HEIGHT, borderRadius: TRACK_HEIGHT / 2, backgroundColor: colors.link }, fillStyle]} />
+        <Animated.View style={[{ position: "absolute", top: 0, bottom: 0, width: SWEEP_WIDTH, borderRadius: TRACK_HEIGHT / 2, backgroundColor: colors.surface }, sweepStyle]} />
+      </View>
+      <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6 }}>
+        {STEPS.map((step, index) => {
+          const lit = level >= index + 1;
+          return (
+            <View key={step} style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+              {index > 0 ? <View style={{ width: 14, height: 1, backgroundColor: colors.border }} /> : null}
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 5 }}>
+                <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: lit ? colors.link : colors.border }} />
+                <AppText variant="caption" style={{ color: lit ? colors.text : colors.textMuted }}>
+                  {step}
+                </AppText>
+              </View>
+            </View>
+          );
+        })}
+      </View>
+      {slow ? (
+        <AppText variant="caption" color="textMuted" style={{ textAlign: "center" }}>
+          Still waiting on the network. Your transaction is on its way.
+        </AppText>
+      ) : null}
     </View>
   );
 }
@@ -150,7 +209,13 @@ type ActionsProps = {
 };
 
 function Actions({ state, primaryLabel, onPrimary, onClose, onExplorer }: ActionsProps) {
-  if (state.phase === "confirming") return null;
+  if (state.phase === "confirming") {
+    return onExplorer && state.signature ? (
+      <View style={{ marginTop: 6 }}>
+        <Button size="md" variant="text" label="View on Solana Explorer" onPress={onExplorer} />
+      </View>
+    ) : null;
+  }
 
   return (
     <View style={{ marginTop: 14, gap: 2 }}>

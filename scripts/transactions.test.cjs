@@ -189,3 +189,17 @@ test("connection drops get their own messages", () => {
   assert.equal(toTransactionError(dropped()).title, "Can't reach Solana");
   assert.equal(toTransactionError(new ConfirmationLostError("sig")).title, "Could not confirm");
 });
+
+test("send, processed and confirmed are reported in order as the network answers", async () => {
+  const stages = [];
+  const answers = [{ value: [null] }, { value: [{ err: null, confirmationStatus: "processed" }] }, { value: [{ err: null, confirmationStatus: "processed" }] }, { value: [{ err: null, confirmationStatus: "confirmed" }] }];
+  let polls = 0;
+  const connection = {
+    sendRawTransaction: async () => "sig-1",
+    getSignatureStatuses: async () => answers[polls++],
+    getBlockHeight: async () => 1,
+  };
+  const signature = await sendAndConfirm(connection, signedStub, 100, { onSent: (sent) => stages.push(`sent:${sent}`), onProcessed: () => stages.push("processed") });
+  assert.equal(signature, "sig-1");
+  assert.equal(stages.join(","), "sent:sig-1,processed");
+});

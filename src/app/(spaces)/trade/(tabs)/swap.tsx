@@ -91,6 +91,7 @@ export default function SwapScreen() {
         state={flow.state}
         onPrimary={onSheetPrimary}
         onClose={flow.close}
+        onExplorer={flow.openExplorer}
         primaryLabel={flow.done ? "View in swap history" : undefined}
       />
     </>

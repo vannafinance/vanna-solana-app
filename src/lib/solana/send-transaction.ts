@@ -46,25 +46,37 @@ async function sendRaw(connection: Connection, raw: Uint8Array): Promise<string>
   }
 }
 
-async function confirmationState(connection: Connection, signature: string, lastValidBlockHeight: number): Promise<"confirmed" | "pending" | "expired"> {
+async function confirmationState(connection: Connection, signature: string, lastValidBlockHeight: number): Promise<"confirmed" | "processed" | "pending" | "expired"> {
   const { value } = await connection.getSignatureStatuses([signature]);
   const status = value[0];
   if (status?.err) throw new TransactionFailedError(JSON.stringify(status.err));
   if (status && (status.confirmationStatus === "confirmed" || status.confirmationStatus === "finalized")) return "confirmed";
+  if (status) return "processed";
   return (await connection.getBlockHeight("confirmed")) > lastValidBlockHeight ? "expired" : "pending";
 }
 
 // A brief connection drop must not turn into a failure once the transaction is already on its way: the poll keeps
 // going, and only a sustained outage is reported, as an unknown outcome rather than a failed send.
-export async function sendAndConfirm(connection: Connection, signed: VersionedTransaction, lastValidBlockHeight: number): Promise<string> {
+export async function sendAndConfirm(
+  connection: Connection,
+  signed: VersionedTransaction,
+  lastValidBlockHeight: number,
+  stages: { onSent?: (signature: string) => void; onProcessed?: () => void } = {},
+): Promise<string> {
   const signature = await sendRaw(connection, signed.serialize());
+  stages.onSent?.(signature);
 
+  let announcedProcessed = false;
   let failures = 0;
   for (;;) {
     try {
       const state = await confirmationState(connection, signature, lastValidBlockHeight);
       if (state === "confirmed") return signature;
       if (state === "expired") throw new BlockhashExpiredError();
+      if (state === "processed" && !announcedProcessed) {
+        announcedProcessed = true;
+        stages.onProcessed?.();
+      }
       failures = 0;
     } catch (error) {
       if (!isNetworkFailure(error)) throw error;
@@ -77,6 +89,8 @@ export async function sendAndConfirm(connection: Connection, signed: VersionedTr
 export type SigningHooks = {
   sign: (transaction: VersionedTransaction) => Promise<VersionedTransaction>;
   onSigned: () => void;
+  onSent?: (signature: string) => void;
+  onProcessed?: () => void;
 };
 
 // Simulating first surfaces a bad instruction or route before the wallet is asked to sign anything.
@@ -86,7 +100,7 @@ export async function simulateSignAndSend(connection: Connection, transaction: V
 
   const signed = await hooks.sign(transaction);
   hooks.onSigned();
-  return sendAndConfirm(connection, signed, lastValidBlockHeight);
+  return sendAndConfirm(connection, signed, lastValidBlockHeight, hooks);
 }
 
 export async function sendInstructions(

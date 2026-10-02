@@ -32,6 +32,10 @@ export async function previewApproval(_step?: number, progress?: RunProgress): P
   await new Promise((resolve) => setTimeout(resolve, 900));
   if (current === "rejected" || current === "expired" || current === "no-fee") throw failures[current];
   progress?.signed();
+  await new Promise((resolve) => setTimeout(resolve, 400));
+  progress?.sent();
+  await new Promise((resolve) => setTimeout(resolve, 500));
+  progress?.processed();
   await new Promise((resolve) => setTimeout(resolve, 500));
   if (current !== "success") throw failures[current];
 }
