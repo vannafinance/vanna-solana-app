@@ -1,6 +1,6 @@
 import { type Connection, ComputeBudgetProgram, PublicKey, type TransactionInstruction } from "@solana/web3.js";
 
-import type { AssetInfo } from "./assets";
+import { type AssetInfo, assets } from "./assets";
 import { type YieldSymbol } from "./kamino";
 import { liteReduceRedeemInstruction, liteReduceRepayInstruction, liteSupplyInstruction } from "./lite-instructions";
 import { fetchLitePositions, resolveLitePosition } from "./lite-position";
@@ -14,6 +14,12 @@ import type { SigningHooks } from "./send-transaction";
 import { createAssociatedTokenAccountIdempotent } from "./token-instructions";
 
 export type YieldAsset = AssetInfo & { symbol: YieldSymbol };
+
+export function yieldAssetOf(symbol: YieldSymbol): YieldAsset {
+  const asset = assets.find((candidate) => candidate.symbol === symbol);
+  if (asset === undefined) throw new Error(`${symbol} is not configured`);
+  return { ...asset, symbol };
+}
 
 // Same limit as the web app's one transaction deploy: the deposit, the borrow and the Kamino supply share one budget.
 const DEPLOY_COMPUTE_UNITS = 1_000_000;

@@ -1,7 +1,10 @@
 import { parseUnits, type TokenAmount } from "@/format/format-amount";
-import type { CollateralSymbol, DeployForm, DeployIssue, FarmCollateral, FarmPool, PoolSymbol } from "@/types/farm";
+import type { CollateralSymbol, DeployForm, DeployIssue, DeployQuote, FarmCollateral, FarmPool, PoolSymbol } from "@/types/farm";
 
 import { deployQuote, heldCollaterals, MIN_LEVERAGE } from "./farm-math";
+
+// Below this the web app refuses to open a position; liquidation starts at 1.1.
+const MIN_OPENING_HEALTH = 1.15;
 
 type DeployInput = {
   pools: readonly FarmPool[];
@@ -10,6 +13,8 @@ type DeployInput = {
   collateralSymbol: CollateralSymbol;
   amountText: string;
   leverage: number;
+  // What the margin account already holds and owes, in USD units, so a new position is judged together with the old ones.
+  account: { collateralUsd: bigint; debtUsd: bigint };
 };
 
 function findBySymbol<T extends { symbol: string }>(items: readonly T[], symbol: string): T {
@@ -18,18 +23,22 @@ function findBySymbol<T extends { symbol: string }>(items: readonly T[], symbol:
   return match;
 }
 
-function findIssue(collateral: FarmCollateral, amount: bigint, leverage: number): DeployIssue | null {
+function findIssue(collateral: FarmCollateral, amount: bigint, leverage: number, quote: DeployQuote, account: DeployInput["account"]): DeployIssue | null {
   if (collateral.balance <= 0n) return "no-balance";
   if (amount > collateral.balance) return "over-balance";
   if (leverage <= MIN_LEVERAGE) return "low-leverage";
   if (amount <= 0n) return "no-amount";
+  const debt = account.debtUsd + quote.debtUsd;
+  if (debt > 0n && Number(account.collateralUsd + quote.collateralValueUsd + quote.debtUsd) / Number(debt) <= MIN_OPENING_HEALTH) return "too-risky";
   return null;
 }
 
-export function buildDeployForm({ pools, collaterals, poolSymbol, collateralSymbol, amountText, leverage }: DeployInput): DeployForm {
+export function buildDeployForm({ pools, collaterals, poolSymbol, collateralSymbol, amountText, leverage, account }: DeployInput): DeployForm {
   const pool = findBySymbol(pools, poolSymbol);
   const collateral = findBySymbol(collaterals, collateralSymbol);
   const amount: TokenAmount = { raw: parseUnits(amountText, collateral.decimals) ?? 0n, decimals: collateral.decimals };
+
+  const quote = deployQuote({ collateral: amount, collateralPriceUsd: collateral.priceUsd, leverage, pool });
 
   return {
     pools,
@@ -40,7 +49,7 @@ export function buildDeployForm({ pools, collaterals, poolSymbol, collateralSymb
     amountText,
     amount,
     leverage,
-    quote: deployQuote({ collateral: amount, collateralPriceUsd: collateral.priceUsd, leverage, pool }),
-    issue: findIssue(collateral, amount.raw, leverage),
+    quote,
+    issue: findIssue(collateral, amount.raw, leverage, quote, account),
   };
 }

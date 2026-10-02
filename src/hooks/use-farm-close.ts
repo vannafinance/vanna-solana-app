@@ -1,30 +1,36 @@
 import { router } from "expo-router";
-import { useState, useSyncExternalStore } from "react";
-import { Linking } from "react-native";
+import { useState } from "react";
 
 import { formatToken } from "@/format/format-amount";
-import { explorerAccountUrl } from "@/lib/solana/explorer";
-import { closeQuote, reducePosition, toPositionView } from "@/lib/farm/position-math";
-import { getFarmPositions, previewCloseStep, replaceFarmPosition, subscribeFarmPositions } from "@/lib/preview-data/farm";
-import { previewSession } from "@/lib/preview-data/session";
+import { closeQuote, toPositionView } from "@/lib/farm/position-math";
+import { assets } from "@/lib/solana/assets";
+import { exitFarm, withdrawStock, yieldAssetOf } from "@/lib/solana/farm-transactions";
+import { routes } from "@/navigation/routes";
 import type { CloseView, ExitFractionBps } from "@/types/farm";
 import type { Resource } from "@/types/resource";
 import { TransactionError } from "@/types/transaction";
 
+import { useFarmState } from "./use-farm-state";
 import { useTransactionFlow } from "./use-transaction-flow";
-import { routes } from "@/navigation/routes";
+import { useWalletSigner } from "./use-wallet-signer";
 
-const CLOSE_STEPS = 2;
+const BPS = 10_000;
 
 export function useFarmClose(id: string) {
-  const positions = useSyncExternalStore(subscribeFarmPositions, getFarmPositions);
+  const state = useFarmState();
+  const signer = useWalletSigner();
   const [fractionBps, setFractionBps] = useState<ExitFractionBps>(10000);
 
-  const position = positions.find((candidate) => candidate.id === id);
+  const position = state.status === "ready" ? state.data.positions.find((candidate) => candidate.id === id) : undefined;
   const quote = position ? closeQuote(position, fractionBps) : null;
-  const close: Resource<CloseView> = position && quote ? { status: "ready", data: { position: toPositionView(position), quote } } : { status: "empty" };
+  const close: Resource<CloseView> = (() => {
+    if (state.status !== "ready") return state;
+    return position && quote ? { status: "ready", data: { position: toPositionView(position), quote } } : { status: "empty" };
+  })();
 
-  const collateralText = quote && position ? `${formatToken(quote.collateralReturned, 2)} ${position.collateralSymbol}` : "";
+  // The stock goes back to the wallet in a second transaction, only when the whole position is closed.
+  const returnsStock = fractionBps === 10000;
+  const collateralText = quote && position && returnsStock ? `${formatToken(quote.collateralReturned, 2)} ${position.collateralSymbol}` : "";
   const leftoverText = quote && position ? `${formatToken(quote.leftover, 2)} ${position.poolSymbol}` : "";
   const partialFailure = new TransactionError(
     "partial",
@@ -33,19 +39,32 @@ export function useFarmClose(id: string) {
   );
 
   const flow = useTransactionFlow({
-    steps: CLOSE_STEPS,
+    steps: returnsStock ? 2 : 1,
     success: {
-      title: fractionBps === 10000 ? "Position closed" : "Position partly closed",
-      message: `${collateralText} and ${leftoverText} are back in your wallet`,
+      title: returnsStock ? "Position closed" : "Position partly closed",
+      message: returnsStock ? `${collateralText} and ${leftoverText} are back in your wallet` : `${leftoverText} is back in your wallet and part of your loan is repaid`,
     },
-    run: (step) => previewCloseStep(step, partialFailure),
+    run: async (step, progress) => {
+      const stock = assets.find((asset) => asset.symbol === position?.collateralSymbol);
+      if (!position || !stock) throw new TransactionError("network", "Something went wrong", "The position could not be prepared. Nothing left your wallet.");
+
+      if (step === 1) {
+        const exitBps = Math.max(1, Math.round((fractionBps * position.poolShareBps) / BPS));
+        await signer.execute(({ connection, owner, hooks }) => exitFarm(connection, owner, { pool: yieldAssetOf(position.poolSymbol), exitBps }, hooks), progress);
+        return;
+      }
+      await signer
+        .execute(({ connection, owner, hooks }) => withdrawStock(connection, owner, stock, position.collateral.raw, hooks), progress)
+        .catch(() => {
+          throw partialFailure;
+        });
+    },
   });
 
   const finish = (destination: "history" | "positions") => {
     flow.close();
-    if (position) replaceFarmPosition(id, reducePosition(position, fractionBps));
     if (destination === "history") router.dismissTo("/farm/history");
-    else if (fractionBps === 10000) router.dismissTo(routes.farmPositions);
+    else if (returnsStock) router.dismissTo(routes.farmPositions);
     else router.back();
   };
 
@@ -64,7 +83,7 @@ export function useFarmClose(id: string) {
       primaryLabel,
       onPrimary: flow.done ? () => finish("history") : flow.primary,
       onClose: flow.done ? () => finish("positions") : flow.close,
-      onExplorer: () => void Linking.openURL(explorerAccountUrl(previewSession.walletAddress)),
+      onExplorer: flow.openExplorer,
     },
   };
 }

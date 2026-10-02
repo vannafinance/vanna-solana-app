@@ -160,3 +160,89 @@ test("the Kamino instructions carry the argument and account counts of the deplo
   assert.equal(repay.keys[repay.keys.length - 1].pubkey.toBase58(), extra.pubkey.toBase58());
   assert.equal(TOKEN_PROGRAM.toBase58(), supply.keys[19].pubkey.toBase58());
 });
+
+const { deriveFarm } = load("src/lib/farm/derive-farm.ts");
+const { composePositions } = load("src/lib/farm/compose-positions.ts");
+const { closeQuote, toPositionView } = load("src/lib/farm/position-math.ts");
+
+const amount = (raw, decimals) => ({ raw, decimals });
+const leg = (asset, raw, decimals) => ({ asset, amount: amount(raw, decimals) });
+const farmTx = (signature, at, chips) => ({ signature, at, strategy: "farm", title: null, stock: null, chips });
+const open = (signature, at, stock, deposit, borrow) =>
+  farmTx(signature, at, [
+    { type: "deposit", leg: leg(stock, deposit, 8) },
+    { type: "deposit", leg: leg("USDC", borrow, 6) },
+    { type: "borrow", leg: leg("USDC", borrow, 6) },
+  ]);
+const exit = (signature, at, repaid, kept = 0n) => farmTx(signature, at, [{ type: "repay", leg: leg("USDC", repaid, 6) }, ...(kept > 0n ? [{ type: "withdraw", leg: leg("USDC", kept, 6) }] : [])]);
+const returnStock = (signature, at, stock, raw) => farmTx(signature, at, [{ type: "withdraw", leg: leg(stock, raw, 8) }]);
+
+test("a stock's deposit and the borrow made with it are what its position was opened with", () => {
+  const derived = deriveFarm([open("b", 20, "TSLAx", 100n, 400n), open("a", 10, "TSLAx", 200n, 700n)]);
+  assert.equal(derived.attributions.length, 1);
+  assert.equal(derived.attributions[0].collateral.raw, 300n);
+  assert.equal(derived.attributions[0].borrowed.raw, 1100n);
+  assert.equal(derived.entries.length, 2);
+});
+
+test("returning the stock to the wallet closes its position and a later open starts afresh", () => {
+  const derived = deriveFarm([
+    open("d", 40, "TSLAx", 50n, 90n),
+    returnStock("c", 30, "TSLAx", 200n),
+    exit("b", 20, 700n, 12n),
+    open("a", 10, "TSLAx", 200n, 700n),
+  ]);
+  assert.equal(derived.closedCount, 1);
+  assert.equal(derived.attributions.length, 1);
+  assert.equal(derived.attributions[0].collateral.raw, 50n);
+  assert.equal(derived.yieldKept[0].raw, 12n);
+  const exitEntry = derived.entries.find((entry) => entry.signature === "b");
+  assert.equal(exitEntry.collateralSymbol, "TSLAx");
+  assert.equal(exitEntry.actions.map((item) => `${item.kind}:${item.amount.raw}`).join(","), "redeem:712,repay:700");
+});
+
+test("activity from perps is not part of Farm", () => {
+  const perps = { signature: "p", at: 5, strategy: "perps", title: null, stock: "TSLAx", chips: [{ type: "deposit", leg: leg("TSLAx", 9n, 8) }] };
+  assert.equal(deriveFarm([perps]).entries.length, 0);
+});
+
+const prices = { USDC: 999_955n, SOL: 150_000_000n, TSLAx: 372_140_000n, GOOGLx: 340_000_000n };
+const attribution = (stock, collateral, borrowed) => ({ stock, pool: "USDC", collateral: amount(collateral, 8), borrowed: amount(borrowed, 6) });
+
+test("a position reads its debt, supply and rates from the chain and its stock from history", () => {
+  const live = [{ pool: "USDC", supplied: 699_999_999n, debt: 700_000_010n, borrowRateBps: 602 }];
+  const [position] = composePositions(live, [attribution("TSLAx", 200_000_000n, 700_000_000n)], prices, { USDC: 498, SOL: null });
+  assert.equal(position.id, "farm-tslax-usdc");
+  assert.equal(position.principal.raw, 700_000_000n);
+  assert.equal(position.interest.raw, 10n);
+  assert.equal(position.supplyApyBps, 498);
+  assert.equal(position.borrowApyBps, 602);
+  assert.equal(position.poolShareBps, 10_000);
+  assert.equal(position.leverage, 1.9);
+});
+
+test("two stocks sharing a pool split its supply and debt by what each borrowed", () => {
+  const live = [{ pool: "USDC", supplied: 1_000_000_000n, debt: 1_000_000_000n, borrowRateBps: 600 }];
+  const positions = composePositions(live, [attribution("TSLAx", 1n, 700_000_000n), attribution("GOOGLx", 1n, 300_000_000n)], prices, { USDC: 500, SOL: null });
+  assert.deepEqual(positions.map((position) => position.poolShareBps), [7000, 3000]);
+  assert.equal(positions[0].supplied.raw, 700_000_000n);
+  assert.equal(positions[1].principal.raw, 300_000_000n);
+});
+
+test("a position that history cannot place, or that has no price, is left out", () => {
+  const live = [{ pool: "USDC", supplied: 1n, debt: 1n, borrowRateBps: 1 }];
+  assert.equal(composePositions(live, [], prices, { USDC: 1, SOL: null }).length, 0);
+  assert.equal(composePositions(live, [attribution("OPENAI", 1n, 1n)], prices, { USDC: 1, SOL: null }).length, 0);
+});
+
+test("closing returns the stock only for the whole position and never repays more than was redeemed", () => {
+  const live = [{ pool: "USDC", supplied: 699_999_999n, debt: 700_000_010n, borrowRateBps: 602 }];
+  const [position] = composePositions(live, [attribution("TSLAx", 200_000_000n, 700_000_000n)], prices, { USDC: 498, SOL: null });
+  const half = closeQuote(position, 5000);
+  assert.equal(half.collateralReturned.raw, 0n);
+  assert.ok(half.leftover.raw >= 0n);
+  assert.ok(half.healthAfter > toPositionView(position).healthFactor);
+  const whole = closeQuote(position, 10000);
+  assert.equal(whole.collateralReturned.raw, 200_000_000n);
+  assert.equal(whole.healthAfter, null);
+});

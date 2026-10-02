@@ -35,6 +35,16 @@ export type FarmPosition = {
   poolPriceUsd: bigint;
   supplyApyBps: number;
   borrowApyBps: number;
+  // Which part of the pool's single Kamino position is this stock's, in basis points. Closing it exits that part only.
+  poolShareBps: number;
+};
+
+// What the margin account's own history says went into a position: the stock deposited and the pool asset borrowed for it.
+export type FarmAttribution = {
+  stock: CollateralSymbol;
+  pool: PoolSymbol;
+  collateral: TokenAmount;
+  borrowed: TokenAmount;
 };
 
 export type FarmPositionView = {
@@ -66,7 +76,7 @@ export type FarmPositionsView = {
   positions: readonly FarmPositionView[];
 };
 
-export type DeployIssue = "no-balance" | "over-balance" | "no-amount" | "low-leverage";
+export type DeployIssue = "no-balance" | "over-balance" | "no-amount" | "low-leverage" | "too-risky";
 
 export type DeployQuote = {
   collateralValueUsd: bigint;

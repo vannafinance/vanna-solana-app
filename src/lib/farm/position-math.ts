@@ -1,22 +1,27 @@
 import type { TokenAmount } from "@/format/format-amount";
-import type { CloseQuote, DeployForm, ExitFractionBps, FarmPosition, FarmPositionView, FarmPositionsView } from "@/types/farm";
+import type { CloseQuote, ExitFractionBps, FarmPosition, FarmPositionView, FarmPositionsView } from "@/types/farm";
 
-import { healthFactor, netAprBps } from "./farm-math";
-import { BPS, scaleAmount, sumAmounts, toUsd } from "./units";
+import { netAprBps } from "./farm-math";
+import { scaleAmount, sumAmounts, toUsd } from "./units";
+
+// Everything the position holds against what it owes: the stock plus what Kamino holds, over the debt.
+function healthOf(assetsUsd: bigint, debtUsd: bigint): number | null {
+  return debtUsd > 0n ? Number(assetsUsd) / Number(debtUsd) : null;
+}
 
 export function toPositionView(position: FarmPosition): FarmPositionView {
   const debt = sumAmounts(position.principal, position.interest);
   const collateralValueUsd = toUsd(position.collateral, position.collateralPriceUsd);
   const debtValueUsd = toUsd(debt, position.poolPriceUsd);
   const suppliedValueUsd = toUsd(position.supplied, position.poolPriceUsd);
-  const yieldEarned: TokenAmount = { raw: position.supplied.raw - position.principal.raw, decimals: position.supplied.decimals };
+  const yieldEarned: TokenAmount = { raw: position.supplied.raw > position.principal.raw ? position.supplied.raw - position.principal.raw : 0n, decimals: position.supplied.decimals };
 
   return {
     id: position.id,
     collateralSymbol: position.collateralSymbol,
     poolSymbol: position.poolSymbol,
     leverage: position.leverage,
-    healthFactor: healthFactor(position.leverage) ?? Number.POSITIVE_INFINITY,
+    healthFactor: healthOf(collateralValueUsd + suppliedValueUsd, debtValueUsd) ?? Number.POSITIVE_INFINITY,
     collateral: position.collateral,
     collateralValueUsd,
     principal: position.principal,
@@ -51,8 +56,12 @@ export function closeQuote(position: FarmPosition, fractionBps: ExitFractionBps)
   const fraction = BigInt(fractionBps);
   const debt = sumAmounts(position.principal, position.interest);
   const redeem = scaleAmount(position.supplied, fraction);
-  const repay = scaleAmount(debt, fraction);
-  const collateralReturned = scaleAmount(position.collateral, fraction);
+  // Interest keeps accruing on its own schedule, so the debt can round a few units past what Kamino returns; the program
+  // never repays more than it redeemed.
+  const owed = scaleAmount(debt, fraction);
+  const repay: TokenAmount = owed.raw > redeem.raw ? redeem : owed;
+  // The stock only goes back to the wallet when the whole position is closed; a partial close leaves it as collateral.
+  const collateralReturned: TokenAmount = fractionBps === 10000 ? position.collateral : { raw: 0n, decimals: position.collateral.decimals };
   const leftover: TokenAmount = { raw: redeem.raw - repay.raw, decimals: redeem.decimals };
   const remainingDebt: TokenAmount = { raw: debt.raw - repay.raw, decimals: debt.decimals };
   const collateralReturnedValueUsd = toUsd(collateralReturned, position.collateralPriceUsd);
@@ -67,36 +76,7 @@ export function closeQuote(position: FarmPosition, fractionBps: ExitFractionBps)
     collateralReturnedValueUsd,
     leftover,
     remainingDebtValueUsd: toUsd(remainingDebt, position.poolPriceUsd),
-    healthAfter: fractionBps === 10000 ? null : healthFactor(position.leverage),
+    healthAfter: fractionBps === 10000 ? null : healthOf(toUsd(position.collateral, position.collateralPriceUsd) + toUsd(scaleAmount(position.supplied, BigInt(10000 - fractionBps)), position.poolPriceUsd), toUsd(remainingDebt, position.poolPriceUsd)),
     receiveValueUsd: collateralReturnedValueUsd + toUsd(leftover, position.poolPriceUsd),
-  };
-}
-
-export function reducePosition(position: FarmPosition, fractionBps: ExitFractionBps): FarmPosition | null {
-  if (fractionBps === 10000) return null;
-  const remaining = BPS - BigInt(fractionBps);
-  return {
-    ...position,
-    collateral: scaleAmount(position.collateral, remaining),
-    principal: scaleAmount(position.principal, remaining),
-    interest: scaleAmount(position.interest, remaining),
-    supplied: scaleAmount(position.supplied, remaining),
-  };
-}
-
-export function positionFromDeploy(id: string, form: DeployForm, collateral: TokenAmount): FarmPosition {
-  return {
-    id,
-    collateralSymbol: form.collateral.symbol,
-    poolSymbol: form.pool.symbol,
-    leverage: form.leverage,
-    collateral,
-    collateralPriceUsd: form.collateral.priceUsd,
-    principal: form.quote.borrow,
-    interest: { raw: 0n, decimals: form.quote.borrow.decimals },
-    supplied: form.quote.borrow,
-    poolPriceUsd: form.pool.priceUsd,
-    supplyApyBps: form.pool.supplyApyBps,
-    borrowApyBps: form.pool.borrowApyBps,
   };
 }

@@ -1,20 +1,26 @@
-import { useSyncExternalStore } from "react";
-import { Linking } from "react-native";
-
-import { explorerTransactionUrl } from "@/lib/solana/explorer";
-import { farmClosedCount, farmClosedEarningsUsd, farmHistory, getFarmPositions, subscribeFarmPositions } from "@/lib/preview-data/farm";
+import { useExplorer } from "@/hooks/use-explorer";
+import { toUsd } from "@/lib/farm/units";
 import type { FarmHistoryView } from "@/types/farm";
 import type { Resource } from "@/types/resource";
 
-export function useFarmHistory() {
-  const open = useSyncExternalStore(subscribeFarmPositions, getFarmPositions);
-  const history: Resource<FarmHistoryView> =
-    farmHistory.length === 0
-      ? { status: "empty" }
-      : {
-          status: "ready",
-          data: { earnedUsd: farmClosedEarningsUsd, closedCount: farmClosedCount, openCount: open.length, entries: farmHistory },
-        };
+import { useFarmState } from "./use-farm-state";
 
-  return { history, openTransaction: (signature: string) => void Linking.openURL(explorerTransactionUrl(signature)) };
+export function useFarmHistory() {
+  const state = useFarmState();
+  const { openTransaction } = useExplorer();
+
+  const history: Resource<FarmHistoryView> = (() => {
+    if (state.status !== "ready") return state;
+    const { derived, positions, prices } = state.data;
+    if (derived.entries.length === 0) return { status: "empty" };
+    // What the closed positions kept beyond their debt, priced at today's oracle price of the pool asset.
+    const earnedUsd = derived.yieldKept.reduce((sum, kept) => {
+      const price = prices[kept.pool];
+      const decimals = derived.entries.flatMap((entry) => entry.actions).find((action) => action.symbol === kept.pool)?.amount.decimals;
+      return price === undefined || decimals === undefined ? sum : sum + toUsd({ raw: kept.raw, decimals }, price);
+    }, 0n);
+    return { ...state, data: { earnedUsd, closedCount: derived.closedCount, openCount: positions.length, entries: derived.entries } };
+  })();
+
+  return { history, openTransaction };
 }

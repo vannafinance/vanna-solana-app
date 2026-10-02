@@ -7,6 +7,7 @@ import { LeverageCard } from "@/components/farm/leverage-card";
 import { YieldPoolCard } from "@/components/farm/yield-pool-card";
 import { Button } from "@/components/ui/button";
 import { ResourceView } from "@/components/ui/resource-view";
+import { ReviewSheet } from "@/components/ui/review-sheet";
 import { SpaceHeader } from "@/components/ui/space-header";
 import { TransactionSheet } from "@/components/ui/transaction-sheet";
 import { useFarmDeploy } from "@/hooks/use-farm-deploy";
@@ -50,6 +51,7 @@ export default function FarmDeployScreen() {
           </ResourceView>
         </View>
       </ScrollView>
+      <ReviewSheet data={deploy.review.data} onConfirm={deploy.review.confirm} onCancel={deploy.review.cancel} />
       <TransactionSheet {...deploy.sheet} />
     </View>
   );

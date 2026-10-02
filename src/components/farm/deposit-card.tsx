@@ -23,6 +23,7 @@ type DepositCardProps = {
 function issueText({ issue, collateral }: DeployForm) {
   if (issue === "no-balance") return `No ${collateral.symbol} in your wallet. Pick another asset.`;
   if (issue === "over-balance") return "That is more than your wallet balance.";
+  if (issue === "too-risky") return "Together with your open positions this would leave your account too close to liquidation. Lower the leverage.";
   return null;
 }
 
