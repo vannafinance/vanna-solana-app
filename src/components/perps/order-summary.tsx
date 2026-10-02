@@ -21,7 +21,7 @@ export function OrderSummary({ market, side, quote, issue, liquidationHealth }: 
     side === "long"
       ? `${formatPercent(market.usdcBorrowBps)} USDC APY`
       : `${formatPercent(market.tokenBorrowBps)} ${market.symbol} APY`;
-  const health = quote.healthAfter.toFixed(2);
+  const health = Number.isFinite(quote.healthAfter) ? quote.healthAfter.toFixed(2) : "∞";
   const risky = issue === "health-low";
   const tone = risky ? "negative" : "textMuted";
 

@@ -19,6 +19,10 @@ function hexBytes(hex: string) {
   return Uint8Array.from({ length: 32 }, (_, index) => Number.parseInt(hex.slice(index * 2, index * 2 + 2), 16));
 }
 
+export function priceAccountAddress(asset: { pythFeedId: string }): PublicKey {
+  return feedAddress(asset.pythFeedId);
+}
+
 function feedAddress(feedId: string) {
   return PublicKey.findProgramAddressSync([Uint8Array.of(0, 0), hexBytes(feedId)], PYTH_PUSH_ORACLE_PROGRAM)[0];
 }

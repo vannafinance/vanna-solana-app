@@ -3,11 +3,15 @@ import { useState } from "react";
 
 import { formatSignedUsd, formatUsd } from "@/format/format-amount";
 import { quoteClose } from "@/lib/perps/close-quote";
+import { assets } from "@/lib/solana/assets";
+import { closePosition } from "@/lib/solana/perps-close";
 import type { CloseQuote, PositionSummary } from "@/types/perps";
+import { TransactionError } from "@/types/transaction";
 
 import { mapResource } from "./resource-helpers";
 import { usePerpsPositions } from "./use-perps-positions";
 import { useTransactionFlow } from "./use-transaction-flow";
+import { useWalletSigner } from "./use-wallet-signer";
 
 export const CLOSE_FRACTIONS_BPS = [2_500, 5_000, 7_500, 10_000] as const;
 
@@ -15,6 +19,7 @@ export type CloseTicket = { position: PositionSummary; quote: CloseQuote };
 
 export function usePerpsClose(id: string) {
   const portfolio = usePerpsPositions();
+  const signer = useWalletSigner();
   const [fractionBps, setFractionBps] = useState<number>(10_000);
 
   const ticket = mapResource(portfolio, (data): CloseTicket | null => {
@@ -22,11 +27,25 @@ export function usePerpsClose(id: string) {
     return position ? { position, quote: quoteClose(position, fractionBps) } : null;
   });
 
-  const quote = ticket.status === "ready" ? ticket.data.quote : null;
+  const ready = ticket.status === "ready" ? ticket.data : null;
   const flow = useTransactionFlow({
+    run: (_step, progress) =>
+      signer.execute(({ connection, owner, hooks }) => {
+        const stock = ready === null ? undefined : assets.find((asset) => asset.symbol === ready.position.symbol);
+        if (ready === null || stock === undefined) {
+          throw new TransactionError("network", "Something went wrong", "The position could not be found. Nothing left your wallet.");
+        }
+        const { position } = ready;
+        return closePosition(
+          connection,
+          owner,
+          { side: position.side, stock, exitPercent: fractionBps / 100, stockPrice: position.markPrice, debtShareUsd: position.sizeUsd - position.collateral },
+          hooks,
+        );
+      }, progress),
     success: {
       title: fractionBps === 10_000 ? "Position closed" : "Position reduced",
-      message: quote ? `${formatSignedUsd(quote.pnl)} realized · ${formatUsd(quote.toMargin)} is back in your margin account.` : "",
+      message: ready ? `${formatSignedUsd(ready.quote.pnl)} realized · ${formatUsd(ready.quote.toWallet)} is back in your wallet.` : "",
     },
   });
 

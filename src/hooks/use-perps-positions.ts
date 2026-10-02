@@ -1,35 +1,63 @@
+import { useQuery } from "@tanstack/react-query";
 import { useCallback } from "react";
 
 import { useAccountSnapshot } from "@/hooks/use-account-snapshot";
 import { useWalletAddress } from "@/hooks/use-wallet-address";
-import { buildAccount } from "@/lib/perps/account-health";
+import { derivePositions } from "@/lib/perps/derive-positions";
+import { summarizePortfolio } from "@/lib/perps/summarize-portfolio";
+import { marginSwapsFrom } from "@/lib/solana/margin-activity";
 import type { PerpsPortfolio } from "@/types/perps";
 import type { Resource } from "@/types/resource";
 
-// The account figures are live. The open and closed position lists need the web app's attribution rules (they
-// separate Perps from Farm positions) and have no source on the phone yet, so they are empty and flagged
-// unavailable instead of pretending there are none.
+import { useMarketList } from "./use-market-list";
+import { useWalletTransactionsOptions } from "./use-wallet-transactions";
+
+// A position is a view of the margin account's balances: stock collateral against USDC debt is a long, stock debt
+// against USDC collateral is a short. The entry price and the split of the shared USDC balance come from the account's
+// own swap events, as on the web app. Closed positions need the web app's history grouping and are not built yet.
 export function usePerpsPositions(): Resource<PerpsPortfolio> {
   const wallet = useWalletAddress();
   const account = useAccountSnapshot(wallet);
-  const { refetch } = account;
-  const retry = useCallback(() => void refetch(), [refetch]);
+  const markets = useMarketList();
+  const margin = account.data?.address ?? null;
+  const activity = useQuery({
+    ...useWalletTransactionsOptions(wallet),
+    select: (transactions) => (margin === null ? [] : marginSwapsFrom(transactions, margin)),
+  });
+  const { refetch: refetchAccount } = account;
+  const { refetch: refetchActivity } = activity;
+  const retry = useCallback(() => {
+    void refetchAccount();
+    void refetchActivity();
+  }, [refetchAccount, refetchActivity]);
 
   if (wallet === null) return { status: "empty" };
   if (account.data === undefined) return account.isError ? { status: "error", error: account.error, retry } : { status: "loading" };
+
+  const snapshot = account.data;
+  const ready = markets.status === "ready" && activity.data !== undefined ? { markets: markets.data, swaps: activity.data } : null;
+  const derived =
+    ready === null
+      ? null
+      : derivePositions({
+          collateral: snapshot.collateralBalances,
+          debt: snapshot.borrowedBalances,
+          prices: Object.fromEntries(ready.markets.map((market) => [market.symbol, market.markPrice])),
+          swaps: ready.swaps,
+        });
+
+  const portfolio = summarizePortfolio({
+    margin: snapshot.collateral,
+    borrowed: snapshot.borrowed,
+    markets: ready?.markets ?? [],
+    positions: derived?.positions ?? [],
+    closed: [],
+  });
 
   return {
     status: "ready",
     stale: account.isError,
     refresh: retry,
-    data: {
-      account: buildAccount(account.data.collateral, account.data.borrowed),
-      positionsAvailable: false,
-      positions: [],
-      openPnl: 0n,
-      closed: [],
-      realizedPnl: 0n,
-      winRateBps: 0,
-    },
+    data: { ...portfolio, positionsAvailable: derived !== null && derived.unresolved.length === 0, historyAvailable: false },
   };
 }

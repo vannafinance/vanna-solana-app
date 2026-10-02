@@ -66,8 +66,8 @@ export default function TradeHistoryScreen() {
       header={header(
         <TradeHero
           label="Closed PnL"
-          value={portfolio.data.positionsAvailable ? formatSignedUsd(realizedPnl) : "—"}
-          valueColor={!portfolio.data.positionsAvailable || realizedPnl >= 0n ? "heroPositive" : "short"}
+          value={portfolio.data.historyAvailable ? formatSignedUsd(realizedPnl) : "—"}
+          valueColor={!portfolio.data.historyAvailable || realizedPnl >= 0n ? "heroPositive" : "short"}
           accessory={<HealthGauge health={account.health} />}
           stats={[
             { label: "Margin", value: formatUsd(account.margin) },
@@ -78,7 +78,7 @@ export default function TradeHistoryScreen() {
       )}
       closed={closed}
       winRateBps={winRateBps}
-      available={portfolio.data.positionsAvailable}
+      available={portfolio.data.historyAvailable}
       onOpenExplorer={openExplorer}
     />
   );

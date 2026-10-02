@@ -41,7 +41,7 @@ export function ClosePositionForm({ position, quote, fractionsBps, onSelectFract
         <DetailRow label="Closing" value={`${formatTokenSize(quote.tokens, position.symbol)} · ${formatUsd(quote.size)}`} />
         <DetailRow label="Realized PnL" value={formatSignedUsd(quote.pnl)} valueColor={quote.pnl >= 0n ? "positive" : "negative"} />
         <DetailRow label="Trading fee" value={`-${formatUsd(quote.fee)}`} />
-        <DetailRow label="Back to margin account" value={formatUsd(quote.toMargin)} last={closingAll} />
+        <DetailRow label="Back to your wallet" value={formatUsd(quote.toWallet)} last={closingAll} />
         {closingAll ? null : <DetailRow label="Liquidation price" value={`Unchanged · ${formatLiquidationPrice(quote.liquidationPrice)}`} last />}
       </View>
       <View style={{ marginTop: 16 }}>

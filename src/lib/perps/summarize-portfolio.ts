@@ -1,27 +1,26 @@
 import type { ClosedPosition, ClosedSummary, PerpsMarket, PerpsPortfolio, PerpsPosition, PositionSummary } from "@/types/perps";
 
 import { buildAccount } from "./account-health";
-import { distanceBps, liquidationPrice, positionPnl, returnBps, tokensToUsd } from "./position-math";
+import { estimatedLiquidationPrice } from "./order-quote";
+import { distanceBps, positionPnl, returnBps, tokensToUsd } from "./position-math";
 
 export function pairOf(symbol: string) {
   return `${symbol}-USDC`;
 }
 
-export function summarizePosition(position: PerpsPosition, markPrice: bigint): PositionSummary {
+// Entry price and leverage feed the same isolated liquidation estimate the web app shows for an open position.
+export function summarizePosition(position: PerpsPosition, market: PerpsMarket): PositionSummary {
+  const markPrice = market.markPrice;
   const pnl = positionPnl(position.side, position.tokens, position.entryPrice, markPrice);
-  const liquidation = liquidationPrice({
-    side: position.side,
-    tokens: position.tokens,
-    collateral: position.collateral,
-    openNotional: position.collateral * BigInt(position.leverage),
-  });
+  const borrowBps = position.side === "long" ? market.usdcBorrowBps : market.tokenBorrowBps;
+  const liquidation = estimatedLiquidationPrice(position.side, position.entryPrice, position.leverage, borrowBps);
   return {
     ...position,
     pair: pairOf(position.symbol),
     markPrice,
     sizeUsd: tokensToUsd(position.tokens, markPrice),
     pnl,
-    pnlBps: returnBps(pnl, position.collateral),
+    pnlBps: position.collateral > 0n ? returnBps(pnl, position.collateral) : 0,
     liquidationPrice: liquidation,
     liquidationDistanceBps: distanceBps(markPrice, liquidation),
   };
@@ -41,10 +40,10 @@ type PortfolioInput = {
 };
 
 export function summarizePortfolio({ margin, borrowed, markets, positions, closed }: PortfolioInput): PerpsPortfolio {
-  const marks = new Map(markets.map((market) => [market.symbol, market.markPrice]));
+  const bySymbol = new Map(markets.map((market) => [market.symbol, market]));
   const open = positions.flatMap((position) => {
-    const mark = marks.get(position.symbol);
-    return mark === undefined ? [] : [summarizePosition(position, mark)];
+    const market = bySymbol.get(position.symbol);
+    return market === undefined ? [] : [summarizePosition(position, market)];
   });
   const history = closed.map(summarizeClosed);
   const wins = history.filter((entry) => entry.pnl > 0n).length;
@@ -52,6 +51,7 @@ export function summarizePortfolio({ margin, borrowed, markets, positions, close
   return {
     account: buildAccount(margin, borrowed),
     positionsAvailable: true,
+    historyAvailable: true,
     positions: open,
     openPnl: open.reduce((sum, position) => sum + position.pnl, 0n),
     closed: history,

@@ -47,8 +47,10 @@ export async function fetchRawJupiterQuote(
   amount: bigint,
   slippageBps: number,
   signal?: AbortSignal,
+  maxAccounts?: number,
 ): Promise<RawJupiterQuote> {
   const query = new URLSearchParams({ inputMint, outputMint, amount: amount.toString(), slippageBps: String(slippageBps) });
+  if (maxAccounts !== undefined) query.set("maxAccounts", String(maxAccounts));
   try {
     const response = await requestJson(`${API_BASE_URL}/api/jupiter/quote?${query}`, { signal });
     return { quote: parseJupiterQuote(response), response };

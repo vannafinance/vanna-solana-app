@@ -4,7 +4,7 @@ import { API_BASE_URL } from "./config";
 import { fetchRawJupiterQuote } from "./jupiter-quote";
 import { ApiError, requestJson } from "./request-json";
 import { type SigningHooks, simulateSignAndSend } from "./send-transaction";
-import { isStalePoolError } from "./transaction-errors";
+import { withStalePoolRetry } from "./retry-stale-pool";
 
 export type SwapRequest = {
   owner: string;
@@ -15,8 +15,6 @@ export type SwapRequest = {
 };
 
 export type SwapHooks = SigningHooks;
-
-const MAX_ATTEMPTS = 2;
 
 function swapTransactionOf(payload: unknown): string {
   if (typeof payload === "object" && payload !== null && "swapTransaction" in payload && typeof payload.swapTransaction === "string") return payload.swapTransaction;
@@ -35,25 +33,6 @@ async function attempt(connection: Connection, request: SwapRequest, hooks: Swap
   return simulateSignAndSend(connection, transaction, latest.lastValidBlockHeight, hooks);
 }
 
-// A pool the fork cloned earlier can drift from Jupiter's live quote. One retry with a fresh quote covers that, but
-// never after the wallet has signed (that would ask the user to sign twice); other failures are not retried.
-export async function executeWalletSwap(connection: Connection, request: SwapRequest, hooks: SwapHooks): Promise<string> {
-  let signed = false;
-  const tracked: SwapHooks = {
-    sign: hooks.sign,
-    onSigned: () => {
-      signed = true;
-      hooks.onSigned();
-    },
-  };
-  let lastError: unknown;
-  for (let tries = 0; tries < MAX_ATTEMPTS; tries++) {
-    try {
-      return await attempt(connection, request, tracked);
-    } catch (error) {
-      lastError = error;
-      if (signed || !isStalePoolError(error)) break;
-    }
-  }
-  throw lastError;
+export function executeWalletSwap(connection: Connection, request: SwapRequest, hooks: SwapHooks): Promise<string> {
+  return withStalePoolRetry(hooks, (tracked) => attempt(connection, request, tracked));
 }

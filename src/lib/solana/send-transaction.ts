@@ -1,4 +1,4 @@
-import { type Connection, type PublicKey, type TransactionInstruction, TransactionMessage, VersionedTransaction } from "@solana/web3.js";
+import { type AddressLookupTableAccount, type Connection, type PublicKey, type TransactionInstruction, TransactionMessage, VersionedTransaction } from "@solana/web3.js";
 
 const POLL_MS = 700;
 const SEND_ATTEMPTS = 3;
@@ -89,8 +89,14 @@ export async function simulateSignAndSend(connection: Connection, transaction: V
   return sendAndConfirm(connection, signed, lastValidBlockHeight);
 }
 
-export async function sendInstructions(connection: Connection, payer: PublicKey, instructions: TransactionInstruction[], hooks: SigningHooks): Promise<string> {
+export async function sendInstructions(
+  connection: Connection,
+  payer: PublicKey,
+  instructions: TransactionInstruction[],
+  hooks: SigningHooks,
+  tables: AddressLookupTableAccount[] = [],
+): Promise<string> {
   const latest = await connection.getLatestBlockhash("confirmed");
-  const message = new TransactionMessage({ payerKey: payer, recentBlockhash: latest.blockhash, instructions }).compileToV0Message();
+  const message = new TransactionMessage({ payerKey: payer, recentBlockhash: latest.blockhash, instructions }).compileToV0Message(tables);
   return simulateSignAndSend(connection, new VersionedTransaction(message), latest.lastValidBlockHeight, hooks);
 }

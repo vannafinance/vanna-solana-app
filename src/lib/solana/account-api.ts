@@ -1,6 +1,7 @@
 import type { MarginAccountSnapshot } from "@/types/account";
 
 import { API_BASE_URL } from "./config";
+import { assets, type AssetSymbol } from "./assets";
 import { ApiError, requestJson } from "./request-json";
 import { usdToUnits } from "./usd";
 
@@ -17,6 +18,8 @@ const EMPTY: MarginAccountSnapshot = {
   health: null,
   leverage: null,
   borrowRatePercent: 0,
+  collateralBalances: {},
+  borrowedBalances: {},
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -27,6 +30,26 @@ function finite(source: Record<string, unknown>, key: string): number {
   const value = source[key];
   if (typeof value !== "number" || !Number.isFinite(value)) throw new ApiError("invalid-response");
   return value;
+}
+
+// The API reports each balance as a decimal string in whole tokens; keep it exact in base units.
+function unitsFromDecimal(text: string, decimals: number): bigint {
+  const match = /^(\d+)(?:\.(\d+))?$/.exec(text);
+  if (!match) throw new ApiError("invalid-response");
+  return BigInt(match[1]) * 10n ** BigInt(decimals) + BigInt((match[2] ?? "").padEnd(decimals, "0").slice(0, decimals) || "0");
+}
+
+function parseBalances(value: unknown): Partial<Record<AssetSymbol, bigint>> {
+  if (value === undefined) return {};
+  if (!isRecord(value)) throw new ApiError("invalid-response");
+  const balances: Partial<Record<AssetSymbol, bigint>> = {};
+  for (const asset of assets) {
+    const entry = value[asset.symbol];
+    if (entry === undefined) continue;
+    if (!isRecord(entry) || typeof entry.amount !== "string") throw new ApiError("invalid-response");
+    balances[asset.symbol] = unitsFromDecimal(entry.amount, asset.decimals);
+  }
+  return balances;
 }
 
 export function parseAccountSnapshot(payload: unknown): MarginAccountSnapshot {
@@ -49,6 +72,8 @@ export function parseAccountSnapshot(payload: unknown): MarginAccountSnapshot {
     health: health >= HEALTH_INFINITY || borrowedValue === 0 ? null : health,
     leverage: netAvailable > 0 ? gross / netAvailable : gross > 0 ? 1 : null,
     borrowRatePercent: finite(payload, "borrowRate"),
+    collateralBalances: parseBalances(payload.collateralBalances),
+    borrowedBalances: parseBalances(payload.borrowedBalances),
   };
 }
 

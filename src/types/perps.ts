@@ -69,6 +69,7 @@ export type PerpsAccount = {
 export type PerpsPortfolio = {
   account: PerpsAccount;
   positionsAvailable: boolean;
+  historyAvailable: boolean;
   positions: PositionSummary[];
   openPnl: bigint;
   closed: ClosedSummary[];
@@ -92,7 +93,7 @@ export type CloseQuote = {
   size: bigint;
   pnl: bigint;
   fee: bigint;
-  toMargin: bigint;
+  toWallet: bigint;
   liquidationPrice: bigint;
 };
 
