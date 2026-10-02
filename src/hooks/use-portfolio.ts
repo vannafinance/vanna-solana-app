@@ -3,8 +3,10 @@ import { useCallback } from "react";
 import { useAccountSnapshot } from "@/hooks/use-account-snapshot";
 import { useEarnDeposits } from "@/hooks/use-earn-deposits";
 import { useEarnEvents } from "@/hooks/use-earn-events";
+import { usePerpsPositions } from "@/hooks/use-perps-positions";
 import { useWalletAddress } from "@/hooks/use-wallet-address";
 import { useWalletHoldings } from "@/hooks/use-wallet-holdings";
+import { toPortfolioPosition } from "@/lib/perps/portfolio-position";
 import { totalEarned, vaultEarnings } from "@/lib/portfolio/net-earnings";
 import type { Portfolio } from "@/types/portfolio";
 import type { Resource } from "@/types/resource";
@@ -17,6 +19,7 @@ export function usePortfolio(): Resource<Portfolio> {
   const holdings = useWalletHoldings(wallet);
   const deposits = useEarnDeposits(wallet);
   const events = useEarnEvents(wallet);
+  const perps = usePerpsPositions();
   const { refetch: refetchAccount } = account;
   const { refetch: refetchHoldings } = holdings;
   const { refetch: refetchDeposits } = deposits;
@@ -50,7 +53,9 @@ export function usePortfolio(): Resource<Portfolio> {
       hasMarginAccount: snapshot.hasMarginAccount,
       walletAddress: wallet,
       marginAddress: snapshot.address,
-      positions: null,
+      // Only perps positions can be read so far. When they cannot be read, or the account holds a Farm position, the
+      // list is unavailable rather than shown empty.
+      positions: perps.status === "ready" && perps.data.positionsAvailable ? perps.data.positions.map(toPortfolioPosition) : null,
       assets: holdings.data?.holdings.map((holding) => ({
         symbol: holding.symbol,
         tokens: { raw: holding.raw, decimals: holding.decimals },

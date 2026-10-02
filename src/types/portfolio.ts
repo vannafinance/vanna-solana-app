@@ -107,6 +107,7 @@ export type Portfolio = {
 
 export type TraderSummary = {
   positionsAvailable: boolean;
+  historyAvailable: boolean;
   perpPnl: bigint | null;
   farmPnl: bigint | null;
   margin: bigint;

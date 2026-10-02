@@ -93,6 +93,7 @@ export default function Overview() {
                     { label: "Margin account", value: formatUsd(data.marginBalance) },
                   ]}
                   secondary={[
+                    { label: "Net available", value: formatUsd(data.netAvailable) },
                     { label: "Health", value: healthText(data), dot: data.hasMarginAccount && data.health !== null },
                     { label: "Total borrowed", value: formatUsd(data.totalBorrowed) },
                     { label: "Net earnings", value: data.netEarnings === null ? "—" : formatSignedUsd(data.netEarnings), positive: data.netEarnings !== null && data.netEarnings > 0n },

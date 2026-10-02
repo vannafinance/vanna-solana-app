@@ -85,13 +85,13 @@ export default function Trader() {
                   <SegmentedControl
                     segments={[
                       { value: "current", label: "Current", badge: data.positionsAvailable ? String(visible.length) : undefined },
-                      { value: "history", label: "History", badge: data.positionsAvailable ? String(data.history.length) : undefined },
+                      { value: "history", label: "History", badge: data.historyAvailable ? String(data.history.length) : undefined },
                     ]}
                     value={tab}
                     onChange={setTab}
                   />
                   {tab === "history" ? (
-                    data.positionsAvailable ? (
+                    data.historyAvailable ? (
                       <TraderHistoryList history={data.history} winRateBps={data.winRateBps} onExplorer={openExplorer} />
                     ) : (
                       <EmptyCard title="History unavailable" message="We can't load your trade history right now." />
