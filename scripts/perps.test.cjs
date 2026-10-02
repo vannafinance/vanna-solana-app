@@ -412,3 +412,123 @@ test("embed addresses follow the theme and carry the widget configuration", () =
   assert.match(html, /"allow_symbol_change":false/);
   assert.match(html, /embed-widget-advanced-chart\.js/);
 });
+
+const { marginActivityFrom } = load("src/lib/solana/margin-history.ts");
+const { formatActivityAmount } = load("src/format/format-perps.ts");
+const { formatDateTime } = load("src/format/format-date.ts");
+const { liteStrategyAddress } = load("src/lib/solana/program-accounts.ts");
+
+const pad = (length) => Buffer.alloc(length);
+const i64 = () => pad(8);
+
+const events = {
+  deposit: (margin, mint, amount) => eventLine([244, 62, 77, 11, 135, 112, 61, 96], [margin.toBuffer(), mint.toBuffer(), u64(amount), pad(8 + 8 + 8)]),
+  withdraw: (margin, mint, amount) => eventLine([51, 224, 133, 106, 74, 173, 72, 82], [margin.toBuffer(), mint.toBuffer(), u64(amount), pad(8 + 16 + 8 + 8)]),
+  borrow: (margin, reserve, assets) => eventLine([225, 182, 241, 78, 34, 145, 253, 230], [margin.toBuffer(), reserve.toBuffer(), u64(assets), pad(16 + 16 + 16 + 8 + 8)]),
+  repay: (margin, reserve, assets) => eventLine([145, 11, 56, 225, 154, 212, 54, 105], [margin.toBuffer(), reserve.toBuffer(), margin.toBuffer(), u64(assets), pad(16 + 8 + 8)]),
+  swap: (margin, from, to, amountIn, amountOut) => eventLine([25, 110, 111, 203, 233, 54, 199, 222], [margin.toBuffer(), from.toBuffer(), to.toBuffer(), u64(amountIn), u64(amountOut), u64(1n)]),
+  liteOpened: (margin, strategy, equity) => eventLine([183, 79, 102, 12, 14, 22, 68, 6], [margin.toBuffer(), strategy.toBuffer(), u64(equity), pad(8 * 3 + 16 + 16 + 8 + 8)]),
+};
+
+const holderMargin = Keypair.generate().publicKey;
+const reserveOf = (name) => reserveAddress(mint(name));
+const txOf = (signature, blockTime, lines) => ({ signature, blockTime, tx: { meta: { logMessages: lines } } });
+
+test("deposit, withdraw and repay events are decoded", () => {
+  const decoded = decodeMarginEvents([
+    events.deposit(holderMargin, mint("USDC"), 500_000_000n),
+    events.withdraw(holderMargin, mint("USDC"), 485_000_000n),
+    events.repay(holderMargin, reserveOf("USDC"), 1_000_000_000n),
+    events.liteOpened(holderMargin, liteStrategyAddress(mint("TSLAx")), 7n),
+  ]);
+  assert.equal(decoded.deposits[0].amount, 500_000_000n);
+  assert.equal(decoded.deposits[0].mint, mint("USDC").toBase58());
+  assert.equal(decoded.withdrawals[0].amount, 485_000_000n);
+  assert.equal(decoded.repayments[0].assets, 1_000_000_000n);
+  assert.equal(decoded.repayments[0].reserve, reserveOf("USDC").toBase58());
+  assert.equal(decoded.liteOpened[0].equity, 7n);
+});
+
+test("a long open reads as one entry: deposit, borrow, swap, titled by the stock", () => {
+  const [entry] = marginActivityFrom(
+    [
+      txOf("sig-open", 1_790_000_100, [
+        events.swap(holderMargin, mint("USDC"), mint("TSLAx"), 1_500_000_000n, 421_198_486n),
+        events.borrow(holderMargin, reserveOf("USDC"), 1_000_000_000n),
+        events.deposit(holderMargin, mint("USDC"), 500_000_000n),
+      ]),
+    ],
+    holderMargin.toBase58(),
+  );
+  assert.equal(entry.title, "TSLAx-USDC Long");
+  assert.equal(entry.stock, "TSLAx");
+  assert.equal(entry.strategy, "perps");
+  assert.equal(entry.chips.map((chip) => chip.type).join(","), "deposit,borrow,swap");
+  assert.equal(entry.chips[2].from.asset, "USDC");
+  assert.equal(entry.chips[2].to.amount.raw, 421_198_486n);
+});
+
+test("a close has no borrow: the swap names the stock, order is swap, repay, withdraw", () => {
+  const [entry] = marginActivityFrom(
+    [
+      txOf("sig-close", 1_790_000_200, [
+        events.withdraw(holderMargin, mint("USDC"), 485_000_000n),
+        events.repay(holderMargin, reserveOf("USDC"), 1_000_000_000n),
+        events.swap(holderMargin, mint("TSLAx"), mint("USDC"), 421_198_486n, 1_496_904_441n),
+      ]),
+    ],
+    holderMargin.toBase58(),
+  );
+  assert.equal(entry.title, "TSLAx-USDC Long");
+  assert.equal(entry.chips.map((chip) => chip.type).join(","), "swap,repay,withdraw");
+});
+
+test("a short open borrows the stock", () => {
+  const [entry] = marginActivityFrom(
+    [
+      txOf("sig-short", 1_790_000_300, [
+        events.deposit(holderMargin, mint("TSLAx"), 100_000_000n),
+        events.borrow(holderMargin, reserveOf("TSLAx"), 200_000_000n),
+        events.swap(holderMargin, mint("TSLAx"), mint("USDC"), 300_000_000n, 1_000_000_000n),
+      ]),
+    ],
+    holderMargin.toBase58(),
+  );
+  assert.equal(entry.title, "TSLAx-USDC Short");
+  assert.equal(entry.strategy, "perps");
+});
+
+test("Farm transactions are classified as farm, and other accounts' events are ignored", () => {
+  const stranger = Keypair.generate().publicKey;
+  const entries = marginActivityFrom(
+    [
+      txOf("sig-farm", 1_790_000_400, [events.deposit(holderMargin, mint("TSLAx"), 100_000_000n), events.liteOpened(holderMargin, liteStrategyAddress(mint("TSLAx")), 100_000_000n)]),
+      txOf("sig-other", 1_790_000_500, [events.deposit(stranger, mint("USDC"), 5_000_000n)]),
+      txOf("sig-none", 1_790_000_600, ["Program log: nothing"]),
+    ],
+    holderMargin.toBase58(),
+  );
+  assert.equal(entries.length, 1);
+  assert.equal(entries[0].strategy, "farm");
+  assert.equal(entries[0].title, "TSLAx-USDC Farm");
+});
+
+test("entries are listed newest first", () => {
+  const entries = marginActivityFrom(
+    [txOf("old", 100, [events.deposit(holderMargin, mint("USDC"), 1_000_000n)]), txOf("new", 200, [events.deposit(holderMargin, mint("USDC"), 2_000_000n)])],
+    holderMargin.toBase58(),
+  );
+  assert.equal(entries.map((entry) => entry.signature).join(","), "new,old");
+  assert.equal(entries[0].title, null);
+});
+
+test("history amounts keep up to six decimals without trailing zeros, like the web app", () => {
+  assert.equal(formatActivityAmount({ raw: 9_804_934n * 100n, decimals: 8 }), "9.804934");
+  assert.equal(formatActivityAmount({ raw: 1_622_040_000n, decimals: 6 }), "1,622.04");
+  assert.equal(formatActivityAmount({ raw: 3_486_887_642n, decimals: 6 }), "3,486.887642");
+  assert.equal(formatActivityAmount({ raw: 500_000_000n, decimals: 6 }), "500");
+});
+
+test("history times read like Oct 2, 5:31 PM", () => {
+  assert.match(formatDateTime(1_790_000_000), /^[A-Z][a-z]{2} \d{1,2}, \d{1,2}:\d{2} (AM|PM)$/);
+});

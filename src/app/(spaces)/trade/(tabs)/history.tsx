@@ -1,16 +1,17 @@
 import type { ReactNode } from "react";
 import { View } from "react-native";
 
+import { ActivityList } from "@/components/perps/activity-list";
 import { HealthGauge } from "@/components/perps/health-gauge";
 import { HistoryChips } from "@/components/perps/history-chips";
-import { PerpsHistoryList } from "@/components/perps/perps-history-list";
 import { TradeHero } from "@/components/perps/trade-hero";
 import { SwapHistoryList } from "@/components/swap/swap-history-list";
 import { ResourceView } from "@/components/ui/resource-view";
 import { SpaceHeader } from "@/components/ui/space-header";
-import { formatSignedUsd, formatUsd } from "@/format/format-amount";
+import { formatUsd } from "@/format/format-amount";
 import { useHeaderProps } from "@/hooks/use-header-props";
 import { type HistoryView, usePerpsHistoryView } from "@/hooks/use-perps-history-view";
+import { usePerpsActivity } from "@/hooks/use-perps-activity";
 import { usePerpsPositions } from "@/hooks/use-perps-positions";
 import { useSwapHistory } from "@/hooks/use-swap-history";
 import { useTheme } from "@/theme/use-theme";
@@ -36,8 +37,9 @@ function Pending<T>({ header, resource, emptyLabel }: { header: ReactNode; resou
 
 export default function TradeHistoryScreen() {
   const headerProps = useHeaderProps();
-  const { view, setView, openExplorer } = usePerpsHistoryView();
+  const { view, setView, openTransaction } = usePerpsHistoryView();
   const portfolio = usePerpsPositions();
+  const activity = usePerpsActivity();
   const swaps = useSwapHistory();
 
   const header = (hero: ReactNode) => (
@@ -60,14 +62,15 @@ export default function TradeHistoryScreen() {
   }
 
   if (portfolio.status !== "ready") return <Pending header={header(null)} resource={portfolio} emptyLabel="No margin account yet" />;
-  const { account, realizedPnl, closed, winRateBps } = portfolio.data;
+  const { account } = portfolio.data;
+  const entries = activity.status === "ready" ? activity.data : [];
+  const emptyLabel = activity.status === "loading" ? "Loading your history…" : activity.status === "error" ? "Your trade history is unavailable right now." : "No position activity yet";
   return (
-    <PerpsHistoryList
+    <ActivityList
       header={header(
         <TradeHero
-          label="Closed PnL"
-          value={portfolio.data.historyAvailable ? formatSignedUsd(realizedPnl) : "—"}
-          valueColor={!portfolio.data.historyAvailable || realizedPnl >= 0n ? "heroPositive" : "short"}
+          label="Position activity"
+          value={activity.status === "ready" ? String(entries.length) : "—"}
           accessory={<HealthGauge health={account.health} />}
           stats={[
             { label: "Margin", value: formatUsd(account.margin) },
@@ -76,10 +79,9 @@ export default function TradeHistoryScreen() {
           ]}
         />,
       )}
-      closed={closed}
-      winRateBps={winRateBps}
-      available={portfolio.data.historyAvailable}
-      onOpenExplorer={openExplorer}
+      entries={entries}
+      emptyLabel={emptyLabel}
+      onOpenTransaction={openTransaction}
     />
   );
 }

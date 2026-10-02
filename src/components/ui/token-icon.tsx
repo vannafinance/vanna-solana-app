@@ -14,6 +14,10 @@ const sources = {
 
 export type TokenSymbol = keyof typeof sources;
 
+export function isTokenSymbol(value: string): value is TokenSymbol {
+  return value in sources;
+}
+
 type TokenIconProps = {
   symbol: TokenSymbol;
   size?: number;

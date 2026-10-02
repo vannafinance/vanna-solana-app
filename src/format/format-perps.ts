@@ -1,4 +1,4 @@
-import { formatToken, formatUsd } from "@/format/format-amount";
+import { formatUnits, formatUsd, formatToken, type TokenAmount } from "@/format/format-amount";
 import type { PerpsSymbol, Side } from "@/types/perps";
 
 const TOKEN_DECIMALS = 6;
@@ -23,4 +23,10 @@ export function sideLabel(side: Side) {
 
 export function formatHealth(health: number) {
   return Number.isFinite(health) ? health.toFixed(2) : "No debt";
+}
+
+// Up to six decimals with the trailing zeros dropped, the way the web app lists amounts in history: 9.804934 or 1,622.04.
+export function formatActivityAmount({ raw, decimals }: TokenAmount): string {
+  const text = formatUnits(raw, decimals, Math.min(decimals, 6));
+  return text.includes(".") ? text.replace(/0+$/, "").replace(/\.$/, "") : text;
 }

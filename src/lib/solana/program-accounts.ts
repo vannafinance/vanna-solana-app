@@ -21,6 +21,7 @@ export const assetConfigAddress = (mint: PublicKey) => derive("asset", mint);
 export const reserveAddress = (mint: PublicKey) => derive("reserve", mint);
 export const shareMintAddress = (mint: PublicKey) => derive("share_mint", mint);
 export const marginAddress = (authority: PublicKey) => derive("margin", authority);
+export const liteStrategyAddress = (mint: PublicKey) => derive("lite_strategy", mint);
 export const swapAuthorityAddress = (margin: PublicKey) => derive("margin_swap", margin);
 
 export function debtPositionAddress(margin: PublicKey, reserve: PublicKey): PublicKey {
