@@ -102,6 +102,32 @@ def chooser_badge_calm(dark):
     return dark_page('<div class="tiles calm">' + out + '</div>')
 
 
+LIGHT = {'Earn': '#5ED3CB', 'Trade': '#B0ABFF', 'Farm': '#FF84BD'}   # each space's colour, lifted for dark tiles
+WHO_ICON = {'Earn': 'person', 'Trade': 'candlestick_chart', 'Farm': 'trending_up'}
+
+
+def chooser_label(kind):
+    """Dark tiles without a pill. The audience is carried by type and colour only."""
+    out = ''
+    for _, name, icon, text, meta, g, tint, ink in SPACES:
+        who, *facts = meta.split(' · ')
+        c = LIGHT[name]
+        bg = 'background:radial-gradient(90%% 120%% at 0%% 0%%, %s55, transparent 60%%), #1A1721' % g[0]
+        icn = '<span class="tli" style="background:linear-gradient(150deg,%s,%s)">%s</span>' % (g[0], g[1], ic(icon, 22))
+        quiet = '<span class="q">%s</span>' % ' · '.join(facts)
+        if kind == 'eyebrow':      # small capitals in the space colour, above the name
+            head = '<div class="tlh">%s<div class="nm"><em style="color:%s">%s</em><b>%s</b></div></div>' % (icn, c, who, name)
+        elif kind == 'subtitle':   # a second line under the name, like a title and its role
+            head = '<div class="tlh">%s<div class="nm"><b>%s</b><i style="color:%s">%s</i></div></div>' % (icn, name, c, who)
+        elif kind == 'lead':       # the fact line starts with it, bright and bold
+            head = '<div class="tlh">%s<b>%s</b></div>' % (icn, name)
+            quiet = '<span class="q"><strong style="color:%s">%s</strong>%s</span>' % (c, who, ''.join(' · ' + f for f in facts))
+        else:                      # 'rule': a coloured hairline and the label on the right of the name, plain text
+            head = '<div class="tlh">%s<b>%s</b><span class="rl" style="color:%s">%s</span></div>' % (icn, name, c, who)
+        out += '<div class="tl5 dk lb" style="%s">%s<span class="d">%s</span>%s</div>' % (bg, head, text, quiet)
+    return dark_page('<div class="tiles calm">' + out + '</div>')
+
+
 def chooser_tiles_eyebrow():
     """4b: the audience reads first, as a bold eyebrow over the name; the facts sit on a darker band along the bottom."""
     out = ''
@@ -206,6 +232,12 @@ h1{margin:22px 0 0;font-size:28px;line-height:34px;font-weight:700;letter-spacin
 .tl5 .tlh{margin-bottom:4px}.tl5 .tlh b{font-size:19px;font-weight:700}.tl5 .d{font-size:14px;line-height:20px;color:rgba(255,255,255,.92)}
 .tl5 .q{font-size:12.5px;font-weight:600;color:rgba(255,255,255,.72)}
 .tl5.dk{box-shadow:inset 0 0 0 1px rgba(255,255,255,.07)}.tl5.dk .d{color:#D9D7E3}.tl5.dk .q{color:#9A98A8}
+/* audience without a pill */
+.lb .nm{display:flex;flex-direction:column}.lb .nm b{font-size:19px;line-height:23px;font-weight:600}
+.lb em{font-style:normal;font-size:11.5px;line-height:15px;font-weight:700;letter-spacing:.1em;text-transform:uppercase}
+.lb .nm i{font-style:normal;font-size:13.5px;line-height:18px;font-weight:600}
+.lb .q strong{font-weight:700}.lb .tlh>b{font-weight:600}
+.rl{margin-left:auto;display:flex;align-items:center;gap:8px;font-size:13px;font-weight:700}.rl span{width:14px;height:2px;border-radius:1px}
 /* 4b eyebrow + band */
 .tl3{overflow:hidden}.top3{padding:14px 16px 12px;display:flex;flex-direction:column;gap:8px}
 .tl3 .tlh>div{display:flex;flex-direction:column}.tl3 em{font-style:normal;font-size:11.5px;font-weight:800;letter-spacing:.09em;text-transform:uppercase;color:#fff;opacity:.95}
@@ -261,9 +293,14 @@ def main():
     s4 = (fig(chooser_tiles_badge(), '<b>4a · as sent.</b> Four to five pills per tile on three full-strength gradients: everything is equally loud.') +
           fig(chooser_badge_calm(False), '<b>4a · calmer.</b> The badge is the only pill. Facts become one quiet line, the arrow button goes (the whole tile is the button), more air between tiles.') +
           fig(chooser_badge_calm(True), '<b>4a · calm, dark tiles.</b> Colour lives in the icon, a soft corner tint and the badge; the page stays dark and the badge is the brightest thing on each tile.'))
+    s5 = (fig(chooser_label('eyebrow'), '<b>L1 · Eyebrow.</b> "FOR LENDERS" in small capitals and the space\'s colour, right above the name. Reads first, like a magazine kicker.') +
+          fig(chooser_label('subtitle'), '<b>L2 · Subtitle.</b> The name, and under it who it\'s for in the space\'s colour, like a title and a role.') +
+          fig(chooser_label('lead'), '<b>L3 · Leads the line.</b> The fact line starts with it, bold and coloured; the rest stays grey.') +
+          fig(chooser_label('rule'), '<b>L4 · Plain label.</b> Same place as the badge, just the coloured words, no shape behind them. (Chosen.)'))
     page = ('<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Vanna onboarding</title>'
             '<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet"><style>' + CSS + '</style></head><body>'
             '<div class="top"><h1>First launch and the margin account</h1><p>Previews only. The chooser keeps your exact words. The margin account follows how Vanna really works: the first margin action creates it, with no terms step.</p></div>'
+            '<section id="o5"><h2>Dark tiles: the audience without a bubble</h2><div class="row">' + s5 + '</div></section>'
             '<section id="o4"><h2>4a, calmer</h2><div class="row">' + s4 + '</div></section>'
             '<section id="o3"><h2>Option 4, refined: the audience you can’t miss</h2><div class="row">' + s3 + '</div></section>'
             '<section id="o1"><h2>"What do you want to do?": four looks</h2><div class="row">' + s1 + '</div></section>'
@@ -274,7 +311,7 @@ def main():
     with sync_playwright() as p:
         b = p.chromium.launch(); pg = b.new_page(viewport={'width': 1760, 'height': 1000})
         pg.goto('file:///' + out.replace('\\', '/'), wait_until='networkidle'); pg.wait_for_timeout(900)
-        for sid in ('o4', 'o3', 'o1', 'o2'):
+        for sid in ('o5', 'o4', 'o3', 'o1', 'o2'):
             pg.locator('#' + sid + ' .row').screenshot(path=os.path.join(CMP, 'renders', 'onboarding-%s.png' % sid))
         b.close()
     print(out)

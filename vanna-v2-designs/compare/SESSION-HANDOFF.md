@@ -77,6 +77,11 @@ Nothing half-edited on disk. Waiting on the user for decisions on two preview pa
 - `previews/refresh2.html` (`tools/preview_refresh2.py`): the Portfolio-style vibrant glow in every space, tabs moved lower for breathing room at the top, tighter overlap with a highlight edge, a version **with icons**, and Portfolio panel options: **A (recommended)** one headline "Total value $9,132.77" (= wallet 4,812.40 + margin account 10,592.29 − borrowed 6,271.92) with a health chip and a breakdown row; **B** the two balances joined by a divider with glass chips. The user said today's panel "isn't sleek, there's a gap between the two".
 - The user will send **Vanna's own colour gradients** later: put them into `buttons_gradient.py` (NAV/CTA) and the header themes (`V` in preview_refresh.py, then the real headers) when they arrive.
 
+**Late 2 Oct (pushed b82fe74):**
+- `previews/onboarding.html` (`tools/preview_onboard.py`): the user picked option 4 (dark colour tiles). Section o3 has 4a badge / 4b eyebrow / 4c white strip. Section o4 has calmer 4a versions, because the user liked 4a but found it "overwhelming": too many pills on three full gradients. "Calm, dark tiles" is recommended. The page glow is pure radial gradients in the top-right corner (blurred blobs rendered inconsistently in screenshots).
+- `previews/marginflow.html` (`tools/marginflow_template.html` + `preview_marginflow.py --video`): margin flows A/B/C in motion, video at `renders/marginflow.mp4`. Unverified: whether account creation and the first trade can share one wallet approval (A); fallback is "Step 1 of 2".
+- Awaiting: the 4a pick (calmer vs dark tiles), margin A/B/C.
+
 ## 8. Open questions (blocked on the user)
 
 1. Glow strength in refresh2 OK?

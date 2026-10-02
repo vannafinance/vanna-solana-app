@@ -1,5 +1,5 @@
 window.VN_META = {
- "stamp": 1790960953630,
+ "stamp": 1790963260335,
  "changes": [
   {
    "title": "New Vanna mark on every screen",
@@ -289,6 +289,14 @@ window.VN_META = {
     "V7EarnSupply",
     "V7MarginCreate",
     "V7FarmPosition"
+   ]
+  },
+  {
+   "title": "First launch: dark colour tiles",
+   "date": "2 Oct 2026",
+   "detail": "\"What do you want to do?\" is now always dark, with a soft coral-violet glow in the top-right corner. Earn, Trade and Farm are dark tiles; each space's colour sits on its icon, a faint corner tint and the words saying who it is for (For lenders, For traders, Leveraged yield), set in that colour on the right of the name, with no bubble behind them. The other facts are one quiet line and the whole tile is the button. Same words as before.",
+   "screens": [
+    "V7Spaces"
    ]
   }
  ]
