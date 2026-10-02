@@ -18,6 +18,7 @@ export function toHistoryEntries(swaps: readonly SpotSwap[], prices: OraclePrice
           : 0n;
     return {
       id: swap.signature,
+      signature: swap.signature,
       timestamp: swap.timestamp,
       from: swap.from,
       to: swap.to,

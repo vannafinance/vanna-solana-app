@@ -2,6 +2,7 @@ import { View } from "react-native";
 
 import { AppText } from "@/components/ui/app-text";
 import { Card } from "@/components/ui/card";
+import { ExplorerLink } from "@/components/ui/explorer-link";
 import { TokenIcon } from "@/components/ui/token-icon";
 import { formatSwapAmount } from "@/format/format-swap-amount";
 import { useTheme } from "@/theme/use-theme";
@@ -9,11 +10,12 @@ import type { SwapHistoryGroup } from "@/types/swap";
 
 type SwapHistoryRowProps = {
   group: SwapHistoryGroup;
+  onOpenTransaction: (signature: string) => void;
 };
 
 const ICON_SIZE = 30;
 
-export function SwapHistoryRow({ group }: SwapHistoryRowProps) {
+export function SwapHistoryRow({ group, onOpenTransaction }: SwapHistoryRowProps) {
   const { colors } = useTheme();
   const date = new Date(group.timestamp).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
 
@@ -58,6 +60,7 @@ export function SwapHistoryRow({ group }: SwapHistoryRowProps) {
                 {paid}
               </AppText>
             </View>
+            <ExplorerLink signature={entry.signature} onOpen={onOpenTransaction} />
           </View>
         );
       })}

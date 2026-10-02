@@ -26,7 +26,7 @@ export default function ClosePositionScreen() {
           )}
         </ResourceView>
       </BottomSheet>
-      <TransactionSheet state={close.flow.state} onPrimary={close.onSheetPrimary} onClose={close.onSheetClose} />
+      <TransactionSheet state={close.flow.state} onPrimary={close.onSheetPrimary} onClose={close.onSheetClose} onExplorer={close.flow.openExplorer} />
     </>
   );
 }

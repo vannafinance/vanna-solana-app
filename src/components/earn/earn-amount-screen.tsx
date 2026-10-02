@@ -37,6 +37,7 @@ type EarnAmountScreenProps = {
   transaction: TransactionState | null;
   onTransactionPrimary: () => void;
   onTransactionClose: () => void;
+  onTransactionExplorer?: () => void;
   onViewPositions: () => void;
 };
 
@@ -53,6 +54,7 @@ export function EarnAmountScreen({
   transaction,
   onTransactionPrimary,
   onTransactionClose,
+  onTransactionExplorer,
   onViewPositions,
 }: EarnAmountScreenProps) {
   const { colors, fontFamily } = useTheme();
@@ -116,6 +118,7 @@ export function EarnAmountScreen({
           if (succeeded) onViewPositions();
         }}
         onClose={onTransactionClose}
+        onExplorer={onTransactionExplorer}
       />
     </View>
   );

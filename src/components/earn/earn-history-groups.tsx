@@ -2,6 +2,7 @@ import { View } from "react-native";
 
 import { AppText } from "@/components/ui/app-text";
 import { Card } from "@/components/ui/card";
+import { ExplorerLink } from "@/components/ui/explorer-link";
 import { Icon } from "@/components/ui/icon";
 import type { IconName } from "@/components/ui/material-symbols";
 import { formatSignedUsd, formatUsd } from "@/format/format-amount";
@@ -31,7 +32,7 @@ function rowView(entry: EarnHistoryEntry): RowView {
   }
 }
 
-function HistoryRow({ entry }: { entry: EarnHistoryEntry }) {
+function HistoryRow({ entry, onOpenTransaction }: { entry: EarnHistoryEntry; onOpenTransaction: (signature: string) => void }) {
   const { colors } = useTheme();
   const view = rowView(entry);
   const teal = view.tone === "teal";
@@ -52,15 +53,17 @@ function HistoryRow({ entry }: { entry: EarnHistoryEntry }) {
       <AppText variant="body" strong color={view.positive ? "positive" : "text"}>
         {view.value}
       </AppText>
+      {"signature" in entry && entry.signature !== undefined ? <ExplorerLink signature={entry.signature} onOpen={onOpenTransaction} /> : null}
     </View>
   );
 }
 
 type EarnHistoryGroupsProps = {
   groups: readonly EarnHistoryGroup[];
+  onOpenTransaction: (signature: string) => void;
 };
 
-export function EarnHistoryGroups({ groups }: EarnHistoryGroupsProps) {
+export function EarnHistoryGroups({ groups, onOpenTransaction }: EarnHistoryGroupsProps) {
   return (
     <View style={{ gap: 12 }}>
       {groups.map((group) => (
@@ -71,7 +74,7 @@ export function EarnHistoryGroups({ groups }: EarnHistoryGroupsProps) {
             </AppText>
           </View>
           {group.entries.map((entry) => (
-            <HistoryRow key={entry.id} entry={entry} />
+            <HistoryRow key={entry.id} entry={entry} onOpenTransaction={onOpenTransaction} />
           ))}
         </Card>
       ))}

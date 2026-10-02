@@ -6,7 +6,7 @@ import { formatPercent, formatToken } from "@/format/format-amount";
 import { toInputText } from "@/lib/farm/amount-text";
 import { buildDeployForm } from "@/lib/farm/deploy-form";
 import { stepHeld } from "@/lib/farm/farm-math";
-import { explorerAccountUrl } from "@/lib/farm/explorer";
+import { explorerAccountUrl } from "@/lib/solana/explorer";
 import { nextFarmPositionId, addFarmPosition, farmCollaterals, farmPools } from "@/lib/preview-data/farm";
 import { positionFromDeploy } from "@/lib/farm/position-math";
 import { previewApproval } from "@/lib/preview-data/approval-outcome";

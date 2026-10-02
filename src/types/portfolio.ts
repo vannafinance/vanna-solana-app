@@ -76,6 +76,7 @@ export type LenderVault = {
 
 export type LenderActivity = {
   id: string;
+  signature?: string;
   kind: "interest" | "supply" | "withdraw" | "shares";
   title: string;
   detail: string;

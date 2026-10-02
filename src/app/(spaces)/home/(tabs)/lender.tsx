@@ -13,6 +13,7 @@ import { Screen } from "@/components/ui/screen";
 import { SegmentedControl } from "@/components/ui/segmented-control";
 import { SpaceHeader } from "@/components/ui/space-header";
 import { formatPercent, formatUsd, formatUsdOrDash } from "@/format/format-amount";
+import { useExplorer } from "@/hooks/use-explorer";
 import { useHeaderProps } from "@/hooks/use-header-props";
 import { useLenderSummary } from "@/hooks/use-lender-summary";
 import { useNotificationMenu } from "@/hooks/use-notification-menu";
@@ -29,6 +30,7 @@ const views = [
 export default function Lender() {
   const header = useHeaderProps();
   const menu = useNotificationMenu();
+  const explorer = useExplorer();
   const lender = useLenderSummary();
   const portfolio = usePortfolio();
   const [tab, setTab] = useState<Tab>("current");
@@ -70,7 +72,7 @@ export default function Lender() {
                 data.history === null ? (
                   <EmptyCard title="History unavailable" message="We can't load your activity right now. Try again later." />
                 ) : (
-                  <LenderHistoryList groups={data.history} />
+                  <LenderHistoryList groups={data.history} onOpenTransaction={explorer.openTransaction} />
                 )
               ) : (
                 <>

@@ -1,13 +1,14 @@
 import { useFocusEffect } from "expo-router";
-import * as WebBrowser from "expo-web-browser";
 import { useCallback, useState } from "react";
 
+import { useExplorer } from "@/hooks/use-explorer";
 import { enterTradeTab, tradeTabBefore } from "@/lib/perps/trade-tab-focus";
 
 export type HistoryView = "perps" | "swaps";
 
 export function usePerpsHistoryView() {
   const [view, setView] = useState<HistoryView>("perps");
+  const { openTransaction } = useExplorer();
 
   useFocusEffect(
     useCallback(() => {
@@ -19,6 +20,6 @@ export function usePerpsHistoryView() {
   return {
     view,
     setView,
-    openTransaction: (signature: string) => void WebBrowser.openBrowserAsync(`https://solscan.io/tx/${signature}`),
+    openTransaction,
   };
 }

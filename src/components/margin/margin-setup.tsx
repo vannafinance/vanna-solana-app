@@ -52,7 +52,7 @@ export function MarginSetup({ view, headerProps }: MarginSetupProps) {
         onClose={view.closeAgreement}
         onSign={view.sign}
       />
-      <TransactionSheet state={view.state} onPrimary={view.onPrimary} onClose={view.closeFlow} primaryLabel={view.done ? "Start trading" : undefined} />
+      <TransactionSheet state={view.state} onPrimary={view.onPrimary} onClose={view.closeFlow} onExplorer={view.openExplorer} primaryLabel={view.done ? "Start trading" : undefined} />
     </>
   );
 }

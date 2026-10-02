@@ -2,6 +2,7 @@ import { View } from "react-native";
 
 import { AppText } from "@/components/ui/app-text";
 import { Card } from "@/components/ui/card";
+import { ExplorerLink } from "@/components/ui/explorer-link";
 import { Icon } from "@/components/ui/icon";
 import type { IconName } from "@/components/ui/material-symbols";
 import { formatSignedUsd, formatUsd } from "@/format/format-amount";
@@ -10,6 +11,7 @@ import type { LenderActivity, LenderActivityGroup } from "@/types/portfolio";
 
 type LenderHistoryListProps = {
   groups: readonly LenderActivityGroup[];
+  onOpenTransaction: (signature: string) => void;
 };
 
 const glyphs: Record<LenderActivity["kind"], { icon: IconName; tone: "teal" | "purple" }> = {
@@ -19,7 +21,7 @@ const glyphs: Record<LenderActivity["kind"], { icon: IconName; tone: "teal" | "p
   withdraw: { icon: "arrow_downward", tone: "purple" },
 };
 
-function ActivityRow({ activity }: { activity: LenderActivity }) {
+function ActivityRow({ activity, onOpenTransaction }: { activity: LenderActivity; onOpenTransaction: (signature: string) => void }) {
   const { colors, radius, spacing } = useTheme();
   const { icon, tone } = glyphs[activity.kind];
   const value = activity.valueLabel ?? (activity.valueUsd === undefined ? "" : activity.gain ? formatSignedUsd(activity.valueUsd) : formatUsd(activity.valueUsd));
@@ -49,11 +51,12 @@ function ActivityRow({ activity }: { activity: LenderActivity }) {
       <AppText variant="body" strong color={activity.gain ? "positive" : "text"}>
         {value}
       </AppText>
+      {activity.signature === undefined ? null : <ExplorerLink signature={activity.signature} onOpen={onOpenTransaction} />}
     </View>
   );
 }
 
-export function LenderHistoryList({ groups }: LenderHistoryListProps) {
+export function LenderHistoryList({ groups, onOpenTransaction }: LenderHistoryListProps) {
   const { spacing } = useTheme();
 
   return (
@@ -66,7 +69,7 @@ export function LenderHistoryList({ groups }: LenderHistoryListProps) {
             </AppText>
           </View>
           {group.items.map((item) => (
-            <ActivityRow key={item.id} activity={item} />
+            <ActivityRow key={item.id} activity={item} onOpenTransaction={onOpenTransaction} />
           ))}
         </Card>
       ))}

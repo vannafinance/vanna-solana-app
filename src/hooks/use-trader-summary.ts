@@ -6,6 +6,7 @@ import { useMarginAccount } from "@/hooks/use-margin-account";
 import { usePerpsPositions } from "@/hooks/use-perps-positions";
 import { useWalletAddress } from "@/hooks/use-wallet-address";
 import { toPortfolioPosition } from "@/lib/perps/portfolio-position";
+import { explorerAccountUrl } from "@/lib/solana/explorer";
 import type { Resource } from "@/types/resource";
 import type { TraderSummary } from "@/types/portfolio";
 
@@ -19,7 +20,7 @@ export function useTraderSummary(): { summary: Resource<TraderSummary>; marginEx
   const { refetch } = account;
   const retry = useCallback(() => void refetch(), [refetch]);
 
-  const explorerUrl = account.data?.address ? `https://solscan.io/account/${account.data.address}` : "";
+  const explorerUrl = account.data?.address ? explorerAccountUrl(account.data.address) : "";
   const openExplorer = () => {
     if (explorerUrl !== "") void WebBrowser.openBrowserAsync(explorerUrl);
   };

@@ -17,5 +17,6 @@ export type MarginSetupView = {
   sign: () => void;
   onPrimary: () => void;
   closeFlow: () => void;
+  openExplorer?: () => void;
   openPosition: () => void;
 };

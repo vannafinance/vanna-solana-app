@@ -27,6 +27,7 @@ export default function SupplyRoute() {
       transaction={flow.state}
       onTransactionPrimary={flow.primary}
       onTransactionClose={flow.close}
+      onTransactionExplorer={flow.openExplorer}
       onViewPositions={() => router.replace("/earn/positions")}
     />
   );

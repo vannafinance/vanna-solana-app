@@ -63,6 +63,7 @@ export function useMarginCreate() {
     },
     onPrimary,
     closeFlow: flow.close,
+    openExplorer: flow.openExplorer,
     openPosition: () => router.replace(`/trade/order/${DEFAULT_MARKET}?side=long`),
   };
 

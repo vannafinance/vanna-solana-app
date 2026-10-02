@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useMobileWallet } from "@wallet-ui/react-native-web3js";
 
 import { previewApproval } from "@/lib/preview-data/approval-outcome";
+import { explorerTransactionUrl } from "@/lib/solana/explorer";
 import * as WebBrowser from "expo-web-browser";
 
 import { type ConfirmStage, type RunProgress, TransactionError, type TransactionState } from "@/types/transaction";
@@ -108,7 +109,7 @@ export function useTransactionFlow({ steps = 1, wallet, success, run = previewAp
   })();
 
   const explorerSignature = internal.phase === "confirming" || internal.phase === "success" ? internal.signature : undefined;
-  const openExplorer = explorerSignature === undefined ? undefined : () => void WebBrowser.openBrowserAsync(`https://solscan.io/tx/${explorerSignature}`);
+  const openExplorer = explorerSignature === undefined ? undefined : () => void WebBrowser.openBrowserAsync(explorerTransactionUrl(explorerSignature));
 
   return { state, start, close, primary, done: internal.phase === "success", openExplorer };
 }

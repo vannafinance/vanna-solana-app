@@ -4,6 +4,7 @@ import { ResourceView } from "@/components/ui/resource-view";
 import { Screen } from "@/components/ui/screen";
 import { SpaceHeader } from "@/components/ui/space-header";
 import { useEarnHistory } from "@/hooks/use-earn-history";
+import { useExplorer } from "@/hooks/use-explorer";
 import { useEarnPositions } from "@/hooks/use-earn-positions";
 import { useHeaderProps } from "@/hooks/use-header-props";
 
@@ -11,6 +12,7 @@ export default function EarnHistoryScreen() {
   const headerProps = useHeaderProps();
   const portfolio = useEarnPositions();
   const history = useEarnHistory();
+  const explorer = useExplorer();
 
   return (
     <Screen
@@ -23,7 +25,7 @@ export default function EarnHistoryScreen() {
       }
     >
       <ResourceView resource={history} emptyLabel="No activity yet">
-        {(groups) => <EarnHistoryGroups groups={groups} />}
+        {(groups) => <EarnHistoryGroups groups={groups} onOpenTransaction={explorer.openTransaction} />}
       </ResourceView>
     </Screen>
   );

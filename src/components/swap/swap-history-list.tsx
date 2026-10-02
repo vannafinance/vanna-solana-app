@@ -10,9 +10,10 @@ import { SwapHistoryRow } from "./swap-history-row";
 type SwapHistoryListProps = {
   header: ReactNode;
   groups: readonly SwapHistoryGroup[];
+  onOpenTransaction: (signature: string) => void;
 };
 
-export function SwapHistoryList({ header, groups }: SwapHistoryListProps) {
+export function SwapHistoryList({ header, groups, onOpenTransaction }: SwapHistoryListProps) {
   const { colors } = useTheme();
 
   return (
@@ -36,7 +37,7 @@ export function SwapHistoryList({ header, groups }: SwapHistoryListProps) {
       }
       renderItem={({ item }) => (
         <View style={{ paddingHorizontal: 16, paddingBottom: 12 }}>
-          <SwapHistoryRow group={item} />
+          <SwapHistoryRow group={item} onOpenTransaction={onOpenTransaction} />
         </View>
       )}
       style={{ backgroundColor: colors.background }}

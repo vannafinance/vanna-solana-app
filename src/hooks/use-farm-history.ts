@@ -1,7 +1,7 @@
 import { useSyncExternalStore } from "react";
 import { Linking } from "react-native";
 
-import { explorerTransactionUrl } from "@/lib/farm/explorer";
+import { explorerTransactionUrl } from "@/lib/solana/explorer";
 import { farmClosedCount, farmClosedEarningsUsd, farmHistory, getFarmPositions, subscribeFarmPositions } from "@/lib/preview-data/farm";
 import type { FarmHistoryView } from "@/types/farm";
 import type { Resource } from "@/types/resource";

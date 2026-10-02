@@ -28,7 +28,7 @@ export default function AddCollateralScreen() {
           )}
         </ResourceView>
       </BottomSheet>
-      <TransactionSheet state={add.flow.state} onPrimary={add.onSheetPrimary} onClose={add.onSheetClose} />
+      <TransactionSheet state={add.flow.state} onPrimary={add.onSheetPrimary} onClose={add.onSheetClose} onExplorer={add.flow.openExplorer} />
     </>
   );
 }

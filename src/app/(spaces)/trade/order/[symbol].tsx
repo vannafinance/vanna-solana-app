@@ -77,6 +77,7 @@ export default function PerpsOrderScreen() {
         state={order.flow.state}
         onPrimary={order.onSheetPrimary}
         onClose={order.flow.close}
+        onExplorer={order.flow.openExplorer}
         primaryLabel={order.flow.done ? "View position" : undefined}
       />
     </>

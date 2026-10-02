@@ -3,7 +3,7 @@ import { useState, useSyncExternalStore } from "react";
 import { Linking } from "react-native";
 
 import { formatToken } from "@/format/format-amount";
-import { explorerAccountUrl } from "@/lib/farm/explorer";
+import { explorerAccountUrl } from "@/lib/solana/explorer";
 import { closeQuote, reducePosition, toPositionView } from "@/lib/farm/position-math";
 import { getFarmPositions, previewCloseStep, replaceFarmPosition, subscribeFarmPositions } from "@/lib/preview-data/farm";
 import { previewSession } from "@/lib/preview-data/session";

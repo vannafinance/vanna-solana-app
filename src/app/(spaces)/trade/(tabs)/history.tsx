@@ -57,6 +57,7 @@ export default function TradeHistoryScreen() {
       <SwapHistoryList
         header={header(<TradeHero label="Swapped in the last 30 days" value={formatUsd(swaps.data.volumeUsd)} />)}
         groups={swaps.data.groups}
+        onOpenTransaction={openTransaction}
       />
     );
   }

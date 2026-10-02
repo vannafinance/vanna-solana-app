@@ -52,6 +52,7 @@ export type SwapState = {
 
 export type SwapHistoryEntry = {
   id: string;
+  signature: string;
   timestamp: number;
   from: SwapSymbol;
   to: SwapSymbol;
