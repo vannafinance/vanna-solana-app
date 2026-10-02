@@ -6,21 +6,25 @@ import { EmptyCard } from "@/components/home/empty-card";
 import { HeroHealth } from "@/components/home/hero-health";
 import { HeroMetrics } from "@/components/home/hero-metrics";
 import { NotificationDropdown } from "@/components/home/notification-dropdown";
-import { TraderHistoryList } from "@/components/home/trader-history-list";
+import { type HistoryFilter, TraderHistorySection } from "@/components/home/trader-history-section";
 import { TraderPositionCard } from "@/components/home/trader-position-card";
 import { ResourceView } from "@/components/ui/resource-view";
 import { Screen } from "@/components/ui/screen";
 import { SegmentedControl } from "@/components/ui/segmented-control";
 import { SpaceHeader } from "@/components/ui/space-header";
 import { formatSignedUsd, formatUsd } from "@/format/format-amount";
+import { useExplorer } from "@/hooks/use-explorer";
 import { useHeaderProps } from "@/hooks/use-header-props";
+import { useMarginActivity } from "@/hooks/use-perps-activity";
 import { useNotificationMenu } from "@/hooks/use-notification-menu";
 import { useTraderSummary } from "@/hooks/use-trader-summary";
 import { routes } from "@/navigation/routes";
 import type { Position } from "@/types/portfolio";
 
 type Tab = "current" | "history";
-type Filter = "all" | "perp" | "farm";
+type Filter = HistoryFilter;
+
+const ALL_ACTIVITY = ["perps", "farm", "unclassified"] as const;
 
 const filters = [
   { value: "all", label: "All" },
@@ -39,7 +43,9 @@ function closePosition(position: Position) {
 export default function Trader() {
   const header = useHeaderProps();
   const menu = useNotificationMenu();
-  const { summary, marginExists, openExplorer } = useTraderSummary();
+  const { summary, marginExists } = useTraderSummary();
+  const activity = useMarginActivity(ALL_ACTIVITY);
+  const explorer = useExplorer();
   const params = useLocalSearchParams<{ tab?: string }>();
   const [tab, setTab] = useState<Tab>(params.tab === "history" ? "history" : "current");
   const [filter, setFilter] = useState<Filter>("all");
@@ -58,7 +64,7 @@ export default function Trader() {
           <SpaceHeader space="portfolio" {...header} onNotifications={menu.toggle}>
             <ResourceView resource={summary} emptyLabel="No trading activity yet">
               {(data) => {
-                const headline = tab === "history" ? data.realizedPnl : filter === "farm" ? data.farmPnl : data.perpPnl;
+                const headline = filter === "farm" ? data.farmPnl : data.perpPnl;
                 return (
                   <HeroMetrics
                     size="large"
@@ -85,20 +91,21 @@ export default function Trader() {
                   <SegmentedControl
                     segments={[
                       { value: "current", label: "Current", badge: data.positionsAvailable ? String(visible.length) : undefined },
-                      { value: "history", label: "History", badge: data.historyAvailable ? String(data.history.length) : undefined },
+                      { value: "history", label: "History" },
                     ]}
                     value={tab}
                     onChange={setTab}
                   />
+                  <ChipRow options={filters} value={filter} onChange={setFilter} />
                   {tab === "history" ? (
-                    data.historyAvailable ? (
-                      <TraderHistoryList history={data.history} winRateBps={data.winRateBps} onExplorer={openExplorer} />
-                    ) : (
-                      <EmptyCard title="History unavailable" message="We can't load your trade history right now." />
-                    )
+                    <TraderHistorySection
+                      activity={activity}
+                      filter={filter}
+                      onOpenTransaction={explorer.openTransaction}
+                      onSeeAll={() => router.navigate(routes.tradeHistory)}
+                    />
                   ) : (
                     <>
-                      <ChipRow options={filters} value={filter} onChange={setFilter} />
                       {visible.length === 0 ? (
                         data.positionsAvailable ? (
                           <EmptyCard title="No open positions" message="Positions you open in Perps or Farm show up here." />

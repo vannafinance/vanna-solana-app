@@ -40,25 +40,6 @@ export type FarmPosition = PositionBase & {
 
 export type Position = PerpPosition | FarmPosition;
 
-export type ClosedPosition = {
-  id: string;
-  symbol: AssetSymbol;
-  pair: string;
-  kind: "perp" | "farm";
-  side?: PositionSide;
-  leverage: number;
-  closedOn: string;
-  duration: string;
-  pnl: bigint;
-  pnlBps: number;
-  entryPrice?: bigint;
-  exitPrice?: bigint;
-  sizeTokens: TokenAmount;
-  collateral: bigint;
-  fees: bigint;
-  farm?: { borrowed: bigint; deployedTo: string; netAprBps: number };
-};
-
 export type TokenBalance = {
   symbol: AssetSymbol;
   tokens: TokenAmount;
@@ -110,7 +91,6 @@ export type Portfolio = {
 
 export type TraderSummary = {
   positionsAvailable: boolean;
-  historyAvailable: boolean;
   perpPnl: bigint | null;
   farmPnl: bigint | null;
   margin: bigint;
@@ -118,10 +98,6 @@ export type TraderSummary = {
   borrowed: bigint;
   health: number | null;
   current: Position[];
-  history: ClosedPosition[];
-  realizedPnl: bigint | null;
-  winRateBps: number;
-  explorerUrl: string;
 };
 
 export type LenderSummary = {

@@ -1,4 +1,3 @@
-import * as WebBrowser from "expo-web-browser";
 import { useCallback } from "react";
 
 import { useAccountSnapshot } from "@/hooks/use-account-snapshot";
@@ -8,13 +7,12 @@ import { usePerpsPositions } from "@/hooks/use-perps-positions";
 import { useWalletAddress } from "@/hooks/use-wallet-address";
 import { toPortfolioFarmPosition } from "@/lib/farm/portfolio-position";
 import { toPortfolioPosition } from "@/lib/perps/portfolio-position";
-import { explorerAccountUrl } from "@/lib/solana/explorer";
 import type { Resource } from "@/types/resource";
 import type { TraderSummary } from "@/types/portfolio";
 
 // Account figures and open Perps and Farm positions are live. Closed-position history is flagged unavailable rather than
 // shown as empty or zero.
-export function useTraderSummary(): { summary: Resource<TraderSummary>; marginExists: boolean; openExplorer: () => void } {
+export function useTraderSummary(): { summary: Resource<TraderSummary>; marginExists: boolean } {
   const wallet = useWalletAddress();
   const account = useAccountSnapshot(wallet);
   const { exists } = useMarginAccount();
@@ -23,14 +21,9 @@ export function useTraderSummary(): { summary: Resource<TraderSummary>; marginEx
   const { refetch } = account;
   const retry = useCallback(() => void refetch(), [refetch]);
 
-  const explorerUrl = account.data?.address ? explorerAccountUrl(account.data.address) : "";
-  const openExplorer = () => {
-    if (explorerUrl !== "") void WebBrowser.openBrowserAsync(explorerUrl);
-  };
-
-  if (wallet === null) return { summary: { status: "empty" }, marginExists: false, openExplorer };
+  if (wallet === null) return { summary: { status: "empty" }, marginExists: false };
   if (account.data === undefined) {
-    return { summary: account.isError ? { status: "error", error: account.error, retry } : { status: "loading" }, marginExists: exists, openExplorer };
+    return { summary: account.isError ? { status: "error", error: account.error, retry } : { status: "loading" }, marginExists: exists };
   }
 
   const snapshot = account.data;
@@ -43,7 +36,6 @@ export function useTraderSummary(): { summary: Resource<TraderSummary>; marginEx
       refresh: retry,
       data: {
         positionsAvailable: open !== null && farmPositions !== null,
-        historyAvailable: false,
         perpPnl: open === null ? null : open.openPnl,
         farmPnl: farmPositions === null ? null : farmPositions.reduce((sum, position) => sum + position.pnl, 0n),
         margin: snapshot.collateral,
@@ -51,13 +43,8 @@ export function useTraderSummary(): { summary: Resource<TraderSummary>; marginEx
         borrowed: snapshot.borrowed,
         health: snapshot.health,
         current: open === null || farmPositions === null ? [] : [...open.positions.map(toPortfolioPosition), ...farmPositions],
-        history: [],
-        realizedPnl: null,
-        winRateBps: 0,
-        explorerUrl,
       },
     },
     marginExists: exists,
-    openExplorer,
   };
 }
