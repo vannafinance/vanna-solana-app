@@ -7,6 +7,8 @@ import type { ClaimStatus, FaucetMessage, FaucetRow } from "@/types/faucet";
 
 import { useWalletSigner } from "./use-wallet-signer";
 
+const SENT_VISIBLE_MS = 2400;
+
 type Claims = Partial<Record<FaucetSymbol, ClaimStatus>>;
 
 export function useFaucet() {
@@ -25,6 +27,8 @@ export function useFaucet() {
       try {
         const grant = await requestFaucetGrant(symbol, owner);
         setClaims((current) => ({ ...current, [symbol]: "done" }));
+        // The tick shows for a moment, then the tile is ready for another claim.
+        setTimeout(() => setClaims((current) => (current[symbol] === "done" ? { ...current, [symbol]: "idle" } : current)), SENT_VISIBLE_MS);
         setMessage({ tone: "positive", text: `Added ${formatUnits(grant.added, grant.decimals, 2)} ${symbol} to your wallet` });
         refreshAfterTransaction();
         return true;
