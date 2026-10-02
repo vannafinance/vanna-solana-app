@@ -162,7 +162,7 @@ test("the Kamino instructions carry the argument and account counts of the deplo
 });
 
 const { deriveFarm } = load("src/lib/farm/derive-farm.ts");
-const { composePositions } = load("src/lib/farm/compose-positions.ts");
+const { composePositions, unplacedPositions } = load("src/lib/farm/compose-positions.ts");
 const { closeQuote, toPositionView } = load("src/lib/farm/position-math.ts");
 
 const amount = (raw, decimals) => ({ raw, decimals });
@@ -277,4 +277,17 @@ test("a farm position is listed on Home with its health, debt and the price that
   // Kamino's supply alone covers 100% of the debt, so only the extra 10% must come from the stock: 70 USD over 2 TSLAx.
   assert.ok(listed.liquidationPrice > 34_000_000n && listed.liquidationPrice < 36_000_000n);
   assert.ok(listed.liquidationAwayBps > 9000);
+});
+
+test("a Kamino position with no stock history is reported with its real amounts", () => {
+  const live = [
+    { pool: "USDC", supplied: 700n, debt: 650n, borrowRateBps: 600 },
+    { pool: "SOL", supplied: 5n, debt: 4n, borrowRateBps: 300 },
+  ];
+  const unplaced = unplacedPositions(live, [attribution("TSLAx", 1n, 1n)], { USDC: 6, SOL: 9 });
+  assert.equal(unplaced.length, 1);
+  assert.equal(unplaced[0].pool, "SOL");
+  assert.equal(unplaced[0].supplied.raw, 5n);
+  assert.equal(unplaced[0].supplied.decimals, 9);
+  assert.equal(unplaced[0].debt.raw, 4n);
 });

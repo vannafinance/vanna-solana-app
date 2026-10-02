@@ -39,7 +39,7 @@ export function toPositionView(position: FarmPosition): FarmPositionView {
   };
 }
 
-export function summarisePositions(positions: readonly FarmPosition[]): FarmPositionsView {
+export function summarisePositions(positions: readonly FarmPosition[], unplaced: FarmPositionsView["unplaced"] = []): FarmPositionsView {
   const views = positions.map(toPositionView);
   const totalDebt = views.reduce((sum, view) => sum + view.debtValueUsd, 0n);
   const weightedApr = views.reduce((sum, view) => sum + BigInt(view.netAprBps) * view.debtValueUsd, 0n);
@@ -49,6 +49,7 @@ export function summarisePositions(positions: readonly FarmPosition[]): FarmPosi
     earningsUsd: views.reduce((sum, view) => sum + view.earningsUsd, 0n),
     netAprBps: totalDebt > 0n ? Number(weightedApr / totalDebt) : 0,
     positions: views,
+    unplaced,
   };
 }
 

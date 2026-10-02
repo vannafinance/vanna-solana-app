@@ -1,6 +1,6 @@
 import type { OraclePrices } from "@/lib/solana/oracle-prices";
 import type { KaminoPosition } from "@/lib/solana/farm-positions";
-import type { FarmAttribution, FarmPosition, PoolSymbol } from "@/types/farm";
+import type { FarmAttribution, FarmPosition, PoolSymbol, UnplacedFarmPosition } from "@/types/farm";
 
 import { toUsd } from "./units";
 
@@ -54,4 +54,11 @@ export function composePositions(live: readonly KaminoPosition[], attributions: 
       ];
     });
   });
+}
+
+// Kamino positions with no stock history behind them: shown with their real supplied and owed amounts rather than hidden.
+export function unplacedPositions(live: readonly KaminoPosition[], attributions: readonly FarmAttribution[], decimals: Record<PoolSymbol, number>): UnplacedFarmPosition[] {
+  return live
+    .filter((kamino) => !attributions.some((attribution) => attribution.pool === kamino.pool))
+    .map((kamino) => ({ pool: kamino.pool, supplied: { raw: kamino.supplied, decimals: decimals[kamino.pool] }, debt: { raw: kamino.debt, decimals: decimals[kamino.pool] } }));
 }

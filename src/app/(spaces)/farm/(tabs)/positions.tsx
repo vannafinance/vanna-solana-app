@@ -3,6 +3,7 @@ import { FlatList, Pressable, View } from "react-native";
 
 import { FarmHero } from "@/components/farm/farm-hero";
 import { FarmPositionCard } from "@/components/farm/farm-position-card";
+import { UnplacedPositionCard } from "@/components/farm/unplaced-position-card";
 import { AppText } from "@/components/ui/app-text";
 import { Icon } from "@/components/ui/icon";
 import { ResourceView } from "@/components/ui/resource-view";
@@ -18,6 +19,7 @@ export default function FarmPositionsScreen() {
   const headerProps = useHeaderProps();
   const positions = useFarmPositions();
   const items = positions.status === "ready" ? positions.data.positions : [];
+  const unplaced = positions.status === "ready" ? positions.data.unplaced : [];
   const settled = positions.status === "ready" || positions.status === "empty";
 
   return (
@@ -56,7 +58,10 @@ export default function FarmPositionsScreen() {
       )}
       ListFooterComponent={
         settled ? (
-          <View style={{ paddingHorizontal: 16, paddingTop: 12 }}>
+          <View style={{ paddingHorizontal: 16, paddingTop: 12, gap: 12 }}>
+            {unplaced.map((position) => (
+              <UnplacedPositionCard key={position.pool} position={position} />
+            ))}
             <Pressable
               accessibilityRole="button"
               accessibilityLabel={positions.status === "empty" ? "Deploy a strategy" : "Deploy another strategy"}

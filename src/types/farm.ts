@@ -72,11 +72,19 @@ export type FarmPositionView = {
   netAprBps: number;
 };
 
+// A Kamino position that is on the chain but whose stock cannot be told from the transactions the app reads.
+export type UnplacedFarmPosition = {
+  pool: PoolSymbol;
+  supplied: TokenAmount;
+  debt: TokenAmount;
+};
+
 export type FarmPositionsView = {
   netValueUsd: bigint;
   earningsUsd: bigint;
   netAprBps: number;
   positions: readonly FarmPositionView[];
+  unplaced: readonly UnplacedFarmPosition[];
 };
 
 export type DeployIssue = "no-balance" | "over-balance" | "no-amount" | "low-leverage" | "too-risky";

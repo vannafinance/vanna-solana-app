@@ -7,5 +7,6 @@ import { useFarmState } from "./use-farm-state";
 export function useFarmPositions(): Resource<FarmPositionsView> {
   const state = useFarmState();
   if (state.status !== "ready") return state;
-  return state.data.positions.length === 0 ? { status: "empty" } : { ...state, data: summarisePositions(state.data.positions) };
+  const { positions, unplaced } = state.data;
+  return positions.length === 0 && unplaced.length === 0 ? { status: "empty" } : { ...state, data: summarisePositions(positions, unplaced) };
 }

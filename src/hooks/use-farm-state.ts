@@ -2,14 +2,15 @@ import { PublicKey } from "@solana/web3.js";
 import { useQuery } from "@tanstack/react-query";
 import { useCallback } from "react";
 
-import { composePositions } from "@/lib/farm/compose-positions";
+import { composePositions, unplacedPositions } from "@/lib/farm/compose-positions";
 import { deriveFarm, type FarmDerived } from "@/lib/farm/derive-farm";
 import { fetchKaminoPositions } from "@/lib/solana/farm-positions";
 import { marginActivityFrom } from "@/lib/solana/margin-history";
 import type { OraclePrices } from "@/lib/solana/oracle-prices";
 import { marginAddress } from "@/lib/solana/program-accounts";
 import { rpcConnection } from "@/lib/solana/rpc";
-import type { FarmPosition } from "@/types/farm";
+import { assets } from "@/lib/solana/assets";
+import type { FarmPosition, PoolSymbol, UnplacedFarmPosition } from "@/types/farm";
 import type { Resource } from "@/types/resource";
 
 import { useKaminoStats } from "./use-kamino-stats";
@@ -19,11 +20,16 @@ import { queryKeys } from "./query-keys";
 import { useWalletAddress } from "./use-wallet-address";
 import { useWalletTransactionsOptions } from "./use-wallet-transactions";
 
+const POOL_DECIMALS: Record<PoolSymbol, number> = {
+  USDC: assets.find((asset) => asset.symbol === "USDC")?.decimals ?? 6,
+  SOL: assets.find((asset) => asset.symbol === "SOL")?.decimals ?? 9,
+};
 const LIVE_MS = 15_000;
 const STALE_MS = 10_000;
 
 export type FarmState = {
   positions: readonly FarmPosition[];
+  unplaced: readonly UnplacedFarmPosition[];
   derived: FarmDerived;
   prices: OraclePrices;
 };
@@ -66,6 +72,11 @@ export function useFarmState(): Resource<FarmState> {
     status: "ready",
     stale: chain.isError || history.isError,
     refresh: retry,
-    data: { positions: composePositions(chain.data, history.data.attributions, prices.data, supply), derived: history.data, prices: prices.data },
+    data: {
+      positions: composePositions(chain.data, history.data.attributions, prices.data, supply),
+      unplaced: unplacedPositions(chain.data, history.data.attributions, POOL_DECIMALS),
+      derived: history.data,
+      prices: prices.data,
+    },
   };
 }
