@@ -5,7 +5,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { AppText } from "@/components/ui/app-text";
 import { Button } from "@/components/ui/button";
 import { PlainHeader } from "@/components/ui/plain-header";
-import { SegmentedControl } from "@/components/ui/segmented-control";
+import { PillTabs } from "@/components/ui/pill-tabs";
 import { TokenIcon } from "@/components/ui/token-icon";
 import { formatCompactUsd, formatPercent } from "@/format/format-amount";
 import { useTheme } from "@/theme/use-theme";
@@ -81,7 +81,7 @@ export function VaultScreen({ vault, analytics, onBack, onSupply, onWithdraw, on
           </View>
         </View>
         <View style={{ marginTop: 12 }}>
-          <SegmentedControl segments={tabs} value={tab} onChange={setTab} scrollable />
+          <PillTabs segments={tabs} value={tab} onChange={setTab} activeColor={colors.earnTab} />
         </View>
         <View style={{ paddingHorizontal: 20 }}>
           {tab === "positions" && vault.position ? <VaultPositionTab vault={vault} position={vault.position} /> : null}

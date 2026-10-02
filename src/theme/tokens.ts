@@ -74,6 +74,7 @@ export const brand = {
   badgeNegative: "#B33C3E",
   badgePositive: "#1C7C83",
   badgeInfo: "#2440A9",
+  earnTab: "#11727A",
   coral: "#FC5457",
   badge: "#FF007A",
   farmAccent: "#FF007A",
