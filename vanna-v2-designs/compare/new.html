@@ -274,7 +274,7 @@ body{margin:0;background:var(--bg);color:var(--text);font-family:'Plus Jakarta S
 @keyframes vnTxSheet { from { transform: translateY(100%); } to { transform: none; } }
 .vn-tx.vn-txA { left: 0; right: 0; bottom: 0; border-radius: 28px 28px 0 0; padding: 12px 20px 24px; text-align: center;
   animation: vnTxSheet 340ms cubic-bezier(0.05, 0.7, 0.1, 1); box-shadow: 0 -10px 30px -12px rgba(17, 11, 46, 0.28); }
-.vn-3btn .vn-tx.vn-txA { bottom: 48px; }
+.vn-3btn .vn-tx.vn-txA { bottom: 0; }   /* #screen already stops above the 3-button bar */
 .vn-wide .vn-tx.vn-txA { left: 50%; right: auto; width: min(560px, calc(100% - 48px)); margin-left: calc(min(560px, calc(100% - 48px)) / -2); transform: none; border-radius: 28px; bottom: 24px; }
 .vn-txA-grab { width: 32px; height: 4px; border-radius: 2px; background: var(--vn-bd); margin: 0 auto 16px; }
 .vn-txA-in { display: flex; flex-direction: column; align-items: center; animation: vnTxIn 240ms cubic-bezier(0.2, 0, 0, 1) both; }
