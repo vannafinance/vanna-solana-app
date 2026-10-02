@@ -9,6 +9,10 @@ const PAGE_SIZE = 1000;
 const CONCURRENCY = 8;
 export const DEFAULT_MAX_SIGNATURES = 1000;
 
+// A confirmed transaction never changes, so each one is parsed from the network once. Refreshing the history then costs one
+// signature listing plus the transactions that are new since the last read.
+const parsedCache = new Map<string, ParsedTransactionWithMeta>();
+
 // Newest first. Failed transactions are dropped before they are fetched. The block time comes from the
 // signature list because the fork reports a truncated one on getTransaction.
 export async function fetchWalletTransactions(connection: Connection, wallet: string, maxSignatures = DEFAULT_MAX_SIGNATURES): Promise<WalletTransaction[]> {
@@ -24,16 +28,20 @@ export async function fetchWalletTransactions(connection: Connection, wallet: st
       before = page[page.length - 1].signature;
     }
 
-    const transactions: WalletTransaction[] = [];
-    for (let i = 0; i < signatures.length; i += CONCURRENCY) {
+    const missing = signatures.filter((entry) => !parsedCache.has(entry.signature));
+    for (let i = 0; i < missing.length; i += CONCURRENCY) {
       const batch = await Promise.all(
-        signatures.slice(i, i + CONCURRENCY).map((entry) =>
-          connection.getParsedTransaction(entry.signature, { commitment: "confirmed", maxSupportedTransactionVersion: 0 }).then((tx) => ({ tx, ...entry })),
+        missing.slice(i, i + CONCURRENCY).map((entry) =>
+          connection.getParsedTransaction(entry.signature, { commitment: "confirmed", maxSupportedTransactionVersion: 0 }).then((tx) => ({ tx, signature: entry.signature })),
         ),
       );
-      for (const { tx, signature, blockTime } of batch) if (tx && !tx.meta?.err) transactions.push({ signature, blockTime, tx });
+      for (const { tx, signature } of batch) if (tx && !tx.meta?.err) parsedCache.set(signature, tx);
     }
-    return transactions;
+
+    return signatures.flatMap(({ signature, blockTime }) => {
+      const tx = parsedCache.get(signature);
+      return tx ? [{ signature, blockTime, tx }] : [];
+    });
   } catch {
     throw new ApiError("network");
   }

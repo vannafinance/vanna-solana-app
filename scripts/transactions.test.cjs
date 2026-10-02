@@ -258,3 +258,30 @@ test("when nothing could be healed the failure is reported and the wallet is nev
   await assert.rejects(simulateSignAndSend(connection, {}, 100, hooks), /6001/);
   assert.equal(signed, false);
 });
+
+const { fetchWalletTransactions } = load("src/lib/solana/wallet-transactions.ts");
+
+test("refreshing the history only fetches transactions it has not seen", async () => {
+  const wallet = "BvR8HTMVgVZMWfaA76K8LTeGmN58u2AgnxpHcGtCV5Nb";
+  let listed = [
+    { signature: "sigB", blockTime: 20, err: null },
+    { signature: "sigA", blockTime: 10, err: null },
+  ];
+  const fetched = [];
+  const connection = {
+    getSignaturesForAddress: async () => listed,
+    getParsedTransaction: async (signature) => {
+      fetched.push(signature);
+      return { meta: { err: null }, transaction: { message: {} } };
+    },
+  };
+
+  const first = await fetchWalletTransactions(connection, wallet);
+  assert.equal(first.length, 2);
+  assert.equal(fetched.join(","), "sigB,sigA");
+
+  listed = [{ signature: "sigC", blockTime: 30, err: null }, ...listed, { signature: "sigFailed", blockTime: 5, err: { InstructionError: [0, "Custom"] } }];
+  const second = await fetchWalletTransactions(connection, wallet);
+  assert.equal(second.map((entry) => entry.signature).join(","), "sigC,sigB,sigA");
+  assert.equal(fetched.join(","), "sigB,sigA,sigC");
+});
