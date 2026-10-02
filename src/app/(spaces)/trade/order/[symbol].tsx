@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { PlainHeader } from "@/components/ui/plain-header";
 import { ResourceView } from "@/components/ui/resource-view";
 import { Screen } from "@/components/ui/screen";
+import { ReviewSheet } from "@/components/ui/review-sheet";
 import { TransactionSheet } from "@/components/ui/transaction-sheet";
 import { formatUsd } from "@/format/format-amount";
 import { usePerpsOrder } from "@/hooks/use-perps-order";
@@ -73,6 +74,7 @@ export default function PerpsOrderScreen() {
           </Screen>
         )}
       </ResourceView>
+      <ReviewSheet data={order.review.data} onConfirm={order.review.confirm} onCancel={order.review.cancel} />
       <TransactionSheet
         state={order.flow.state}
         onPrimary={order.onSheetPrimary}

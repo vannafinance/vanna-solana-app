@@ -51,6 +51,7 @@
     "test:transactions": "node --test scripts/transactions.test.cjs",
     "test:perps": "node --test scripts/perps.test.cjs",
     "test:farm": "node --test scripts/farm.test.cjs",
+    "test:review": "node --test scripts/review.test.cjs",
     "test:appearance": "node --test scripts/appearance.test.cjs",
     "check:data-layer": "node scripts/check-data-layer.mjs"
   },

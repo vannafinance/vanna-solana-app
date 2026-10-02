@@ -8,7 +8,6 @@ import { defaultSwapSettings, swapRoutes } from "@/lib/swap/routes";
 import { AUTO_SLIPPAGE_BPS, effectiveSlippageBps } from "@/lib/swap/slippage";
 import { routes } from "@/navigation/routes";
 import type { Resource } from "@/types/resource";
-import type { ReviewData } from "@/types/review";
 import type { SwapIssue, SwapRouteId, SwapSettings, SwapState, SwapSymbol, SwapToken } from "@/types/swap";
 
 import { assets } from "@/lib/solana/assets";
@@ -18,6 +17,7 @@ import { TransactionError } from "@/types/transaction";
 
 import { useConnectedWallet } from "./use-connected-wallet";
 import { usePerpsTabFocus } from "./use-perps-tab-focus";
+import { useReviewStep } from "./use-review-step";
 import { useSwapQuote } from "./use-swap-quote";
 import { useSwapTokens } from "./use-swap-tokens";
 import { useWalletSigner } from "./use-wallet-signer";
@@ -41,7 +41,6 @@ export function useSwap() {
   const [amountText, setAmountText] = useState("");
   const [settings, setSettings] = useState<SwapSettings>(defaultSwapSettings);
   const [routeId, setRouteId] = useState<SwapRouteId>("jupiter");
-  const [reviewing, setReviewing] = useState(false);
   const wallet = useConnectedWallet();
 
   const list = tokens.status === "ready" ? tokens.data : null;
@@ -85,26 +84,26 @@ export function useSwap() {
 
   // What the user sees before the wallet opens. The amounts are the live quote; the swap itself fetches a fresh one when
   // it is confirmed, so the wallet shows the final figures.
-  const review: ReviewData | null =
-    reviewing && from && to && quote && amountIn !== null && wallet
-      ? {
-          title: "Review swap",
-          legs: [
-            { label: "You pay", value: `${formatSwapAmount(amountIn, from.decimals, from.symbol)} ${from.symbol}`, caption: `≈ ${formatUsd(quote.payValueUsd)}` },
-            { label: "You receive (estimated)", value: `${formatSwapAmount(quote.amountOut, to.decimals, to.symbol)} ${to.symbol}`, caption: `≈ ${formatUsd(quote.receiveValueUsd)}` },
-          ],
-          rows: [
-            { label: "Route", value: "Jupiter" },
-            { label: "Price impact", value: formatPriceImpact(quote.priceImpactBps), tone: quote.priceImpactBps >= HIGH_IMPACT_BPS ? "negative" : "positive" },
-            { label: "Minimum received", value: `${formatSwapAmount(quote.minReceived, to.decimals, to.symbol)} ${to.symbol}` },
-            { label: "Slippage", value: formatSlippage(quote.slippageBps, settings.mode === "auto") },
-            { label: "Network fee", value: NETWORK_FEE_ESTIMATE },
-          ],
-          wallet,
-          network: NETWORK_LABEL,
-          confirmLabel: "Confirm swap",
-        }
-      : null;
+  const review = useReviewStep(() => {
+    if (!(from && to && quote && amountIn !== null && wallet)) return null;
+    return {
+      title: "Review swap",
+      legs: [
+        { label: "You pay", value: `${formatSwapAmount(amountIn, from.decimals, from.symbol)} ${from.symbol}`, caption: `≈ ${formatUsd(quote.payValueUsd)}` },
+        { label: "You receive (estimated)", value: `${formatSwapAmount(quote.amountOut, to.decimals, to.symbol)} ${to.symbol}`, caption: `≈ ${formatUsd(quote.receiveValueUsd)}` },
+      ],
+      rows: [
+        { label: "Route", value: "Jupiter" },
+        { label: "Price impact", value: formatPriceImpact(quote.priceImpactBps), tone: quote.priceImpactBps >= HIGH_IMPACT_BPS ? "negative" : "positive" },
+        { label: "Minimum received", value: `${formatSwapAmount(quote.minReceived, to.decimals, to.symbol)} ${to.symbol}` },
+        { label: "Slippage", value: formatSlippage(quote.slippageBps, settings.mode === "auto") },
+        { label: "Network fee", value: NETWORK_FEE_ESTIMATE },
+      ],
+      wallet,
+      network: NETWORK_LABEL,
+      confirmLabel: "Confirm swap",
+    };
+  }, flow.start);
 
   const viewHistory = () => {
     flow.close();
@@ -154,15 +153,7 @@ export function useSwap() {
     selectRoute,
     saveSettings: setSettings,
     flow,
-    review: {
-      data: review,
-      request: () => setReviewing(true),
-      cancel: () => setReviewing(false),
-      confirm: () => {
-        setReviewing(false);
-        flow.start();
-      },
-    },
+    review,
     onSheetPrimary: flow.done ? viewHistory : flow.primary,
   };
 }

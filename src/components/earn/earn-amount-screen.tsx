@@ -10,9 +10,11 @@ import { Icon } from "@/components/ui/icon";
 import { PlainHeader } from "@/components/ui/plain-header";
 import { SegmentedControl } from "@/components/ui/segmented-control";
 import { TokenPill } from "@/components/ui/token-pill";
+import { ReviewSheet } from "@/components/ui/review-sheet";
 import { TransactionSheet } from "@/components/ui/transaction-sheet";
 import { useTheme } from "@/theme/use-theme";
 import type { EarnAsset } from "@/types/earn";
+import type { ReviewData } from "@/types/review";
 import type { TransactionState } from "@/types/transaction";
 
 import type { AmountFormMode, AmountFormView } from "./present-amount-form";
@@ -33,6 +35,7 @@ type EarnAmountScreenProps = {
   onQuickFill: (fraction: number) => void;
   onModeChange: (mode: AmountFormMode) => void;
   onSubmit: () => void;
+  review: { data: ReviewData | null; confirm: () => void; cancel: () => void };
   onBack: () => void;
   transaction: TransactionState | null;
   onTransactionPrimary: () => void;
@@ -50,6 +53,7 @@ export function EarnAmountScreen({
   onQuickFill,
   onModeChange,
   onSubmit,
+  review,
   onBack,
   transaction,
   onTransactionPrimary,
@@ -110,6 +114,7 @@ export function EarnAmountScreen({
       <View style={{ paddingTop: 12, paddingHorizontal: 16, paddingBottom: Math.max(insets.bottom, 12) + 12, backgroundColor: colors.background, borderTopWidth: 1, borderTopColor: colors.divider }}>
         <Button label={view.cta.label} icon="account_balance_wallet" disabled={view.cta.disabled} onPress={onSubmit} />
       </View>
+      <ReviewSheet data={review.data} onConfirm={review.confirm} onCancel={review.cancel} />
       <TransactionSheet
         state={transaction}
         primaryLabel={succeeded ? "View my positions" : undefined}

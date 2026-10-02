@@ -7,7 +7,7 @@ import { useEarnForm } from "@/hooks/use-earn-form";
 
 export default function SupplyRoute() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { mode, setMode, market, input, quote, flow } = useEarnForm(id, "supply");
+  const { mode, setMode, market, input, quote, flow, review } = useEarnForm(id, "supply");
 
   if (market.status !== "ready" || !quote) {
     return <EarnUnavailable title="Vault" resource={market} emptyLabel="Vault not found" onBack={() => router.back()} />;
@@ -22,7 +22,8 @@ export default function SupplyRoute() {
       onChangeText={input.onChangeText}
       onQuickFill={input.fill}
       onModeChange={setMode}
-      onSubmit={flow.start}
+      onSubmit={review.request}
+      review={review}
       onBack={() => router.back()}
       transaction={flow.state}
       onTransactionPrimary={flow.primary}

@@ -1,10 +1,13 @@
 import { formatToken } from "@/format/format-amount";
 import { quoteSupply } from "@/lib/earn/quote";
+import { buildEarnReview } from "@/lib/earn/review";
 import { supplyToVault } from "@/lib/solana/earn-transactions";
 import { TransactionError } from "@/types/transaction";
 
+import { useConnectedWallet } from "./use-connected-wallet";
 import { useEarnAmount } from "./use-earn-amount";
 import { useEarnMarket } from "./use-earn-market";
+import { useReviewStep } from "./use-review-step";
 import { useTransactionFlow } from "./use-transaction-flow";
 import { useWalletSigner } from "./use-wallet-signer";
 
@@ -14,6 +17,7 @@ export function useSupply(id: string) {
   const input = useEarnAmount(found?.decimals ?? 0, found?.walletBalance.raw ?? 0n);
   const quote = found ? quoteSupply(found, input.amount) : null;
   const signer = useWalletSigner();
+  const wallet = useConnectedWallet();
 
   const flow = useTransactionFlow({
     run: (_step, progress) =>
@@ -27,5 +31,10 @@ export function useSupply(id: string) {
     },
   });
 
-  return { market, input, quote, flow };
+  const review = useReviewStep(
+    () => (found && quote && wallet && input.amount > 0n ? buildEarnReview({ mode: "supply", market: found, quote, amount: input.amount, wallet }) : null),
+    flow.start,
+  );
+
+  return { market, input, quote, flow, review };
 }

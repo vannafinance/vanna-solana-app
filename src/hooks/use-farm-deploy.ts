@@ -12,7 +12,6 @@ import { YIELD_SYMBOLS } from "@/lib/solana/kamino";
 import { routes } from "@/navigation/routes";
 import type { CollateralSymbol, DeployForm, FarmCollateral, FarmPool, PoolSymbol } from "@/types/farm";
 import type { Resource } from "@/types/resource";
-import type { ReviewData } from "@/types/review";
 import { TransactionError } from "@/types/transaction";
 
 import { useAccountSnapshot } from "./use-account-snapshot";
@@ -20,6 +19,7 @@ import { useConnectedWallet } from "./use-connected-wallet";
 import { useKaminoStats } from "./use-kamino-stats";
 import { useMarginAccount } from "./use-margin-account";
 import { useOraclePrices } from "./use-oracle-prices";
+import { useReviewStep } from "./use-review-step";
 import { usePools } from "./use-pools";
 import { useTransactionFlow } from "./use-transaction-flow";
 import { useWalletAddress } from "./use-wallet-address";
@@ -49,7 +49,6 @@ export function useFarmDeploy() {
   const [collateralSymbol, setCollateralSymbol] = useState<CollateralSymbol>("TSLAx");
   const [amountText, setAmountText] = useState("");
   const [leverage, setLeverage] = useState(DEFAULT_LEVERAGE);
-  const [reviewing, setReviewing] = useState(false);
 
   // Everything here is a live read: the pool's rates and liquidity from Kamino, what the program charges to borrow, the
   // wallet's stock balances and the oracle prices that value them.
@@ -142,30 +141,30 @@ export function useFarmDeploy() {
   };
 
   // What the user sees before the wallet opens: what leaves their wallet, what is borrowed against it and where that goes.
-  const review: ReviewData | null =
-    reviewing && data && connected
-      ? {
-          title: "Review strategy",
-          legs: [
-            { label: "You deposit", value: `${formatToken(data.amount, 2)} ${data.collateral.symbol}`, caption: `≈ ${formatUsd(data.quote.collateralValueUsd)} kept as collateral` },
-            {
-              label: "Borrowed and supplied to Kamino",
-              value: `${formatToken(data.quote.borrow, borrowDigits)} ${data.pool.symbol}`,
-              caption: `≈ ${formatUsd(data.quote.debtUsd)} earning ${formatPercent(data.pool.supplyApyBps)}`,
-            },
-          ],
-          rows: [
-            { label: "Leverage", value: `${data.leverage}x` },
-            { label: "Health factor", value: data.quote.healthFactor === null ? "No debt" : data.quote.healthFactor.toFixed(2) },
-            { label: "Liquidated below", value: `${formatUsd(data.quote.liquidationPriceUsd)} per ${data.collateral.symbol}`, tone: "negative" },
-            { label: "Net APY on the borrow", value: formatPercent(data.quote.netApyBps), tone: data.quote.netApyBps >= 0 ? "positive" : "negative" },
-            { label: "Network fee", value: NETWORK_FEE_ESTIMATE },
-          ],
-          wallet: connected,
-          network: NETWORK_LABEL,
-          confirmLabel: "Confirm strategy",
-        }
-      : null;
+  const review = useReviewStep(() => {
+    if (!(data && connected)) return null;
+    return {
+      title: "Review strategy",
+      legs: [
+        { label: "You deposit", value: `${formatToken(data.amount, 2)} ${data.collateral.symbol}`, caption: `≈ ${formatUsd(data.quote.collateralValueUsd)} kept as collateral` },
+        {
+          label: "Borrowed and supplied to Kamino",
+          value: `${formatToken(data.quote.borrow, borrowDigits)} ${data.pool.symbol}`,
+          caption: `≈ ${formatUsd(data.quote.debtUsd)} earning ${formatPercent(data.pool.supplyApyBps)}`,
+        },
+      ],
+      rows: [
+        { label: "Leverage", value: `${data.leverage}x` },
+        { label: "Health factor", value: data.quote.healthFactor === null ? "No debt" : data.quote.healthFactor.toFixed(2) },
+        { label: "Liquidated below", value: `${formatUsd(data.quote.liquidationPriceUsd)} per ${data.collateral.symbol}`, tone: "negative" },
+        { label: "Net APY on the borrow", value: formatPercent(data.quote.netApyBps), tone: data.quote.netApyBps >= 0 ? "positive" : "negative" },
+        { label: "Network fee", value: NETWORK_FEE_ESTIMATE },
+      ],
+      wallet: connected,
+      network: NETWORK_LABEL,
+      confirmLabel: "Confirm strategy",
+    };
+  }, flow.start);
 
   return {
     form,
@@ -180,15 +179,8 @@ export function useFarmDeploy() {
       if (data) setAmountText(balanceText(data.collateral));
     },
     setLeverage,
-    deploy: () => (margin.exists ? setReviewing(true) : router.push(routes.marginCreate)),
-    review: {
-      data: review,
-      cancel: () => setReviewing(false),
-      confirm: () => {
-        setReviewing(false);
-        flow.start();
-      },
-    },
+    deploy: () => (margin.exists ? review.request() : router.push(routes.marginCreate)),
+    review,
     sheet: {
       state: flow.state,
       primaryLabel: flow.done ? "View position" : undefined,
