@@ -39,6 +39,13 @@ figure { margin:0; width:392px; display:flex; flex-direction:column; gap:10px; }
 .chips .sp { flex:1; } .chips .ico { width:34px; height:32px; padding:0; justify-content:center; background:var(--chip); }
 .chips .pro { background:var(--chip); color:inherit; gap:5px; }
 .ohlc { display:flex; gap:10px; padding:0 18px; font-size:11.5px; color:var(--t2); min-height:16px; } .ohlc b { color:inherit; font-weight:600; }
+.roomy .head { padding-bottom:4px; } .roomy .price { margin-top:16px; } .roomy .chg { margin-top:4px; }
+.roomy .ohlc { margin:16px 18px 0; padding:10px 0; display:grid; grid-template-columns:repeat(4,1fr); gap:0; border-top:1px solid var(--line); border-bottom:1px solid var(--line); }
+.roomy .ohlc div { display:flex; flex-direction:column; gap:2px; } .roomy .ohlc div + div { padding-left:12px; border-left:1px solid var(--line); }
+.roomy .ohlc span { font-size:10.5px; letter-spacing:.06em; text-transform:uppercase; } .roomy .ohlc b { font-size:13.5px; color:var(--fg); }
+.roomy .chart { margin-top:12px; } .roomy .chips { margin-top:12px; } .roomy .src { padding-top:12px; }
+.ph { --fg:#FFFFFF; } .ph.light { --fg:#1F1F1F; }
+.cta span svg { margin-left:8px; }
 .src { padding:6px 18px 0; font-size:10.5px; color:var(--t2); display:flex; align-items:center; gap:6px; } .src i { width:6px; height:6px; border-radius:50%; background:var(--pos); display:inline-block; }
 .card { margin:10px 14px 0; border-radius:20px; background:var(--card); padding:10px 0 10px; }
 .seg { display:flex; padding:3px; border-radius:12px; background:var(--chip); } .seg span { height:28px; padding:0 8px; border-radius:9px; display:flex; align-items:center; font-size:12px; font-weight:600; color:var(--t2); } .seg span.on { background:var(--card); color:inherit; box-shadow:0 1px 3px rgba(0,0,0,.3); }
@@ -46,7 +53,8 @@ figure { margin:0; width:392px; display:flex; flex-direction:column; gap:10px; }
 .pos b { font-size:15px; font-weight:600; } .pos span { display:block; font-size:12px; color:var(--t2); }
 .legend { display:flex; gap:12px; padding:4px 18px 0; font-size:11.5px; color:var(--t2); } .legend i { display:inline-block; width:14px; border-top:1.5px dashed; vertical-align:middle; margin-right:5px; }
 .mkt { margin:6px 18px 0; } .mkt div { display:flex; justify-content:space-between; padding:11px 0; border-top:1px solid var(--line); font-size:14px; } .mkt span { color:var(--t2); }
-.cta { position:absolute; left:14px; right:14px; bottom:22px; display:flex; gap:10px; } .cta span { flex:1; height:54px; border-radius:27px; display:flex; align-items:center; justify-content:center; font-size:16px; font-weight:600; color:#fff; }
+.cta { position:absolute; left:0; right:0; bottom:0; padding:28px 14px 22px; display:flex; gap:10px; background:linear-gradient(180deg, transparent, var(--pg) 34%); }
+.ph { --pg:#111111; } .ph.light { --pg:#F7F7F7; } .cta span { flex:1; height:54px; border-radius:27px; display:flex; align-items:center; justify-content:center; font-size:16px; font-weight:600; color:#fff; }
 .long { background:linear-gradient(90deg,#6C63FF,#4B44E0); } .short { background:#B33C3E; }
 </style></head><body>
 <div class="top"><h1>Market charts that belong to the app</h1>
@@ -108,7 +116,7 @@ function mount(fig) {
     var ch = x.close - first.open, pc = ch / first.open * 100;
     priceEl.textContent = fmt(x.close);
     chgEl.innerHTML = '<span style="color:' + (ch >= 0 ? pos : neg) + '">' + (ch >= 0 ? '+' : '−') + fmt(Math.abs(ch)).slice(1).replace(/^/, '$') + ' (' + (ch >= 0 ? '+' : '−') + Math.abs(pc).toFixed(2) + '%)</span><span class="when">' + (x === last ? (d.asset === 'tsla' ? 'past 3 months' : 'past 24 hours') : new Date(x.time * 1000).toUTCString().slice(5, d.asset === 'tsla' ? 16 : 22)) + '</span>';
-    if (ohlc) ohlc.innerHTML = 'O <b>' + x.open.toFixed(2) + '</b> H <b>' + x.high.toFixed(2) + '</b> L <b>' + x.low.toFixed(2) + '</b> C <b>' + x.close.toFixed(2) + '</b>';
+    if (ohlc) ohlc.innerHTML = [['Open', x.open], ['High', x.high], ['Low', x.low], ['Close', x.close]].map(function (k) { return '<div><span>' + k[0] + '</span><b>' + k[1].toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + '</b></div>'; }).join('');
   }
   show(last);
   chart.subscribeCrosshairMove(function (p) { var x = p && p.time ? data.find(function (k) { return k.time === p.time; }) : null; show(x || last); });
@@ -116,7 +124,9 @@ function mount(fig) {
 window.addEventListener('load', function () { document.querySelectorAll('figure[data-asset]').forEach(mount); });
 </script></body></html>'''
 
-ICON = {'back': '<svg width="24" height="24" viewBox="0 -960 960 960" fill="currentColor"><path d="m313-440 196 196q12 12 11.5 28T508-188q-12 11-28 11.5T452-188L188-452q-6-6-8.5-13t-2.5-15q0-8 2.5-15t8.5-13l264-264q11-11 27.5-11t28.5 11q12 12 12 28.5T508-715L313-520h447q17 0 28.5 11.5T800-480q0 17-11.5 28.5T760-440H313Z"/></svg>',
+ICON = {'up': '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17l6-6 4 4 8-8"/><path d="M15 7h6v6"/></svg>',
+        'down': '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7l6 6 4-4 8 8"/><path d="M15 17h6v-6"/></svg>',
+        'back': '<svg width="24" height="24" viewBox="0 -960 960 960" fill="currentColor"><path d="m313-440 196 196q12 12 11.5 28T508-188q-12 11-28 11.5T452-188L188-452q-6-6-8.5-13t-2.5-15q0-8 2.5-15t8.5-13l264-264q11-11 27.5-11t28.5 11q12 12 12 28.5T508-715L313-520h447q17 0 28.5 11.5T800-480q0 17-11.5 28.5T760-440H313Z"/></svg>',
         'candle': '<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><rect x="5" y="7" width="4" height="9" rx="1"/><rect x="6.5" y="4" width="1" height="15"/><rect x="15" y="9" width="4" height="7" rx="1"/><rect x="16.5" y="6" width="1" height="13"/></svg>',
         'line': '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17l5-6 4 3 7-8"/></svg>',
         'open': '<svg width="14" height="14" viewBox="0 -960 960 960" fill="currentColor"><path d="M200-120q-33 0-56.5-23.5T120-200v-560q0-33 23.5-56.5T200-840h240q17 0 28.5 11.5T480-800q0 17-11.5 28.5T440-760H200v560h560v-240q0-17 11.5-28.5T800-480q17 0 28.5 11.5T840-440v240q0 33-23.5 56.5T760-120H200Zm560-584L416-360q-11 11-28 11t-28-11q-11-11-11-28t11-28l344-344H600q-17 0-28.5-11.5T560-800q0-17 11.5-28.5T600-840h200q17 0 28.5 11.5T840-800v200q0 17-11.5 28.5T800-560q-17 0-28.5-11.5T760-600v-104Z"/></svg>'}
@@ -137,7 +147,7 @@ def phone(asset, style, light=False):
     elif style == 'pro':
         attrs.update(type='candle', axis='1', grid='1', vol='1')
         top_extra = '<div class="ohlc"></div>'
-        chips_html = ('<div class="chips">' + chips + '<span class="sp"></span><span class="ico">' + ICON['line'] + '</span><span class="pro">Pro ' + ICON['open'] + '</span></div>')
+        chips_html = ('<div class="chips">' + chips + '<span class="sp"></span><span class="ico">' + ICON['line'] + '</span></div>')
     elif style == 'position':
         attrs.update(type='candle', axis='1', grid='1', lines='1' if tsla else '0')
         chips_html = ''
@@ -155,13 +165,13 @@ def phone(asset, style, light=False):
     if tsla:
         body += '<div class="pos"><div><b>Long 2.8x · 34.49 TSLAx</b><span>Entry $356.67 · liq. $258.90</span></div><b style="color:var(--pos)">+$542.76</b></div>'
     body += '<div class="mkt"><div><span>Borrow APY</span><b>%s</b></div><div><span>Max leverage</span><b>5x</b></div></div>' % ('0.23%' if tsla else '0.40%')
-    body += '<div class="cta"><span class="long">Long</span><span class="short">Short</span></div>'
-    return '<div class="ph%s">%s</div>' % (' light' if light else '', body), data_attrs
+    body += '<div class="cta"><span class="long">Long' + ICON['up'] + '</span><span class="short">Short' + ICON['down'] + '</span></div>'
+    return '<div class="ph%s%s">%s</div>' % (' light' if light else '', ' roomy' if style == 'pro' else '', body), data_attrs
 
 
 CAPS = {
     'clean': '<b>1 · Clean line</b> (Robinhood-style default): one smooth line coloured by the period\'s direction, no axes or grid. Drag to read any point; the price above follows. A small candle icon switches to candles.',
-    'pro': '<b>2 · Candles + volume</b> (Binance "original" chart): candles in Vanna teal and red, a faint grid, prices on the right, volume underneath, an O H L C line that follows your finger. "Pro" opens the full TradingView (xStocks) or DexScreener (PreStocks) chart full screen.',
+    'pro': '<b>2 · Candles + volume</b>, with more room: Open / High / Low / Close as a calm strip that follows your finger, candles in Vanna teal and red, volume underneath, a line / candles switch. No foreign toolbars, no Pro button.',
     'position': '<b>3 · Your position on the chart</b>: the chart in a card with Line | Candles and the ranges inside it, and dashed lines for your entry and liquidation price, so you see how far you are from danger. Only shows lines when you hold a position.',
 }
 
@@ -174,7 +184,7 @@ def fig(asset, style, light=False):
 def main():
     img = json.load(open(os.path.join(CMP, 'src', 'img.json'), encoding='utf8'))
     row1 = fig('tsla', 'clean') + fig('tsla', 'pro') + fig('tsla', 'position')
-    row2 = fig('anth', 'clean') + fig('anth', 'pro') + fig('anth', 'pro', light=True)
+    row2 = fig('anth', 'clean') + fig('anth', 'pro') + fig('anth', 'pro', light=True) + fig('tsla', 'pro', light=True)
     html = (PAGE.replace('__ROW1__', row1).replace('__ROW2__', row2).replace('__IMG__', '{}')
             .replace('__tsla__', img['a9a1db51309a512ccf9302f8acc244d2']).replace('__anth__', img['c0af4af206fcfbcf3cce92e51a5837cf']))
     out = os.path.join(CMP, 'previews', 'marketchart.html')
