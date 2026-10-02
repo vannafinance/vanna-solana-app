@@ -29,6 +29,22 @@ __v.icoBd = this.props.dark ? 'rgba(255,255,255,0.28)' : 'rgba(255,255,255,0)';
 __v.logoBd = this.props.dark ? 'rgba(255,255,255,0.16)' : 'rgba(255,255,255,0)';
 __v.swAria = __sw ? 'true' : 'false';
 __v.toggleSw = function () { self.setState({ __sw: !__sw }); };
+/* faucet (tools/faucet_tabs.py): one call per token, as the existing faucet component does */
+var __fo = this.state.__fo === undefined ? !!this.props.faucetOpen : this.state.__fo;
+var __fs = this.state.__fs || {};
+var __FT = [['USDC', '@IMG:022fc945e265208f7997f02a7fbdd97f@'], ['TSLAx', '@IMG:a9a1db51309a512ccf9302f8acc244d2@'], ['GOOGLx', '@IMG:cad380b03cb4c689f02e014100f56452@'], ['AAPLx', '@IMG:74e439ecf30e3316195f26ae04a1689e@'], ['ANTHROPIC', '@IMG:c0af4af206fcfbcf3cce92e51a5837cf@'], ['OPENAI', '@IMG:68c99bf0397471dc2d806cfaa2e15d53@']];
+var __fset = function (sym, st) { var o = {}; o[sym] = st; self.setState({ __fs: Object.assign({}, self.state.__fs, o) }); };
+__v.fOpen = __fo;
+__v.fShow = function () { self.setState({ __fo: true }); };
+__v.fHide = function () { self.setState({ __fo: false }); };
+__v.faucet = __FT.map(function (x) {
+  var st = __fs[x[0]] || '';
+  return { sym: x[0], icon: x[1], label: st === 'busy' ? 'Getting…' : (st === 'done' ? 'Sent' : 'Get'), aria: 'Get test ' + x[0],
+    cls: 'vn-ft' + (st ? ' vn-ft-' + st : ''),
+    pick: function () { if ((self.state.__fs || {})[x[0]] === 'busy') return; __fset(x[0], 'busy');
+      setTimeout(function () { __fset(x[0], 'done'); setTimeout(function () { if ((self.state.__fs || {})[x[0]] === 'done') __fset(x[0], ''); }, 2400); }, 1200); } };
+});
+/* end faucet */
 return __v;
 }
 }

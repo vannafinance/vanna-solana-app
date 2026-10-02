@@ -35,6 +35,28 @@ __v.icoBd = this.props.dark ? 'rgba(255,255,255,0.28)' : 'rgba(255,255,255,0)';
 __v.logoBd = this.props.dark ? 'rgba(255,255,255,0.16)' : 'rgba(255,255,255,0)';
 __v.swAria = __sw ? 'true' : 'false';
 __v.toggleSw = function () { self.setState({ __sw: !__sw }); };
+/* margin-envelope (tools/margin_envelope.py) */
+var __m = this.state.__m === undefined ? (this.props.m || '') : this.state.__m;
+var __acct = this.state.__acct === undefined ? !this.props.noAcct : this.state.__acct;
+var __mwhy = this.state.__mwhy || this.props.mwhy || 'network';
+var __mout = function () { try { return (typeof window !== 'undefined' && window.__vnOutcome) || 'ok'; } catch (e) { return 'ok'; } };
+var __MF = { network: ['Network error', 'Solana did not confirm this in time. Nothing left your wallet. Check your connection and try again.'],
+  fee: ['Not enough SOL for fees', 'Opening the account needs a tiny SOL fee. Add a little SOL to your wallet, then try again.'],
+  expired: ['Request expired', 'Your wallet didn\'t answer in time, so the request expired. Nothing was sent.'] };
+var __mf = __MF[__mwhy] || __MF.network;
+__v.noAcct = !__acct && __m !== 'done';
+__v.walletHero = !__acct || __m === 'done'; __v.acctHero = !__v.walletHero;
+__v.mOpen = __m !== ''; __v.mAsk = __m === 'ask'; __v.mSign = __m === 'sign'; __v.mConfirm = __m === 'confirm';
+__v.mDone = __m === 'done'; __v.mFailed = __m === 'failed'; __v.mRejected = __m === 'rejected';
+__v.envCls = __m === 'done' ? 'vn-env-opening' : (__m === 'confirm' ? 'vn-env-pend' : '');
+__v.mFailTitle = __mf[0]; __v.mFailBody = __mf[1];
+__v.mAskOpen = function () { self.setState({ __m: 'ask' }); };
+__v.mGo = function () { self.setState({ __m: 'sign', __mwhy: '' }); };
+__v.mClose = function () { self.setState(self.state.__m === 'done' || (self.state.__m === undefined && self.props.m === 'done') ? { __m: '', __acct: true } : { __m: '' }); };
+__v.mApprove = function () { var o = __mout(); if (o === 'reject') { self.setState({ __m: 'rejected' }); return; }
+  self.setState({ __m: 'confirm' });
+  setTimeout(function () { if (self.state.__m !== 'confirm') return; if (o !== 'ok' && o !== 'step2') self.setState({ __m: 'failed', __mwhy: o }); else self.setState({ __m: 'done', __acct: true }); }, 2400); };
+/* end margin-envelope */
 return __v;
 }
 }

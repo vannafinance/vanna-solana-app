@@ -192,31 +192,30 @@
   }
  },
  "V7MarginCreate": {
-  "t": 12,
-  "c": 24,
+  "w": "V7Perps",
   "p": {
-   "dark": false
+   "noAcct": true
   }
  },
  "V7MarginAgree": {
-  "t": 12,
-  "c": 25,
+  "w": "V7Perps",
   "p": {
-   "dark": false
+   "noAcct": true,
+   "m": "ask"
   }
  },
  "V7MarginSign": {
-  "t": 12,
-  "c": 26,
+  "w": "V7Perps",
   "p": {
-   "dark": false
+   "noAcct": true,
+   "m": "sign"
   }
  },
  "V7MarginDone": {
-  "t": 12,
-  "c": 27,
+  "w": "V7Perps",
   "p": {
-   "dark": false
+   "noAcct": true,
+   "m": "done"
   }
  },
  "V7Swap": {
@@ -515,17 +514,18 @@
   }
  },
  "V7MarginFee": {
-  "t": 12,
-  "c": 63,
+  "w": "V7Perps",
   "p": {
-   "dark": false
+   "noAcct": true,
+   "m": "failed",
+   "mwhy": "fee"
   }
  },
  "V7MarginRejected": {
-  "t": 12,
-  "c": 64,
+  "w": "V7Perps",
   "p": {
-   "dark": false
+   "noAcct": true,
+   "m": "rejected"
   }
  },
  "V7PerpsOrderNoFunds": {
@@ -759,6 +759,18 @@
   "c": 85,
   "p": {
    "dark": false
+  }
+ },
+ "V7PerpsOrderFirst": {
+  "w": "V7PerpsOrder",
+  "p": {
+   "noAcct": true
+  }
+ },
+ "V7ProfileFaucet": {
+  "w": "V7Profile",
+  "p": {
+   "faucetOpen": true
   }
  }
 }

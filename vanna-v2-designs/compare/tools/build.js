@@ -234,6 +234,17 @@ function newShell(html) {
   out = out.replace(/(<div class="panel-head"><img src=")[^"]*(")/, (m, a, b) => a + mark + b);
   const css = path.join(SRC, 'styles.css');
   if (fs.existsSync(css)) out = out.replace('</head>', () => `<style>\n${fs.readFileSync(css, 'utf8')}</style>\n</head>`);
+  // Margin account in place (tools/margin_envelope.py): a new trader is never sent to a separate margin page.
+  // Markets shows the banner, the first order opens the account as step 1 of 2, and the account counts once either succeeds.
+  for (const [from, to] of [
+    ["if (gateOn() && !hasMargin && stem === 'V7PerpsOrder') { toast('First trade: set up your margin account (one time)'); stem = 'V7MarginCreate'; s = D.screens[stem]; shown = stem; extra = {}; }",
+     "if (gateOn() && !hasMargin && (stem === 'V7PerpsOrder' || stem === 'V7Perps')) { extra = Object.assign({}, extra, { noAcct: true }); }"],
+    ["if (app.stem && app.stem.indexOf('V7Margin') === 0 && app.inst.state.__ok) hasMargin = true;",
+     "if (app.stem && app.inst && (app.inst.state.__acct || (app.stem.indexOf('V7Margin') === 0 && app.inst.state.__ok))) hasMargin = true;"],
+  ]) {
+    if (!out.includes(from)) throw new Error('newShell: the margin gate in the shell changed');
+    out = out.replace(from, () => to);
+  }
   const charts = path.join(SRC, 'charts.js');   // live charts (vnLine, vnRateCurve), mounted by runtime.js
   if (fs.existsSync(charts)) out = out.replace('</body>', () => `<script>\n${fs.readFileSync(charts, 'utf8')}</script>\n</body>`);
   const rt = path.join(SRC, 'runtime.js');

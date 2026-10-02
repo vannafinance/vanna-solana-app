@@ -341,3 +341,39 @@
     setTimeout(function () { if (document.contains(a)) a.click(); }, +a.getAttribute('data-auto-go') || 1200);
   }).observe(screen, { childList: true, subtree: true });
 })();
+
+/* ===== faucet-tabs (tools/faucet_tabs.py) =====
+   Scrolling tab rows (.vn-tabscroll): the arrow scrolls on, the fade and arrow go at the end, and the selected tab
+   is always in view. An arrow and its fade show only while there is more on that side. */
+(function () {
+  'use strict';
+  var screen = document.getElementById('screen');
+  if (!screen) return;
+  function sync(row) {
+    var w = row.parentNode; if (!w) return;
+    w.classList.toggle('vn-tab-start', row.scrollLeft <= 8);
+    w.classList.toggle('vn-tab-end', row.scrollLeft + row.clientWidth >= row.scrollWidth - 8);
+  }
+  screen.addEventListener('click', function (e) {
+    var b = e.target.closest('[data-vn-step]'); if (!b) return;
+    var row = b.parentNode.querySelector('.vn-tabscroll'); if (row) row.scrollBy({ left: 160 * +b.getAttribute('data-vn-step'), behavior: 'smooth' });
+  });
+  screen.addEventListener('scroll', function (e) { if (e.target.classList && e.target.classList.contains('vn-tabscroll')) sync(e.target); }, true);
+  function scan() {
+    screen.querySelectorAll('.vn-tabscroll').forEach(function (row) {
+      var on = row.querySelector('[aria-selected="true"]');
+      if (on && row.__vnOn !== on.textContent) {
+        row.__vnOn = on.textContent;
+        var tabs = row.querySelectorAll('[role="tab"]'), first = on === tabs[0], last = on === tabs[tabs.length - 1];
+        var l = on.offsetLeft - 60, r = on.offsetLeft + on.offsetWidth - row.clientWidth + 60;   /* clear of the arrows */
+        var x = first ? 0 : last ? row.scrollWidth : (row.scrollLeft > l ? l : (row.scrollLeft < r ? r : row.scrollLeft));
+        row.scrollTo({ left: x, behavior: 'instant' });
+        setTimeout(function () { sync(row); }, 60);
+      }
+      sync(row);
+    });
+  }
+  new MutationObserver(scan).observe(screen, { childList: true, subtree: true, attributes: true, attributeFilter: ['aria-selected', 'class'] });   /* a re-render (e.g. theme switch) resets the row's classes */
+  scan(); setTimeout(scan, 120);   /* the first screen may already be on the page */
+})();
+/* ===== end faucet-tabs ===== */

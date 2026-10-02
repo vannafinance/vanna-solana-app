@@ -83,6 +83,19 @@ Nothing half-edited on disk. Waiting on the user for decisions on two preview pa
 - **Built:** the chooser V7Spaces uses dark tiles via `tools/chooser_dark.py` (run after spaces.py). The audience is plain coloured words on the right of the name (L4 with no hairline): the user found the pill "AI made". Pushed as 23d0ebc.
 - Margin B is liked as a concept but felt empty. Section m2 in `previews/marginflow.html` (video `renders/marginflow-b.mp4`) has an envelope (the wax Vanna seal gets the tick, the flap opens, the card rises) and a 3D card (a ghost flips to the real card, collateral coins light up), plus an "unlocks" list. Awaiting: envelope or card, then build into V7MarginCreate.
 
+**Late 2 Oct, NOT pushed (the user said: preview first, push only when they say):**
+- **Margin in place:** `tools/margin_envelope.py` (run after tx_sheet.py).
+  - Markets shows a banner when there is no margin account. It opens the envelope sheet with the engraved card.
+  - A first order runs as 2 steps, and step 1 carries the envelope.
+  - The six V7Margin* screens are now aliases of Markets, and V7PerpsOrderFirst is new. Template 12 (agreement) is unused.
+  - `build.js` newShell rewrites the shell's margin gate: no redirect, `noAcct` instead, and `hasMargin` is set from `__acct`.
+  - `tools/record_margin.py` clicks through both flows and writes `renders/margin-live.mp4`.
+- **Previews:** `previews/faucet-tabs.html` (`tools/preview_faucet_tabs.py --video`).
+  - Faucet F1 grid / F2 rows / F3 row+sheet. All keep the other dev's component contract.
+  - Vault tabs T1 fit five / T2 scroll+hint / T3 three tabs / T4 three+More.
+  - Awaiting picks.
+- **Shell gotcha:** heredocs in this Bash tool mangle backslashes; write patch scripts with the Write tool. Some src files are CRLF.
+
 ## 8. Open questions (blocked on the user)
 
 1. Glow strength in refresh2 OK?

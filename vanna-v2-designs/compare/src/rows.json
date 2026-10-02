@@ -58,6 +58,10 @@
    [
     "V7Profile",
     "Profile"
+   ],
+   [
+    "V7ProfileFaucet",
+    "Profile \u00b7 test faucet"
    ]
   ]
  ],
@@ -123,23 +127,27 @@
   ]
  ],
  [
-  "Margin account: created once, before the first Perps or Farm trade",
+  "Margin account: a banner on Markets opens the envelope; a first order adds it as step 1 of 2",
   [
    [
     "V7MarginCreate",
-    "Create margin account"
+    "Markets \u00b7 no margin account yet"
    ],
    [
     "V7MarginAgree",
-    "Borrow agreement"
+    "Open margin account \u00b7 envelope"
    ],
    [
     "V7MarginSign",
-    "Approve in Backpack"
+    "Margin account \u00b7 approve in wallet"
    ],
    [
     "V7MarginDone",
-    "Margin account active"
+    "Margin account \u00b7 opened"
+   ],
+   [
+    "V7PerpsOrderFirst",
+    "First trade \u00b7 account + order, 2 approvals"
    ]
   ]
  ],
@@ -331,11 +339,11 @@
    ],
    [
     "V7MarginFee",
-    "Margin \u00b7 no SOL for fees"
+    "Margin account \u00b7 not enough SOL"
    ],
    [
     "V7MarginRejected",
-    "Margin \u00b7 cancelled"
+    "Margin account \u00b7 cancelled in wallet"
    ],
    [
     "V7PerpsOrderNoFunds",

@@ -43,7 +43,7 @@ __v.icoBd = this.props.dark ? 'rgba(255,255,255,0.28)' : 'rgba(255,255,255,0)';
 __v.logoBd = this.props.dark ? 'rgba(255,255,255,0.16)' : 'rgba(255,255,255,0)';
 __v.swAria = __sw ? 'true' : 'false';
 var __tx = this.state.__tx === undefined ? '' : this.state.__tx;
-var __st = this.state.__st || 1, __n = 1, __why = this.state.__why || 'network';
+var __st = this.state.__st || 1, __n = this.props.noAcct ? 2 : 1, __why = this.state.__why || 'network';
 __v.txOpen = __tx !== ''; __v.txSign = __tx === 'sign'; __v.txConfirm = __tx === 'confirm'; __v.txDone = __tx === 'done'; __v.txFailed = __tx === 'failed'; __v.txRejected = __tx === 'rejected';
 __v.txStepLabel = 'Step ' + __st + ' of ' + __n; __v.txStepShow = __n > 1 ? 'inline-flex' : 'none';
 var __F = { network: ['Network error', 'Solana did not confirm this in time. Nothing left your wallet. Check your connection and try again.'],
@@ -63,6 +63,27 @@ __v.finishTx = function () { __next(); };
 __v.retryTx = function () { self.setState({ __tx: 'sign', __st: self.state.__st || 1, __why: '' }); };
 __v.closeTx = function () { self.setState({ __tx: '', __st: 1, __why: '' }); };
 __v.toggleSw = function () { self.setState({ __sw: !__sw }); };
+/* margin-envelope (tools/margin_envelope.py): first trade also opens the margin account, step 1 of 2 */
+__v.txAcct = __tx === 'acct'; __v.envShow = false; __v.envCls = '';
+if (__n === 2) {
+  var __next1 = __next;
+  __next = function () {   // after step 1 the envelope opens; step 2 follows once the card is out
+    var w = self.state.__why;
+    if (self.state.__tx === 'confirm' && (self.state.__st || 1) === 1 && !(w && w !== 'ok')) {
+      self.setState({ __tx: 'acct', __acct: true });
+      setTimeout(function () { if (self.state.__tx === 'acct') self.setState({ __tx: 'sign', __st: 2 }); }, 2800);
+      return;
+    }
+    __next1();
+  };
+  __v.envShow = (__st === 1 && ['sign', 'confirm', 'failed', 'rejected'].indexOf(__tx) >= 0) || __tx === 'acct';
+  __v.envCls = __tx === 'acct' ? 'vn-env-opening' : (__tx === 'confirm' ? 'vn-env-pend' : '');
+  __v.acctNext = (this.state.side || 'Long') + ' ' + (this.state.lev || 3) + 'x';
+  __v.txStepLabel += __st === 1 ? ' · Open margin account' : ' · ' + (this.state.side || 'Long') + ' ' + (this.state.lev || 3) + 'x';
+  if (__v.cta.indexOf('Not enough') < 0) __v.cta = 'Open account & ' + (this.state.side || 'Long').toLowerCase() + ' · 2 approvals';
+  __v.doneText = 'Margin account opened. ' + __v.doneText;
+}
+/* end margin-envelope */
 return __v;
 }
 }

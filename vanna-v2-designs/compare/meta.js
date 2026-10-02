@@ -1,5 +1,5 @@
 window.VN_META = {
- "stamp": 1790963260335,
+ "stamp": 1790966022676,
  "changes": [
   {
    "title": "New Vanna mark on every screen",
@@ -297,6 +297,41 @@ window.VN_META = {
    "detail": "\"What do you want to do?\" is now always dark, with a soft coral-violet glow in the top-right corner. Earn, Trade and Farm are dark tiles; each space's colour sits on its icon, a faint corner tint and the words saying who it is for (For lenders, For traders, Leveraged yield), set in that colour on the right of the name, with no bubble behind them. The other facts are one quiet line and the whole tile is the button. Same words as before.",
    "screens": [
     "V7Spaces"
+   ]
+  },
+  {
+   "title": "Margin account without a separate page",
+   "date": "3 Oct 2026",
+   "detail": "There is no margin page and no agreement any more; Vanna's first margin action creates the account. On Trade › Markets, someone without an account sees a small banner, 'Open your margin account · One tap, then go long or short up to 5x', and the header shows the money in their wallet that is ready to become collateral. Open brings up a sheet over Markets with an envelope sealed with the Vanna seal and addressed to their wallet, the dark engraved account card inside, and what the account unlocks. One approval in the wallet; while Solana confirms the seal breathes; then the tick draws into the seal, the flap opens and the card rises out. Someone who goes straight to an order gets the usual transaction sheet in two steps: step 1 opens the account with the same envelope ('Margin account opened'), step 2 places the order and ends on the seal.",
+   "screens": [
+    "V7MarginCreate",
+    "V7MarginAgree",
+    "V7MarginSign",
+    "V7MarginDone",
+    "V7MarginFee",
+    "V7MarginRejected",
+    "V7PerpsOrderFirst"
+   ]
+  },
+  {
+   "title": "Test faucet in Profile",
+   "date": "3 Oct 2026",
+   "detail": "Profile has a 'Test faucet' row after Account, with the token logos stacked. It opens a sheet tagged 'Fork only' with USDC, TSLAx, GOOGLx, AAPLx, ANTHROPIC and OPENAI in a grid: tap a token and a ring spins around its logo, then a tick lands on it and it says Sent. The note stays: 'Test tokens for the Vanna fork. SOL for fees is not included.' It wraps the existing faucet component (same tokens, one call per token), see compare/DEV-NOTES.md.",
+   "screens": [
+    "V7Profile",
+    "V7ProfileFaucet"
+   ]
+  },
+  {
+   "title": "Vault tabs that show they scroll",
+   "date": "3 Oct 2026",
+   "detail": "On an Earn vault, Positions, Details, Activity, Collateral and Analytics are pills in a row that scrolls. While there is more on a side, that edge fades into the page with a small arrow that scrolls on; at each end its arrow and fade disappear. The selected tab is always fully in view.",
+   "screens": [
+    "V7EarnVault",
+    "V7EarnVaultDetails",
+    "V7EarnVaultActivity",
+    "V7EarnVaultCollateral",
+    "V7EarnVaultAnalytics"
    ]
   }
  ]
