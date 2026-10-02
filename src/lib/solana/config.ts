@@ -13,3 +13,6 @@ export const APP_IDENTITY: AppIdentity = {
 export const FORK_FAUCET_ENABLED = process.env.EXPO_PUBLIC_FORK_FAUCET !== "off";
 // Fork-only cheatcodes (re-cloning stale swap pools). A real cluster has none, so a build for one sets this to "off".
 export const FORK_CHEATCODES_ENABLED = process.env.EXPO_PUBLIC_FORK_CHEATCODES !== "off";
+export const NETWORK_LABEL = "Solana mainnet fork";
+// The base fee for a one signature transaction; the app adds no priority fee.
+export const NETWORK_FEE_ESTIMATE = "≈ 0.000005 SOL";

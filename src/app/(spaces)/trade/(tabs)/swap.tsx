@@ -12,6 +12,7 @@ import { IconButton } from "@/components/ui/icon-button";
 import { ResourceView } from "@/components/ui/resource-view";
 import { Screen } from "@/components/ui/screen";
 import { SpaceHeader } from "@/components/ui/space-header";
+import { ReviewSheet } from "@/components/ui/review-sheet";
 import { TransactionSheet } from "@/components/ui/transaction-sheet";
 import { formatUsd } from "@/format/format-amount";
 import { formatSwapAmount } from "@/format/format-swap-amount";
@@ -36,7 +37,7 @@ function ctaLabel(issue: SwapIssue | null, symbol: string) {
 
 export default function SwapScreen() {
   const header = useHeaderProps();
-  const { swap, setAmountText, pickFrom, pickTo, flip, fill, selectRoute, saveSettings, flow, onSheetPrimary } = useSwap();
+  const { swap, setAmountText, pickFrom, pickTo, flip, fill, selectRoute, saveSettings, flow, review, onSheetPrimary } = useSwap();
   const [settingsOpen, setSettingsOpen] = useState(false);
 
   return (
@@ -74,7 +75,7 @@ export default function SwapScreen() {
 
               <SwapDetailsCard quote={quote} receive={to} autoSlippage={settings.mode === "auto"} />
 
-              <Button label={ctaLabel(issue, from.symbol)} icon="account_balance_wallet" disabled={issue !== null} onPress={flow.start} />
+              <Button label={ctaLabel(issue, from.symbol)} icon="account_balance_wallet" disabled={issue !== null} onPress={review.request} />
 
               <SwapSettingsSheet
                 visible={settingsOpen}
@@ -87,6 +88,7 @@ export default function SwapScreen() {
           )}
         </ResourceView>
       </Screen>
+      <ReviewSheet data={review.data} onConfirm={review.confirm} onCancel={review.cancel} />
       <TransactionSheet
         state={flow.state}
         onPrimary={onSheetPrimary}

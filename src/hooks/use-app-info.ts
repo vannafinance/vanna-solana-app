@@ -1,9 +1,10 @@
 import Constants from "expo-constants";
 import * as WebBrowser from "expo-web-browser";
 
+import { NETWORK_LABEL } from "@/lib/solana/config";
+
 const DOCS_URL = "https://docs.vanna.finance";
 const SUPPORT_URL = "https://vanna.finance";
-const NETWORK_LABEL = "Solana mainnet fork";
 
 export function useAppInfo() {
   return {

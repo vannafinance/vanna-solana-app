@@ -2,7 +2,7 @@ const assert = require("node:assert/strict");
 const { test } = require("node:test");
 const { loadTs } = require("./load-ts.cjs");
 
-const stubs = { "./config": { API_BASE_URL: "https://example.test" } };
+const stubs = { "./config": { API_BASE_URL: "https://example.test", VANNA_PROGRAM_ID: "BZ812nUv4Qhr2p1JVgmoJGjYTGk1brAXckyhFSCNH3Zg" } };
 const { parseAccountSnapshot } = loadTs("src/lib/solana/account-api.ts", stubs);
 const { decodePriceUpdate } = loadTs("src/lib/solana/oracle-prices.ts", stubs);
 const { valueHoldings, totalValue } = loadTs("src/lib/portfolio/value-holdings.ts", stubs);

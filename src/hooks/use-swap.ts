@@ -1,19 +1,22 @@
 import { router } from "expo-router";
 import { useCallback, useState } from "react";
 
-import { formatSwapAmount } from "@/format/format-swap-amount";
-import { parseUnits } from "@/format/format-amount";
+import { formatPriceImpact, formatSlippage, formatSwapAmount } from "@/format/format-swap-amount";
+import { formatUsd, parseUnits } from "@/format/format-amount";
 import { fractionOfBalance } from "@/lib/swap/fraction-of-balance";
 import { defaultSwapSettings, swapRoutes } from "@/lib/swap/routes";
 import { AUTO_SLIPPAGE_BPS, effectiveSlippageBps } from "@/lib/swap/slippage";
 import { routes } from "@/navigation/routes";
 import type { Resource } from "@/types/resource";
+import type { ReviewData } from "@/types/review";
 import type { SwapIssue, SwapRouteId, SwapSettings, SwapState, SwapSymbol, SwapToken } from "@/types/swap";
 
 import { assets } from "@/lib/solana/assets";
+import { NETWORK_FEE_ESTIMATE, NETWORK_LABEL } from "@/lib/solana/config";
 import { executeWalletSwap } from "@/lib/solana/swap-execution";
 import { TransactionError } from "@/types/transaction";
 
+import { useConnectedWallet } from "./use-connected-wallet";
 import { usePerpsTabFocus } from "./use-perps-tab-focus";
 import { useSwapQuote } from "./use-swap-quote";
 import { useSwapTokens } from "./use-swap-tokens";
@@ -26,6 +29,7 @@ function findToken(tokens: readonly SwapToken[], symbol: SwapSymbol): SwapToken 
   return token;
 }
 
+const HIGH_IMPACT_BPS = 300;
 const DEFAULT_FROM: SwapSymbol = "USDC";
 const DEFAULT_TO: SwapSymbol = "TSLAx";
 
@@ -37,6 +41,8 @@ export function useSwap() {
   const [amountText, setAmountText] = useState("");
   const [settings, setSettings] = useState<SwapSettings>(defaultSwapSettings);
   const [routeId, setRouteId] = useState<SwapRouteId>("jupiter");
+  const [reviewing, setReviewing] = useState(false);
+  const wallet = useConnectedWallet();
 
   const list = tokens.status === "ready" ? tokens.data : null;
   const from = list ? findToken(list, fromSymbol) : null;
@@ -76,6 +82,29 @@ export function useSwap() {
           : "",
     },
   });
+
+  // What the user sees before the wallet opens. The amounts are the live quote; the swap itself fetches a fresh one when
+  // it is confirmed, so the wallet shows the final figures.
+  const review: ReviewData | null =
+    reviewing && from && to && quote && amountIn !== null && wallet
+      ? {
+          title: "Review swap",
+          legs: [
+            { label: "You pay", value: `${formatSwapAmount(amountIn, from.decimals, from.symbol)} ${from.symbol}`, caption: `≈ ${formatUsd(quote.payValueUsd)}` },
+            { label: "You receive (estimated)", value: `${formatSwapAmount(quote.amountOut, to.decimals, to.symbol)} ${to.symbol}`, caption: `≈ ${formatUsd(quote.receiveValueUsd)}` },
+          ],
+          rows: [
+            { label: "Route", value: "Jupiter" },
+            { label: "Price impact", value: formatPriceImpact(quote.priceImpactBps), tone: quote.priceImpactBps >= HIGH_IMPACT_BPS ? "negative" : "positive" },
+            { label: "Minimum received", value: `${formatSwapAmount(quote.minReceived, to.decimals, to.symbol)} ${to.symbol}` },
+            { label: "Slippage", value: formatSlippage(quote.slippageBps, settings.mode === "auto") },
+            { label: "Network fee", value: NETWORK_FEE_ESTIMATE },
+          ],
+          wallet,
+          network: NETWORK_LABEL,
+          confirmLabel: "Confirm swap",
+        }
+      : null;
 
   const viewHistory = () => {
     flow.close();
@@ -125,6 +154,15 @@ export function useSwap() {
     selectRoute,
     saveSettings: setSettings,
     flow,
+    review: {
+      data: review,
+      request: () => setReviewing(true),
+      cancel: () => setReviewing(false),
+      confirm: () => {
+        setReviewing(false);
+        flow.start();
+      },
+    },
     onSheetPrimary: flow.done ? viewHistory : flow.primary,
   };
 }

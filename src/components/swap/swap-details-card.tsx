@@ -2,8 +2,7 @@ import { View } from "react-native";
 
 import { AppText } from "@/components/ui/app-text";
 import { Card } from "@/components/ui/card";
-import { formatPercent } from "@/format/format-amount";
-import { formatSwapAmount } from "@/format/format-swap-amount";
+import { formatSlippage, formatPriceImpact, formatSwapAmount } from "@/format/format-swap-amount";
 import { type ThemeColor, useTheme } from "@/theme/use-theme";
 import type { SwapQuote, SwapToken } from "@/types/swap";
 
@@ -14,11 +13,6 @@ type SwapDetailsCardProps = {
   receive: SwapToken;
   autoSlippage: boolean;
 };
-
-function formatSlippage(bps: number, auto: boolean) {
-  const percent = formatPercent(bps, bps % 10 === 0 ? 1 : 2);
-  return auto ? `Auto · ${percent}` : percent;
-}
 
 function Row({ label, value, color = "text", first = false }: { label: string; value: string; color?: ThemeColor; first?: boolean }) {
   const { colors } = useTheme();
@@ -45,7 +39,7 @@ function Row({ label, value, color = "text", first = false }: { label: string; v
 }
 
 export function SwapDetailsCard({ quote, receive, autoSlippage }: SwapDetailsCardProps) {
-  const impact = quote ? (quote.priceImpactBps === 0 ? "< 0.01%" : formatPercent(quote.priceImpactBps)) : "—";
+  const impact = quote ? formatPriceImpact(quote.priceImpactBps) : "—";
 
   return (
     <Card padded={false} style={{ paddingHorizontal: 16, paddingVertical: 4 }}>
