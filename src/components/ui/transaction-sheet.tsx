@@ -53,12 +53,7 @@ export function TransactionSheet({ state, onPrimary, onClose, primaryLabel, onEx
             shadow.floating,
           ]}
         >
-          {state.phase === "signing" && !state.prepared ? (
-            <StatusRow ring="arc" title="Preparing your transaction" detail="Checking it on the network before your wallet opens." chip={state.steps > 1 ? `Step ${state.step} of ${state.steps}` : undefined} />
-          ) : null}
-          {state.phase === "signing" && state.prepared ? (
-            <StatusRow ring="wait" title={`Approve in ${state.wallet}`} detail="Nothing moves until you approve." chip={state.steps > 1 ? `Step ${state.step} of ${state.steps}` : undefined} />
-          ) : null}
+          {state.phase === "signing" ? <SigningRow key={state.prepared ? "approve" : "prepare"} state={state} /> : null}
           {state.phase === "confirming" ? <StatusRow ring="arc" title={state.title} detail={state.message} /> : null}
           {state.phase === "success" ? <StatusRow ring="seal" title={state.title} detail={state.message} /> : null}
           {state.phase === "failure" ? (
@@ -75,6 +70,34 @@ export function TransactionSheet({ state, onPrimary, onClose, primaryLabel, onEx
         </Animated.View>
       </View>
     </Modal>
+  );
+}
+
+type SigningRowProps = { state: Extract<TransactionState, { phase: "signing" }> };
+
+// Two waits that look alike but are not: the app preparing the transaction, then the wallet opening to ask. Each says what
+// it is doing, and says so plainly when it takes longer than usual. The key on this row restarts the timer for each.
+function SigningRow({ state }: SigningRowProps) {
+  const slow = useElapsed(SLOW_AFTER_MS);
+  const chip = state.steps > 1 ? `Step ${state.step} of ${state.steps}` : undefined;
+
+  if (!state.prepared) {
+    return (
+      <StatusRow
+        ring="arc"
+        title="Preparing your transaction"
+        detail={slow ? "This is taking longer than usual. The network may be slow. You can cancel and try again." : "Checking it on the network before your wallet opens."}
+        chip={chip}
+      />
+    );
+  }
+  return (
+    <StatusRow
+      ring="wait"
+      title={`Approve in ${state.wallet}`}
+      detail={slow ? `Waiting for ${state.wallet}. If it did not open, cancel and try again. Nothing was sent.` : "Nothing moves until you approve."}
+      chip={chip}
+    />
   );
 }
 
