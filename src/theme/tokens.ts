@@ -75,6 +75,8 @@ export const brand = {
   badgePositive: "#1C7C83",
   badgeInfo: "#2440A9",
   earnTab: "#11727A",
+  engraved: "#17131F",
+  engravedRule: "rgba(255,255,255,0.10)",
   coral: "#FC5457",
   badge: "#FF007A",
   farmAccent: "#FF007A",

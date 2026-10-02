@@ -1,7 +1,6 @@
 import { router } from "expo-router";
 import { FlatList, View } from "react-native";
 
-import { MarginSetup } from "@/components/margin/margin-setup";
 import { HealthGauge } from "@/components/perps/health-gauge";
 import { PerpsPositionCard } from "@/components/perps/perps-position-card";
 import { TradeHero } from "@/components/perps/trade-hero";
@@ -10,7 +9,6 @@ import { ResourceView } from "@/components/ui/resource-view";
 import { SpaceHeader } from "@/components/ui/space-header";
 import { formatSignedUsd, formatUsd } from "@/format/format-amount";
 import { useHeaderProps } from "@/hooks/use-header-props";
-import { useMarginCreate } from "@/hooks/use-margin-create";
 import { usePerpsPositions } from "@/hooks/use-perps-positions";
 import { usePerpsTabFocus } from "@/hooks/use-perps-tab-focus";
 import { useTheme } from "@/theme/use-theme";
@@ -21,9 +19,6 @@ export default function PerpsPositionsScreen() {
   const headerProps = useHeaderProps();
   const portfolio = usePerpsPositions();
   const data = portfolio.status === "ready" ? portfolio.data : null;
-  const { view, needsSetup } = useMarginCreate();
-
-  if (needsSetup) return <MarginSetup view={view} headerProps={headerProps} />;
 
   const header = (
     <SpaceHeader space="trade" {...headerProps}>

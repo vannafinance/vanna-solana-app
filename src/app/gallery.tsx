@@ -3,6 +3,7 @@ import { useState } from "react";
 import { View } from "react-native";
 
 import { VaultRow } from "@/components/earn/vault-row";
+import { MarginAccountSheet } from "@/components/margin/margin-account-sheet";
 import { LeverageSelector } from "@/components/perps/leverage-selector";
 import { MarketRow } from "@/components/perps/market-row";
 import { PositionCard } from "@/components/perps/position-card";
@@ -23,6 +24,7 @@ import { TokenPill } from "@/components/ui/token-pill";
 import { TransactionSheet } from "@/components/ui/transaction-sheet";
 import { VannaWordmark } from "@/components/ui/vanna-wordmark";
 import { useTheme } from "@/theme/use-theme";
+import type { EnvelopeStage } from "@/types/margin-account";
 import type { TransactionState } from "@/types/transaction";
 
 const noop = () => undefined;
@@ -44,6 +46,7 @@ function ComponentPreview() {
   const [note, setNote] = useState<string | null>(null);
   const [filter, setFilter] = useState(true);
   const [sheet, setSheet] = useState<keyof typeof sheets | null>(null);
+  const [envelope, setEnvelope] = useState<EnvelopeStage | "intro" | null>(null);
 
   return (
     <>
@@ -158,10 +161,32 @@ function ComponentPreview() {
             <Button flex size="md" variant="outline" label="Network" onPress={() => setSheet("network")} />
             <Button flex size="md" variant="outline" label="Rejected" onPress={() => setSheet("rejected")} />
           </View>
+          <View style={{ flexDirection: "row", gap: spacing.sm }}>
+            <Button flex size="md" variant="outline" label="Account" onPress={() => setEnvelope("intro")} />
+            <Button flex size="md" variant="outline" label="Waiting" onPress={() => setEnvelope("waiting")} />
+            <Button flex size="md" variant="outline" label="Opened" onPress={() => setEnvelope("open")} />
+          </View>
         </View>
       </Screen>
       <Snackbar message={note} onDismiss={() => setNote(null)} />
       <TransactionSheet state={sheet ? sheets[sheet] : null} onPrimary={() => setSheet(null)} onClose={() => setSheet(null)} />
+      <MarginAccountSheet
+        view={{
+          address: "7Xk2…9Fq1",
+          intro: envelope === "intro",
+          stage: envelope === "open" || envelope === "waiting" ? envelope : "sealed",
+          state:
+            envelope === "waiting"
+              ? { phase: "confirming", stage: "sent", title: "Sent to Solana", message: "Usually under 2 seconds" }
+              : envelope === "open"
+                ? { phase: "success", title: "Your margin account is open", message: "Account 7Xk2…9Fq1 is ready. Go long or short up to 5x." }
+                : null,
+          open: () => setEnvelope("waiting"),
+          dismiss: () => setEnvelope(null),
+          onPrimary: () => setEnvelope(null),
+          closeFlow: () => setEnvelope(null),
+        }}
+      />
     </>
   );
 }

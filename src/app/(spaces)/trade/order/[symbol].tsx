@@ -4,6 +4,7 @@ import { View } from "react-native";
 import { CollateralCard } from "@/components/perps/collateral-card";
 import { LeverageSelector } from "@/components/perps/leverage-selector";
 import { OrderMarketCard } from "@/components/perps/order-market-card";
+import { MarginEnvelope } from "@/components/margin/margin-envelope";
 import { OrderSummary } from "@/components/perps/order-summary";
 import { SideToggle } from "@/components/perps/side-toggle";
 import { Button } from "@/components/ui/button";
@@ -25,10 +26,9 @@ const QUICK_FILLS = [
 ] as const;
 
 function ctaLabel(side: Side, issue: OrderIssue, hasMarginAccount: boolean) {
-  if (!hasMarginAccount) return "Create margin account";
   if (issue === "empty") return "Enter an amount";
   if (issue === "insufficient-margin") return "Not enough margin available";
-  return `Open ${side} · approve in wallet`;
+  return hasMarginAccount ? `Open ${side} · approve in wallet` : `Open account and ${side} · 2 approvals`;
 }
 
 export default function PerpsOrderScreen() {
@@ -78,9 +78,10 @@ export default function PerpsOrderScreen() {
       <TransactionSheet
         state={order.flow.state}
         onPrimary={order.onSheetPrimary}
-        onClose={order.flow.close}
+        onClose={order.closeFlow}
         onExplorer={order.flow.openExplorer}
         primaryLabel={order.flow.done ? "View position" : undefined}
+        hero={order.envelope ? <MarginEnvelope address={order.envelope.address} stage={order.envelope.stage} /> : undefined}
       />
     </>
   );

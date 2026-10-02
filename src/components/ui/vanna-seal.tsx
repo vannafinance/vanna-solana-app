@@ -7,6 +7,8 @@ import { brand } from "@/theme/tokens";
 
 type VannaSealProps = {
   size?: number;
+  // The tick draws in once the seal has settled; a seal still waiting for its transaction has none.
+  tick?: boolean;
 };
 
 const VIEWBOX = 56;
@@ -39,7 +41,7 @@ function SealGradient() {
   );
 }
 
-export function VannaSeal({ size = 52 }: VannaSealProps) {
+export function VannaSeal({ size = 52, tick: showTick = true }: VannaSealProps) {
   const settle = useSharedValue(0);
   const pulse = useSharedValue(0);
   const tick = useSharedValue(TICK_LENGTH);
@@ -63,7 +65,7 @@ export function VannaSeal({ size = 52 }: VannaSealProps) {
   const layer = { position: "absolute", top: 0, left: 0, width: size, height: size } as const;
 
   return (
-    <View accessibilityLabel="Confirmed" style={{ width: size, height: size }}>
+    <View accessibilityLabel={showTick ? "Confirmed" : "Vanna seal"} style={{ width: size, height: size }}>
       <Animated.View style={[layer, pulseStyle]}>
         <Svg width={size} height={size} viewBox={`0 0 ${VIEWBOX} ${VIEWBOX}`}>
           <SealGradient />
@@ -76,20 +78,22 @@ export function VannaSeal({ size = 52 }: VannaSealProps) {
           <Path d={shape} fill="url(#vannaSeal)" />
         </Svg>
       </Animated.View>
-      <View style={layer}>
-        <Svg width={size} height={size} viewBox={`0 0 ${VIEWBOX} ${VIEWBOX}`}>
-          <AnimatedPath
-            d={TICK}
-            fill="none"
-            stroke={brand.onPrimary}
-            strokeWidth={4.6}
-            strokeLinecap="square"
-            strokeLinejoin="miter"
-            strokeDasharray={TICK_LENGTH}
-            animatedProps={tickProps}
-          />
-        </Svg>
-      </View>
+      {showTick ? (
+        <View style={layer}>
+          <Svg width={size} height={size} viewBox={`0 0 ${VIEWBOX} ${VIEWBOX}`}>
+            <AnimatedPath
+              d={TICK}
+              fill="none"
+              stroke={brand.onPrimary}
+              strokeWidth={4.6}
+              strokeLinecap="square"
+              strokeLinejoin="miter"
+              strokeDasharray={TICK_LENGTH}
+              animatedProps={tickProps}
+            />
+          </Svg>
+        </View>
+      ) : null}
     </View>
   );
 }

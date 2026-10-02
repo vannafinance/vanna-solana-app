@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { type ReactNode, useEffect, useState } from "react";
 import { Modal, View } from "react-native";
 import Animated, { cancelAnimation, Easing, FadeIn, FadeInDown, useAnimatedStyle, useSharedValue, withRepeat, withTiming } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -16,11 +16,13 @@ type TransactionSheetProps = {
   onClose: () => void;
   primaryLabel?: string;
   onExplorer?: () => void;
+  // A picture above the status row, for a transaction that has a thing to show rather than only a spinner.
+  hero?: ReactNode;
 };
 
 const SLOW_AFTER_MS = 12_000;
 
-export function TransactionSheet({ state, onPrimary, onClose, primaryLabel, onExplorer }: TransactionSheetProps) {
+export function TransactionSheet({ state, onPrimary, onClose, primaryLabel, onExplorer, hero }: TransactionSheetProps) {
   const { colors, layout, motion, radius, shadow } = useTheme();
   const insets = useSafeAreaInsets();
   if (!state) return null;
@@ -53,6 +55,7 @@ export function TransactionSheet({ state, onPrimary, onClose, primaryLabel, onEx
             shadow.floating,
           ]}
         >
+          {hero ? <View style={{ alignItems: "center", marginBottom: 20 }}>{hero}</View> : null}
           {state.phase === "signing" ? <SigningRow key={state.prepared ? "approve" : "prepare"} state={state} /> : null}
           {state.phase === "confirming" ? <StatusRow ring="arc" title={state.title} detail={state.message} /> : null}
           {state.phase === "success" ? <StatusRow ring="seal" title={state.title} detail={state.message} /> : null}

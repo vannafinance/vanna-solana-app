@@ -1,6 +1,6 @@
 import { router } from "expo-router";
 
-import { MarginSetup } from "@/components/margin/margin-setup";
+import { MarginBanner } from "@/components/margin/margin-banner";
 import { MarketFilterChips } from "@/components/perps/market-filter-chips";
 import { MarketList } from "@/components/perps/market-list";
 import { MarketSearchField } from "@/components/perps/market-search-field";
@@ -10,7 +10,7 @@ import { Screen } from "@/components/ui/screen";
 import { SpaceHeader } from "@/components/ui/space-header";
 import { formatUsd } from "@/format/format-amount";
 import { useHeaderProps } from "@/hooks/use-header-props";
-import { useMarginCreate } from "@/hooks/use-margin-create";
+import { useMarginPrompt } from "@/hooks/use-margin-prompt";
 import { MARKET_FILTERS, usePerpsMarkets } from "@/hooks/use-perps-markets";
 import { usePerpsPositions } from "@/hooks/use-perps-positions";
 import { usePerpsTabFocus } from "@/hooks/use-perps-tab-focus";
@@ -20,21 +20,24 @@ export default function PerpsMarketsScreen() {
   const headerProps = useHeaderProps();
   const { markets, filter, setFilter, query, setQuery } = usePerpsMarkets();
   const portfolio = usePerpsPositions();
-  const { view, needsSetup } = useMarginCreate();
-
-  if (needsSetup) return <MarginSetup view={view} headerProps={headerProps} />;
+  const prompt = useMarginPrompt();
 
   return (
     <Screen
       gap={12}
       header={
         <SpaceHeader space="trade" {...headerProps}>
-          <ResourceView resource={portfolio} emptyLabel="No margin account yet">
-            {(data) => <TradeHero label="Net available collateral" value={formatUsd(data.account.available)} dimFraction />}
-          </ResourceView>
+          {prompt.visible ? (
+            <TradeHero label="In your wallet, ready as collateral" value={prompt.walletBalance === null ? "—" : formatUsd(prompt.walletBalance)} dimFraction />
+          ) : (
+            <ResourceView resource={portfolio} emptyLabel="No margin account yet">
+              {(data) => <TradeHero label="Net available collateral" value={formatUsd(data.account.available)} dimFraction />}
+            </ResourceView>
+          )}
         </SpaceHeader>
       }
     >
+      {prompt.visible ? <MarginBanner onOpen={prompt.open} /> : null}
       <MarketSearchField value={query} onChangeText={setQuery} />
       <MarketFilterChips filters={MARKET_FILTERS} value={filter} onChange={setFilter} />
       <ResourceView resource={markets} emptyLabel="No markets match your search">

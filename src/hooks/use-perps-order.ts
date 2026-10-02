@@ -1,13 +1,18 @@
 import { router } from "expo-router";
+import { PublicKey } from "@solana/web3.js";
 import { useCallback, useState } from "react";
 
 import { formatToken, formatUsd, parseUnits } from "@/format/format-amount";
+import { shortAddress } from "@/format/short-address";
 import { collateralBaseUnits, orderFunds } from "@/lib/perps/order-funds";
 import { orderIssue, quoteOrder } from "@/lib/perps/order-quote";
 import { assets } from "@/lib/solana/assets";
 import { NETWORK_FEE_ESTIMATE, NETWORK_LABEL } from "@/lib/solana/config";
+import { createMarginAccount } from "@/lib/solana/margin-transactions";
 import { openPosition } from "@/lib/solana/perps-transactions";
+import { marginAddress } from "@/lib/solana/program-accounts";
 import { routes } from "@/navigation/routes";
+import type { EnvelopeStage } from "@/types/margin-account";
 import type { OrderIssue, OrderQuote, PerpsAccount, PerpsMarket, Side } from "@/types/perps";
 import type { Resource } from "@/types/resource";
 import { TransactionError } from "@/types/transaction";
@@ -44,6 +49,10 @@ export function usePerpsOrder(symbol: string, initialSide: Side) {
   const [side, setSide] = useState(initialSide);
   const [amountText, setAmountText] = useState("");
   const [leverage, setLeverage] = useState(DEFAULT_LEVERAGE);
+  // A first trade opens the margin account as its step 1. This is decided when the order is submitted and kept until the
+  // sheet closes, because the account appearing on chain after step 1 must not turn a retry of step 2 into a one-step flow.
+  const [firstTrade, setFirstTrade] = useState(false);
+  const [step, setStep] = useState(1);
 
   const funds = market.status === "ready" && holdings.data ? orderFunds(side, market.data.symbol, market.data.markPrice, holdings.data.holdings) : null;
   const collateral = parseUnits(amountText, DECIMALS) ?? 0n;
@@ -67,15 +76,19 @@ export function usePerpsOrder(symbol: string, initialSide: Side) {
 
   const ready = ticket.status === "ready" ? ticket.data : null;
   const flow = useTransactionFlow({
-    run: (_step, progress) =>
-      signer.execute(({ connection, owner, hooks }) => {
+    steps: firstTrade ? 2 : 1,
+    run: (stepNumber, progress) => {
+      setStep(stepNumber);
+      return signer.execute(({ connection, owner, hooks }) => {
+        if (firstTrade && stepNumber === 1) return createMarginAccount(connection, owner, hooks);
         const stock = assets.find((asset) => asset.symbol === symbol);
         if (ready === null || funds === null || stock === undefined || ready.collateral === 0n) {
           throw new TransactionError("network", "Something went wrong", "The order could not be prepared. Nothing left your wallet.");
         }
         const base = collateralBaseUnits(side, funds, ready.collateral, ready.market.markPrice);
         return openPosition(connection, owner, { side, stock, collateral: base, leverage }, hooks);
-      }, progress),
+      }, progress);
+    },
     success: {
       title: `Your ${side} is open`,
       message: ready
@@ -99,6 +112,7 @@ export function usePerpsOrder(symbol: string, initialSide: Side) {
         { label: "Liquidation price", value: formatUsd(quote.liquidationPrice), tone: "negative" },
         { label: "Health after", value: quote.healthAfter.toFixed(2) },
         { label: "Network fee", value: NETWORK_FEE_ESTIMATE },
+        ...(marginAccount.exists ? [] : [{ label: "Margin account", value: "Opens first, 2 approvals" }]),
       ],
       wallet: connected,
       network: NETWORK_LABEL,
@@ -116,14 +130,23 @@ export function usePerpsOrder(symbol: string, initialSide: Side) {
 
   const submit = () => {
     if (blocked) return;
-    if (!marginAccount.exists) router.push(routes.marginCreate);
-    else review.request();
+    setFirstTrade(!marginAccount.exists);
+    setStep(1);
+    review.request();
+  };
+
+  const closeFlow = () => {
+    flow.close();
+    setFirstTrade(false);
   };
 
   const viewPosition = () => {
-    flow.close();
+    closeFlow();
     router.dismissTo(routes.tradePositions);
   };
+
+  const envelope: { address: string; stage: EnvelopeStage } | null =
+    firstTrade && signer.owner !== null ? { address: shortAddress(marginAddress(new PublicKey(signer.owner)).toBase58()), stage: step === 1 ? "waiting" : "open" } : null;
 
   return {
     ticket,
@@ -139,6 +162,8 @@ export function usePerpsOrder(symbol: string, initialSide: Side) {
     submit,
     review,
     flow,
+    envelope,
+    closeFlow,
     onSheetPrimary: flow.done ? viewPosition : flow.primary,
   };
 }
