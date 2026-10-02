@@ -11,3 +11,5 @@ export const APP_IDENTITY: AppIdentity = {
   icon: "favicon.ico",
 };
 export const FORK_FAUCET_ENABLED = process.env.EXPO_PUBLIC_FORK_FAUCET !== "off";
+// Fork-only cheatcodes (re-cloning stale swap pools). A real cluster has none, so a build for one sets this to "off".
+export const FORK_CHEATCODES_ENABLED = process.env.EXPO_PUBLIC_FORK_CHEATCODES !== "off";

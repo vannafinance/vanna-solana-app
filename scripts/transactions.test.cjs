@@ -203,3 +203,45 @@ test("send, processed and confirmed are reported in order as the network answers
   assert.equal(signature, "sig-1");
   assert.equal(stages.join(","), "sent:sig-1,processed");
 });
+
+function sendModule(heal) {
+  return loadTs("src/lib/solana/send-transaction.ts", { ...stubs, "./heal-pools": { healStaleDexPools: heal } }, new Map());
+}
+
+test("a failed simulation re-clones stale pools once and then simulates again before the wallet is asked", async () => {
+  let healed = 0;
+  let simulations = 0;
+  let signed = false;
+  const { simulateSignAndSend } = sendModule(async () => ++healed);
+  const connection = {
+    simulateTransaction: async () => (++simulations === 1 ? { value: { err: { InstructionError: [2, { Custom: 6001 }] }, logs: [] } } : { value: { err: null } }),
+    sendRawTransaction: async () => "sig",
+    getSignatureStatuses: async () => ({ value: [{ err: null, confirmationStatus: "confirmed" }] }),
+    getBlockHeight: async () => 1,
+  };
+  const hooks = {
+    sign: async (tx) => {
+      signed = true;
+      return { serialize: () => new Uint8Array([1]) };
+    },
+    onSigned: () => {},
+  };
+  assert.equal(await simulateSignAndSend(connection, {}, 100, hooks), "sig");
+  assert.equal(healed, 1);
+  assert.equal(simulations, 2);
+  assert.equal(signed, true);
+});
+
+test("when nothing could be healed the failure is reported and the wallet is never asked", async () => {
+  const { simulateSignAndSend } = sendModule(async () => 0);
+  let signed = false;
+  const connection = { simulateTransaction: async () => ({ value: { err: { InstructionError: [2, { Custom: 6001 }] }, logs: ["Program failed"] } }) };
+  const hooks = {
+    sign: async () => {
+      signed = true;
+    },
+    onSigned: () => {},
+  };
+  await assert.rejects(simulateSignAndSend(connection, {}, 100, hooks), /6001/);
+  assert.equal(signed, false);
+});

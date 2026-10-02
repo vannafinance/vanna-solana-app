@@ -1,5 +1,7 @@
 import { type AddressLookupTableAccount, type Connection, type PublicKey, type TransactionInstruction, TransactionMessage, VersionedTransaction } from "@solana/web3.js";
 
+import { healStaleDexPools } from "./heal-pools";
+
 const POLL_MS = 700;
 const SEND_ATTEMPTS = 3;
 const MAX_POLL_FAILURES = 8;
@@ -95,7 +97,12 @@ export type SigningHooks = {
 
 // Simulating first surfaces a bad instruction or route before the wallet is asked to sign anything.
 export async function simulateSignAndSend(connection: Connection, transaction: VersionedTransaction, lastValidBlockHeight: number, hooks: SigningHooks): Promise<string> {
-  const simulation = await connection.simulateTransaction(transaction, { sigVerify: false, commitment: "confirmed" });
+  let simulation = await connection.simulateTransaction(transaction, { sigVerify: false, commitment: "confirmed" });
+  // A pool the fork cloned earlier can fail a fresh quote in several ways, so any failed simulation tries the re-clone
+  // once; it only does anything when a stale-prone pool is part of the transaction.
+  if (simulation.value.err && (await healStaleDexPools(connection, transaction)) > 0) {
+    simulation = await connection.simulateTransaction(transaction, { sigVerify: false, commitment: "confirmed" });
+  }
   if (simulation.value.err) throw new TransactionFailedError(`${JSON.stringify(simulation.value.err)} ${simulation.value.logs?.join(" ") ?? ""}`);
 
   const signed = await hooks.sign(transaction);
