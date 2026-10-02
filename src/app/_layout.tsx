@@ -4,13 +4,14 @@ import { focusManager, QueryClient, QueryClientProvider } from "@tanstack/react-
 import { Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { StatusBar } from "expo-status-bar";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { AppState } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import { ResourceView } from "@/components/ui/resource-view";
 import { SpaceScope } from "@/components/ui/space-scope";
+import { restoreAppearance } from "@/hooks/use-appearance";
 import { useWalletSession } from "@/hooks/use-wallet-session";
 import { APP_IDENTITY, CHAIN, RPC_URL } from "@/lib/solana/config";
 import { walletCache } from "@/lib/solana/wallet-cache";
@@ -39,7 +40,12 @@ function Navigation() {
 
 export default function RootLayout() {
   const [fontsLoaded, fontError] = useFonts({ PlusJakartaSans_400Regular, PlusJakartaSans_600SemiBold });
-  const ready = fontsLoaded || fontError !== null;
+  const [appearanceRestored, setAppearanceRestored] = useState(false);
+  const ready = (fontsLoaded || fontError !== null) && appearanceRestored;
+
+  useEffect(() => {
+    void restoreAppearance().finally(() => setAppearanceRestored(true));
+  }, []);
 
   useEffect(() => {
     if (ready) SplashScreen.hideAsync();
