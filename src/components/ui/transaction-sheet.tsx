@@ -21,7 +21,7 @@ type TransactionSheetProps = {
 const SLOW_AFTER_MS = 12_000;
 
 export function TransactionSheet({ state, onPrimary, onClose, primaryLabel, onExplorer }: TransactionSheetProps) {
-  const { colors, motion, radius, shadow } = useTheme();
+  const { colors, layout, motion, radius, shadow } = useTheme();
   const insets = useSafeAreaInsets();
   if (!state) return null;
 
@@ -40,15 +40,14 @@ export function TransactionSheet({ state, onPrimary, onClose, primaryLabel, onEx
           accessibilityLiveRegion="polite"
           style={[
             {
-              marginHorizontal: 12,
-              marginBottom: insets.bottom + 12,
               alignSelf: "center",
               width: "100%",
-              maxWidth: 560,
-              padding: 16,
-              borderRadius: radius.lg,
-              borderWidth: 1,
-              borderColor: colors.border,
+              maxWidth: layout.sheetMaxWidth,
+              paddingHorizontal: 20,
+              paddingTop: 24,
+              paddingBottom: Math.max(insets.bottom + 12, 28),
+              borderTopLeftRadius: radius.sheet,
+              borderTopRightRadius: radius.sheet,
               backgroundColor: colors.surface,
             },
             shadow.floating,
