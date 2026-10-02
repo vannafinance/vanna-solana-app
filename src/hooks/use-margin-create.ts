@@ -10,9 +10,10 @@ import { DEFAULT_MARKET } from "@/lib/perps/build-markets";
 import { createMarginAccount } from "@/lib/solana/margin-transactions";
 import { marginAddress } from "@/lib/solana/program-accounts";
 import { spaceRoutes } from "@/navigation/routes";
+import type { MarginSetupView } from "@/types/margin-setup";
 
 export function useMarginCreate() {
-  const { markCreated, exists } = useMarginAccount();
+  const { markCreated, exists, known } = useMarginAccount();
   const signer = useWalletSigner();
   const address = signer.owner === null ? null : marginAddress(new PublicKey(signer.owner)).toBase58();
   const [agreementOpen, setAgreementOpen] = useState(false);
@@ -34,29 +35,38 @@ export function useMarginCreate() {
     if (flow.done) markCreated();
   }, [flow.done, markCreated]);
 
-  return {
-    flow,
+  const onPrimary = () => {
+    if (!flow.done) {
+      flow.primary();
+      return;
+    }
+    flow.close();
+    setCreated(false);
+    router.replace(spaceRoutes.trade);
+  };
+
+  const view: MarginSetupView = {
     created: created || exists,
+    marginAddress: address === null ? "" : shortAddress(address),
     agreementOpen,
     agreed,
     openSection,
-    marginAddress: address === null ? "" : shortAddress(address),
+    state: flow.state,
+    done: flow.done,
     openAgreement: () => setAgreementOpen(true),
     closeAgreement: () => setAgreementOpen(false),
     toggleAgreed: () => setAgreed((value) => !value),
-    toggleSection: (index: number) => setOpenSection((current) => (current === index ? null : index)),
+    toggleSection: (index) => setOpenSection((current) => (current === index ? null : index)),
     sign: () => {
       setAgreementOpen(false);
       flow.start();
     },
-    onPrimary: () => {
-      if (!flow.done) {
-        flow.primary();
-        return;
-      }
-      flow.close();
-      router.replace(spaceRoutes.trade);
-    },
+    onPrimary,
+    closeFlow: flow.close,
     openPosition: () => router.replace(`/trade/order/${DEFAULT_MARKET}?side=long`),
   };
+
+  // Setup stays on screen after the account appears until the user leaves the success card, so it is not swapped out
+  // from under the sheet by the refetch that follows the transaction.
+  return { view, needsSetup: known && (!exists || created) };
 }

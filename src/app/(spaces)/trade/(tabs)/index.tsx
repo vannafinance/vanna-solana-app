@@ -1,5 +1,6 @@
 import { router } from "expo-router";
 
+import { MarginSetup } from "@/components/margin/margin-setup";
 import { MarketFilterChips } from "@/components/perps/market-filter-chips";
 import { MarketList } from "@/components/perps/market-list";
 import { MarketSearchField } from "@/components/perps/market-search-field";
@@ -9,6 +10,7 @@ import { Screen } from "@/components/ui/screen";
 import { SpaceHeader } from "@/components/ui/space-header";
 import { formatUsd } from "@/format/format-amount";
 import { useHeaderProps } from "@/hooks/use-header-props";
+import { useMarginCreate } from "@/hooks/use-margin-create";
 import { MARKET_FILTERS, usePerpsMarkets } from "@/hooks/use-perps-markets";
 import { usePerpsPositions } from "@/hooks/use-perps-positions";
 import { usePerpsTabFocus } from "@/hooks/use-perps-tab-focus";
@@ -18,6 +20,9 @@ export default function PerpsMarketsScreen() {
   const headerProps = useHeaderProps();
   const { markets, filter, setFilter, query, setQuery } = usePerpsMarkets();
   const portfolio = usePerpsPositions();
+  const { view, needsSetup } = useMarginCreate();
+
+  if (needsSetup) return <MarginSetup view={view} headerProps={headerProps} />;
 
   return (
     <Screen
