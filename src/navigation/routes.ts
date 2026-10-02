@@ -1,6 +1,7 @@
 export const routes = {
   notifications: "/notifications",
   profile: "/profile",
+  faucet: "/faucet",
   marginCreate: "/margin/create",
   tradeSwap: "/trade/swap",
   tradePositions: "/trade/positions",

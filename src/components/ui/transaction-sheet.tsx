@@ -228,7 +228,7 @@ function Actions({ state, primaryLabel, onPrimary, onClose, onExplorer }: Action
       ) : null}
       {state.phase === "failure" ? (
         <>
-          <Button size="md" variant="tonal" label={primaryLabel ?? "Try again"} onPress={onPrimary} />
+          <Button size="md" variant="tonal" label={state.actionLabel ?? primaryLabel ?? "Try again"} onPress={onPrimary} />
           <Button size="md" variant="text" label="Close" onPress={onClose} />
         </>
       ) : null}

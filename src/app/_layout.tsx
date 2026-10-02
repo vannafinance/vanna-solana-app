@@ -31,7 +31,9 @@ function Navigation() {
     <ResourceView resource={session} emptyLabel="No wallet session">
       {() => (
         <SpaceScope>
-          <Stack screenOptions={{ headerShown: false, animation: "slide_from_right" }} />
+          <Stack screenOptions={{ headerShown: false, animation: "slide_from_right" }}>
+            <Stack.Screen name="faucet" options={{ presentation: "transparentModal", animation: "none" }} />
+          </Stack>
         </SpaceScope>
       )}
     </ResourceView>

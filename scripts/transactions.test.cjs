@@ -131,6 +131,19 @@ test("wallet cancellation and missing fees keep their own messages", () => {
   assert.equal(toTransactionError(new TransactionFailedError("Attempt to debit an account but found no record of a prior credit.")).kind, "no-fee");
 });
 
+test("a wallet that never held SOL is told it needs SOL, not that the network failed", () => {
+  const unfunded = toTransactionError(new TransactionFailedError('"AccountNotFound"'));
+  assert.equal(unfunded.kind, "no-fee");
+  assert.equal(unfunded.title, "Not enough SOL");
+  assert.equal(toTransactionError(new TransactionFailedError('"InsufficientFundsForRent"')).kind, "no-fee");
+});
+
+test("a rejected simulation is reported as a failed transaction, not a connection problem", () => {
+  const failed = toTransactionError(new TransactionFailedError('{"InstructionError":[0,"InvalidAccountData"]}'));
+  assert.equal(failed.title, "Transaction failed");
+  assert.doesNotMatch(failed.message, /connection/);
+});
+
 const { sendAndConfirm, ConfirmationLostError } = load("src/lib/solana/send-transaction.ts");
 const dropped = () => new Error("fetch failed: java.net.UnknownHostException: Unable to resolve host");
 const signedStub = { serialize: () => new Uint8Array([1]) };

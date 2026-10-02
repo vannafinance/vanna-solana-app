@@ -7,7 +7,8 @@ import { BlockhashExpiredError, ConfirmationLostError, isNetworkFailure, Transac
 export const WALLET_MISMATCH = "wallet-mismatch";
 
 const REJECTED = /cancel|declin|reject|denied|ERROR_NOT_SIGNED|ERROR_ASSOCIATION_CANCELLED|CancellationException/i;
-const NO_FEE = /insufficient (lamports|funds for fee)|attempt to debit an account but found no record|0x1\b.*lamports|insufficient funds for rent/i;
+// A wallet that has never held SOL has no account at all, which the cluster reports as AccountNotFound for the fee payer.
+const NO_FEE = /AccountNotFound|InsufficientFundsFor(Fee|Rent)|insufficient (lamports|funds for fee)|attempt to debit an account but found no record|0x1\b.*lamports|insufficient funds for rent/i;
 const PRICE_MOVED = /0x1771|6001|SlippageToleranceExceeded|0xbbd|3005|AccountNotEnoughKeys|bin_array/i;
 const NOT_ENOUGH_TOKENS = /insufficient funds|custom program error: 0x1\b/i;
 
@@ -59,10 +60,13 @@ export function toTransactionError(error: unknown): TransactionError {
   const program = text.includes(VANNA_PROGRAM_ID) ? programError(text) : null;
   if (program) return new TransactionError("network", program.title, program.message);
   if (PRICE_MOVED.test(text)) return new TransactionError("price-moved", "Price moved", "The price moved past your slippage limit before this confirmed. Nothing was sent. Try again.");
-  if (NO_FEE.test(text)) return new TransactionError("no-fee", "Not enough SOL for fees", "Your wallet needs a little SOL to pay network fees. Add some SOL and try again.");
+  if (NO_FEE.test(text)) return new TransactionError("no-fee", "Not enough SOL", "Your wallet needs a little SOL for network fees and account rent. Nothing was sent. Add some SOL and try again.");
   if (NOT_ENOUGH_TOKENS.test(text)) return new TransactionError("network", "Not enough balance", "Your wallet does not hold enough of this token. Nothing was sent.");
-  if (error instanceof ApiError || error instanceof TransactionFailedError) {
-    return new TransactionError("network", "Network error", "Solana did not confirm this. Nothing left your wallet. Check your connection and try again.");
+  if (error instanceof ApiError) {
+    return new TransactionError("network", "Network error", "Vanna could not be reached. Nothing left your wallet. Check your connection and try again.");
+  }
+  if (error instanceof TransactionFailedError) {
+    return new TransactionError("network", "Transaction failed", "Solana rejected this transaction before it was sent. Nothing left your wallet. Try again in a moment.");
   }
   return new TransactionError("network", "Something went wrong", "The transaction did not go through. Nothing left your wallet.");
 }

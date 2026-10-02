@@ -7,7 +7,7 @@ export type TransactionState =
   | { phase: "signing"; step: number; steps: number; wallet: string }
   | { phase: "confirming"; stage: ConfirmStage; title: string; message: string; signature?: string }
   | { phase: "success"; title: string; message: string; explorerLabel?: string; signature?: string }
-  | { phase: "failure"; kind: FailureKind; title: string; message: string };
+  | { phase: "failure"; kind: FailureKind; title: string; message: string; actionLabel?: string };
 
 export type RunProgress = {
   signed: () => void;

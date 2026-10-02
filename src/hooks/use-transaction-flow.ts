@@ -1,10 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useMobileWallet } from "@wallet-ui/react-native-web3js";
+import { router } from "expo-router";
 
 import { previewApproval } from "@/lib/preview-data/approval-outcome";
+import { FORK_FAUCET_ENABLED } from "@/lib/solana/config";
 import { explorerTransactionUrl } from "@/lib/solana/explorer";
 import * as WebBrowser from "expo-web-browser";
 
+import { routes } from "@/navigation/routes";
 import { type ConfirmStage, type RunProgress, TransactionError, type TransactionState } from "@/types/transaction";
 
 export const DEFAULT_WALLET = "your wallet";
@@ -86,8 +89,12 @@ export function useTransactionFlow({ steps = 1, wallet, success, run = previewAp
     setInternal({ phase: "idle" });
   }, []);
 
+  // A wallet with no SOL cannot retry its way out, so the fork build sends it to the faucet instead.
   const primary = useCallback(() => {
-    if (internal.phase === "failure") void execute(internal.step);
+    if (internal.phase === "failure" && internal.error.kind === "no-fee" && FORK_FAUCET_ENABLED) {
+      close();
+      router.push(routes.faucet);
+    } else if (internal.phase === "failure") void execute(internal.step);
     else if (internal.phase === "success") close();
   }, [internal, execute, close]);
 
@@ -104,7 +111,13 @@ export function useTransactionFlow({ steps = 1, wallet, success, run = previewAp
       case "failure":
         return internal.error.kind === "rejected"
           ? { phase: "failure", kind: "rejected", title: `Cancelled in ${walletLabel}`, message: "Nothing was sent." }
-          : { phase: "failure", kind: internal.error.kind, title: internal.error.title, message: internal.error.message };
+          : {
+              phase: "failure",
+              kind: internal.error.kind,
+              title: internal.error.title,
+              message: internal.error.message,
+              actionLabel: internal.error.kind === "no-fee" && FORK_FAUCET_ENABLED ? "Get test SOL" : undefined,
+            };
     }
   })();
 

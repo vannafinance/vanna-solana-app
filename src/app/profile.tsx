@@ -23,6 +23,7 @@ import { useFaucet } from "@/hooks/use-faucet";
 import { usePortfolio } from "@/hooks/use-portfolio";
 import { useShareText } from "@/hooks/use-share-text";
 import { useWalletConnection } from "@/hooks/use-wallet-connection";
+import { routes } from "@/navigation/routes";
 import { useTheme } from "@/theme/use-theme";
 
 // Metro folds __DEV__ before it collects dependencies, so a release build never contains the preview switches.
@@ -60,7 +61,7 @@ export default function Profile() {
         )}
       </ResourceView>
       <AppearanceCard value={appearance.preference} onChange={appearance.choose} />
-      {faucet.available ? <FaucetCard symbols={faucet.symbols} state={faucet.state} onRequest={faucet.request} /> : null}
+      {faucet.available ? <FaucetCard onOpen={() => router.push(routes.faucet)} /> : null}
       <SettingsCard network={info.network} onDocs={info.openDocs} onSupport={info.openSupport} />
       {wallet.address ? (
         <DisconnectButton
