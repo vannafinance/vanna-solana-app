@@ -90,6 +90,8 @@ export async function sendAndConfirm(
 
 export type SigningHooks = {
   sign: (transaction: VersionedTransaction) => Promise<VersionedTransaction>;
+  // Several transactions approved in one wallet prompt.
+  signAll: (transactions: VersionedTransaction[]) => Promise<VersionedTransaction[]>;
   onSigned: () => void;
   onSent?: (signature: string) => void;
   onProcessed?: () => void;

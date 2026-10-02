@@ -7,7 +7,7 @@ export class MarginAccountMissingError extends Error {
 
 export class UnsupportedPositionError extends Error {
   constructor() {
-    super("This margin account holds a Farm position, which the app cannot size against yet.");
+    super("This margin account holds a Kamino position in an asset the app does not support.");
     this.name = "UnsupportedPositionError";
   }
 }
@@ -30,5 +30,12 @@ export class NoPositionError extends Error {
   constructor(readonly side: "long" | "short") {
     super(`There is no ${side} position to close.`);
     this.name = "NoPositionError";
+  }
+}
+
+export class NoFarmPositionError extends Error {
+  constructor() {
+    super("There is no Farm position to close.");
+    this.name = "NoFarmPositionError";
   }
 }

@@ -1,6 +1,8 @@
 import { type AccountMeta, type Connection, PublicKey } from "@solana/web3.js";
 
-import { type AssetInfo, type AssetSymbol, assets } from "./assets";
+import { type AssetInfo, type AssetSymbol, assetByMint, assets } from "./assets";
+import { isYieldSymbol, kaminoReserveOf } from "./kamino";
+import { decodeLitePosition } from "./lite-position";
 import { priceAccountAddress } from "./oracle-prices";
 import {
   assetConfigAddress,
@@ -8,6 +10,7 @@ import {
   debtPositionAddress,
   litePositionAddress,
   reserveAddress,
+  TOKEN_PROGRAM,
   tokenProgramOf,
 } from "./program-accounts";
 import { MarginAccountMissingError, UnsupportedPositionError } from "./perps-errors";
@@ -72,6 +75,7 @@ type ScanOptions = {
   excludeDebt?: readonly AssetSymbol[];
   injectDebt?: AssetSymbol;
   injectCollateral?: AssetSymbol;
+  excludeLite?: PublicKey;
 };
 
 function withInjected(slots: number[], symbol: AssetSymbol | undefined, symbolOf: ReadonlyMap<number, AssetInfo>): number[] {
@@ -89,7 +93,8 @@ const readOnly = (pubkey: PublicKey): AccountMeta => ({ pubkey, isSigner: false,
 // The program's health check reads one block of accounts per active position, in slot order, and rejects anything else
 // (error 6024). An asset the instruction already names itself is left out; one that this same transaction opens for the
 // first time is added, because it is not in the account yet when this snapshot is read.
-// Farm positions need extra Kamino accounts that are not ported, so an account holding one is refused up front.
+// A Kamino position adds five accounts after its own address: its strategy, the asset's config, the receipt token vault,
+// the Kamino reserve and the price feed. A position the instruction is itself closing out is left out entirely.
 export async function positionAccounts(connection: Connection, state: MarginState, options: ScanOptions = {}): Promise<AccountMeta[]> {
   const { margin, slots, symbolOf } = state;
   const collateral = withInjected(slots.collateral, options.injectCollateral, symbolOf);
@@ -115,7 +120,27 @@ export async function positionAccounts(connection: Connection, state: MarginStat
 
   const liteAddresses = [litePositionAddress(margin), ...slots.lite.map((index) => litePositionAddress(margin, index))];
   const liteInfos = await connection.getMultipleAccountsInfo(liteAddresses, "confirmed");
-  if (liteInfos.some((info) => info !== null)) throw new UnsupportedPositionError();
-  metas.push(...liteAddresses.map(readOnly));
+  liteAddresses.forEach((address, index) => {
+    if (options.excludeLite?.equals(address)) return;
+    metas.push(readOnly(address));
+    const info = liteInfos[index];
+    if (info === null) return;
+    const position = decodeLitePosition(address, info.data);
+    const asset = assetByMint.get(position.mint.toBase58());
+    if (!asset || !isYieldSymbol(asset.symbol)) throw new UnsupportedPositionError();
+    metas.push(
+      readOnly(position.strategy),
+      readOnly(assetConfigAddress(position.mint)),
+      readOnly(associatedTokenAddress(margin, kaminoReserveOf(asset.symbol).collateralMint, TOKEN_PROGRAM)),
+      readOnly(kaminoReserveOf(asset.symbol).reserve),
+      readOnly(priceAccountAddress(asset)),
+    );
+  });
   return metas;
+}
+
+export function assetIndexOf(state: MarginState, symbol: AssetSymbol): number {
+  const entry = [...state.symbolOf.entries()].find(([, asset]) => asset.symbol === symbol);
+  if (!entry) throw new Error(`${symbol} is not registered on this margin account`);
+  return entry[0];
 }

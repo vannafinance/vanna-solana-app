@@ -14,12 +14,13 @@ type SigningContext = { connection: Connection; owner: PublicKey; hooks: Signing
 // The wallet signs only. In development builds a developer wallet override can show another address's data, in
 // which case that address cannot be the signer and transactions are refused instead of sent from the wrong account.
 export function useWalletSigner() {
-  const { account, signTransaction } = useMobileWallet();
+  const { account, signTransactions } = useMobileWallet();
   const queryClient = useQueryClient();
   const owner = account?.address.toBase58() ?? null;
   const mismatch = DEV_WALLET_ADDRESS !== undefined && owner !== DEV_WALLET_ADDRESS;
 
-  const sign = useCallback((transaction: VersionedTransaction) => signTransaction(transaction), [signTransaction]);
+  const sign = useCallback((transaction: VersionedTransaction) => signTransactions(transaction), [signTransactions]);
+  const signAll = useCallback((transactions: VersionedTransaction[]) => signTransactions(transactions), [signTransactions]);
 
   // After a confirmed transaction every live figure is stale; refetch them now instead of waiting for the next poll.
   const refreshAfterTransaction = useCallback(() => {
@@ -34,14 +35,14 @@ export function useWalletSigner() {
       if (owner === null) throw new TransactionError("network", "Wallet not connected", "Connect your wallet and try again. Nothing was sent.");
       if (mismatch) throw toTransactionError(new Error(WALLET_MISMATCH));
       try {
-        await task({ connection: rpcConnection, owner: new PublicKey(owner), hooks: { sign, onSigned: progress.signed, onSent: progress.sent, onProcessed: progress.processed } });
+        await task({ connection: rpcConnection, owner: new PublicKey(owner), hooks: { sign, signAll, onSigned: progress.signed, onSent: progress.sent, onProcessed: progress.processed } });
         refreshAfterTransaction();
       } catch (error) {
         throw toTransactionError(error);
       }
     },
-    [owner, mismatch, sign, refreshAfterTransaction],
+    [owner, mismatch, sign, signAll, refreshAfterTransaction],
   );
 
-  return { owner, mismatch, sign, refreshAfterTransaction, execute };
+  return { owner, mismatch, sign, signAll, refreshAfterTransaction, execute };
 }

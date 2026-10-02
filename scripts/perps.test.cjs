@@ -175,11 +175,52 @@ test("an asset the same transaction opens for the first time fills the first emp
   assert.equal(metas[0].pubkey.toBase58(), assetConfigAddress(mint("USDC")).toBase58());
 });
 
-test("an account holding a Kamino position is refused", async () => {
+const { kaminoReserveOf } = load("src/lib/solana/kamino.ts");
+
+function litePositionData(strategy, mint) {
+  const data = Buffer.alloc(193);
+  Buffer.from([141, 145, 27, 4, 142, 122, 126, 174]).copy(data, 0);
+  strategy.toBuffer().copy(data, 40);
+  mint.toBuffer().copy(data, 72);
+  return data;
+}
+
+test("a Kamino position adds its strategy, config, receipts, reserve and price after its own address", async () => {
+  const owner = Keypair.generate().publicKey;
+  const margin = marginAddress(owner);
+  const strategy = Keypair.generate().publicKey;
+  const state = { margin, slots: { collateral: [], debt: [], lite: [] }, symbolOf: new Map() };
+  const data = litePositionData(strategy, mint("USDC"));
+  const connection = { getMultipleAccountsInfo: async (keys) => keys.map((_, index) => (index === 0 ? { data } : null)) };
+
+  const keys = (await positionAccounts(connection, state)).map((meta) => meta.pubkey.toBase58());
+  const expected = [
+    litePositionAddress(margin),
+    strategy,
+    assetConfigAddress(mint("USDC")),
+    associatedTokenAddress(margin, kaminoReserveOf("USDC").collateralMint, TOKEN_PROGRAM),
+    kaminoReserveOf("USDC").reserve,
+    priceAccountAddress(symbol("USDC")),
+  ].map((key) => key.toBase58());
+  assert.equal(keys.join(","), expected.join(","));
+});
+
+test("the position an instruction closes out is left out of its own health scan", async () => {
+  const owner = Keypair.generate().publicKey;
+  const margin = marginAddress(owner);
+  const state = { margin, slots: { collateral: [], debt: [], lite: [] }, symbolOf: new Map() };
+  const data = litePositionData(Keypair.generate().publicKey, mint("USDC"));
+  const connection = { getMultipleAccountsInfo: async (keys) => keys.map((_, index) => (index === 0 ? { data } : null)) };
+  const metas = await positionAccounts(connection, state, { excludeLite: litePositionAddress(margin) });
+  assert.equal(metas.length, 0);
+});
+
+test("a Kamino position in an asset the app does not list is refused", async () => {
   const owner = Keypair.generate().publicKey;
   const state = { margin: marginAddress(owner), slots: { collateral: [], debt: [], lite: [] }, symbolOf: new Map() };
-  const connection = { getMultipleAccountsInfo: async (keys) => keys.map(() => ({ data: Buffer.alloc(1) })) };
-  await assert.rejects(positionAccounts(connection, state), /Farm position/);
+  const data = litePositionData(Keypair.generate().publicKey, Keypair.generate().publicKey);
+  const connection = { getMultipleAccountsInfo: async (keys) => keys.map((_, index) => (index === 0 ? { data } : null)) };
+  await assert.rejects(positionAccounts(connection, state), /does not support/);
 });
 
 test("instruction data writes u16, u64, u128 and length-prefixed bytes little endian", () => {
