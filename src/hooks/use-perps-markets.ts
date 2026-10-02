@@ -1,8 +1,9 @@
 import { useMemo, useState, useSyncExternalStore } from "react";
 
+import { chartSourceFor } from "@/lib/perps/chart-sources";
 import { usdToTokens } from "@/lib/perps/position-math";
 import { getWatchlist, subscribeWatchlist, toggleWatchlist } from "@/lib/perps/watchlist-store";
-import type { Candle, MarketKind, MarketListItem, PerpsMarket, PositionSummary, Timeframe } from "@/types/perps";
+import type { Candle, ChartSource, MarketKind, MarketListItem, PerpsMarket, PositionSummary, Timeframe } from "@/types/perps";
 import type { Resource } from "@/types/resource";
 
 import { useMarketList } from "./use-market-list";
@@ -18,6 +19,7 @@ export type MarketDetail = {
   markets: readonly PerpsMarket[];
   liquidityTokens: bigint;
   candles: Candle[];
+  chart: ChartSource | null;
   watched: boolean;
   position: PositionSummary | null;
 };
@@ -69,6 +71,7 @@ export function usePerpsMarket(symbol: string) {
         markets: list.data,
         liquidityTokens: usdToTokens(market.liquidityUsd, market.markPrice),
         candles: [],
+        chart: chartSourceFor(market.symbol),
         watched: watched.has(market.symbol),
         position: open ?? null,
       },

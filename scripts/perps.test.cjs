@@ -365,3 +365,50 @@ test("margin swap: route accounts are never signers and follow the 19 named acco
   assert.equal(ix.keys[19].isSigner, false);
   assert.equal(ix.keys[19].isWritable, true);
 });
+
+const { quoteAddCollateral } = load("src/lib/perps/add-collateral-quote.ts");
+
+test("adding collateral lowers leverage, moves the liquidation estimate away, and spends wallet USDC", () => {
+  const position = { side: "long", sizeUsd: 1500n * USD, collateral: 500n * USD, entryPrice: 356_130_000n };
+  const quote = quoteAddCollateral({ position, market: { usdcBorrowBps: 103, tokenBorrowBps: 100 }, walletUsdc: 2000n * USD, amount: 500n * USD });
+  assert.equal(quote.collateralAfter, 1000n * USD);
+  assert.equal(quote.availableAfter, 1500n * USD);
+  const before = quoteAddCollateral({ position, market: { usdcBorrowBps: 103, tokenBorrowBps: 100 }, walletUsdc: 2000n * USD, amount: 0n });
+  assert.ok(quote.liquidationAfter < before.liquidationAfter);
+  // 1.5x leverage after: 1.1 * entry * (0.5 / 1.5) * 1.0103
+  assert.equal(quote.liquidationAfter, BigInt(Math.round(356.13 * 1.1 * (0.5 / 1.5) * 1.0103 * 1_000_000)));
+});
+
+const { chartSourceFor } = load("src/lib/perps/chart-sources.ts");
+const { isAllowedChartUrl, dexScreenerUrl, tradingViewHtml } = load("src/components/perps/chart-embed.ts");
+
+test("each market maps to the same chart source as the web app", () => {
+  assert.deepEqual({ ...chartSourceFor("TSLAx") }, { kind: "tradingview", symbol: "NASDAQ:TSLA" });
+  assert.deepEqual({ ...chartSourceFor("GOOGLx") }, { kind: "tradingview", symbol: "NASDAQ:GOOGL" });
+  assert.deepEqual({ ...chartSourceFor("AAPLx") }, { kind: "tradingview", symbol: "NASDAQ:AAPL" });
+  assert.deepEqual({ ...chartSourceFor("ANTHROPIC") }, { kind: "dexscreener", pairAddress: "9thgWVMJUKiiotrVmzhEy1MWPyvkNsUSwKbp8ZFsuhA2" });
+  assert.deepEqual({ ...chartSourceFor("OPENAI") }, { kind: "dexscreener", pairAddress: "4HTy7aTjPm5PTSEws2yWRDPX6gjWM6sC2dV5mv9u8JsH" });
+});
+
+test("a chart may only navigate to its own provider over https", () => {
+  assert.equal(isAllowedChartUrl("https://www.tradingview.com/chart/?symbol=NASDAQ%3ATSLA"), true);
+  assert.equal(isAllowedChartUrl("https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js"), true);
+  assert.equal(isAllowedChartUrl("https://www.tradingview-widget.com/embed-widget/advanced-chart/"), true);
+  assert.equal(isAllowedChartUrl(dexScreenerUrl("abc", true)), true);
+  assert.equal(isAllowedChartUrl("about:blank"), true);
+  assert.equal(isAllowedChartUrl("http://dexscreener.com/solana/abc"), false);
+  assert.equal(isAllowedChartUrl("https://evil-tradingview.com/x"), false);
+  assert.equal(isAllowedChartUrl("https://dexscreener.com.evil.com/x"), false);
+  assert.equal(isAllowedChartUrl("https://tradingview.com@evil.com/x"), false);
+  assert.equal(isAllowedChartUrl("intent://scan/#Intent;end"), false);
+});
+
+test("embed addresses follow the theme and carry the widget configuration", () => {
+  assert.equal(dexScreenerUrl("pair", true), "https://dexscreener.com/solana/pair?embed=1&theme=dark&trades=0&info=0");
+  assert.match(dexScreenerUrl("pair", false), /theme=light/);
+  const html = tradingViewHtml("NASDAQ:TSLA", true, "#121212");
+  assert.match(html, /"symbol":"NASDAQ:TSLA"/);
+  assert.match(html, /"theme":"dark"/);
+  assert.match(html, /"allow_symbol_change":false/);
+  assert.match(html, /embed-widget-advanced-chart\.js/);
+});

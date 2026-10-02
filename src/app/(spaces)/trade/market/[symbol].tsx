@@ -1,6 +1,7 @@
 import { router, useLocalSearchParams } from "expo-router";
 import { Pressable, View } from "react-native";
 
+import { EmbeddedChart } from "@/components/perps/embedded-chart";
 import { MarketPositionRow } from "@/components/perps/market-position-row";
 import { MarketStats } from "@/components/perps/market-stats";
 import { MarketSwitcher } from "@/components/perps/market-switcher";
@@ -34,7 +35,7 @@ export default function PerpsMarketScreen() {
 
   return (
     <ResourceView resource={detail} emptyLabel="Market not found">
-      {({ market, markets, liquidityTokens, candles, watched, position }) => (
+      {({ market, markets, liquidityTokens, candles, chart, watched, position }) => (
         <Screen
           gap={0}
           paddingTop={0}
@@ -71,7 +72,9 @@ export default function PerpsMarketScreen() {
               {formatUsd(market.markPrice)}
             </AppText>
             <View style={{ marginTop: 16, marginHorizontal: -4 }}>
-              {candles.length === 0 ? (
+              {chart !== null ? (
+                <EmbeddedChart source={chart} accessibilityLabel={`${market.pair} price chart`} />
+              ) : candles.length === 0 ? (
                 <View style={{ height: 184, alignItems: "center", justifyContent: "center" }}>
                   <AppText variant="body" color="textMuted">
                     Price chart unavailable
@@ -81,9 +84,11 @@ export default function PerpsMarketScreen() {
                 <PriceChart candles={candles} lastPrice={market.markPrice} accessibilityLabel={`${market.pair} price, ${timeframe} candles`} />
               )}
             </View>
-            <View style={{ marginTop: 8 }}>
-              <TimeframeTabs options={TIMEFRAMES} value={timeframe} onChange={setTimeframe} />
-            </View>
+            {chart !== null ? null : (
+              <View style={{ marginTop: 8 }}>
+                <TimeframeTabs options={TIMEFRAMES} value={timeframe} onChange={setTimeframe} />
+              </View>
+            )}
             {position ? (
               <>
                 <SectionTitle title="Your position" />

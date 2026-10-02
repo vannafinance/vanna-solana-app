@@ -103,3 +103,6 @@ export type AddCollateralQuote = {
   liquidationAfter: bigint;
   availableAfter: bigint;
 };
+
+// Where a market's chart comes from: TradingView for listed stocks, a DexScreener pair for tokens with no listing.
+export type ChartSource = { kind: "tradingview"; symbol: string } | { kind: "dexscreener"; pairAddress: string };
