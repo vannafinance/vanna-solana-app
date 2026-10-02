@@ -1,0 +1,286 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Vanna transaction status: six styles</title>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root { --page:#F7F7F7; --card:#FFFFFF; --text:#1F1F1F; --text2:#5F5F68; --line:#EFEDF4; --bd:#E3E1EA; --pos:#1C7C83; --neg:#B33C3E;
+  --acc:#4B44E0; --tv:#ECEBFE; --tvI:#3A33C4; --grad:linear-gradient(90deg,#6C63FF,#4B44E0); --bg:#EDEBF3;
+  --dec:cubic-bezier(.05,.7,.1,1); --acc-e:cubic-bezier(.3,0,.8,.15); --std:cubic-bezier(.2,0,0,1); --spring:cubic-bezier(.34,1.4,.64,1); }
+* { box-sizing:border-box; }
+body { margin:0; background:var(--bg); color:var(--text); font-family:'Plus Jakarta Sans',system-ui,sans-serif; font-variant-numeric:tabular-nums; }
+.top { padding:22px 28px 0; max-width:1300px; } .top h1 { margin:0; font-size:24px; font-weight:600; }
+.top p { margin:6px 0 0; font-size:14px; line-height:20px; color:var(--text2); max-width:1100px; }
+section { padding:6px 28px 26px; } section h2 { margin:18px 0 12px; font-size:18px; font-weight:600; }
+.row { display:flex; gap:28px; flex-wrap:wrap; align-items:flex-start; }
+figure { margin:0; width:392px; display:flex; flex-direction:column; gap:10px; }
+figcaption { font-size:13px; line-height:19px; color:var(--text2); } figcaption b { color:var(--text); }
+.phone { position:relative; width:392px; height:820px; border-radius:36px; overflow:hidden; background:var(--page); box-shadow:0 0 0 9px #0B0B0D,0 30px 60px -20px rgba(47,27,97,.4); }
+.ic { display:inline-flex; }
+
+/* the Swap screen behind every style */
+.hdr { height:118px; padding:12px 18px 0; color:#fff; border-radius:0 0 24px 24px; background:radial-gradient(110% 90% at 100% 0%, rgba(130,170,255,.6), transparent 60%), linear-gradient(180deg,#221D8C,#3A33C4); }
+.sbar { display:flex; justify-content:space-between; font-size:12px; font-weight:600; }
+.brand { margin-top:16px; display:flex; align-items:center; gap:8px; font-size:22px; font-weight:700; } .brand img { width:28px; height:28px; }
+.form { padding:16px; display:flex; flex-direction:column; gap:10px; }
+.c { background:var(--card); border-radius:18px; padding:14px 16px; box-shadow:0 1px 2px rgba(17,17,17,.04),0 8px 24px rgba(17,17,17,.05); }
+.k { display:flex; justify-content:space-between; font-size:12.5px; color:var(--text2); }
+.amt { display:flex; justify-content:space-between; align-items:center; margin-top:6px; } .amt b { font-size:30px; font-weight:600; letter-spacing:-.01em; }
+.tok { height:40px; padding:0 12px 0 6px; border-radius:20px; background:var(--page); display:flex; align-items:center; gap:8px; font-weight:600; } .tok img { width:28px; height:28px; border-radius:50%; }
+.kv { display:flex; justify-content:space-between; font-size:14px; padding:9px 0; } .kv+.kv { border-top:1px solid var(--line); } .kv span { color:var(--text2); } .kv b { font-weight:600; }
+.cta { position:absolute; left:16px; right:16px; bottom:24px; height:54px; border-radius:27px; border:0; background:var(--grad); color:#fff; font:600 16px 'Plus Jakarta Sans';
+  display:flex; align-items:center; justify-content:center; gap:10px; box-shadow:0 10px 24px -12px rgba(75,68,224,.8);
+  transition:background 240ms var(--std), color 240ms var(--std), box-shadow 240ms var(--std), transform 120ms var(--std); }
+.cta.tonal { background:var(--tv); color:var(--tvI); box-shadow:none; }
+.press { transform:scale(.97) !important; }
+.loader { width:16px; height:16px; background:currentColor; display:inline-block; animation:shapes 1100ms var(--std) infinite; }
+@keyframes shapes { 0%{border-radius:50%;transform:rotate(0) scale(.9)} 33%{border-radius:30% 70% 50% 50%;transform:rotate(120deg)} 66%{border-radius:5px;transform:rotate(240deg) scale(.85)} 100%{border-radius:50%;transform:rotate(360deg) scale(.9)} }
+
+/* status glyphs, shared by all styles */
+.g { position:relative; flex-shrink:0; border-radius:50%; display:flex; align-items:center; justify-content:center; }
+.g-wait { background:var(--tv); color:var(--tvI); animation:breathe 1600ms ease-in-out infinite; }
+@keyframes breathe { 0%,100%{box-shadow:0 0 0 0 rgba(75,68,224,.28)} 50%{box-shadow:0 0 0 7px rgba(75,68,224,.1)} }
+.g-off { background:#F1F0F4; color:#6B6A73; animation:shake 280ms var(--std) 2; }
+@keyframes shake { 0%,100%{transform:none} 25%{transform:translateX(-5px)} 75%{transform:translateX(5px)} }
+.g-arc { background:var(--tv); color:var(--tvI); } .g-arc svg.spin { position:absolute; inset:-3px; animation:spin 900ms linear infinite; }
+@keyframes spin { to { transform:rotate(360deg); } }
+.seal { overflow:visible; } .seal .sh,.seal .pu { transform-box:fill-box; transform-origin:center; }
+.seal .sh { animation:sealIn 480ms var(--spring) both; } .seal .tk { stroke-dasharray:34; animation:tick 280ms var(--dec) 220ms both; }
+.seal .pu { opacity:0; animation:pulse 700ms var(--dec) 140ms both; }
+@keyframes sealIn { from{transform:scale(.35) rotate(-50deg);opacity:0} to{transform:none;opacity:1} }
+@keyframes tick { from{stroke-dashoffset:34} to{stroke-dashoffset:0} }
+@keyframes pulse { 0%{opacity:.6;transform:scale(.85)} 100%{opacity:0;transform:scale(1.35)} }
+.fadein { animation:fadein 240ms var(--std) both; } @keyframes fadein { from{opacity:0;transform:translateY(6px)} to{opacity:1;transform:none} }
+.btn { height:50px; border-radius:25px; border:0; font:600 15px 'Plus Jakarta Sans'; display:flex; align-items:center; justify-content:center; gap:8px; flex:1; transition:transform 120ms var(--std); }
+.btn.fill { background:var(--grad); color:#fff; } .btn.out { background:transparent; color:var(--text); box-shadow:inset 0 0 0 1.5px var(--bd); }
+.btn.text { background:transparent; color:var(--text2); height:44px; } .btn.tonal { background:var(--tv); color:var(--tvI); }
+.steps { display:flex; align-items:center; gap:6px; font-size:12px; color:var(--text2); }
+.steps span { display:inline-flex; align-items:center; gap:5px; } .steps em { width:14px; height:1px; background:var(--bd); }
+.steps i { width:7px; height:7px; border-radius:50%; background:var(--bd); transition:background 160ms; } .steps .on { color:var(--text); } .steps .on i { background:var(--acc); }
+
+/* the wallet's own sheet (mocked, it is not drawn by Vanna) */
+.wscrim { position:absolute; inset:0; z-index:58; background:rgba(8,6,16,.45); opacity:0; pointer-events:none; transition:opacity 250ms; } .wscrim.on { opacity:1; }
+.wal { position:absolute; z-index:60; left:0; right:0; bottom:0; height:316px; border-radius:22px 22px 0 0; background:#17171B; color:#fff; padding:12px 20px 22px;
+  transform:translateY(105%); transition:transform 300ms var(--dec); } .wal.on { transform:none; } .wal.off { transform:translateY(105%); transition:transform 240ms var(--acc-e); }
+.wal .gr { width:32px; height:4px; border-radius:2px; background:#3A3A42; margin:0 auto 16px; } .wal .who { display:flex; align-items:center; gap:10px; font-weight:600; }
+.wal .who span { width:36px; height:36px; border-radius:10px; background:#2A2A31; display:flex; align-items:center; justify-content:center; } .wal small { display:block; font-size:11px; color:#9C9CA6; font-weight:500; }
+.wal h4 { margin:18px 0 6px; font-size:19px; } .wal .kv { border-color:#2A2A31; } .wal .kv span { color:#9C9CA6; }
+.wal .wb { display:flex; gap:10px; margin-top:16px; } .wal .wb span { flex:1; height:48px; border-radius:24px; display:flex; align-items:center; justify-content:center; font-weight:600; transition:transform 120ms; }
+.wal .rej { background:#2A2A31; } .wal .app { background:#F2F2F3; color:#17171B; }
+
+/* A · Balanced sheet */
+.a-scrim { position:absolute; inset:0; z-index:39; background:rgba(17,14,32,.22); opacity:0; transition:opacity 240ms; pointer-events:none; } .a-scrim.on { opacity:1; }
+.a { position:absolute; z-index:40; left:0; right:0; bottom:0; border-radius:28px 28px 0 0; background:var(--card); padding:12px 20px 26px; overflow:hidden;
+  transform:translateY(105%); transition:transform 340ms var(--dec), height 300ms var(--std); box-shadow:0 -10px 30px -12px rgba(17,11,46,.25); }
+.a.on { transform:none; } .a .gr { width:32px; height:4px; border-radius:2px; background:var(--bd); margin:0 auto 18px; }
+.a .in { display:flex; flex-direction:column; align-items:center; text-align:center; }
+.a h3 { margin:16px 0 0; font-size:20px; line-height:26px; font-weight:600; } .a p { margin:6px 0 0; font-size:14px; line-height:20px; color:var(--text2); max-width:300px; }
+.a .acts { margin-top:20px; display:flex; gap:10px; width:100%; } .a .steps { margin-top:14px; }
+
+/* B · Floating row */
+.b { position:absolute; z-index:40; left:12px; right:12px; bottom:16px; min-height:76px; border-radius:22px; background:var(--card); padding:14px 14px 14px 16px;
+  display:flex; align-items:center; gap:14px; box-shadow:0 0 0 1px rgba(17,17,17,.04),0 18px 40px -14px rgba(17,11,46,.45);
+  transform:translateY(130%) scale(.96); opacity:0; transition:transform 380ms var(--spring), opacity 200ms; } .b.on { transform:none; opacity:1; }
+.b .t { flex:1; min-width:0; display:flex; flex-direction:column; gap:2px; } .b .t b { font-size:15.5px; font-weight:600; } .b .t span { font-size:13px; color:var(--text2); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.b .act { height:40px; padding:0 16px; border-radius:20px; border:0; font:600 14px 'Plus Jakarta Sans'; flex-shrink:0; transition:transform 120ms; }
+.b .act.tonal { background:var(--tv); color:var(--tvI); } .b .act.text { background:transparent; color:var(--text2); padding:0 8px; }
+
+/* C · Snackbar */
+.snk { position:absolute; z-index:40; left:12px; right:12px; bottom:92px; min-height:52px; padding:8px 8px 8px 16px; border-radius:12px; background:#26252D; color:#F4F3F7;
+  display:flex; align-items:center; gap:10px; font-size:14px; line-height:19px; box-shadow:0 10px 24px -10px rgba(0,0,0,.5);
+  transform:translateY(20px); opacity:0; transition:transform 260ms var(--dec), opacity 180ms; } .snk.on { transform:none; opacity:1; }
+.snk span { flex:1; } .snk button { height:36px; padding:0 12px; border:0; border-radius:18px; background:transparent; color:#C8BEFF; font:700 14px 'Plus Jakarta Sans'; transition:transform 120ms; }
+
+/* D · Button morph */
+.dcap { position:absolute; z-index:40; left:16px; right:16px; bottom:90px; display:flex; align-items:center; justify-content:center; gap:8px; font-size:13.5px; color:var(--text2);
+  opacity:0; transform:translateY(6px); transition:opacity 200ms, transform 240ms var(--dec); } .dcap.on { opacity:1; transform:none; }
+.cta .dots { display:flex; gap:6px; margin-left:4px; } .cta .dots i { width:7px; height:7px; border-radius:50%; background:rgba(58,51,196,.25); transition:background 160ms; } .cta .dots i.on { background:#3A33C4; }
+.cta.shake { animation:shake 280ms var(--std) 2; }
+
+/* E · Top pill */
+.brand { transition:opacity 200ms; } .e-on .brand { opacity:0; }
+.e { position:absolute; z-index:40; left:50%; top:44px; height:52px; padding:6px 6px 6px 8px; border-radius:26px; background:var(--card); display:flex; align-items:center; gap:10px;
+  box-shadow:0 0 0 1px rgba(17,17,17,.04),0 14px 30px -12px rgba(17,11,46,.45); white-space:nowrap;
+  transform:translate(-50%,-90px) scale(.9); opacity:0; transition:transform 380ms var(--spring), opacity 200ms; } .e.on { transform:translate(-50%,0); opacity:1; }
+.e b { font-size:14px; font-weight:600; } .e span { font-size:13px; color:var(--text2); } .e .chip { height:40px; padding:0 14px; border:0; border-radius:20px; background:var(--tv); color:var(--tvI); font:700 13.5px 'Plus Jakarta Sans'; transition:transform 120ms; }
+.e .chip.ghost { background:transparent; width:4px; padding:0; }
+
+/* F · Card with progress track */
+.f-scrim { position:absolute; inset:0; z-index:39; background:rgba(17,14,32,.18); opacity:0; transition:opacity 240ms; pointer-events:none; } .f-scrim.on { opacity:1; }
+.f { position:absolute; z-index:40; left:12px; right:12px; bottom:16px; border-radius:26px; background:var(--card); padding:18px; overflow:hidden;
+  box-shadow:0 0 0 1px rgba(17,17,17,.04),0 22px 44px -16px rgba(17,11,46,.5); transform:translateY(110%); transition:transform 360ms var(--dec), height 300ms var(--std); } .f.on { transform:none; }
+.f .hd { display:flex; align-items:center; gap:14px; } .f .hd b { display:block; font-size:16.5px; font-weight:600; } .f .hd span { font-size:13px; color:var(--text2); }
+.track { margin:18px 4px 0; display:flex; align-items:flex-start; }
+.node { display:flex; flex-direction:column; align-items:center; gap:6px; width:64px; font-size:11.5px; color:var(--text2); text-align:center; }
+.node i { width:22px; height:22px; border-radius:50%; background:#F1F0F4; display:flex; align-items:center; justify-content:center; color:#fff; transition:background 200ms; }
+.node.done i { background:var(--acc); } .node.now i { background:var(--tv); box-shadow:0 0 0 4px rgba(75,68,224,.12); animation:breathe 1600ms ease-in-out infinite; }
+.node.stop i { background:#8E8D96; } .node.done,.node.now,.node.stop { color:var(--text); font-weight:600; }
+.link { flex:1; height:2px; margin-top:10px; border-radius:1px; background:var(--bd); position:relative; overflow:hidden; } .link::after { content:''; position:absolute; inset:0; background:var(--acc); transform:scaleX(0); transform-origin:left; transition:transform 360ms var(--std); }
+.link.done::after { transform:none; }
+.f .acts { margin-top:18px; display:flex; gap:10px; }
+@media (prefers-reduced-motion: reduce) { *,*::before,*::after { animation-duration:1ms !important; transition-duration:1ms !important; } }
+</style></head>
+<body>
+<div class="top"><h1>Transaction status: six styles</h1>
+<p>Previews only. Each phone plays the same story on the Swap screen: tap Swap, the wallet opens (its own sheet, mocked), you cancel there, Vanna shows it calmly, you tap Try again, approve, Solana confirms, and the Vanna seal appears. Light mode; "Main Wallet" is the example wallet name.</p></div>
+<section id="r1"><h2>A to C</h2><div class="row">
+<figure><div class="phone" data-style="A"></div><figcaption><b>A · Balanced sheet.</b> Everything centred on one axis: icon, title, one line, then two equal buttons side by side (Close · Try again). The sheet grows and shrinks to fit each state instead of jumping.</figcaption></figure>
+<figure><div class="phone" data-style="B"></div><figcaption><b>B · Floating row.</b> One compact card floating above the screen, no grey overlay: icon, two lines, one action on the right. The screen stays readable behind it.</figcaption></figure>
+<figure><div class="phone" data-style="C"></div><figcaption><b>C · Snackbar.</b> Cancelling is not an error, so it gets the lightest touch: the button returns, and a dark one-line message slides up with "Try again". Success uses the same message with the seal.</figcaption></figure>
+</div></section>
+<section id="r2"><h2>D to F</h2><div class="row">
+<figure><div class="phone" data-style="D"></div><figcaption><b>D · Button only.</b> No overlay at all: the Swap button itself shows waiting, gives a small shake when cancelled (with one line above it), lights Sent · Processed · Confirmed inside, and ends on the seal.</figcaption></figure>
+<figure><div class="phone" data-style="E"></div><figcaption><b>E · Top pill.</b> A small status pill drops into the header, like a live activity, and tucks away by itself. The form below never moves.</figcaption></figure>
+<figure><div class="phone" data-style="F"></div><figcaption><b>F · Card with progress.</b> A floating card with a three-stop track (You · Main Wallet · Solana) that shows exactly where it stopped, then two equal buttons.</figcaption></figure>
+</div></section>
+
+<script>
+var IC = __ICONS__, MARK = __MARK__, LOGO = '__LOGO__', USDC = '__USDC__', TSLA = '__TSLA__', WNAME = 'Main Wallet';
+function ic(n, s) { return '<span class="ic"><svg width="' + (s || 22) + '" height="' + (s || 22) + '" viewBox="0 -960 960 960" fill="currentColor">' + IC[n] + '</svg></span>'; }
+var sealN = 0;
+function seal(size) {
+  var id = 'sg' + (sealN++), d = '';
+  for (var i = 0; i <= 120; i++) { var a = i / 120 * Math.PI * 2, r = 23 + 1.8 * Math.cos(9 * a); d += (i ? 'L' : 'M') + (28 + r * Math.cos(a)).toFixed(2) + ' ' + (28 + r * Math.sin(a)).toFixed(2); }
+  return '<svg class="seal" width="' + size + '" height="' + size + '" viewBox="0 0 56 56"><defs><linearGradient id="' + id + '" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#FC5457"/><stop offset="1" stop-color="#703AE6"/></linearGradient></defs>' +
+    '<circle class="pu" cx="28" cy="28" r="25" fill="none" stroke="url(#' + id + ')" stroke-width="2"/><path class="sh" d="' + d + 'Z" fill="url(#' + id + ')"/>' +
+    '<path class="tk" d="M17.5 28.5 L25 35.5 L39.5 20" fill="none" stroke="#fff" stroke-width="4.6" stroke-linecap="square" stroke-linejoin="miter"/></svg>';
+}
+function glyph(kind, size) {
+  var s = size + 'px', inner = Math.round(size * .46);
+  if (kind === 'wait') return '<span class="g g-wait" style="width:' + s + ';height:' + s + '">' + ic('wallet', inner) + '</span>';
+  if (kind === 'off') return '<span class="g g-off" style="width:' + s + ';height:' + s + '">' + ic('close', inner) + '</span>';
+  if (kind === 'arc') return '<span class="g g-arc" style="width:' + s + ';height:' + s + '"><svg class="spin" width="' + (size + 6) + '" height="' + (size + 6) + '" viewBox="0 0 52 52"><circle cx="26" cy="26" r="24" fill="none" stroke="#4B44E0" stroke-width="2.5" stroke-linecap="round" stroke-dasharray="36 120"/></svg>' + ic('wallet', inner) + '</span>';
+  return '<span class="g" style="width:' + s + ';height:' + s + '">' + seal(size) + '</span>';
+}
+function steps(n) { return '<div class="steps">' + ['Sent', 'Processed', 'Confirmed'].map(function (t, i) { return '<span class="' + (i < n ? 'on' : '') + '"><i></i>' + t + '</span>'; }).join('<em></em>') + '</div>'; }
+function q(p, s) { return p.querySelector(s); }
+function press(el) { if (!el) return; el.classList.add('press'); setTimeout(function () { el.classList.remove('press'); }, 150); }
+/* swap a box's content and let its height follow smoothly */
+function morph(box, inner, html) {
+  var h0 = box.offsetHeight; box.style.height = h0 + 'px';
+  inner.innerHTML = html; inner.firstElementChild && inner.classList.remove('fadein'); void inner.offsetWidth; inner.classList.add('fadein');
+  var cs = getComputedStyle(box), h1 = inner.offsetHeight + parseFloat(cs.paddingTop) + parseFloat(cs.paddingBottom) + (q(box, '.gr') ? 22 : 0);
+  requestAnimationFrame(function () { box.style.height = h1 + 'px'; });
+}
+
+var SCREEN = '<div class="hdr"><div class="sbar"><span>12:30</span><span>&#9679;&#9679;&#9679; &#9650; &#9646;</span></div><div class="brand"><img src="' + LOGO + '" alt="">Swap</div></div>' +
+  '<div class="form"><div class="c"><div class="k"><span>You pay</span><span>Balance 4,731.87</span></div><div class="amt"><b>1,182.96</b><span class="tok"><img src="' + USDC + '">USDC</span></div></div>' +
+  '<div class="c"><div class="k"><span>You receive</span><span>Balance 37.2035</span></div><div class="amt"><b>3.1841</b><span class="tok"><img src="' + TSLA + '">TSLAx</span></div></div>' +
+  '<div class="c"><div class="kv"><span>Price impact</span><b style="color:var(--pos)">0.21%</b></div><div class="kv"><span>Minimum received</span><b>3.1682 TSLAx</b></div><div class="kv"><span>Slippage</span><b>Auto · 0.5%</b></div></div></div>' +
+  '<button class="cta">Swap · approve in wallet</button>' +
+  '<div class="wscrim"></div><div class="wal"><div class="gr"></div><div class="who"><span>' + ic('wallet', 20) + '</span><div>' + WNAME + '<small>Wallet app, not drawn by Vanna</small></div></div>' +
+  '<h4>Sign 1 transaction</h4><div class="kv"><span>Swap</span><b>1,182.96 USDC → TSLAx</b></div><div class="kv"><span>Network fee</span><b>≈ 0.00005 SOL</b></div>' +
+  '<div class="wb"><span class="rej">Reject</span><span class="app">Approve</span></div></div>';
+var CTA = 'Swap · approve in wallet';
+
+var STYLES = {
+  A: function (p) {
+    p.insertAdjacentHTML('beforeend', '<div class="a-scrim"></div><div class="a"><div class="gr"></div><div class="in"></div></div>');
+    var box = q(p, '.a'), inner = q(p, '.a .in'), scrim = q(p, '.a-scrim');
+    function show(html) { if (!box.classList.contains('on')) { inner.innerHTML = html; box.style.height = ''; box.classList.add('on'); scrim.classList.add('on'); } else morph(box, inner, html); }
+    return {
+      wait: function () { show(glyph('wait', 64) + '<h3>Approve in ' + WNAME + '</h3><p>Your wallet is open. Nothing moves until you approve there.</p><div class="acts"><button class="btn text">Cancel</button></div>'); },
+      cancel: function () { show(glyph('off', 64) + '<h3>Cancelled in ' + WNAME + '</h3><p>Nothing was sent. Your amounts are still here.</p><div class="acts"><button class="btn out">Close</button><button class="btn fill retry">Try again</button></div>'); },
+      retry: function () { press(q(p, '.retry')); },
+      confirm: function (n) { show(glyph('arc', 64) + '<h3>Sent to Solana</h3><p>Usually under 2 seconds.</p>' + steps(n)); },
+      step: function (n) { var s = q(p, '.a .steps'); if (s) s.outerHTML = steps(n); },
+      done: function () { show(glyph('seal', 64) + '<h3>Swapped</h3><p>1,182.96 USDC → 3.1841 TSLAx</p><div class="acts"><button class="btn out">Done</button><button class="btn fill">View in history</button></div>'); },
+      reset: function () { box.classList.remove('on'); scrim.classList.remove('on'); }
+    };
+  },
+  B: function (p) {
+    p.insertAdjacentHTML('beforeend', '<div class="b"></div>');
+    var box = q(p, '.b');
+    function show(g, t, s, act) { box.innerHTML = '<span class="fadein" style="display:flex">' + g + '</span><div class="t fadein"><b>' + t + '</b><span>' + s + '</span></div>' + (act || ''); box.classList.add('on'); }
+    return {
+      wait: function () { show(glyph('wait', 44), 'Approve in your wallet', WNAME + ' is open', '<button class="act text">Cancel</button>'); },
+      cancel: function () { show(glyph('off', 44), 'Cancelled', 'In ' + WNAME + ' · nothing sent', '<button class="act tonal retry">Try again</button>'); },
+      retry: function () { press(q(p, '.retry')); },
+      confirm: function (n) { show(glyph('arc', 44), 'Sent to Solana', ['Sending', 'Processed · confirming', 'Confirmed'][n - 1]); },
+      step: function (n) { var s = q(p, '.b .t span'); if (s) s.textContent = ['Sending', 'Processed · confirming', 'Confirmed'][n - 1]; },
+      done: function () { show(glyph('seal', 44), 'Swapped', '3.1841 TSLAx received', '<button class="act tonal">View</button>'); },
+      reset: function () { box.classList.remove('on'); }
+    };
+  },
+  C: function (p) {
+    p.insertAdjacentHTML('beforeend', '<div class="snk"></div>');
+    var snk = q(p, '.snk'), cta = q(p, '.cta');
+    return {
+      wait: function () { snk.classList.remove('on'); cta.classList.add('tonal'); cta.innerHTML = '<span class="loader"></span>Waiting for ' + WNAME; },
+      cancel: function () { cta.classList.remove('tonal'); cta.innerHTML = CTA; snk.innerHTML = '<span>Cancelled in ' + WNAME + '. Nothing sent.</span><button class="retry">Try again</button>'; snk.classList.add('on'); },
+      retry: function () { press(q(p, '.snk .retry')); },
+      confirm: function () { snk.classList.remove('on'); cta.innerHTML = '<span class="loader"></span>Confirming on Solana'; },
+      step: function () {},
+      done: function () { cta.classList.remove('tonal'); cta.innerHTML = CTA; snk.innerHTML = '<span style="display:flex;align-items:center;gap:10px">' + seal(22) + 'Swapped 3.1841 TSLAx</span><button>View</button>'; snk.classList.add('on'); },
+      reset: function () { snk.classList.remove('on'); }
+    };
+  },
+  D: function (p) {
+    p.insertAdjacentHTML('beforeend', '<div class="dcap"></div>');
+    var cap = q(p, '.dcap'), cta = q(p, '.cta');
+    function dots(n) { return '<span class="dots">' + [1, 2, 3].map(function (i) { return '<i class="' + (i <= n ? 'on' : '') + '"></i>'; }).join('') + '</span>'; }
+    return {
+      wait: function () { cap.classList.remove('on'); cta.classList.add('tonal'); cta.innerHTML = '<span class="loader"></span>Waiting for ' + WNAME; },
+      cancel: function () {
+        cta.classList.remove('tonal'); cta.innerHTML = CTA; cta.classList.remove('shake'); void cta.offsetWidth; cta.classList.add('shake');
+        cap.innerHTML = '<span style="color:#6B6A73;display:flex">' + ic('close', 16) + '</span>Cancelled in ' + WNAME + ' · nothing was sent'; cap.classList.add('on');
+      },
+      retry: function () { press(cta); },
+      confirm: function (n) { cap.classList.remove('on'); cta.classList.add('tonal'); cta.innerHTML = 'Sent to Solana' + dots(n); },
+      step: function (n) { var d = q(cta, '.dots'); if (d) d.outerHTML = dots(n); },
+      done: function () { cta.classList.remove('tonal'); cta.innerHTML = '<span style="display:flex;margin-left:-6px">' + seal(28) + '</span>Swapped · View in history'; cap.innerHTML = '3.1841 TSLAx received'; cap.classList.add('on'); },
+      reset: function () { cap.classList.remove('on'); cta.classList.remove('tonal', 'shake'); cta.innerHTML = CTA; }
+    };
+  },
+  E: function (p) {
+    p.insertAdjacentHTML('beforeend', '<div class="e"></div>');
+    var pill = q(p, '.e'), cta = q(p, '.cta');
+    function show(g, b, s, chip) { p.classList.add('e-on'); pill.innerHTML = g + '<span style="display:flex;flex-direction:column"><b>' + b + '</b>' + (s ? '<span>' + s + '</span>' : '') + '</span>' + (chip || '<i class="chip ghost"></i>'); pill.classList.add('on'); }
+    return {
+      wait: function () { cta.classList.add('tonal'); cta.innerHTML = '<span class="loader"></span>Waiting for ' + WNAME; show(glyph('wait', 40), 'Approve in your wallet', WNAME + ' is open'); },
+      cancel: function () { cta.classList.remove('tonal'); cta.innerHTML = CTA; show(glyph('off', 40), 'Cancelled', 'Nothing was sent', '<button class="chip retry">Try again</button>'); },
+      retry: function () { press(q(p, '.e .retry')); },
+      confirm: function (n) { cta.classList.add('tonal'); cta.innerHTML = '<span class="loader"></span>Confirming'; show(glyph('arc', 40), 'Sent to Solana', ['Sending', 'Processed', 'Confirmed'][n - 1]); },
+      step: function (n) { var s = q(pill, 'span span'); if (s) s.textContent = ['Sending', 'Processed', 'Confirmed'][n - 1]; },
+      done: function () { cta.classList.remove('tonal'); cta.innerHTML = CTA; show(glyph('seal', 40), 'Swapped', '3.1841 TSLAx received', '<button class="chip">View</button>'); setTimeout(function () { pill.classList.remove('on'); p.classList.remove('e-on'); }, 2200); },
+      reset: function () { pill.classList.remove('on'); p.classList.remove('e-on'); }
+    };
+  },
+  F: function (p) {
+    p.insertAdjacentHTML('beforeend', '<div class="f-scrim"></div><div class="f"><div class="in"></div></div>');
+    var box = q(p, '.f'), inner = q(p, '.f .in'), scrim = q(p, '.f-scrim');
+    function track(a, b, c, l1, l2) {
+      function node(cls, label, icon) { return '<div class="node ' + cls + '"><i>' + (icon || '') + '</i>' + label + '</div>'; }
+      return '<div class="track">' + node(a, 'You', ic('check', 14)) + '<div class="link ' + l1 + '"></div>' + node(b, WNAME, b === 'stop' ? ic('close', 14) : (b === 'done' ? ic('check', 14) : '')) +
+        '<div class="link ' + l2 + '"></div>' + node(c, 'Solana', c === 'done' ? ic('check', 14) : '') + '</div>';
+    }
+    function show(html) { if (!box.classList.contains('on')) { inner.innerHTML = html; box.style.height = ''; box.classList.add('on'); scrim.classList.add('on'); } else morph(box, inner, html); }
+    return {
+      wait: function () { show('<div class="hd">' + glyph('wait', 44) + '<div><b>Approve in ' + WNAME + '</b><span>Nothing moves until you approve.</span></div></div>' + track('done', 'now', '', 'done', '') + '<div class="acts"><button class="btn text">Cancel</button></div>'); },
+      cancel: function () { show('<div class="hd">' + glyph('off', 44) + '<div><b>Cancelled in ' + WNAME + '</b><span>Nothing was sent.</span></div></div>' + track('done', 'stop', '', 'done', '') + '<div class="acts"><button class="btn out">Close</button><button class="btn fill retry">Try again</button></div>'); },
+      retry: function () { press(q(p, '.retry')); },
+      confirm: function () { show('<div class="hd">' + glyph('arc', 44) + '<div><b>Sent to Solana</b><span>Usually under 2 seconds.</span></div></div>' + track('done', 'done', 'now', 'done', 'done')); },
+      step: function () {},
+      done: function () { show('<div class="hd">' + glyph('seal', 44) + '<div><b>Swapped</b><span>1,182.96 USDC → 3.1841 TSLAx</span></div></div>' + track('done', 'done', 'done', 'done', 'done') + '<div class="acts"><button class="btn out">Done</button><button class="btn fill">View in history</button></div>'); },
+      reset: function () { box.classList.remove('on'); scrim.classList.remove('on'); }
+    };
+  }
+};
+
+function play(p) {
+  p.innerHTML = SCREEN;
+  var S = STYLES[p.dataset.style](p), cta = q(p, '.cta'), wal = q(p, '.wal'), ws = q(p, '.wscrim'), timers = [];
+  function up() { wal.classList.remove('off'); wal.classList.add('on'); ws.classList.add('on'); }
+  function down() { wal.classList.remove('on'); wal.classList.add('off'); ws.classList.remove('on'); }
+  var T = [
+    [600, function () { press(cta); }], [800, S.wait], [1300, up],
+    [2800, function () { press(q(wal, '.rej')); }], [3000, down], [3200, S.cancel],
+    [5900, S.retry], [6100, S.wait], [6500, up], [7900, function () { press(q(wal, '.app')); }], [8100, down],
+    [8300, function () { S.confirm(1); }], [8800, function () { S.step(2); }], [9300, S.done],
+    [12600, S.reset]
+  ];
+  T.forEach(function (t) { timers.push(setTimeout(t[1], t[0])); });
+  setTimeout(function () { play(p); }, 13400);
+}
+document.querySelectorAll('.phone').forEach(play);
+</script>
+</body></html>

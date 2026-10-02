@@ -10,7 +10,7 @@ The work is a **design prototype** of the Vanna Android app (Solana leveraged le
 
 - **Project folder (work here):** `C:\Users\akgam\Downloads\vanna-v2-designs\vanna-v2-designs` (not a git repo).
 - **Repo clone (for pushing):** `C:\Users\akgam\Downloads\vanna-v2-designs\vanna-solana-app`, private repo `vannafinance/vanna-solana-app`. The design lives in its `vanna-v2-designs/` subfolder.
-- **Pushed branch:** `feature/vanna-v2-android-redesign` (https://github.com/vannafinance/vanna-solana-app/tree/feature/vanna-v2-android-redesign), last commit `5a08544` (gradient buttons, refresh previews, handoff). Earlier: `779f32d`, `51b0ed4`, `5f889ed`.
+- **Pushed branch:** `feature/vanna-v2-android-redesign` (https://github.com/vannafinance/vanna-solana-app/tree/feature/vanna-v2-android-redesign), last commit `6f1ed86` (refresh2 preview: own-colour glow, plain bell, logo = the user's favicon as given, assets/vanna-favicon-256.png, no effects). Earlier: `779f32d`, `51b0ed4`, `5f889ed`.
 - **Everything is pushed** as of `5a08544`. Logo rule (user, latest): the mark keeps its original coral→violet gradient and has **no tile/background** behind it, same in light and dark (white mark was rejected).
 - **Latest checkpoint:** `042 Gradient buttons per space` (`node compare/tools/checkpoint.js list`). New builds cleanly; every logic file parses; a simulated fresh checkout runs over http and file://.
 - **Server:** `python -m http.server 8790 --directory compare` (the `compare` entry in `.claude/launch.json`) → http://localhost:8790.

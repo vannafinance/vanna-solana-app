@@ -275,5 +275,18 @@
    "V7Swap",
    "V7Farm"
   ]
+ },
+ {
+  "title": "Transaction status as a balanced sheet",
+  "date": "2 Oct 2026",
+  "detail": "The status that appears after you confirm (waiting for the wallet, cancelled, sent to Solana, done, failed) is now a bottom sheet where everything sits on one centred line: the status icon, a title, one sentence, then two equal buttons side by side. Cancelled reads 'Cancelled in Phantom. Nothing was sent. Your amounts are still here.' with Close and Try again; success shows the Vanna seal with Done and the screen's own next step (View position, View in swap history, Start trading). The main button uses the space's gradient. Before, the text was left-aligned while the buttons were centred and Close floated on its own.",
+  "screens": [
+   "V7Swap",
+   "V7PerpsOrder",
+   "V7Farm",
+   "V7EarnSupply",
+   "V7MarginCreate",
+   "V7FarmPosition"
+  ]
  }
 ]
