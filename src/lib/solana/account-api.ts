@@ -4,7 +4,7 @@ import { API_BASE_URL } from "./config";
 import { ApiError, requestJson } from "./request-json";
 import { usdToUnits } from "./usd";
 
-// The web app reports "no debt" as a health factor of 999.
+// The web app reports "no debt" as a health factor of 999, and as 0 for an account that holds nothing yet.
 const HEALTH_INFINITY = 999;
 
 const EMPTY: MarginAccountSnapshot = {
@@ -37,15 +37,16 @@ export function parseAccountSnapshot(payload: unknown): MarginAccountSnapshot {
   const gross = finite(payload, "grossCollateralValue");
   const netAvailable = finite(payload, "netAvailableCollateral");
   const health = finite(payload, "avgHealthFactor");
+  const borrowedValue = finite(payload, "totalBorrowedValue");
 
   return {
     hasMarginAccount: true,
     address: payload.marginAccountAddress,
     collateral: usdToUnits(finite(payload, "totalCollateralValue")),
-    borrowed: usdToUnits(finite(payload, "totalBorrowedValue")),
+    borrowed: usdToUnits(borrowedValue),
     netAvailable: usdToUnits(Math.max(netAvailable, 0)),
     roomBeforeLiquidation: usdToUnits(Math.max(finite(payload, "collateralLeftBeforeLiquidation"), 0)),
-    health: health >= HEALTH_INFINITY ? null : health,
+    health: health >= HEALTH_INFINITY || borrowedValue === 0 ? null : health,
     leverage: netAvailable > 0 ? gross / netAvailable : gross > 0 ? 1 : null,
     borrowRatePercent: finite(payload, "borrowRate"),
   };

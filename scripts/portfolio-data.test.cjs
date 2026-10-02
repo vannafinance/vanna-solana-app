@@ -32,6 +32,12 @@ test("health of 999 means no debt", () => {
   assert.equal(parseAccountSnapshot({ ...wire, avgHealthFactor: 999 }).health, null);
 });
 
+test("an account with nothing borrowed has no health, even when the web app reports 0", () => {
+  const empty = parseAccountSnapshot({ ...wire, totalBorrowedValue: 0, totalCollateralValue: 0, grossCollateralValue: 0, netAvailableCollateral: 0, avgHealthFactor: 0 });
+  assert.equal(empty.hasMarginAccount, true);
+  assert.equal(empty.health, null);
+});
+
 test("a wallet without a margin account is empty, not an error", () => {
   const snapshot = parseAccountSnapshot({ hasMarginAccount: false });
   assert.equal(snapshot.hasMarginAccount, false);
