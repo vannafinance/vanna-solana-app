@@ -2,14 +2,17 @@ import { type Connection, PublicKey, type TransactionInstruction } from "@solana
 
 import { fetchAccountSnapshot } from "./account-api";
 import type { AssetInfo } from "./assets";
+import { KAMINO_EXTRA_LOOKUP_TABLES, KAMINO_LOOKUP_TABLE } from "./kamino";
+import { fetchLookupTables } from "./lookup-tables";
 import { repayFromMarginInstruction, withdrawCollateralInstruction } from "./margin-instructions";
-import { buildMarginSwap, type MarginSwapBuild } from "./margin-swap";
+import { buildMarginSwap, MARGIN_SWAP_COMPUTE_UNITS, type MarginSwapBuild } from "./margin-swap";
 import { fetchMarginState, positionAccounts } from "./margin-state";
 import { NoPositionError } from "./perps-errors";
 import { fetchPerpsQuote, type Side, usdcAsset } from "./perps-transactions";
 import { associatedTokenAddress, marginAddress, tokenProgramOf } from "./program-accounts";
 import { withStalePoolRetry } from "./retry-stale-pool";
-import { type SigningHooks, sendInstructions } from "./send-transaction";
+import { sendBatches } from "./send-batches";
+import type { SigningHooks } from "./send-transaction";
 import { createAssociatedTokenAccountIdempotent } from "./token-instructions";
 import { inputTransferFee } from "./transfer-fee";
 
@@ -127,10 +130,16 @@ export function buildClosePosition(connection: Connection, owner: PublicKey, req
   return request.side === "long" ? buildCloseLong(connection, owner, request) : buildCloseShort(connection, owner, request);
 }
 
-// The quote is fetched again on every attempt: a pool the fork cloned earlier can drift from an older quote.
+// The quote is fetched again on every attempt: a pool the fork cloned earlier can drift from an older quote. The swap, the
+// repay and the withdraw stay in one transaction, so a close either happens whole or not at all. An account that holds
+// many positions needs a lookup table for that, and the last resort is one made on the fork, as on the web app.
 export function closePosition(connection: Connection, owner: PublicKey, request: ClosePositionRequest, hooks: SigningHooks): Promise<string> {
   return withStalePoolRetry(hooks, async (tracked) => {
-    const { instructions, tables } = await buildClosePosition(connection, owner, request);
-    return sendInstructions(connection, owner, instructions, tracked, tables);
+    const [{ instructions, tables }, kamino] = await Promise.all([
+      buildClosePosition(connection, owner, request),
+      fetchLookupTables(connection, [KAMINO_LOOKUP_TABLE, ...KAMINO_EXTRA_LOOKUP_TABLES]),
+    ]);
+    const [, ...body] = instructions;
+    return sendBatches(connection, owner, { computeUnits: MARGIN_SWAP_COMPUTE_UNITS, batches: [body], retrySafe: true, allowForkTable: true, tables: [...tables, ...kamino] }, tracked);
   });
 }

@@ -443,6 +443,46 @@ test("only a wallet that refused to authorize the app counts as a refusal worth 
 });
 
 test("an account too big for one order reads as too many open positions", () => {
-  assert.equal(toTransactionError(new RangeError("This action is too large to send in one transaction")).title, "Too many open positions");
-  assert.equal(toTransactionError(new RangeError("encoding overruns Uint8Array")).title, "Too many open positions");
+  assert.equal(toTransactionError(new RangeError("This action is too large to send in one transaction")).title, "Order too large");
+  assert.equal(toTransactionError(new RangeError("encoding overruns Uint8Array")).title, "Order too large");
+});
+
+const { AddressLookupTableAccount } = require("@solana/web3.js");
+
+// Forty distinct read-only accounts do not fit in one transaction (40 x 32 bytes) and do once a table holds them.
+function crowded() {
+  const keys = Array.from({ length: 40 }, () => Keypair.generate().publicKey);
+  const instruction = new TransactionInstruction({ programId: owner, keys: keys.map((pubkey) => ({ pubkey, isSigner: false, isWritable: false })), data: Buffer.alloc(8) });
+  return { keys, instruction };
+}
+
+function tableFixture(keys) {
+  const base = batchFixture();
+  let slot = 100;
+  const connection = {
+    ...base.connection,
+    getSlot: async () => (slot += 1),
+    getAddressLookupTable: async (address) => ({
+      value: new AddressLookupTableAccount({ key: address, state: { deactivationSlot: 2n ** 64n - 1n, lastExtendedSlot: 0, lastExtendedSlotStartIndex: 0, authority: owner, addresses: keys } }),
+    }),
+  };
+  return { ...base, connection };
+}
+
+test("an order that fits no other way gets a table made on the fork, with one extra wallet prompt", async () => {
+  const { keys, instruction } = crowded();
+  const { connection, hooks, prompts, sent } = tableFixture(keys);
+  let single = 0;
+  const counted = { ...hooks, sign: async (transaction) => { single += 1; return hooks.sign(transaction); } };
+  await sendBatches(connection, owner, { computeUnits: 600_000, batches: [[instruction]], retrySafe: false, allowForkTable: true }, counted);
+  assert.deepEqual(prompts, [2], "the table is made in two transactions, approved together in one prompt");
+  assert.equal(single, 1, "then the order itself is one more prompt");
+  assert.equal(sent.length, 3, "create and first extend, the second extend, then the order");
+});
+
+test("without permission to make a table the same order is reported as too large", async () => {
+  const { keys, instruction } = crowded();
+  const { connection, hooks, prompts } = tableFixture(keys);
+  await assert.rejects(sendBatches(connection, owner, { computeUnits: 600_000, batches: [[instruction]], retrySafe: false }, hooks), RangeError);
+  assert.deepEqual(prompts, []);
 });

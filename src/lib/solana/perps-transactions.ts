@@ -136,7 +136,7 @@ export function openPosition(connection: Connection, owner: PublicKey, request: 
     return sendBatches(
       connection,
       owner,
-      { computeUnits: MARGIN_SWAP_COMPUTE_UNITS, batches: legs, retrySafe: false, tables: [...tables, ...kamino], onLanded: (count) => (progress.landed = alreadyLanded + count) },
+      { computeUnits: MARGIN_SWAP_COMPUTE_UNITS, batches: legs, retrySafe: false, allowForkTable: true, tables: [...tables, ...kamino], onLanded: (count) => (progress.landed = alreadyLanded + count) },
       tracked,
     );
   });

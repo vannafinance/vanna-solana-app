@@ -82,7 +82,7 @@ export function toTransactionError(error: unknown): TransactionError {
     return new TransactionError("network", "Wrong wallet", "This build is showing another wallet's data. Disconnect the developer wallet override to send transactions.");
   }
   if (TOO_LARGE.test(text)) {
-    return new TransactionError("network", "Too many open positions", "This account holds too many positions to place this order in one go. Close or reduce a position first, then try again. Nothing was sent.");
+    return new TransactionError("network", "Order too large", "This account holds so many positions that the order does not fit in a Solana transaction, even with a lookup table. Close or reduce a position first, then try again. Nothing was sent.");
   }
   if (WALLET_UNREACHABLE.test(text)) {
     return new TransactionError("network", "Could not reach your wallet", "The wallet app did not answer in time. Open it once, then try again. Nothing was sent.");

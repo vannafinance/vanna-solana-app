@@ -1,5 +1,6 @@
 import { type AddressLookupTableAccount, ComputeBudgetProgram, type Connection, type PublicKey, type TransactionInstruction, TransactionMessage, VersionedTransaction } from "@solana/web3.js";
 
+import { createTemporaryTable, distinctAccounts } from "./lookup-tables";
 import { sendAndConfirm, type SigningHooks, sendInstructions, TransactionFailedError } from "./send-transaction";
 
 const MAX_TRANSACTION_BYTES = 1232;
@@ -26,6 +27,9 @@ export type BatchRequest = {
   // Lookup tables that exist on mainnet. A wallet reads them like any other account, unlike a table made on the fork, and
   // they let more of the batches share one transaction.
   tables?: readonly AddressLookupTableAccount[];
+  // When the batches still cannot be packed with those, a table made on the fork is the last resort: one extra wallet
+  // prompt, and a warning in some wallets (Solflare refuses it). Without it such an order is reported as too large.
+  allowForkTable?: boolean;
   // Called after each transaction lands with how many batches have landed so far in this call.
   onLanded?: (batches: number) => void;
 };
@@ -61,8 +65,16 @@ function pack(payer: PublicKey, { computeUnits, batches }: BatchRequest, tables:
 // transactions as fit, using only tables that exist on mainnet, approves them together in one prompt and sends them in
 // order, each after the one before has confirmed. One that fits goes out as it is.
 export async function sendBatches(connection: Connection, payer: PublicKey, request: BatchRequest, hooks: SigningHooks): Promise<string> {
-  const tables = request.tables ?? [];
-  const transactions = pack(payer, request, tables);
+  let tables = request.tables ?? [];
+  let transactions: Packed[];
+  try {
+    transactions = pack(payer, request, tables);
+  } catch (error) {
+    if (!(error instanceof RangeError) || request.allowForkTable !== true) throw error;
+    const table = await createTemporaryTable(connection, payer, distinctAccounts(payer, request.batches.flat()), hooks);
+    tables = [...tables, table];
+    transactions = pack(payer, request, tables);
+  }
   if (transactions.length === 0) throw new RangeError("There is nothing left to send");
   if (transactions.length === 1) {
     const signature = await sendInstructions(connection, payer, transactions[0].instructions, hooks, [...tables]);

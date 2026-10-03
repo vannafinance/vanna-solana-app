@@ -95,7 +95,7 @@ const kaminoTables = (connection: Connection) => fetchLookupTables(connection, [
 export async function deployFarm(connection: Connection, owner: PublicKey, request: FarmDeployRequest, hooks: SigningHooks, progress: FarmDeployProgress = freshDeployProgress()): Promise<string> {
   const [batches, tables] = await Promise.all([buildFarmDeploy(connection, owner, request, progress), kaminoTables(connection)]);
   const alreadyLanded = progress.landed;
-  return sendBatches(connection, owner, { computeUnits: DEPLOY_COMPUTE_UNITS, batches, retrySafe: false, tables, onLanded: (count) => (progress.landed = alreadyLanded + count) }, hooks);
+  return sendBatches(connection, owner, { computeUnits: DEPLOY_COMPUTE_UNITS, batches, retrySafe: false, allowForkTable: true, tables, onLanded: (count) => (progress.landed = alreadyLanded + count) }, hooks);
 }
 
 export type FarmExitRequest = {
@@ -129,7 +129,7 @@ export async function buildFarmExit(connection: Connection, owner: PublicKey, re
 
 export async function exitFarm(connection: Connection, owner: PublicKey, request: FarmExitRequest, hooks: SigningHooks): Promise<string> {
   const [batches, tables] = await Promise.all([buildFarmExit(connection, owner, request), kaminoTables(connection)]);
-  return sendBatches(connection, owner, { computeUnits: EXIT_COMPUTE_UNITS, batches, retrySafe: true, tables }, hooks);
+  return sendBatches(connection, owner, { computeUnits: EXIT_COMPUTE_UNITS, batches, retrySafe: true, allowForkTable: true, tables }, hooks);
 }
 
 // A second transaction on purpose: it reads the account as the exit left it, so the health scan is right whether or not
