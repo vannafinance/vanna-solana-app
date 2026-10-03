@@ -74,7 +74,7 @@ export function toTransactionError(error: unknown): TransactionError {
     return new TransactionError("network", "Wrong wallet", "This build is showing another wallet's data. Disconnect the developer wallet override to send transactions.");
   }
   if (CONNECTION_REFUSED.test(text)) {
-    return new TransactionError("network", "Wallet connection refused", "Your wallet did not accept the connection to Vanna. Disconnect in Profile, connect it again and retry. Nothing was sent.");
+    return new TransactionError("network", "Wallet connection refused", "This wallet did not accept the request. Pick the wallet app you connected with when Android asks, or disconnect in Profile and connect again. Nothing was sent.");
   }
   if (REJECTED.test(text)) return new TransactionError("rejected", "Request cancelled", "You cancelled the request in your wallet. Nothing was sent.");
   const program = text.includes(VANNA_PROGRAM_ID) ? programError(text) : null;
