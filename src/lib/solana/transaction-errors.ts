@@ -50,7 +50,6 @@ function detailOf(error: unknown): string {
 }
 
 export function toTransactionError(error: unknown): TransactionError {
-${error.stack}` : String(error));
   if (error instanceof TransactionError) return error;
   if (error instanceof BlockhashExpiredError) {
     return new TransactionError("expired", "Request expired", "The transaction was not confirmed in time. Nothing was sent. Try again.");
