@@ -1,6 +1,6 @@
 import { router } from "expo-router";
 import { PublicKey } from "@solana/web3.js";
-import { useCallback, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 
 import { formatToken, formatUsd, parseUnits } from "@/format/format-amount";
 import { shortAddress } from "@/format/short-address";
@@ -9,7 +9,7 @@ import { orderIssue, quoteOrder } from "@/lib/perps/order-quote";
 import { assets } from "@/lib/solana/assets";
 import { NETWORK_FEE_ESTIMATE, NETWORK_LABEL } from "@/lib/solana/config";
 import { createMarginAccount } from "@/lib/solana/margin-transactions";
-import { openPosition } from "@/lib/solana/perps-transactions";
+import { freshOpenProgress, openPosition } from "@/lib/solana/perps-transactions";
 import { marginAddress } from "@/lib/solana/program-accounts";
 import { routes } from "@/navigation/routes";
 import type { EnvelopeStage } from "@/types/margin-account";
@@ -53,6 +53,8 @@ export function usePerpsOrder(symbol: string, initialSide: Side) {
   // sheet closes, because the account appearing on chain after step 1 must not turn a retry of step 2 into a one-step flow.
   const [firstTrade, setFirstTrade] = useState(false);
   const [step, setStep] = useState(1);
+  // How far the last attempt got, so trying again after a stop does not deposit or borrow a second time.
+  const landed = useRef(freshOpenProgress());
 
   const funds = market.status === "ready" && holdings.data ? orderFunds(side, market.data.symbol, market.data.markPrice, holdings.data.holdings) : null;
   const collateral = parseUnits(amountText, DECIMALS) ?? 0n;
@@ -77,7 +79,7 @@ export function usePerpsOrder(symbol: string, initialSide: Side) {
   const ready = ticket.status === "ready" ? ticket.data : null;
   const flow = useTransactionFlow({
     steps: firstTrade ? 2 : 1,
-    run: (stepNumber, progress) => {
+    run: (stepNumber, runProgress) => {
       setStep(stepNumber);
       return signer.execute(({ connection, owner, hooks }) => {
         if (firstTrade && stepNumber === 1) return createMarginAccount(connection, owner, hooks);
@@ -86,8 +88,8 @@ export function usePerpsOrder(symbol: string, initialSide: Side) {
           throw new TransactionError("network", "Something went wrong", "The order could not be prepared. Nothing left your wallet.");
         }
         const base = collateralBaseUnits(side, funds, ready.collateral, ready.market.markPrice);
-        return openPosition(connection, owner, { side, stock, collateral: base, leverage }, hooks);
-      }, progress);
+        return openPosition(connection, owner, { side, stock, collateral: base, leverage }, hooks, landed.current);
+      }, runProgress);
     },
     success: {
       title: `Your ${side} is open`,
@@ -132,10 +134,12 @@ export function usePerpsOrder(symbol: string, initialSide: Side) {
     if (blocked) return;
     setFirstTrade(!marginAccount.exists);
     setStep(1);
+    landed.current = freshOpenProgress();
     review.request();
   };
 
   const closeFlow = () => {
+    landed.current = freshOpenProgress();
     flow.close();
     setFirstTrade(false);
   };

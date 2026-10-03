@@ -7,8 +7,11 @@ import { DEV_WALLET_ADDRESS } from "@/lib/solana/config";
 import { signWithFreshBlockhash } from "@/lib/solana/fresh-blockhash";
 import { rpcConnection } from "@/lib/solana/rpc";
 import type { SigningHooks } from "@/lib/solana/send-transaction";
-import { toTransactionError, WALLET_MISMATCH } from "@/lib/solana/transaction-errors";
+import { isWalletRefusal, toTransactionError, WALLET_MISMATCH } from "@/lib/solana/transaction-errors";
 import { type RunProgress, TransactionError } from "@/types/transaction";
+
+const WALLET_ATTEMPTS = 2;
+const RETRY_PAUSE_MS = 1500;
 
 type SigningContext = { connection: Connection; owner: PublicKey; hooks: SigningHooks };
 
@@ -38,16 +41,36 @@ export function useWalletSigner() {
     }
   }, [queryClient]);
 
-  // Runs one signed transaction flow and turns every failure into the error the approval sheet renders.
+  // Runs one signed transaction flow and turns every failure into the error the approval sheet renders. A wallet that
+  // refuses to authorize the app has not been shown anything and nothing was signed, so that one failure is tried again once.
   const execute = useCallback(
     async (task: (context: SigningContext) => Promise<unknown>, progress: RunProgress) => {
       if (owner === null) throw new TransactionError("network", "Wallet not connected", "Connect your wallet and try again. Nothing was sent.");
       if (mismatch) throw toTransactionError(new Error(WALLET_MISMATCH));
-      try {
-        await task({ connection: rpcConnection, owner: new PublicKey(owner), hooks: { sign, signAll, onPrepared: progress.prepared, onSigned: progress.signed, onSent: progress.sent, onProcessed: progress.processed } });
-        refreshAfterTransaction();
-      } catch (error) {
-        throw toTransactionError(error);
+      let signed = false;
+      const hooks = {
+        sign,
+        signAll,
+        onPrepared: progress.prepared,
+        onSigned: () => {
+          signed = true;
+          progress.signed();
+        },
+        onSent: progress.sent,
+        onProcessed: progress.processed,
+      };
+      for (let attempt = 1; ; attempt++) {
+        try {
+          await task({ connection: rpcConnection, owner: new PublicKey(owner), hooks });
+          refreshAfterTransaction();
+          return;
+        } catch (error) {
+          if (attempt < WALLET_ATTEMPTS && !signed && isWalletRefusal(error)) {
+            await new Promise((resolve) => setTimeout(resolve, RETRY_PAUSE_MS));
+            continue;
+          }
+          throw toTransactionError(error);
+        }
       }
     },
     [owner, mismatch, sign, signAll, refreshAfterTransaction],

@@ -433,3 +433,16 @@ test("a stopped send keeps the count of what landed, so a retry can start after 
   await assert.rejects(sendBatches(stopped.connection, owner, { computeUnits: 600_000, batches: [[bulky()], [bulky()]], retrySafe: false, onLanded: (count) => seen.push(count) }, stopped.hooks), PartialSendError);
   assert.deepEqual(seen, [1]);
 });
+
+const { isWalletRefusal } = load("src/lib/solana/transaction-errors.ts");
+
+test("only a wallet that refused to authorize the app counts as a refusal worth trying again", () => {
+  assert.equal(isWalletRefusal(new Error("SolanaMobileWalletAdapterProtocolError -1/authorization request failed -1")), true);
+  assert.equal(isWalletRefusal(new Error("CancellationException: user declined")), false);
+  assert.equal(isWalletRefusal(new TransactionFailedError('{"InstructionError":[0,{"Custom":6018}]}')), false);
+});
+
+test("an account too big for one order reads as too many open positions", () => {
+  assert.equal(toTransactionError(new RangeError("This action is too large to send in one transaction")).title, "Too many open positions");
+  assert.equal(toTransactionError(new RangeError("encoding overruns Uint8Array")).title, "Too many open positions");
+});

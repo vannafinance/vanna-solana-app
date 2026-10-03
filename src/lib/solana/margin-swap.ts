@@ -8,7 +8,7 @@ import { UnsupportedRouteError } from "./perps-errors";
 import { ASSOCIATED_TOKEN_PROGRAM, associatedTokenAddress, marginAddress, swapAuthorityAddress, tokenProgramOf } from "./program-accounts";
 import { ApiError, requestJson } from "./request-json";
 
-const COMPUTE_UNITS = 1_400_000;
+export const MARGIN_SWAP_COMPUTE_UNITS = 1_400_000;
 const CREATE_IDEMPOTENT = 1;
 
 type ApiInstruction = { programId: string; accounts: { pubkey: string; isWritable: boolean; isSigner: boolean }[]; data: string };
@@ -114,7 +114,7 @@ export async function buildMarginSwap(connection: Connection, { quote, owner, st
   );
 
   return {
-    instructions: [ComputeBudgetProgram.setComputeUnitLimit({ units: COMPUTE_UNITS }), ...setup, swap],
+    instructions: [ComputeBudgetProgram.setComputeUnitLimit({ units: MARGIN_SWAP_COMPUTE_UNITS }), ...setup, swap],
     tables: tables.filter((table): table is AddressLookupTableAccount => table !== null),
   };
 }

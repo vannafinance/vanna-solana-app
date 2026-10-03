@@ -1,7 +1,8 @@
-import { type AddressLookupTableAccount, type Connection, PublicKey, type TransactionInstruction } from "@solana/web3.js";
+import { type Connection, PublicKey, type TransactionInstruction } from "@solana/web3.js";
 
 import { type AssetInfo, assets } from "./assets";
 import { KAMINO_LOOKUP_TABLE, type YieldSymbol } from "./kamino";
+import { fetchLookupTables } from "./lookup-tables";
 import { liteReduceRedeemInstruction, liteReduceRepayInstruction, liteSupplyInstruction } from "./lite-instructions";
 import { fetchLitePositions, resolveLitePosition } from "./lite-position";
 import { borrowInstruction, depositCollateralInstruction, openDebtPositionInstruction, withdrawCollateralInstruction } from "./margin-instructions";
@@ -89,10 +90,7 @@ export async function buildFarmDeploy(connection: Connection, owner: PublicKey, 
   return legs.slice(progress.landed);
 }
 
-async function kaminoTables(connection: Connection): Promise<AddressLookupTableAccount[]> {
-  const { value } = await connection.getAddressLookupTable(KAMINO_LOOKUP_TABLE);
-  return value === null ? [] : [value];
-}
+const kaminoTables = (connection: Connection) => fetchLookupTables(connection, [KAMINO_LOOKUP_TABLE]);
 
 export async function deployFarm(connection: Connection, owner: PublicKey, request: FarmDeployRequest, hooks: SigningHooks, progress: FarmDeployProgress = freshDeployProgress()): Promise<string> {
   const [batches, tables] = await Promise.all([buildFarmDeploy(connection, owner, request, progress), kaminoTables(connection)]);

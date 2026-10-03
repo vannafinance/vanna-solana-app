@@ -12,6 +12,7 @@ const REJECTED = /cancel|declin|reject|denied|ERROR_NOT_SIGNED|ERROR_ASSOCIATION
 const NO_FEE = /AccountNotFound|InsufficientFundsFor(Fee|Rent)|insufficient (lamports|funds for fee)|attempt to debit an account but found no record|0x1\b.*lamports|insufficient funds for rent/i;
 const PRICE_MOVED = /0x1771|6001|SlippageToleranceExceeded|0xbbd|3005|AccountNotEnoughKeys|bin_array/i;
 const BLOCKHASH_STALE = /blockhash not found/i;
+const TOO_LARGE = /too large to send in one transaction|encoding overruns/i;
 const CONNECTION_REFUSED = /authorization request failed/i;
 const WALLET_UNREACHABLE = /ConnectionFailedException|unable to connect to websocket|ERROR_SESSION_TIMEOUT|ERROR_WALLET_NOT_FOUND/i;
 const NOT_ENOUGH_TOKENS = /insufficient funds|custom program error: 0x1\b/i;
@@ -52,6 +53,12 @@ function detailOf(error: unknown): string {
   return text.length > DETAIL_LIMIT ? `${text.slice(0, DETAIL_LIMIT)}…` : text;
 }
 
+// The wallet declined to authorize this app before anything was shown to the user. Wallets check the app's identity under a
+// tight time limit, so this one is often a slow answer and goes away on a second try.
+export function isWalletRefusal(error: unknown): boolean {
+  return CONNECTION_REFUSED.test(textOf(error));
+}
+
 export function toTransactionError(error: unknown): TransactionError {
   if (error instanceof TransactionError) return error;
   if (error instanceof PartialSendError) {
@@ -73,6 +80,9 @@ export function toTransactionError(error: unknown): TransactionError {
   const text = textOf(error);
   if (text.includes(WALLET_MISMATCH)) {
     return new TransactionError("network", "Wrong wallet", "This build is showing another wallet's data. Disconnect the developer wallet override to send transactions.");
+  }
+  if (TOO_LARGE.test(text)) {
+    return new TransactionError("network", "Too many open positions", "This account holds too many positions to place this order in one go. Close or reduce a position first, then try again. Nothing was sent.");
   }
   if (WALLET_UNREACHABLE.test(text)) {
     return new TransactionError("network", "Could not reach your wallet", "The wallet app did not answer in time. Open it once, then try again. Nothing was sent.");

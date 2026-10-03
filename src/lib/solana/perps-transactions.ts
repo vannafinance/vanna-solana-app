@@ -1,14 +1,17 @@
-import { type Connection, PublicKey, type TransactionInstruction } from "@solana/web3.js";
+import { type AddressLookupTableAccount, type Connection, PublicKey, type TransactionInstruction } from "@solana/web3.js";
 
 import { type AssetInfo, assets } from "./assets";
 import { fetchRawJupiterQuote, NoRouteError, type RawJupiterQuote } from "./jupiter-quote";
+import { KAMINO_EXTRA_LOOKUP_TABLES, KAMINO_LOOKUP_TABLE } from "./kamino";
+import { fetchLookupTables } from "./lookup-tables";
 import { borrowInstruction, depositCollateralInstruction, openDebtPositionInstruction } from "./margin-instructions";
-import { buildMarginSwap, type MarginSwapBuild } from "./margin-swap";
+import { buildMarginSwap, MARGIN_SWAP_COMPUTE_UNITS } from "./margin-swap";
 import { PriceImpactError } from "./perps-errors";
 import { fetchMarginState, type MarginState, positionAccounts } from "./margin-state";
 import { associatedTokenAddress, debtPositionAddress, marginAddress, reserveAddress, tokenProgramOf } from "./program-accounts";
 import { withStalePoolRetry } from "./retry-stale-pool";
-import { type SigningHooks, sendInstructions } from "./send-transaction";
+import { sendBatches } from "./send-batches";
+import type { SigningHooks } from "./send-transaction";
 import { createAssociatedTokenAccountIdempotent } from "./token-instructions";
 import { inputTransferFee } from "./transfer-fee";
 
@@ -59,25 +62,43 @@ async function vaultSizes(connection: Connection, base: AssetInfo, collateral: b
   return { vaultAmount, swapAmount: vaultAmount - (await inputTransferFee(connection, base, vaultAmount)) };
 }
 
-async function depositAndBorrow(connection: Connection, owner: PublicKey, state: MarginState, asset: AssetInfo, deposit: bigint, borrow: bigint): Promise<TransactionInstruction[]> {
+// How far an order got, so trying again after it stopped does not deposit or borrow a second time. An order is up to three
+// legs: the deposit, the borrow and the swap. A leg that has landed stays in the margin account whatever happens next.
+export type OpenProgress = { landed: number };
+
+export const freshOpenProgress = (): OpenProgress => ({ landed: 0 });
+
+async function depositAndBorrow(
+  connection: Connection,
+  owner: PublicKey,
+  state: MarginState,
+  asset: AssetInfo,
+  deposit: bigint,
+  borrow: bigint,
+): Promise<{ deposit: TransactionInstruction[]; borrow: TransactionInstruction[] }> {
   const mint = new PublicKey(asset.mint);
   const source = associatedTokenAddress(owner, mint, tokenProgramOf(asset));
-  const instructions = [createAssociatedTokenAccountIdempotent(owner, source, owner, mint, tokenProgramOf(asset)), depositCollateralInstruction({ authority: owner, asset, amount: deposit, source })];
-  if (borrow <= 0n) return instructions;
+  const depositLeg = [createAssociatedTokenAccountIdempotent(owner, source, owner, mint, tokenProgramOf(asset)), depositCollateralInstruction({ authority: owner, asset, amount: deposit, source })];
+  if (borrow <= 0n) return { deposit: depositLeg, borrow: [] };
 
   const margin = marginAddress(owner);
   const remaining = await positionAccounts(connection, state, { excludeCollateral: [asset.symbol], excludeDebt: [asset.symbol] });
+  const borrowLeg: TransactionInstruction[] = [];
   if ((await connection.getAccountInfo(debtPositionAddress(margin, reserveAddress(mint)), "confirmed")) === null) {
-    instructions.push(openDebtPositionInstruction({ authority: owner, asset }));
+    borrowLeg.push(openDebtPositionInstruction({ authority: owner, asset }));
   }
-  instructions.push(borrowInstruction({ authority: owner, asset, amount: borrow, remaining }));
-  return instructions;
+  borrowLeg.push(borrowInstruction({ authority: owner, asset, amount: borrow, remaining }));
+  return { deposit: depositLeg, borrow: borrowLeg };
 }
 
+export type OpenBuild = { legs: TransactionInstruction[][]; tables: AddressLookupTableAccount[] };
+
 // Long: deposit USDC, borrow more USDC to the chosen leverage, swap the total into the stock. Short: the same with the
-// stock on the deposit and borrow side, swapped into USDC. Everything is one transaction, so a route that would fail
-// is caught by the simulation before the wallet is asked to sign and nothing is ever left half open.
-export async function buildOpenPosition(connection: Connection, owner: PublicKey, request: OpenPositionRequest): Promise<MarginSwapBuild> {
+// stock on the deposit and borrow side, swapped into USDC. The legs share one transaction when they fit, so a route that
+// would fail is caught by the simulation before the wallet is asked to sign. An account that already holds positions makes
+// the borrow and the swap carry a long list of accounts to check, and then the legs go as several transactions that the
+// wallet approves together.
+export async function buildOpenPosition(connection: Connection, owner: PublicKey, request: OpenPositionRequest, progress: OpenProgress = freshOpenProgress()): Promise<OpenBuild> {
   const { side, stock, collateral, leverage } = request;
   if (collateral <= 0n) throw new RangeError("Enter a collateral amount");
   if (!Number.isInteger(leverage) || leverage < 1 || leverage > MAX_LEVERAGE) throw new RangeError("Leverage is outside the allowed range");
@@ -99,14 +120,24 @@ export async function buildOpenPosition(connection: Connection, owner: PublicKey
     grossAmountIn: vaultAmount,
   });
 
-  const [computeBudget, ...swapInstructions] = swap.instructions;
-  return { instructions: [computeBudget, ...depositBorrow, ...swapInstructions], tables: swap.tables };
+  const [, ...swapInstructions] = swap.instructions;
+  const legs = [depositBorrow.deposit, ...(depositBorrow.borrow.length > 0 ? [depositBorrow.borrow] : []), swapInstructions];
+  return { legs: legs.slice(progress.landed), tables: swap.tables };
 }
 
 // The quote is fetched again on every attempt: a pool the fork cloned earlier can drift from an older quote.
-export function openPosition(connection: Connection, owner: PublicKey, request: OpenPositionRequest, hooks: SigningHooks): Promise<string> {
+export function openPosition(connection: Connection, owner: PublicKey, request: OpenPositionRequest, hooks: SigningHooks, progress: OpenProgress = freshOpenProgress()): Promise<string> {
   return withStalePoolRetry(hooks, async (tracked) => {
-    const { instructions, tables } = await buildOpenPosition(connection, owner, request);
-    return sendInstructions(connection, owner, instructions, tracked, tables);
+    const alreadyLanded = progress.landed;
+    const [{ legs, tables }, kamino] = await Promise.all([
+      buildOpenPosition(connection, owner, request, progress),
+      fetchLookupTables(connection, [KAMINO_LOOKUP_TABLE, ...KAMINO_EXTRA_LOOKUP_TABLES]),
+    ]);
+    return sendBatches(
+      connection,
+      owner,
+      { computeUnits: MARGIN_SWAP_COMPUTE_UNITS, batches: legs, retrySafe: false, tables: [...tables, ...kamino], onLanded: (count) => (progress.landed = alreadyLanded + count) },
+      tracked,
+    );
   });
 }

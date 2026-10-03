@@ -16,6 +16,14 @@ export const KAMINO_MARKET_AUTHORITY = new PublicKey("9DrvZvyWh1HuAoZxvYWMvkf2XC
 // A lookup table that exists on mainnet and holds the accounts every Kamino transaction names (its program, the main market and its
 // authority, the token program, the instructions sysvar). Wallets read mainnet, so unlike a table made on the fork they can read it.
 export const KAMINO_LOOKUP_TABLE = new PublicKey("3hi1c3L11vL446LJotFZNXHp1YZSLQ867SeQJUc9b5t1");
+// More mainnet tables that Kamino and Jupiter transactions use often. A Perps order on an account with Farm positions needs
+// every byte they save, and a wallet reads them like any other account.
+export const KAMINO_EXTRA_LOOKUP_TABLES = [
+  new PublicKey("7i8VciRdgphzakobo5E6nsNsHZtqDVXRDE6k1iQqvLq"),
+  new PublicKey("AKgVyHByNHG4nZUjyHQaCszQd5oXDudVUcevsKLx3ehT"),
+  new PublicKey("Fh5MLAFZKoQLeBkzkpjZVEmyLAeSeGGHKMfP3bi27pTi"),
+  new PublicKey("6uhwng7MtdwBxzQHP7THRYuwq4E7Fz9nW9tNgngZNPBk"),
+] as const;
 export const INSTRUCTIONS_SYSVAR = new PublicKey("Sysvar1nstructions1111111111111111111111111");
 
 const MAIN_MARKET_RESERVES: Record<YieldSymbol, KaminoReserveAddresses> = {
