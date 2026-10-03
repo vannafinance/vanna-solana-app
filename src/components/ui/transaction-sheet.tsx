@@ -1,6 +1,6 @@
 import { type ReactNode, useEffect, useState } from "react";
 import { Modal, View } from "react-native";
-import Animated, { cancelAnimation, Easing, FadeIn, FadeInDown, useAnimatedStyle, useSharedValue, withRepeat, withTiming } from "react-native-reanimated";
+import Animated, { cancelAnimation, Easing, FadeIn, FadeInDown, FadeOut, FadeOutDown, useAnimatedStyle, useSharedValue, withRepeat, withTiming } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useTheme } from "@/theme/use-theme";
@@ -21,57 +21,85 @@ type TransactionSheetProps = {
 };
 
 const SLOW_AFTER_MS = 12_000;
+// How long the sheet takes to leave. The window stays mounted that long after the state clears, so it can animate out.
+const EXIT_MS = 200;
 
-export function TransactionSheet({ state, onPrimary, onClose, primaryLabel, onExplorer, hero }: TransactionSheetProps) {
+// The last non-empty value, kept for `ms` after the value clears so what was on screen can fade out instead of vanishing.
+// The value is a new object on every render, so changes are told apart by what it says, not by identity.
+function useRetained<T>(value: T | null, ms: number): T | null {
+  const said = JSON.stringify(value);
+  const [held, setHeld] = useState(value);
+
+  useEffect(() => {
+    const next: T | null = JSON.parse(said);
+    const timer = setTimeout(() => setHeld(next), next === null ? ms : 0);
+    return () => clearTimeout(timer);
+  }, [said, ms]);
+
+  return value ?? held;
+}
+
+export function TransactionSheet({ state: current, onPrimary, onClose, primaryLabel, onExplorer, hero }: TransactionSheetProps) {
   const { colors, layout, motion, radius, shadow } = useTheme();
   const insets = useSafeAreaInsets();
+  const state = useRetained(current, EXIT_MS);
   if (!state) return null;
+
+  const open = current !== null;
 
   const confirming = state.phase === "confirming";
   const rejected = state.phase === "failure" && state.kind === "rejected";
 
   return (
-    <Modal visible transparent animationType="none" statusBarTranslucent onRequestClose={confirming ? undefined : onClose}>
+    <Modal visible transparent animationType="none" statusBarTranslucent navigationBarTranslucent onRequestClose={confirming || !open ? undefined : onClose}>
       <View style={{ flex: 1, justifyContent: "flex-end" }}>
-        <Animated.View
-          entering={FadeIn.duration(motion.duration.short)}
-          style={{ position: "absolute", top: 0, right: 0, bottom: 0, left: 0, backgroundColor: colors.walletScrim }}
-        />
-        <Animated.View
-          entering={FadeInDown.duration(motion.duration.long).easing(Easing.bezier(0.05, 0.7, 0.1, 1))}
-          accessibilityLiveRegion="polite"
-          style={[
-            {
-              alignSelf: "center",
-              width: "100%",
-              maxWidth: layout.sheetMaxWidth,
-              paddingHorizontal: 20,
-              paddingTop: 24,
-              paddingBottom: Math.max(insets.bottom + 12, 28),
-              borderTopLeftRadius: radius.sheet,
-              borderTopRightRadius: radius.sheet,
-              backgroundColor: colors.surface,
-            },
-            shadow.floating,
-          ]}
-        >
-          {hero ? <View style={{ alignItems: "center", marginBottom: 20 }}>{hero}</View> : null}
-          {state.phase === "signing" ? <SigningRow key={state.prepared ? "approve" : "prepare"} state={state} /> : null}
-          {state.phase === "confirming" ? <StatusRow ring="arc" title={state.title} detail={state.message} /> : null}
-          {state.phase === "success" ? <StatusRow ring="seal" title={state.title} detail={state.message} /> : null}
-          {state.phase === "failure" ? (
-            <StatusRow ring={rejected ? "off" : "fail"} title={state.title} detail={state.message} />
-          ) : null}
-          {state.phase === "failure" && state.detail ? <FailureDetail text={state.detail} /> : null}
-          {state.phase === "confirming" || state.phase === "success" ? <Progress stage={state.phase === "success" ? "success" : state.stage} /> : null}
-          <Actions
-            state={state}
-            primaryLabel={primaryLabel}
-            onPrimary={onPrimary}
-            onClose={onClose}
-            onExplorer={onExplorer}
+        {open ? (
+          <Animated.View
+            key="scrim"
+            entering={FadeIn.duration(motion.duration.short)}
+            exiting={FadeOut.duration(EXIT_MS)}
+            style={{ position: "absolute", top: 0, right: 0, bottom: 0, left: 0, backgroundColor: colors.walletScrim }}
           />
-        </Animated.View>
+        ) : null}
+        {open ? (
+          <Animated.View
+            key="sheet"
+            entering={FadeInDown.duration(motion.duration.long).easing(Easing.bezier(0.05, 0.7, 0.1, 1))}
+            exiting={FadeOutDown.duration(EXIT_MS)}
+            accessibilityLiveRegion="polite"
+            style={[
+              {
+                alignSelf: "center",
+                width: "100%",
+                maxWidth: layout.sheetMaxWidth,
+                paddingHorizontal: 20,
+                paddingTop: 24,
+                paddingBottom: Math.max(insets.bottom + 12, 28),
+                borderTopLeftRadius: radius.sheet,
+                borderTopRightRadius: radius.sheet,
+                backgroundColor: colors.surface,
+              },
+              shadow.floating,
+            ]}
+          >
+            {hero ? <View style={{ alignItems: "center", marginBottom: 20 }}>{hero}</View> : null}
+            {state.phase === "signing" ? <SigningRow key={state.prepared ? "approve" : "prepare"} state={state} /> : null}
+            {state.phase === "confirming" ? <StatusRow ring="arc" title={state.title} detail={state.message} /> : null}
+            {state.phase === "success" ? <StatusRow ring="seal" title={state.title} detail={state.message} /> : null}
+            {state.phase === "failure" ? (
+              <StatusRow ring={rejected ? "off" : "fail"} title={state.title} detail={state.message} />
+            ) : null}
+            {state.phase === "failure" && state.detail ? <FailureDetail text={state.detail} /> : null}
+            {state.phase === "confirming" || state.phase === "success" ? <Progress stage={state.phase === "success" ? "success" : state.stage} /> : null}
+            <Actions
+              state={state}
+              primaryLabel={primaryLabel}
+              onPrimary={onPrimary}
+              onClose={onClose}
+              onExplorer={onExplorer}
+            />
+          </Animated.View>
+        ) : null}
       </View>
     </Modal>
   );
@@ -128,7 +156,7 @@ function StatusRow({ ring, title, detail, chip }: StatusRowProps) {
   const { colors, motion } = useTheme();
 
   return (
-    <Animated.View entering={FadeInDown.duration(motion.duration.medium)} style={{ flexDirection: "row", alignItems: "center", gap: 14 }}>
+    <Animated.View entering={FadeIn.duration(motion.duration.medium)} style={{ flexDirection: "row", alignItems: "center", gap: 14 }}>
       <TransactionRing kind={ring} />
       <View style={{ flex: 1, gap: 2 }}>
         <AppText variant="bodyLg" strong style={{ lineHeight: 22 }}>

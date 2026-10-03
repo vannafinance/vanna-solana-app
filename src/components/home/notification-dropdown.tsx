@@ -23,7 +23,7 @@ export function NotificationDropdown({ visible, notifications, onClose, onMarkAl
   const insets = useSafeAreaInsets();
 
   return (
-    <Modal visible={visible} transparent animationType="fade" statusBarTranslucent onRequestClose={onClose}>
+    <Modal visible={visible} transparent animationType="fade" statusBarTranslucent navigationBarTranslucent onRequestClose={onClose}>
       <Pressable
         accessibilityLabel="Close notifications"
         onPress={onClose}

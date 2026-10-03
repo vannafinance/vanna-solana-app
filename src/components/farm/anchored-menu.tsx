@@ -50,7 +50,7 @@ export function AnchoredMenu({ open, anchor, onClose, accessibilityLabel, gap, p
   const left = placement.kind === "stretch" ? rect.x - placement.bleed : rect.x + rect.width - placement.width;
 
   return (
-    <Modal visible transparent animationType="none" statusBarTranslucent onRequestClose={onClose}>
+    <Modal visible transparent animationType="none" statusBarTranslucent navigationBarTranslucent onRequestClose={onClose}>
       <Pressable accessibilityLabel="Close menu" style={{ flex: 1 }} onPress={onClose}>
         <Animated.View
           accessibilityRole="menu"

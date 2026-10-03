@@ -58,7 +58,7 @@ export function AnchoredMenu({
   return (
     <View ref={setTrigger} collapsable={false}>
       {renderTrigger({ open, toggle })}
-      <Modal visible={open} transparent animationType="none" statusBarTranslucent onRequestClose={close}>
+      <Modal visible={open} transparent animationType="none" statusBarTranslucent navigationBarTranslucent onRequestClose={close}>
         <Pressable accessibilityLabel={`Close ${label}`} style={{ flex: 1 }} onPress={close}>
           {scrim ? (
             <Animated.View

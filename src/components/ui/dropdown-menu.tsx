@@ -90,7 +90,7 @@ export function DropdownMenu<T extends string>({ label, options, value, onSelect
           <Icon name="keyboard_arrow_down" size={18} color="text" />
         </Animated.View>
       </Pressable>
-      <Modal visible={anchor !== null} transparent animationType="none" statusBarTranslucent onRequestClose={close}>
+      <Modal visible={anchor !== null} transparent animationType="none" statusBarTranslucent navigationBarTranslucent onRequestClose={close}>
         <Pressable accessibilityLabel="Close menu" style={{ flex: 1 }} onPress={close}>
           {anchor ? (
             <MenuSurface anchor={anchor} width={menuWidth} progress={progress}>

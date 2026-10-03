@@ -21,7 +21,7 @@ export function BottomSheet({ visible, onDismiss, dismissable = true, title, chi
   const insets = useSafeAreaInsets();
 
   return (
-    <Modal visible={visible} transparent animationType="none" statusBarTranslucent onRequestClose={dismissable ? onDismiss : undefined}>
+    <Modal visible={visible} transparent animationType="none" statusBarTranslucent navigationBarTranslucent onRequestClose={dismissable ? onDismiss : undefined}>
       <View style={{ flex: 1, justifyContent: "flex-end" }}>
         <Animated.View entering={FadeIn.duration(motion.duration.short)} style={{ position: "absolute", top: 0, right: 0, bottom: 0, left: 0, backgroundColor: colors.scrim }}>
           <Pressable accessibilityLabel="Dismiss" style={{ flex: 1 }} onPress={dismissable ? onDismiss : undefined} />
