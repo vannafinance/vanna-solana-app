@@ -235,10 +235,11 @@ function newShell(html) {
   const css = path.join(SRC, 'styles.css');
   if (fs.existsSync(css)) out = out.replace('</head>', () => `<style>\n${fs.readFileSync(css, 'utf8')}</style>\n</head>`);
   // Margin account in place (tools/margin_envelope.py): a new trader is never sent to a separate margin page.
-  // Markets shows the banner, the first order opens the account as step 1 of 2, and the account counts once either succeeds.
+  // The first order opens the account as step 1 of 2 (Markets' banner has its own screen, V7MarginCreate), and the
+  // account counts once either succeeds.
   for (const [from, to] of [
     ["if (gateOn() && !hasMargin && stem === 'V7PerpsOrder') { toast('First trade: set up your margin account (one time)'); stem = 'V7MarginCreate'; s = D.screens[stem]; shown = stem; extra = {}; }",
-     "if (gateOn() && !hasMargin && (stem === 'V7PerpsOrder' || stem === 'V7Perps')) { extra = Object.assign({}, extra, { noAcct: true }); }"],
+     "if (gateOn() && !hasMargin && stem === 'V7PerpsOrder') { extra = Object.assign({}, extra, { noAcct: true }); }"],
     ["if (app.stem && app.stem.indexOf('V7Margin') === 0 && app.inst.state.__ok) hasMargin = true;",
      "if (app.stem && app.inst && (app.inst.state.__acct || (app.stem.indexOf('V7Margin') === 0 && app.inst.state.__ok))) hasMargin = true;"],
   ]) {

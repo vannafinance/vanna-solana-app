@@ -331,5 +331,27 @@
       "V7EarnVaultCollateral",
       "V7EarnVaultAnalytics"
     ]
+  },
+  {
+    "title": "Space switcher: floating island",
+    "date": "3 Oct 2026",
+    "detail": "The folder tabs are gone. Every space's header is now one surface in its own colours with a soft glow of the same colour in the corner, and Portfolio · Earn · Trade · Farm sit in a white pill bar that floats over the header's bottom edge, between the numbers and the page. The current space fills its pill with the space gradient (coral to violet, teal, violet to indigo, coral to pink). Tapping works as before: switching spaces resets Back to Portfolio, and tapping the current space scrolls to the top. Dark mode uses a dark bar.",
+    "screens": [
+      "V7Home",
+      "V7Lender",
+      "V7Trader",
+      "V7Earn",
+      "V7EarnPositions",
+      "V7EarnHistory",
+      "V7Perps",
+      "V7Swap",
+      "V7PerpsPositions",
+      "V7PerpsHistory",
+      "V7SwapHistory",
+      "V7Farm",
+      "V7FarmPositions",
+      "V7FarmPositionsNew",
+      "V7FarmHistory"
+    ]
   }
 ]
