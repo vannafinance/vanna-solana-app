@@ -33,7 +33,7 @@ export function useWalletSigner() {
 
   // After a confirmed transaction every live figure is stale; refetch them now instead of waiting for the next poll.
   const refreshAfterTransaction = useCallback(() => {
-    for (const key of ["account-snapshot", "wallet-holdings", "earn-deposits", "wallet-transactions", "kamino-positions", "pools"]) {
+    for (const key of ["account-snapshot", "wallet-holdings", "earn-deposits", "earn-events", "spot-swaps", "wallet-transactions", "kamino-positions", "pools"]) {
       void queryClient.invalidateQueries({ queryKey: [key] });
     }
   }, [queryClient]);

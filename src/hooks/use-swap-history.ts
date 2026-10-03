@@ -1,23 +1,18 @@
-import { useQuery } from "@tanstack/react-query";
 import { useCallback } from "react";
 
 import { useOraclePrices } from "@/hooks/use-oracle-prices";
 import { useWalletAddress } from "@/hooks/use-wallet-address";
-import { useWalletTransactionsOptions } from "@/hooks/use-wallet-transactions";
+import { useSpotSwaps } from "@/hooks/use-spot-swaps";
 import { toHistoryEntries, volumeSince } from "@/lib/swap/spot-swap-history";
 import { groupHistoryByDay } from "@/lib/swap/group-history";
-import { spotSwapsFrom } from "@/lib/solana/spot-swaps";
 import type { Resource } from "@/types/resource";
 import type { SwapHistory } from "@/types/swap";
 
-// Wallet-level Jupiter swaps, decoded from the wallet's own transactions on the fork. Prices only add a
-// volume figure, so a failed price read leaves the history itself intact.
+// Wallet-level Jupiter swaps from the web app's spot history route. Prices only add a volume figure, so a failed price
+// read leaves the history itself intact.
 export function useSwapHistory(): Resource<SwapHistory> {
   const wallet = useWalletAddress();
-  const transactions = useQuery({
-    ...useWalletTransactionsOptions(wallet),
-    select: (data) => (wallet === null ? [] : spotSwapsFrom(data, wallet)),
-  });
+  const transactions = useSpotSwaps(wallet);
   const prices = useOraclePrices();
   const { refetch } = transactions;
   const retry = useCallback(() => void refetch(), [refetch]);

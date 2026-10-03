@@ -127,42 +127,27 @@ test("deposits are valued through the exchange rate and price, with a value-weig
   assert.throws(() => valueDeposits([{ symbol: "OPENAI", shares: 1n, decimals: 9 }], pools, {}), { name: "MissingPriceError" });
 });
 
-const bs58 = require("bs58");
-const { PublicKey } = require("@solana/web3.js");
 const historyStubs = { "./config": { API_BASE_URL: "x", VANNA_PROGRAM_ID: "BZ812nUv4Qhr2p1JVgmoJGjYTGk1brAXckyhFSCNH3Zg" } };
-const { decodeEarnEvents } = loadTs("src/lib/solana/earn-history.ts", historyStubs);
+const { earnEventsFromPayload } = loadTs("src/lib/solana/earn-history.ts", historyStubs);
 const { netPrincipal, vaultEarnings, totalEarned } = loadTs("src/lib/portfolio/net-earnings.ts", stubs);
 const { groupLenderHistory } = loadTs("src/lib/portfolio/lender-history.ts", stubs);
-const { decodeBase58 } = loadTs("src/lib/solana/base58.ts", stubs);
 
-const USDC_MINT = new PublicKey("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v");
-const SUPPLY_DISC = [52, 247, 77, 250, 74, 122, 100, 33];
-
-function supplyTx(amount, failed = false) {
-  const data = new Uint8Array(24);
-  data.set(SUPPLY_DISC, 0);
-  new DataView(data.buffer).setBigUint64(8, amount, true);
-  const accounts = Array.from({ length: 13 }, () => PublicKey.unique());
-  accounts[4] = USDC_MINT;
-  return {
-    meta: { err: failed ? {} : null, preTokenBalances: [], postTokenBalances: [] },
-    transaction: { message: { accountKeys: [], instructions: [{ programId: new PublicKey("BZ812nUv4Qhr2p1JVgmoJGjYTGk1brAXckyhFSCNH3Zg"), accounts, data: bs58.encode(data) }] } },
-  };
-}
-
-test("base58 decoding matches the reference implementation", () => {
-  const sample = Uint8Array.from([0, 0, 1, 2, 250, 255]);
-  assert.deepEqual([...decodeBase58(bs58.encode(sample))], [...sample]);
-  assert.equal(decodeBase58("0OIl"), null);
-});
-
-test("a supply instruction decodes to the asset and exact amount, using the signature time", () => {
-  const [event] = decodeEarnEvents(supplyTx(2_500_000_000n), "sig1", 1_790_679_386);
-  assert.equal(event.kind, "supply");
-  assert.equal(event.symbol, "USDC");
-  assert.equal(event.amount, 2_500_000_000n);
-  assert.equal(event.timestamp, 1_790_679_386_000);
-  assert.equal(decodeEarnEvents(supplyTx(1n, true), "sig2", 1).length, 0);
+test("the web app's earn history rows become supply and withdraw events in base units, newest first", () => {
+  const events = earnEventsFromPayload({
+    source: "alchemy",
+    rows: [
+      { type: "supply", asset: "SOL", amount: "9.99", timestamp: 1_790_677_111_000, hash: "supplySig", status: "success" },
+      { type: "withdraw", asset: "SOL", amount: "9.990000002", timestamp: 1_790_677_122_000, hash: "withdrawSig", status: "success" },
+      { type: "supply", asset: "USDC", amount: "5", timestamp: 1, hash: "failedSig", status: "failed" },
+      { type: "transfer", asset: "SOL", amount: "1", timestamp: 2, hash: "otherSig", status: "success" },
+    ],
+  });
+  assert.deepEqual(events.map((event) => event.signature), ["withdrawSig", "supplySig"]);
+  assert.equal(events[0].kind, "withdraw");
+  assert.equal(events[0].amount, 9_990_000_002n);
+  assert.equal(events[1].amount, 9_990_000_000n);
+  assert.equal(events[1].timestamp, 1_790_677_111_000);
+  assert.throws(() => earnEventsFromPayload({ error: "nope" }), { name: "ApiError" });
 });
 
 test("net principal drops an asset whose withdrawal size is unknown", () => {
@@ -199,44 +184,26 @@ test("lender history groups by day and words supplies and withdrawals", () => {
   assert.equal(groups[1].items[0].title, "Supplied 9.99 SOL");
 });
 
-const { decodeSpotSwap } = loadTs("src/lib/solana/spot-swaps.ts", stubs);
+const { spotSwapsFromPayload } = loadTs("src/lib/solana/spot-swaps.ts", stubs);
 const { toHistoryEntries, volumeSince } = loadTs("src/lib/swap/spot-swap-history.ts", stubs);
 
-const WALLET = "2iyYKhNcD5fiPNphQQDq1KVqVVR3iXrwy6UFkYuhF98e";
-const OPENAI_MINT = "PreweJYECqtQwBtpxHL171nL2K6umo692gTm7Q3rpgF";
-
-function jupiterSwap({ solLamports, openaiRaw, fee = 5000 }) {
-  return {
-    signature: "sigSwap",
-    blockTime: 1_790_000_000,
-    tx: {
-      meta: {
-        err: null,
-        fee,
-        logMessages: ["Program JUP6LkbZbjS1jKKwapdHNy74zcZ3tLUZoi5QNyVTaV4 invoke [1]"],
-        preBalances: [10_000_000_000],
-        postBalances: [10_000_000_000 - solLamports - fee],
-        preTokenBalances: [{ accountIndex: 3, mint: OPENAI_MINT, owner: WALLET, uiTokenAmount: { amount: "0", decimals: 9 } }],
-        postTokenBalances: [{ accountIndex: 3, mint: OPENAI_MINT, owner: WALLET, uiTokenAmount: { amount: String(openaiRaw), decimals: 9 } }],
-      },
-      transaction: { message: { accountKeys: [{ pubkey: { toBase58: () => WALLET } }] } },
-    },
-  };
-}
-
-test("a Jupiter swap is read from token and lamport changes with the fee added back", () => {
-  const swap = decodeSpotSwap(jupiterSwap({ solLamports: 18_744_465_367, openaiRaw: 923_256_828 }), WALLET);
-  assert.equal(swap.from, "SOL");
-  assert.equal(swap.to, "OPENAI");
-  assert.equal(swap.amountIn, 18_744_465_367n);
-  assert.equal(swap.amountOut, 923_256_828n);
-  assert.equal(swap.timestamp, 1_790_000_000_000);
-});
-
-test("a transaction without Jupiter is not a swap", () => {
-  const tx = jupiterSwap({ solLamports: 1_000_000_000, openaiRaw: 1 });
-  tx.tx.meta.logMessages = ["Program 11111111111111111111111111111111 invoke [1]"];
-  assert.equal(decodeSpotSwap(tx, WALLET), null);
+test("the web app's spot history rows become swaps in base units, ignoring digits an asset does not have", () => {
+  const swaps = spotSwapsFromPayload({
+    source: "alchemy",
+    rows: [
+      { type: "swap", assetIn: "SOL", assetOut: "OPENAI", amountIn: "18.744465367", amountOut: "0.9232568279999995", timestamp: 1_790_857_147_000, hash: "olderSig" },
+      { type: "swap", assetIn: "SOL", assetOut: "USDC", amountIn: "78.514660587", amountOut: "9261.938901", timestamp: 1_790_887_367_000, hash: "newerSig" },
+      { type: "swap", assetIn: "SOL", assetOut: "NOTATOKEN", amountIn: "1", amountOut: "1", timestamp: 3, hash: "unknownSig" },
+    ],
+  });
+  assert.deepEqual(swaps.map((swap) => swap.signature), ["newerSig", "olderSig"]);
+  assert.equal(swaps[0].from, "SOL");
+  assert.equal(swaps[0].amountIn, 78_514_660_587n);
+  assert.equal(swaps[0].decimalsIn, 9);
+  assert.equal(swaps[0].amountOut, 9_261_938_901n);
+  assert.equal(swaps[0].decimalsOut, 6);
+  assert.equal(swaps[1].to, "OPENAI");
+  assert.throws(() => spotSwapsFromPayload("not an object"), { name: "ApiError" });
 });
 
 test("swap volume values the sold token at the oracle price and counts only the last 30 days", () => {
