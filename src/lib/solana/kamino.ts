@@ -13,6 +13,9 @@ export type KaminoReserveAddresses = {
 export const KAMINO_PROGRAM = new PublicKey("KLend2g3cP87fffoy8q1mQqGKjrxjC8boSyAYavgmjD");
 export const KAMINO_MAIN_MARKET = new PublicKey("7u3HeHxYDLhnCoErrtycNokbQYbWGzLs6JSDqGAv5PfF");
 export const KAMINO_MARKET_AUTHORITY = new PublicKey("9DrvZvyWh1HuAoZxvYWMvkf2XCzryCpGgHqrMjyDWpmo");
+// A lookup table that exists on mainnet and holds the accounts every Kamino transaction names (its program, the main market and its
+// authority, the token program, the instructions sysvar). Wallets read mainnet, so unlike a table made on the fork they can read it.
+export const KAMINO_LOOKUP_TABLE = new PublicKey("3hi1c3L11vL446LJotFZNXHp1YZSLQ867SeQJUc9b5t1");
 export const INSTRUCTIONS_SYSVAR = new PublicKey("Sysvar1nstructions1111111111111111111111111");
 
 const MAIN_MARKET_RESERVES: Record<YieldSymbol, KaminoReserveAddresses> = {

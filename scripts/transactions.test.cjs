@@ -345,3 +345,66 @@ test("a blockhash the network no longer knows reads as an expired request", () =
   const error = toTransactionError(new Error("Simulation failed. Message: Transaction simulation failed: Blockhash not found."));
   assert.equal(error.kind, "expired");
 });
+
+const { sendBatches, PartialSendError } = load("src/lib/solana/send-batches.ts");
+const { TransactionInstruction } = require("@solana/web3.js");
+
+function batchFixture({ failSecond = false } = {}) {
+  const sent = [];
+  const connection = {
+    getLatestBlockhash: async () => ({ blockhash: "11111111111111111111111111111111", lastValidBlockHeight: 500 }),
+    simulateTransaction: async () => ({ value: { err: null, logs: [] } }),
+    sendRawTransaction: async () => {
+      sent.push(true);
+      if (failSecond && sent.length === 2) throw new Error("second leg refused");
+      return `sig${sent.length}`;
+    },
+    getSignatureStatuses: async () => ({ value: [{ confirmationStatus: "confirmed", err: null }] }),
+    getBlockHeight: async () => 100,
+  };
+  const prompts = [];
+  const hooks = {
+    sign: async (transaction) => transaction,
+    signAll: async (transactions) => {
+      prompts.push(transactions.length);
+      return transactions;
+    },
+    onSigned: () => undefined,
+  };
+  return { connection, hooks, prompts, sent };
+}
+
+const bulky = () => new TransactionInstruction({ programId: owner, keys: [], data: Buffer.alloc(700) });
+
+test("batches that do not fit together are signed in one prompt and sent in order", async () => {
+  const { connection, hooks, prompts, sent } = batchFixture();
+  const signature = await sendBatches(connection, owner, { computeUnits: 600_000, batches: [[bulky()], [bulky()]], retrySafe: true }, hooks);
+  assert.deepEqual(prompts, [2]);
+  assert.equal(sent.length, 2);
+  assert.equal(signature, "sig2");
+});
+
+test("batches that fit together go out as one transaction", async () => {
+  const { connection, hooks, prompts, sent } = batchFixture();
+  const small = () => new TransactionInstruction({ programId: owner, keys: [], data: Buffer.alloc(20) });
+  await sendBatches(connection, owner, { computeUnits: 600_000, batches: [[small()], [small()]], retrySafe: true }, { ...hooks, sign: async (transaction) => transaction });
+  assert.equal(sent.length, 1);
+  assert.deepEqual(prompts, []);
+});
+
+test("a later leg that fails after an earlier one landed is reported as partial unless repeating the first is harmless", async () => {
+  const unsafe = batchFixture({ failSecond: true });
+  await assert.rejects(sendBatches(unsafe.connection, owner, { computeUnits: 600_000, batches: [[bulky()], [bulky()]], retrySafe: false }, unsafe.hooks), (error) => error instanceof PartialSendError && error.landed === 1);
+  const safe = batchFixture({ failSecond: true });
+  await assert.rejects(sendBatches(safe.connection, owner, { computeUnits: 600_000, batches: [[bulky()], [bulky()]], retrySafe: true }, safe.hooks), /second leg refused/);
+});
+
+test("a partial send reads as a partial failure with the real reason attached", () => {
+  const error = toTransactionError(new PartialSendError(1, new TransactionFailedError('{"InstructionError":[0,{"Custom":6018}]} Program ' + PROGRAM + " failed: custom program error: 0x1782")));
+  assert.equal(error.kind, "partial");
+  assert.match(error.message, /Not enough free liquidity/);
+});
+
+test("a refused wallet connection says so instead of a generic failure", () => {
+  assert.equal(toTransactionError(new Error("SolanaMobileWalletAdapterProtocolError -1/authorization request failed -1")).title, "Wallet connection refused");
+});

@@ -1,7 +1,7 @@
-import { type Connection, ComputeBudgetProgram, PublicKey, type TransactionInstruction } from "@solana/web3.js";
+import { type AddressLookupTableAccount, type Connection, PublicKey, type TransactionInstruction } from "@solana/web3.js";
 
 import { type AssetInfo, assets } from "./assets";
-import { type YieldSymbol } from "./kamino";
+import { KAMINO_LOOKUP_TABLE, type YieldSymbol } from "./kamino";
 import { liteReduceRedeemInstruction, liteReduceRepayInstruction, liteSupplyInstruction } from "./lite-instructions";
 import { fetchLitePositions, resolveLitePosition } from "./lite-position";
 import { borrowInstruction, depositCollateralInstruction, openDebtPositionInstruction, withdrawCollateralInstruction } from "./margin-instructions";
@@ -9,7 +9,7 @@ import { assetIndexOf, fetchMarginState, type MarginState, positionAccounts } fr
 import { NoFarmPositionError } from "./perps-errors";
 import { associatedTokenAddress, debtPositionAddress, marginAddress, reserveAddress, tokenProgramOf } from "./program-accounts";
 import { assetsToDebtSharesUp, clockTimestamp, decodeReserveDebt, projectReserveDebt } from "./reserve-debt";
-import { sendLargeInstructions } from "./send-large-transaction";
+import { sendBatches } from "./send-batches";
 import type { SigningHooks } from "./send-transaction";
 import { createAssociatedTokenAccountIdempotent } from "./token-instructions";
 
@@ -21,7 +21,7 @@ export function yieldAssetOf(symbol: YieldSymbol): YieldAsset {
   return { ...asset, symbol };
 }
 
-// Same limit as the web app's one transaction deploy: the deposit, the borrow and the Kamino supply share one budget.
+// Same limit as the web app's one transaction deploy, for the borrow and the Kamino supply that share a transaction.
 const DEPLOY_COMPUTE_UNITS = 1_000_000;
 const EXIT_COMPUTE_UNITS = 600_000;
 const CLOCK_SYSVAR = new PublicKey("SysvarC1ock11111111111111111111111111111111");
@@ -34,6 +34,8 @@ export type FarmDeployRequest = {
   collateral: bigint;
   // Pool base units borrowed against it and supplied to Kamino; zero for a plain deposit.
   borrow: bigint;
+  // The deposit already landed in an earlier attempt that stopped before the borrow, so it is not made again.
+  depositDone?: boolean;
 };
 
 async function ensureDebtPosition(connection: Connection, owner: PublicKey, asset: AssetInfo): Promise<TransactionInstruction[]> {
@@ -52,9 +54,10 @@ async function borrowedShares(connection: Connection, pool: AssetInfo, borrow: b
   return assetsToDebtSharesUp(borrow, reserve.totalBorrowShares, totalDebt);
 }
 
-// Deposit the stock, borrow the pool asset against it and supply that into Kamino, all in one transaction so a failure
-// anywhere leaves nothing half open. The stock stays as ordinary margin collateral; the debt is in the pool asset.
-export async function buildFarmDeploy(connection: Connection, owner: PublicKey, request: FarmDeployRequest): Promise<TransactionInstruction[]> {
+// Deposit the stock, borrow the pool asset against it and supply that into Kamino. The borrow and the supply share a
+// transaction so a loan is never left without its Kamino position; the deposit before them may be a transaction of its own.
+// The stock stays as ordinary margin collateral; the debt is in the pool asset.
+export async function buildFarmDeploy(connection: Connection, owner: PublicKey, request: FarmDeployRequest): Promise<TransactionInstruction[][]> {
   const { stock, pool, collateral, borrow } = request;
   if (collateral <= 0n) throw new RangeError("Enter a deposit amount");
   if (borrow < 0n) throw new RangeError("The borrow amount is invalid");
@@ -62,27 +65,35 @@ export async function buildFarmDeploy(connection: Connection, owner: PublicKey, 
   const state = await fetchMarginState(connection, marginAddress(owner));
   const stockMint = new PublicKey(stock.mint);
   const source = associatedTokenAddress(owner, stockMint, tokenProgramOf(stock));
-  const instructions = [
-    ComputeBudgetProgram.setComputeUnitLimit({ units: DEPLOY_COMPUTE_UNITS }),
-    createAssociatedTokenAccountIdempotent(owner, source, owner, stockMint, tokenProgramOf(stock)),
-    depositCollateralInstruction({ authority: owner, asset: stock, amount: collateral, source }),
-  ];
-  if (borrow === 0n) return instructions;
+  const deposit =
+    request.depositDone === true
+      ? []
+      : [
+          createAssociatedTokenAccountIdempotent(owner, source, owner, stockMint, tokenProgramOf(stock)),
+          depositCollateralInstruction({ authority: owner, asset: stock, amount: collateral, source }),
+        ];
+  if (borrow === 0n) return [deposit];
 
-  // The deposit ahead of the borrow in this same transaction is not in the account yet, so the health scan is told to
-  // count it, and the pool asset is excluded because the borrow names it itself.
+  // The deposit ahead of the borrow is not in the account when this is built, so the health scan is told to count it, and
+  // the pool asset is excluded because the borrow names it itself.
   const remaining = await positionAccounts(connection, state, { excludeCollateral: [pool.symbol], excludeDebt: [pool.symbol], injectCollateral: stock.symbol });
   const litePosition = await resolveLitePosition(connection, state.margin, new PublicKey(pool.mint), assetIndexOf(state, pool.symbol), state.slots.lite);
-  instructions.push(
-    ...(await ensureDebtPosition(connection, owner, pool)),
+  const beforeBorrow = [...deposit, ...(await ensureDebtPosition(connection, owner, pool))];
+  const borrowAndSupply = [
     borrowInstruction({ authority: owner, asset: pool, amount: borrow, remaining }),
     liteSupplyInstruction({ owner, asset: pool, litePosition, amount: borrow, attributeSharesDelta: await borrowedShares(connection, pool, borrow) }),
-  );
-  return instructions;
+  ];
+  return beforeBorrow.length === 0 ? [borrowAndSupply] : [beforeBorrow, borrowAndSupply];
 }
 
-export function deployFarm(connection: Connection, owner: PublicKey, request: FarmDeployRequest, hooks: SigningHooks): Promise<string> {
-  return buildFarmDeploy(connection, owner, request).then((instructions) => sendLargeInstructions(connection, owner, instructions, hooks));
+async function kaminoTables(connection: Connection): Promise<AddressLookupTableAccount[]> {
+  const { value } = await connection.getAddressLookupTable(KAMINO_LOOKUP_TABLE);
+  return value === null ? [] : [value];
+}
+
+export async function deployFarm(connection: Connection, owner: PublicKey, request: FarmDeployRequest, hooks: SigningHooks): Promise<string> {
+  const [batches, tables] = await Promise.all([buildFarmDeploy(connection, owner, request), kaminoTables(connection)]);
+  return sendBatches(connection, owner, { computeUnits: DEPLOY_COMPUTE_UNITS, batches, retrySafe: false, tables }, hooks);
 }
 
 export type FarmExitRequest = {
@@ -92,7 +103,7 @@ export type FarmExitRequest = {
 };
 
 // Redeem part of the Kamino position, repay the debt attributed to it, and send what is left to the wallet.
-export async function buildFarmExit(connection: Connection, owner: PublicKey, request: FarmExitRequest, state?: MarginState): Promise<TransactionInstruction[]> {
+export async function buildFarmExit(connection: Connection, owner: PublicKey, request: FarmExitRequest, state?: MarginState): Promise<TransactionInstruction[][]> {
   const { pool, exitBps } = request;
   if (!Number.isInteger(exitBps) || exitBps < 1 || exitBps > MAX_EXIT_BPS) throw new RangeError("Choose a close size between 1% and 100%");
 
@@ -104,34 +115,32 @@ export async function buildFarmExit(connection: Connection, owner: PublicKey, re
 
   const userTokenAccount = associatedTokenAddress(owner, mint, tokenProgramOf(pool));
   const remaining = await positionAccounts(connection, current, { excludeDebt: [pool.symbol], excludeLite: position.address });
+  // The redeem and the repay stay together so the Kamino position is never reduced without its loan being repaid.
   return [
-    ComputeBudgetProgram.setComputeUnitLimit({ units: EXIT_COMPUTE_UNITS }),
-    createAssociatedTokenAccountIdempotent(owner, userTokenAccount, owner, mint, tokenProgramOf(pool)),
-    ...(await ensureDebtPosition(connection, owner, pool)),
-    liteReduceRedeemInstruction({ owner, asset: pool, litePosition: position.address, exitBps, minUnderlyingOut: 0n }),
-    liteReduceRepayInstruction({ owner, asset: pool, litePosition: position.address, exitBps, userTokenAccount, remaining }),
+    [createAssociatedTokenAccountIdempotent(owner, userTokenAccount, owner, mint, tokenProgramOf(pool)), ...(await ensureDebtPosition(connection, owner, pool))],
+    [
+      liteReduceRedeemInstruction({ owner, asset: pool, litePosition: position.address, exitBps, minUnderlyingOut: 0n }),
+      liteReduceRepayInstruction({ owner, asset: pool, litePosition: position.address, exitBps, userTokenAccount, remaining }),
+    ],
   ];
 }
 
-export function exitFarm(connection: Connection, owner: PublicKey, request: FarmExitRequest, hooks: SigningHooks): Promise<string> {
-  return buildFarmExit(connection, owner, request).then((instructions) => sendLargeInstructions(connection, owner, instructions, hooks));
+export async function exitFarm(connection: Connection, owner: PublicKey, request: FarmExitRequest, hooks: SigningHooks): Promise<string> {
+  const [batches, tables] = await Promise.all([buildFarmExit(connection, owner, request), kaminoTables(connection)]);
+  return sendBatches(connection, owner, { computeUnits: EXIT_COMPUTE_UNITS, batches, retrySafe: true, tables }, hooks);
 }
 
 // A second transaction on purpose: it reads the account as the exit left it, so the health scan is right whether or not
 // another position still borrows the same asset.
-export async function buildStockWithdrawal(connection: Connection, owner: PublicKey, stock: AssetInfo, amount: bigint): Promise<TransactionInstruction[]> {
+export async function buildStockWithdrawal(connection: Connection, owner: PublicKey, stock: AssetInfo, amount: bigint): Promise<TransactionInstruction[][]> {
   if (amount <= 0n) throw new RangeError("There is no collateral to return");
   const state = await fetchMarginState(connection, marginAddress(owner));
   const mint = new PublicKey(stock.mint);
   const destination = associatedTokenAddress(owner, mint, tokenProgramOf(stock));
   const remaining = await positionAccounts(connection, state, { excludeCollateral: [stock.symbol] });
-  return [
-    ComputeBudgetProgram.setComputeUnitLimit({ units: EXIT_COMPUTE_UNITS }),
-    createAssociatedTokenAccountIdempotent(owner, destination, owner, mint, tokenProgramOf(stock)),
-    withdrawCollateralInstruction({ authority: owner, asset: stock, amount, destination, remaining }),
-  ];
+  return [[createAssociatedTokenAccountIdempotent(owner, destination, owner, mint, tokenProgramOf(stock)), withdrawCollateralInstruction({ authority: owner, asset: stock, amount, destination, remaining })]];
 }
 
 export function withdrawStock(connection: Connection, owner: PublicKey, stock: AssetInfo, amount: bigint, hooks: SigningHooks): Promise<string> {
-  return buildStockWithdrawal(connection, owner, stock, amount).then((instructions) => sendLargeInstructions(connection, owner, instructions, hooks));
+  return buildStockWithdrawal(connection, owner, stock, amount).then((batches) => sendBatches(connection, owner, { computeUnits: EXIT_COMPUTE_UNITS, batches, retrySafe: true }, hooks));
 }

@@ -1,4 +1,4 @@
-import { type AddressLookupTableAccount, type Connection, type PublicKey, type TransactionInstruction, TransactionMessage, VersionedTransaction } from "@solana/web3.js";
+import { type AddressLookupTableAccount, type Connection, type PublicKey, SendTransactionError, type TransactionInstruction, TransactionMessage, VersionedTransaction } from "@solana/web3.js";
 
 import { lastValidHeightOf } from "./fresh-blockhash";
 import { healStaleDexPools } from "./heal-pools";
@@ -43,6 +43,8 @@ async function sendRaw(connection: Connection, raw: Uint8Array): Promise<string>
     try {
       return await connection.sendRawTransaction(raw, { skipPreflight: false, preflightCommitment: "confirmed" });
     } catch (error) {
+      // The send's own check carries the program logs, which is where the reason for a refusal is.
+      if (error instanceof SendTransactionError) throw new TransactionFailedError(`${error.message} ${(error.logs ?? []).join(" ")}`);
       if (attempt >= SEND_ATTEMPTS || !isNetworkFailure(error)) throw error;
       await sleep(POLL_MS * attempt * 2);
     }

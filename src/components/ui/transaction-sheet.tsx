@@ -99,7 +99,7 @@ function SigningRow({ state }: SigningRowProps) {
     <StatusRow
       ring="wait"
       title={`Approve in ${state.wallet}`}
-      detail={slow ? `Waiting for ${state.wallet}. If it did not open, cancel and try again. Nothing was sent.` : "Nothing moves until you approve."}
+      detail={slow ? `Waiting for ${state.wallet}. If it did not open, cancel and try again. Nothing was sent.` : "Your wallet may warn that it could not check this on the test network. That is expected: confirm the amounts and approve."}
       chip={chip}
     />
   );
