@@ -13,6 +13,7 @@ const NO_FEE = /AccountNotFound|InsufficientFundsFor(Fee|Rent)|insufficient (lam
 const PRICE_MOVED = /0x1771|6001|SlippageToleranceExceeded|0xbbd|3005|AccountNotEnoughKeys|bin_array/i;
 const BLOCKHASH_STALE = /blockhash not found/i;
 const CONNECTION_REFUSED = /authorization request failed/i;
+const WALLET_UNREACHABLE = /ConnectionFailedException|unable to connect to websocket|ERROR_SESSION_TIMEOUT|ERROR_WALLET_NOT_FOUND/i;
 const NOT_ENOUGH_TOKENS = /insufficient funds|custom program error: 0x1\b/i;
 
 // Vanna program errors a lender or margin user can hit; codes are the program's custom error numbers.
@@ -72,6 +73,9 @@ export function toTransactionError(error: unknown): TransactionError {
   const text = textOf(error);
   if (text.includes(WALLET_MISMATCH)) {
     return new TransactionError("network", "Wrong wallet", "This build is showing another wallet's data. Disconnect the developer wallet override to send transactions.");
+  }
+  if (WALLET_UNREACHABLE.test(text)) {
+    return new TransactionError("network", "Could not reach your wallet", "The wallet app did not answer in time. Open it once, then try again. Nothing was sent.");
   }
   if (CONNECTION_REFUSED.test(text)) {
     return new TransactionError("network", "Wallet connection refused", "This wallet did not accept the request. Pick the wallet app you connected with when Android asks, or disconnect in Profile and connect again. Nothing was sent.");

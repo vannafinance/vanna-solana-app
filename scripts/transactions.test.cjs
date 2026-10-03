@@ -408,3 +408,8 @@ test("a partial send reads as a partial failure with the real reason attached", 
 test("a refused wallet connection says so instead of a generic failure", () => {
   assert.equal(toTransactionError(new Error("SolanaMobileWalletAdapterProtocolError -1/authorization request failed -1")).title, "Wallet connection refused");
 });
+
+test("a wallet app that never answers the local connection says so", () => {
+  const error = toTransactionError(new Error("SolanaMobileWalletAdapterError com.solana.mobilewalletadapter.clientlib.scenario.LocalAssociationScenario$ConnectionFailedException: Unable to connect to websocket server EUNSPECIFIED"));
+  assert.equal(error.title, "Could not reach your wallet");
+});
