@@ -8,8 +8,9 @@ From: Vanna Solana mobile app (Android). Checked against `https://devnet.solana.
 | --- | --- | --- | --- |
 | 1 | `/api/solana/history` and `/api/solana/spot-history` return 502 | Broken on the hosted server, but the web page still works through a fallback (see below) | Fix or remove the indexed call; confirm the fallback window in production |
 | 2 | Perps positions have no server route | Missing | Add `GET /api/perps/positions/{addr}` (draft below) so the phone does not re-derive them |
+| 3 | `/.well-known/assetlinks.json` is a 404 | Missing | Host one static file (below) so every Android wallet can verify the mobile app |
 
-The mobile app needs only these two. Everything else it reads already works (`/api/account/{addr}`, `/api/pools`, fork RPC).
+The mobile app needs only these three. Everything else it reads already works (`/api/account/{addr}`, `/api/pools`, fork RPC).
 
 **Correction to an earlier version of this note:** it said history failing blocks Perps positions and Net Earnings, and that Net Earnings `$0.00` is misleading. That was wrong. `historyWithFallback` in `lib/solana/history.ts` runs the indexed call and a direct RPC scan together and merges them, so the web Perps "Position History" and Swap History still show rows when the indexed call fails. The `$0.00` for the test wallet is probably correct (its SOL deposit was fully withdrawn, so deposited minus principal is not positive).
 
@@ -153,6 +154,44 @@ Each row is a `DerivedPosition` (`lib/long-short-math.ts`): `stock`, `side` (`lo
 | `openedAt` | first matching swap row timestamp | "Since Sep 22" |
 
 Numbers can stay JSON numbers like `/api/account` (USD figures are numbers there too). Errors should keep the existing shape (`{ error }` with 400/429/502) so one client handles both routes.
+
+## 3. Let Android wallets verify the mobile app (assetlinks.json)
+
+When the mobile app asks a wallet to connect it names itself as `https://devnet.solana.vanna.finance`. A wallet that follows the Mobile Wallet Adapter identity rules fetches `https://devnet.solana.vanna.finance/.well-known/assetlinks.json` and checks that this site vouches for the app's package name and signing certificate. That file does not exist (HTTP 404), so:
+
+- Backpack on Android refuses to connect ("Identity verification failed for the requesting app").
+- Phantom shows a warning that the app could not be verified.
+- Solflare and Seed Vault connect anyway.
+
+Hosting the file is the same for every wallet, so no wallet-specific code is needed in the app.
+
+Add `public/.well-known/assetlinks.json` to the Next.js app (served as `application/json`, no redirect):
+
+```json
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "finance.vanna.solana",
+      "sha256_cert_fingerprints": [
+        "FA:C6:17:45:DC:09:03:78:6F:B9:ED:E6:2A:96:2B:39:9F:73:48:F0:BB:6F:89:9B:83:32:66:75:91:03:3B:9C"
+      ]
+    }
+  }
+]
+```
+
+The fingerprint above is the Android debug key that signs the hackathon APK. When the app is signed with a release keystore for the dApp Store, add that key's SHA-256 as a second entry in the same array.
+
+Check it after deploying:
+
+```bash
+curl -si https://devnet.solana.vanna.finance/.well-known/assetlinks.json | head -5
+# HTTP/2 200, content-type: application/json
+curl -s "https://digitalassetlinks.googleapis.com/v1/statements:list?source.web.site=https://devnet.solana.vanna.finance&relation=delegate_permission/common.handle_all_urls"
+# lists the android_app statement for finance.vanna.solana
+```
 
 ## What the mobile app already reads (no change needed)
 
