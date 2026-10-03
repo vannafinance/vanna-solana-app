@@ -1,9 +1,10 @@
 import { useMobileWallet } from "@wallet-ui/react-native-web3js";
 import { useQueryClient } from "@tanstack/react-query";
 import { type Connection, PublicKey, type VersionedTransaction } from "@solana/web3.js";
-import { useCallback } from "react";
+import { useCallback, useEffect, useRef } from "react";
 
 import { DEV_WALLET_ADDRESS } from "@/lib/solana/config";
+import { signWithFreshBlockhash } from "@/lib/solana/fresh-blockhash";
 import { rpcConnection } from "@/lib/solana/rpc";
 import type { SigningHooks } from "@/lib/solana/send-transaction";
 import { toTransactionError, WALLET_MISMATCH } from "@/lib/solana/transaction-errors";
@@ -19,8 +20,16 @@ export function useWalletSigner() {
   const owner = account?.address.toBase58() ?? null;
   const mismatch = DEV_WALLET_ADDRESS !== undefined && owner !== DEV_WALLET_ADDRESS;
 
-  const sign = useCallback((transaction: VersionedTransaction) => signTransactions(transaction), [signTransactions]);
-  const signAll = useCallback((transactions: VersionedTransaction[]) => signTransactions(transactions), [signTransactions]);
+  // The wallet hands out a new authorization token after every approval, and a signing call that outlives a render keeps the
+  // token it was created with. A flow that asks twice (a lookup table, then the transaction) would present the first token
+  // again and be refused, so every call goes through the latest function.
+  const latest = useRef(signTransactions);
+  useEffect(() => {
+    latest.current = signTransactions;
+  }, [signTransactions]);
+
+  const sign = useCallback((transaction: VersionedTransaction) => signWithFreshBlockhash(rpcConnection, [transaction], () => latest.current(transaction)), []);
+  const signAll = useCallback((transactions: VersionedTransaction[]) => signWithFreshBlockhash(rpcConnection, transactions, () => latest.current(transactions)), []);
 
   // After a confirmed transaction every live figure is stale; refetch them now instead of waiting for the next poll.
   const refreshAfterTransaction = useCallback(() => {

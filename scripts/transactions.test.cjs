@@ -153,7 +153,7 @@ test("a rejected simulation is reported as a failed transaction, not a connectio
 
 const { sendAndConfirm, ConfirmationLostError } = load("src/lib/solana/send-transaction.ts");
 const dropped = () => new Error("fetch failed: java.net.UnknownHostException: Unable to resolve host");
-const signedStub = { serialize: () => new Uint8Array([1]) };
+const signedStub = { serialize: () => new Uint8Array([1]), message: { recentBlockhash: "stub" } };
 
 test("a dropped connection while sending is retried, then the transaction confirms", async () => {
   let sends = 0;
@@ -242,7 +242,7 @@ test("a failed simulation re-clones stale pools once and then simulates again be
   const hooks = {
     sign: async (tx) => {
       signed = true;
-      return { serialize: () => new Uint8Array([1]) };
+      return { serialize: () => new Uint8Array([1]), message: { recentBlockhash: "stub" } };
     },
     onSigned: () => {},
   };
@@ -308,10 +308,40 @@ test("the wallet is only asked once the transaction has been built and checked, 
     onPrepared: () => order.push("prepared"),
     sign: async () => {
       order.push("signing");
-      return { serialize: () => new Uint8Array([1]) };
+      return { serialize: () => new Uint8Array([1]), message: { recentBlockhash: "stub" } };
     },
     onSigned: () => order.push("signed"),
   };
   await simulateSignAndSend(connection, {}, 100, hooks);
   assert.equal(order.join(","), "simulated,prepared,signing,signed");
+});
+
+const { lastValidHeightOf, signWithFreshBlockhash } = load("src/lib/solana/fresh-blockhash.ts");
+
+test("a transaction is re-stamped with the newest blockhash while the wallet is still opening", async () => {
+  let height = 100;
+  const connection = {
+    getLatestBlockhash: async () => {
+      height += 1;
+      return { blockhash: `hash${height}`, lastValidBlockHeight: height + 150 };
+    },
+  };
+  const transaction = { message: { recentBlockhash: "built" } };
+  const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+  const signed = await signWithFreshBlockhash(connection, [transaction], async () => {
+    await wait(3300);
+    return transaction.message.recentBlockhash;
+  });
+  assert.notEqual(signed, "built");
+  assert.equal(lastValidHeightOf(signed, 0), Number(signed.slice(4)) + 150);
+
+  await wait(1800);
+  assert.equal(transaction.message.recentBlockhash, signed, "nothing changes once the wallet has answered");
+  assert.equal(lastValidHeightOf("unknown", 7), 7);
+});
+
+test("a blockhash the network no longer knows reads as an expired request", () => {
+  const error = toTransactionError(new Error("Simulation failed. Message: Transaction simulation failed: Blockhash not found."));
+  assert.equal(error.kind, "expired");
 });

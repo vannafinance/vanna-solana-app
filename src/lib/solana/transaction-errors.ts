@@ -10,6 +10,7 @@ const REJECTED = /cancel|declin|reject|denied|ERROR_NOT_SIGNED|ERROR_ASSOCIATION
 // A wallet that has never held SOL has no account at all, which the cluster reports as AccountNotFound for the fee payer.
 const NO_FEE = /AccountNotFound|InsufficientFundsFor(Fee|Rent)|insufficient (lamports|funds for fee)|attempt to debit an account but found no record|0x1\b.*lamports|insufficient funds for rent/i;
 const PRICE_MOVED = /0x1771|6001|SlippageToleranceExceeded|0xbbd|3005|AccountNotEnoughKeys|bin_array/i;
+const BLOCKHASH_STALE = /blockhash not found/i;
 const NOT_ENOUGH_TOKENS = /insufficient funds|custom program error: 0x1\b/i;
 
 // Vanna program errors a lender or margin user can hit; codes are the program's custom error numbers.
@@ -49,12 +50,16 @@ function detailOf(error: unknown): string {
 }
 
 export function toTransactionError(error: unknown): TransactionError {
+${error.stack}` : String(error));
   if (error instanceof TransactionError) return error;
   if (error instanceof BlockhashExpiredError) {
     return new TransactionError("expired", "Request expired", "The transaction was not confirmed in time. Nothing was sent. Try again.");
   }
   if (error instanceof ConfirmationLostError) {
     return new TransactionError("network", "Could not confirm", "Your connection dropped after this was sent, so we can't tell if it went through. Check your Portfolio before trying again.");
+  }
+  if (BLOCKHASH_STALE.test(textOf(error))) {
+    return new TransactionError("expired", "Request expired", "It took too long to approve, so the network no longer accepts it. Nothing was sent. Try again.");
   }
   if (isNetworkFailure(error)) {
     return new TransactionError("network", "Can't reach Solana", "Your connection dropped before this was sent. Nothing left your wallet. Check your connection and try again.");

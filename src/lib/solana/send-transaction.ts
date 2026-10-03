@@ -1,5 +1,6 @@
 import { type AddressLookupTableAccount, type Connection, type PublicKey, type TransactionInstruction, TransactionMessage, VersionedTransaction } from "@solana/web3.js";
 
+import { lastValidHeightOf } from "./fresh-blockhash";
 import { healStaleDexPools } from "./heal-pools";
 
 const POLL_MS = 700;
@@ -66,13 +67,14 @@ export async function sendAndConfirm(
   stages: { onSent?: (signature: string) => void; onProcessed?: () => void } = {},
 ): Promise<string> {
   const signature = await sendRaw(connection, signed.serialize());
+  const lastValid = lastValidHeightOf(signed.message.recentBlockhash, lastValidBlockHeight);
   stages.onSent?.(signature);
 
   let announcedProcessed = false;
   let failures = 0;
   for (;;) {
     try {
-      const state = await confirmationState(connection, signature, lastValidBlockHeight);
+      const state = await confirmationState(connection, signature, lastValid);
       if (state === "confirmed") return signature;
       if (state === "expired") throw new BlockhashExpiredError();
       if (state === "processed" && !announcedProcessed) {
