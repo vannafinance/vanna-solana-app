@@ -109,6 +109,14 @@ export const spaceGradients = {
   farm: { nav: ["#FC5457", "#FF007A"], cta: ["#E2087A", "#B0005A"] },
 } as const satisfies Record<Space, { nav: readonly [string, string]; cta: readonly [string, string] }>;
 
+// The header of each space is one surface that runs from a deep top into the space's colour, with a glow in its top right corner.
+export const spaceHeaders = {
+  portfolio: { surface: ["#3E1A9E", "#7B3FEA", "#5A26C9"], glow: "rgba(196,160,255,0.75)" },
+  earn: { surface: ["#07494F", "#11838B", "#0B5F66"], glow: "rgba(110,236,226,0.6)" },
+  trade: { surface: ["#221D8C", "#5A52F0", "#3A33C4"], glow: "rgba(130,170,255,0.8)" },
+  farm: { surface: ["#86003F", "#E2087A", "#A3004F"], glow: "rgba(255,120,190,0.72)" },
+} as const satisfies Record<Space, { surface: readonly [string, string, string]; glow: string }>;
+
 export const brandGradient = ["#FC5457", "#703AE6"] as const;
 
 export const horizontalGradient = { start: { x: 0, y: 0.5 }, end: { x: 1, y: 0.5 } } as const;
