@@ -8,7 +8,7 @@ export type TransactionState =
   | { phase: "signing"; step: number; steps: number; wallet: string; prepared: boolean }
   | { phase: "confirming"; stage: ConfirmStage; title: string; message: string; signature?: string }
   | { phase: "success"; title: string; message: string; explorerLabel?: string; signature?: string }
-  | { phase: "failure"; kind: FailureKind; title: string; message: string; actionLabel?: string };
+  | { phase: "failure"; kind: FailureKind; title: string; message: string; actionLabel?: string; detail?: string };
 
 export type RunProgress = {
   prepared: () => void;
@@ -22,6 +22,8 @@ export class TransactionError extends Error {
     readonly kind: FailureKind,
     readonly title: string,
     message: string,
+    // The underlying error, shown small under the message when nothing more specific is known.
+    readonly detail?: string,
   ) {
     super(message);
   }

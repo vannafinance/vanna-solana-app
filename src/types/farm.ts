@@ -11,6 +11,8 @@ export type FarmPool = {
   supplyApyBps: number;
   borrowApyBps: number;
   available: bigint;
+  // What Vanna's own reserve can still lend of this asset; a borrow above it is refused by the program.
+  borrowable: bigint;
   totalSupplied: bigint;
   utilizationBps: number;
 };
@@ -87,7 +89,7 @@ export type FarmPositionsView = {
   unplaced: readonly UnplacedFarmPosition[];
 };
 
-export type DeployIssue = "no-balance" | "over-balance" | "no-amount" | "low-leverage" | "too-risky";
+export type DeployIssue = "no-balance" | "over-balance" | "no-amount" | "low-leverage" | "too-risky" | "pool-liquidity";
 
 export type DeployQuote = {
   collateralValueUsd: bigint;

@@ -20,9 +20,10 @@ type DepositCardProps = {
   onStepCollateral: (direction: 1 | -1) => void;
 };
 
-function issueText({ issue, collateral }: DeployForm) {
+function issueText({ issue, collateral, pool }: DeployForm) {
   if (issue === "no-balance") return `No ${collateral.symbol} in your wallet. Pick another asset.`;
   if (issue === "over-balance") return "That is more than your wallet balance.";
+  if (issue === "pool-liquidity") return `Vanna has only ${formatToken({ raw: pool.borrowable, decimals: pool.decimals }, 0)} ${pool.symbol} free to lend right now. Lower the leverage or the amount.`;
   if (issue === "too-risky") return "Together with your open positions this would leave your account too close to liquidation. Lower the leverage.";
   return null;
 }

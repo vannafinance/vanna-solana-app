@@ -126,6 +126,13 @@ test("Vanna program errors become specific messages", () => {
   assert.equal(toTransactionError(failure(6004)).title, "Action paused");
 });
 
+test("an error nothing recognises keeps its text as a detail line, and a slow lookup table has its own message", () => {
+  const unknown = toTransactionError(new Error("signTransactions failed: unexpected payload"));
+  assert.equal(unknown.title, "Something went wrong");
+  assert.match(unknown.detail, /unexpected payload/);
+  assert.equal(toTransactionError(new Error("The lookup table was not ready in time. Nothing else was sent.")).title, "The network was slow");
+});
+
 test("wallet cancellation and missing fees keep their own messages", () => {
   assert.equal(toTransactionError(new Error("CancellationException: user declined")).kind, "rejected");
   assert.equal(toTransactionError(new TransactionFailedError("Attempt to debit an account but found no record of a prior credit.")).kind, "no-fee");

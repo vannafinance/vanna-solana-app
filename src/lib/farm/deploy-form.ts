@@ -23,11 +23,12 @@ function findBySymbol<T extends { symbol: string }>(items: readonly T[], symbol:
   return match;
 }
 
-function findIssue(collateral: FarmCollateral, amount: bigint, leverage: number, quote: DeployQuote, account: DeployInput["account"]): DeployIssue | null {
+function findIssue(collateral: FarmCollateral, pool: FarmPool, amount: bigint, leverage: number, quote: DeployQuote, account: DeployInput["account"]): DeployIssue | null {
   if (collateral.balance <= 0n) return "no-balance";
   if (amount > collateral.balance) return "over-balance";
   if (leverage <= MIN_LEVERAGE) return "low-leverage";
   if (amount <= 0n) return "no-amount";
+  if (quote.borrow.raw > pool.borrowable) return "pool-liquidity";
   const debt = account.debtUsd + quote.debtUsd;
   if (debt > 0n && Number(account.collateralUsd + quote.collateralValueUsd + quote.debtUsd) / Number(debt) <= MIN_OPENING_HEALTH) return "too-risky";
   return null;
@@ -50,6 +51,6 @@ export function buildDeployForm({ pools, collaterals, poolSymbol, collateralSymb
     amount,
     leverage,
     quote,
-    issue: findIssue(collateral, amount.raw, leverage, quote, account),
+    issue: findIssue(collateral, pool, amount.raw, leverage, quote, account),
   };
 }

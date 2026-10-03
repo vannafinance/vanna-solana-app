@@ -16,7 +16,7 @@ const NOT_ENOUGH_TOKENS = /insufficient funds|custom program error: 0x1\b/i;
 const PROGRAM_ERRORS: Record<number, { title: string; message: string }> = {
   6004: { title: "Action paused", message: "Vanna has paused this action for now. Nothing was sent." },
   6015: { title: "Vault is full", message: "This vault has reached its supply cap. Nothing was sent. Try a smaller amount." },
-  6018: { title: "Not enough free liquidity", message: "Borrowers are using most of this vault. Withdraw a smaller amount, or try again later." },
+  6018: { title: "Not enough free liquidity", message: "Vanna does not have that much free to lend or pay out right now. Nothing was sent. Try a smaller amount, or try again later." },
   6020: { title: "Not enough supplied", message: "You have less supplied in this vault than the amount requested. Nothing was sent." },
   6045: { title: "Amount too small", message: "The vault needs a larger first deposit. Nothing was sent." },
 };
@@ -39,6 +39,13 @@ function textOf(error: unknown): string {
 // A swap pool the fork cloned earlier can drift from the quote; a fresh quote usually fixes it.
 export function isStalePoolError(error: unknown): boolean {
   return PRICE_MOVED.test(textOf(error));
+}
+
+const DETAIL_LIMIT = 240;
+
+function detailOf(error: unknown): string {
+  const text = textOf(error).replace(/\s+/g, " ").trim();
+  return text.length > DETAIL_LIMIT ? `${text.slice(0, DETAIL_LIMIT)}…` : text;
 }
 
 export function toTransactionError(error: unknown): TransactionError {
@@ -65,8 +72,11 @@ export function toTransactionError(error: unknown): TransactionError {
   if (error instanceof ApiError) {
     return new TransactionError("network", "Network error", "Vanna could not be reached. Nothing left your wallet. Check your connection and try again.");
   }
-  if (error instanceof TransactionFailedError) {
-    return new TransactionError("network", "Transaction failed", "Solana rejected this transaction before it was sent. Nothing left your wallet. Try again in a moment.");
+  if (/lookup table was not ready/i.test(text)) {
+    return new TransactionError("network", "The network was slow", "Setting up this transaction took too long. Only a small temporary account was created. Try again.");
   }
-  return new TransactionError("network", "Something went wrong", "The transaction did not go through. Nothing left your wallet.");
+  if (error instanceof TransactionFailedError) {
+    return new TransactionError("network", "Transaction failed", "Solana rejected this transaction before it was sent. Nothing left your wallet. Try again in a moment.", detailOf(error));
+  }
+  return new TransactionError("network", "Something went wrong", "The transaction did not go through. Nothing left your wallet.", detailOf(error));
 }

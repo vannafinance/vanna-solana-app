@@ -119,6 +119,7 @@ export function useTransactionFlow({ steps = 1, wallet, success, run }: Options)
               title: internal.error.title,
               message: internal.error.message,
               actionLabel: internal.error.kind === "no-fee" && FORK_FAUCET_ENABLED ? "Get test SOL" : undefined,
+              detail: internal.error.detail,
             };
     }
   })();

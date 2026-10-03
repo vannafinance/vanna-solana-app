@@ -31,6 +31,13 @@ const LOW_PRECISION_DECIMALS = 6;
 const MARKET = "Kamino Main Market";
 const STOCK_SYMBOLS: readonly CollateralSymbol[] = ["TSLAx", "GOOGLx", "AAPLx", "ANTHROPIC", "OPENAI"];
 
+// Interest accrues between the read and the transaction, so a little of the free liquidity is kept back.
+const LIQUIDITY_MARGIN = 0.99;
+
+function borrowableOf(totalSupply: number, totalBorrowed: number, decimals: number): bigint {
+  return BigInt(Math.max(0, Math.floor((totalSupply - totalBorrowed) * LIQUIDITY_MARGIN * 10 ** decimals)));
+}
+
 function balanceText(collateral: FarmCollateral) {
   return toInputText({ raw: collateral.balance, decimals: collateral.decimals });
 }
@@ -57,7 +64,8 @@ export function useFarmDeploy() {
     const kamino = stats.data?.[symbol];
     const borrowPercent = vanna.data?.[symbol]?.borrowApyPercent;
     const decimals = assets.find((asset) => asset.symbol === symbol)?.decimals;
-    if (price === undefined || !kamino || borrowPercent === undefined || decimals === undefined) return [];
+    const reserve = vanna.data?.[symbol];
+    if (price === undefined || !kamino || borrowPercent === undefined || decimals === undefined || reserve === undefined) return [];
     return [
       {
         symbol,
@@ -67,6 +75,7 @@ export function useFarmDeploy() {
         supplyApyBps: kamino.supplyApyBps,
         borrowApyBps: Math.round(borrowPercent * 100),
         available: kamino.available,
+        borrowable: borrowableOf(reserve.totalSupply, reserve.totalBorrowed, decimals),
         totalSupplied: kamino.totalSupplied,
         utilizationBps: kamino.utilizationBps,
       },

@@ -291,3 +291,18 @@ test("a Kamino position with no stock history is reported with its real amounts"
   assert.equal(unplaced[0].supplied.decimals, 9);
   assert.equal(unplaced[0].debt.raw, 4n);
 });
+
+const { buildDeployForm } = load("src/lib/farm/deploy-form.ts");
+
+function deployInput({ borrowable, amountText, leverage }) {
+  const pool = { symbol: "USDC", market: "Kamino Main Market", decimals: 6, priceUsd: 1_000_000n, supplyApyBps: 498, borrowApyBps: 659, available: 0n, borrowable, totalSupplied: 0n, utilizationBps: 0 };
+  const collateral = { symbol: "TSLAx", decimals: 8, priceUsd: 370_000_000n, balance: 10_000_000_000n };
+  return { pools: [pool], collaterals: [collateral], poolSymbol: "USDC", collateralSymbol: "TSLAx", amountText, leverage, account: { collateralUsd: 0n, debtUsd: 0n } };
+}
+
+test("a deploy that borrows more than Vanna's pool can lend is refused before the wallet opens", () => {
+  const tooBig = buildDeployForm(deployInput({ borrowable: 26_000_000_000n, amountText: "52", leverage: 4 }));
+  assert.equal(tooBig.issue, "pool-liquidity");
+  const fits = buildDeployForm(deployInput({ borrowable: 26_000_000_000n, amountText: "20", leverage: 2 }));
+  assert.equal(fits.issue, null);
+});

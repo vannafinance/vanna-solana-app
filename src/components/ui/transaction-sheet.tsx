@@ -62,6 +62,7 @@ export function TransactionSheet({ state, onPrimary, onClose, primaryLabel, onEx
           {state.phase === "failure" ? (
             <StatusRow ring={rejected ? "off" : "fail"} title={state.title} detail={state.message} />
           ) : null}
+          {state.phase === "failure" && state.detail ? <FailureDetail text={state.detail} /> : null}
           {state.phase === "confirming" || state.phase === "success" ? <Progress stage={state.phase === "success" ? "success" : state.stage} /> : null}
           <Actions
             state={state}
@@ -101,6 +102,18 @@ function SigningRow({ state }: SigningRowProps) {
       detail={slow ? `Waiting for ${state.wallet}. If it did not open, cancel and try again. Nothing was sent.` : "Nothing moves until you approve."}
       chip={chip}
     />
+  );
+}
+
+function FailureDetail({ text }: { text: string }) {
+  const { colors, radius } = useTheme();
+
+  return (
+    <View style={{ marginTop: 12, padding: 10, borderRadius: radius.sm, backgroundColor: colors.background }}>
+      <AppText variant="caption" color="textMuted" selectable>
+        {text}
+      </AppText>
+    </View>
   );
 }
 

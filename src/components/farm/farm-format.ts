@@ -62,6 +62,8 @@ export function deployCtaLabel({ issue, collateral }: DeployForm, needsMarginAcc
       return "Pick leverage above 1x";
     case "too-risky":
       return "Position too risky";
+    case "pool-liquidity":
+      return "Pool too small for this size";
     case null:
       return needsMarginAccount ? "Create margin account to deploy" : "Deploy strategy · approve in wallet";
   }
