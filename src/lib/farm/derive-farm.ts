@@ -23,9 +23,27 @@ function legs(chips: readonly HistoryChip[], type: Single["type"]): HistoryLeg[]
 
 const action = (kind: FarmHistoryAction["kind"], leg: HistoryLeg): FarmHistoryAction => ({ kind, symbol: leg.asset, amount: leg.amount });
 
+// A deploy too big for one transaction is sent as several in a row, so the stock deposit and the borrow can sit in
+// transactions of their own just before the one that supplies to Kamino. They belong to it when they come right before it.
+const PAIRING_WINDOW_SECONDS = 600;
+
+type Pending = { stockDeposit?: HistoryLeg; borrow?: HistoryLeg; at: number };
+
+function remember(pending: Pending | null, item: MarginActivity): Pending | null {
+  const only = (type: Single["type"], accept: (asset: string) => boolean) => {
+    const found = item.chips.filter((chip): chip is Single => chip.type !== "swap" && chip.type === type);
+    return found.length === item.chips.length && found.length > 0 && found.every((chip) => accept(chip.leg.asset)) ? found[0].leg : undefined;
+  };
+  const stockDeposit = only("deposit", isStock);
+  const borrow = only("borrow", isPool);
+  if (!stockDeposit && !borrow) return pending;
+  const current = pending !== null && item.at - pending.at <= PAIRING_WINDOW_SECONDS ? pending : { at: item.at };
+  return { ...current, ...(stockDeposit ? { stockDeposit } : {}), ...(borrow ? { borrow } : {}), at: item.at };
+}
+
 // Replays the Farm transactions of one margin account, oldest first. A stock's deposit and the pool asset borrowed in the
-// same transaction are what a position was opened with; returning the stock to the wallet closes it. The split between
-// two stocks sharing one pool is only an estimate from this history, as on the web app.
+// same transaction, or in the transactions right before it, are what a position was opened with; returning the stock to the
+// wallet closes it. The split between two stocks sharing one pool is only an estimate from this history, as on the web app.
 export function deriveFarm(activity: readonly MarginActivity[]): FarmDerived {
   const open = new Map<string, FarmAttribution>();
   const poolOf = new Map<CollateralSymbol, PoolSymbol>();
@@ -33,11 +51,18 @@ export function deriveFarm(activity: readonly MarginActivity[]): FarmDerived {
   const yieldKept: FarmDerived["yieldKept"] = [];
   let closedCount = 0;
 
-  for (const item of activity.filter((candidate) => candidate.strategy === "farm").reverse()) {
+  let pending: Pending | null = null;
+  for (const item of [...activity].reverse()) {
+    if (item.strategy !== "farm") {
+      pending = remember(pending, item);
+      continue;
+    }
+    const before = pending !== null && item.at - pending.at <= PAIRING_WINDOW_SECONDS ? pending : null;
+    pending = null;
     const deposits = legs(item.chips, "deposit");
-    const stockDeposit = deposits.find((leg) => isStock(leg.asset));
+    const stockDeposit = deposits.find((leg) => isStock(leg.asset)) ?? before?.stockDeposit;
     const poolDeposit = deposits.find((leg) => isPool(leg.asset));
-    const borrow = legs(item.chips, "borrow").find((leg) => isPool(leg.asset));
+    const borrow = legs(item.chips, "borrow").find((leg) => isPool(leg.asset)) ?? before?.borrow;
     const repay = legs(item.chips, "repay").find((leg) => isPool(leg.asset));
     const stockWithdraw = legs(item.chips, "withdraw").find((leg) => isStock(leg.asset));
     const poolWithdraw = legs(item.chips, "withdraw").find((leg) => isPool(leg.asset));

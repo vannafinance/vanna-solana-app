@@ -413,3 +413,23 @@ test("a wallet app that never answers the local connection says so", () => {
   const error = toTransactionError(new Error("SolanaMobileWalletAdapterError com.solana.mobilewalletadapter.clientlib.scenario.LocalAssociationScenario$ConnectionFailedException: Unable to connect to websocket server EUNSPECIFIED"));
   assert.equal(error.title, "Could not reach your wallet");
 });
+
+test("each transaction that lands reports how many batches have landed so far", async () => {
+  const split = batchFixture();
+  const seen = [];
+  await sendBatches(split.connection, owner, { computeUnits: 600_000, batches: [[bulky()], [bulky()]], retrySafe: true, onLanded: (count) => seen.push(count) }, split.hooks);
+  assert.deepEqual(seen, [1, 2]);
+
+  const together = batchFixture();
+  const small = () => new TransactionInstruction({ programId: owner, keys: [], data: Buffer.alloc(20) });
+  const merged = [];
+  await sendBatches(together.connection, owner, { computeUnits: 600_000, batches: [[small()], [small()], [small()]], retrySafe: true, onLanded: (count) => merged.push(count) }, together.hooks);
+  assert.deepEqual(merged, [3]);
+});
+
+test("a stopped send keeps the count of what landed, so a retry can start after it", async () => {
+  const stopped = batchFixture({ failSecond: true });
+  const seen = [];
+  await assert.rejects(sendBatches(stopped.connection, owner, { computeUnits: 600_000, batches: [[bulky()], [bulky()]], retrySafe: false, onLanded: (count) => seen.push(count) }, stopped.hooks), PartialSendError);
+  assert.deepEqual(seen, [1]);
+});

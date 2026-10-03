@@ -7,8 +7,7 @@ import { buildDeployForm } from "@/lib/farm/deploy-form";
 import { stepHeld } from "@/lib/farm/farm-math";
 import { assets } from "@/lib/solana/assets";
 import { NETWORK_FEE_ESTIMATE, NETWORK_LABEL } from "@/lib/solana/config";
-import { deployFarm, yieldAssetOf } from "@/lib/solana/farm-transactions";
-import { PartialSendError } from "@/lib/solana/send-batches";
+import { deployFarm, freshDeployProgress, yieldAssetOf } from "@/lib/solana/farm-transactions";
 import { YIELD_SYMBOLS } from "@/lib/solana/kamino";
 import { routes } from "@/navigation/routes";
 import type { CollateralSymbol, DeployForm, FarmCollateral, FarmPool, PoolSymbol } from "@/types/farm";
@@ -57,8 +56,8 @@ export function useFarmDeploy() {
   const [collateralSymbol, setCollateralSymbol] = useState<CollateralSymbol>("TSLAx");
   const [amountText, setAmountText] = useState("");
   const [leverage, setLeverage] = useState(DEFAULT_LEVERAGE);
-  // Set when the deposit landed but the borrow did not, so trying again does not deposit the stock a second time.
-  const depositDone = useRef(false);
+  // How far the last attempt got, so trying again after a stop does not deposit or borrow a second time.
+  const progress = useRef(freshDeployProgress());
 
   // Everything here is a live read: the pool's rates and liquidity from Kamino, what the program charges to borrow, the
   // wallet's stock balances and the oracle prices that value them.
@@ -125,17 +124,14 @@ export function useFarmDeploy() {
   const borrowDigits = data && data.pool.decimals <= LOW_PRECISION_DECIMALS ? 2 : 3;
 
   const flow = useTransactionFlow({
-    run: (_step, progress) =>
+    run: (_step, runProgress) =>
       signer.execute(({ connection, owner, hooks }) => {
         const stock = assets.find((asset) => asset.symbol === data?.collateral.symbol);
         if (data === null || stock === undefined || data.issue !== null) {
           throw new TransactionError("network", "Something went wrong", "The strategy could not be prepared. Nothing left your wallet.");
         }
-        return deployFarm(connection, owner, { stock, pool: yieldAssetOf(data.pool.symbol), collateral: data.amount.raw, borrow: data.quote.borrow.raw, depositDone: depositDone.current }, hooks).catch((error: unknown) => {
-          if (error instanceof PartialSendError) depositDone.current = true;
-          throw error;
-        });
-      }, progress),
+        return deployFarm(connection, owner, { stock, pool: yieldAssetOf(data.pool.symbol), collateral: data.amount.raw, borrow: data.quote.borrow.raw }, hooks, progress.current);
+      }, runProgress),
     success: {
       title: "Strategy deployed",
       message: data
@@ -151,7 +147,7 @@ export function useFarmDeploy() {
   };
 
   const closeFlow = () => {
-    depositDone.current = false;
+    progress.current = freshDeployProgress();
     flow.close();
   };
 

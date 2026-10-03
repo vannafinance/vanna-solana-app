@@ -34,9 +34,14 @@ export type FarmDeployRequest = {
   collateral: bigint;
   // Pool base units borrowed against it and supplied to Kamino; zero for a plain deposit.
   borrow: bigint;
-  // The deposit already landed in an earlier attempt that stopped before the borrow, so it is not made again.
-  depositDone?: boolean;
 };
+
+// How far a deploy got, so trying again after it stopped does not repeat what already landed. A deploy is three legs:
+// the deposit (with the debt account if the pool asset has none yet), the borrow and the Kamino supply. The shares the
+// borrow mints are worked out once and kept, because the supply must attribute exactly those to the Kamino position.
+export type FarmDeployProgress = { landed: number; sharesDelta: bigint | null };
+
+export const freshDeployProgress = (): FarmDeployProgress => ({ landed: 0, sharesDelta: null });
 
 async function ensureDebtPosition(connection: Connection, owner: PublicKey, asset: AssetInfo): Promise<TransactionInstruction[]> {
   const margin = marginAddress(owner);
@@ -54,10 +59,10 @@ async function borrowedShares(connection: Connection, pool: AssetInfo, borrow: b
   return assetsToDebtSharesUp(borrow, reserve.totalBorrowShares, totalDebt);
 }
 
-// Deposit the stock, borrow the pool asset against it and supply that into Kamino. The borrow and the supply share a
-// transaction so a loan is never left without its Kamino position; the deposit before them may be a transaction of its own.
-// The stock stays as ordinary margin collateral; the debt is in the pool asset.
-export async function buildFarmDeploy(connection: Connection, owner: PublicKey, request: FarmDeployRequest): Promise<TransactionInstruction[][]> {
+// Deposit the stock, borrow the pool asset against it and supply that into Kamino, as the legs a transaction can hold.
+// Neighbouring legs share a transaction when they fit, which keeps a loan next to its Kamino position wherever it can. The
+// stock stays as ordinary margin collateral; the debt is in the pool asset.
+export async function buildFarmDeploy(connection: Connection, owner: PublicKey, request: FarmDeployRequest, progress: FarmDeployProgress = freshDeployProgress()): Promise<TransactionInstruction[][]> {
   const { stock, pool, collateral, borrow } = request;
   if (collateral <= 0n) throw new RangeError("Enter a deposit amount");
   if (borrow < 0n) throw new RangeError("The borrow amount is invalid");
@@ -65,25 +70,23 @@ export async function buildFarmDeploy(connection: Connection, owner: PublicKey, 
   const state = await fetchMarginState(connection, marginAddress(owner));
   const stockMint = new PublicKey(stock.mint);
   const source = associatedTokenAddress(owner, stockMint, tokenProgramOf(stock));
-  const deposit =
-    request.depositDone === true
-      ? []
-      : [
-          createAssociatedTokenAccountIdempotent(owner, source, owner, stockMint, tokenProgramOf(stock)),
-          depositCollateralInstruction({ authority: owner, asset: stock, amount: collateral, source }),
-        ];
-  if (borrow === 0n) return [deposit];
+  const deposit = [
+    createAssociatedTokenAccountIdempotent(owner, source, owner, stockMint, tokenProgramOf(stock)),
+    depositCollateralInstruction({ authority: owner, asset: stock, amount: collateral, source }),
+  ];
+  if (borrow === 0n) return [deposit].slice(progress.landed);
 
-  // The deposit ahead of the borrow is not in the account when this is built, so the health scan is told to count it, and
+  // The deposit ahead of the borrow may not be in the account when this is built, so the health scan is told to count it, and
   // the pool asset is excluded because the borrow names it itself.
   const remaining = await positionAccounts(connection, state, { excludeCollateral: [pool.symbol], excludeDebt: [pool.symbol], injectCollateral: stock.symbol });
   const litePosition = await resolveLitePosition(connection, state.margin, new PublicKey(pool.mint), assetIndexOf(state, pool.symbol), state.slots.lite);
-  const beforeBorrow = [...deposit, ...(await ensureDebtPosition(connection, owner, pool))];
-  const borrowAndSupply = [
-    borrowInstruction({ authority: owner, asset: pool, amount: borrow, remaining }),
-    liteSupplyInstruction({ owner, asset: pool, litePosition, amount: borrow, attributeSharesDelta: await borrowedShares(connection, pool, borrow) }),
+  progress.sharesDelta ??= await borrowedShares(connection, pool, borrow);
+  const legs = [
+    [...deposit, ...(await ensureDebtPosition(connection, owner, pool))],
+    [borrowInstruction({ authority: owner, asset: pool, amount: borrow, remaining })],
+    [liteSupplyInstruction({ owner, asset: pool, litePosition, amount: borrow, attributeSharesDelta: progress.sharesDelta })],
   ];
-  return beforeBorrow.length === 0 ? [borrowAndSupply] : [beforeBorrow, borrowAndSupply];
+  return legs.slice(progress.landed);
 }
 
 async function kaminoTables(connection: Connection): Promise<AddressLookupTableAccount[]> {
@@ -91,9 +94,10 @@ async function kaminoTables(connection: Connection): Promise<AddressLookupTableA
   return value === null ? [] : [value];
 }
 
-export async function deployFarm(connection: Connection, owner: PublicKey, request: FarmDeployRequest, hooks: SigningHooks): Promise<string> {
-  const [batches, tables] = await Promise.all([buildFarmDeploy(connection, owner, request), kaminoTables(connection)]);
-  return sendBatches(connection, owner, { computeUnits: DEPLOY_COMPUTE_UNITS, batches, retrySafe: false, tables }, hooks);
+export async function deployFarm(connection: Connection, owner: PublicKey, request: FarmDeployRequest, hooks: SigningHooks, progress: FarmDeployProgress = freshDeployProgress()): Promise<string> {
+  const [batches, tables] = await Promise.all([buildFarmDeploy(connection, owner, request, progress), kaminoTables(connection)]);
+  const alreadyLanded = progress.landed;
+  return sendBatches(connection, owner, { computeUnits: DEPLOY_COMPUTE_UNITS, batches, retrySafe: false, tables, onLanded: (count) => (progress.landed = alreadyLanded + count) }, hooks);
 }
 
 export type FarmExitRequest = {

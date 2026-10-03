@@ -23,10 +23,14 @@ export type BatchRequest = {
   batches: readonly (readonly TransactionInstruction[])[];
   // True when running the earlier batches again is harmless, so a failure after they landed is just the failure.
   retrySafe: boolean;
-  // Lookup tables that exist on mainnet, used only when the batches do not fit without them. A wallet reads them like any
-  // other account, unlike a table made on the fork.
+  // Lookup tables that exist on mainnet. A wallet reads them like any other account, unlike a table made on the fork, and
+  // they let more of the batches share one transaction.
   tables?: readonly AddressLookupTableAccount[];
+  // Called after each transaction lands with how many batches have landed so far in this call.
+  onLanded?: (batches: number) => void;
 };
+
+type Packed = { instructions: TransactionInstruction[]; batches: number };
 
 function fits(payer: PublicKey, instructions: TransactionInstruction[], tables: readonly AddressLookupTableAccount[]): boolean {
   try {
@@ -38,39 +42,37 @@ function fits(payer: PublicKey, instructions: TransactionInstruction[], tables: 
   }
 }
 
-function pack(payer: PublicKey, { computeUnits, batches }: BatchRequest, tables: readonly AddressLookupTableAccount[]): TransactionInstruction[][] {
+function pack(payer: PublicKey, { computeUnits, batches }: BatchRequest, tables: readonly AddressLookupTableAccount[]): Packed[] {
   const budget = ComputeBudgetProgram.setComputeUnitLimit({ units: computeUnits });
-  const transactions: TransactionInstruction[][] = [];
+  const transactions: Packed[] = [];
   for (const batch of batches) {
     const last = transactions[transactions.length - 1];
-    if (last !== undefined && fits(payer, [...last, ...batch], tables)) last.push(...batch);
-    else if (fits(payer, [budget, ...batch], tables)) transactions.push([budget, ...batch]);
+    if (last !== undefined && fits(payer, [...last.instructions, ...batch], tables)) {
+      last.instructions.push(...batch);
+      last.batches += 1;
+    } else if (fits(payer, [budget, ...batch], tables)) transactions.push({ instructions: [budget, ...batch], batches: 1 });
     else throw new RangeError("This action is too large to send in one transaction");
   }
   return transactions;
 }
 
-function packWithFallback(payer: PublicKey, request: BatchRequest): { transactions: TransactionInstruction[][]; tables: readonly AddressLookupTableAccount[] } {
-  try {
-    return { transactions: pack(payer, request, []), tables: [] };
-  } catch (error) {
-    const tables = request.tables ?? [];
-    if (!(error instanceof RangeError) || tables.length === 0) throw error;
-    return { transactions: pack(payer, request, tables), tables };
-  }
-}
-
 // The wallet's own security check reads every transaction against real mainnet, so a transaction that points at an address
-// lookup table made on the fork cannot be read and some wallets refuse to sign it. This sends what does not fit in one
-// transaction as several plain ones instead, approved together in one prompt and sent in order, each after the one before
-// has confirmed. One that fits goes out as it is.
+// lookup table made on the fork cannot be read and some wallets refuse to sign it. This packs the batches into as few
+// transactions as fit, using only tables that exist on mainnet, approves them together in one prompt and sends them in
+// order, each after the one before has confirmed. One that fits goes out as it is.
 export async function sendBatches(connection: Connection, payer: PublicKey, request: BatchRequest, hooks: SigningHooks): Promise<string> {
-  const { transactions, tables } = packWithFallback(payer, request);
-  if (transactions.length === 1) return sendInstructions(connection, payer, transactions[0], hooks, [...tables]);
+  const tables = request.tables ?? [];
+  const transactions = pack(payer, request, tables);
+  if (transactions.length === 0) throw new RangeError("There is nothing left to send");
+  if (transactions.length === 1) {
+    const signature = await sendInstructions(connection, payer, transactions[0].instructions, hooks, [...tables]);
+    request.onLanded?.(transactions[0].batches);
+    return signature;
+  }
 
   const latest = await connection.getLatestBlockhash("confirmed");
   const unsigned = transactions.map(
-    (instructions) => new VersionedTransaction(new TransactionMessage({ payerKey: payer, recentBlockhash: latest.blockhash, instructions }).compileToV0Message([...tables])),
+    ({ instructions }) => new VersionedTransaction(new TransactionMessage({ payerKey: payer, recentBlockhash: latest.blockhash, instructions }).compileToV0Message([...tables])),
   );
   // Only the first can be checked now; the others read what the first leaves behind.
   const simulation = await connection.simulateTransaction(unsigned[0], { sigVerify: false, commitment: "confirmed" });
@@ -81,10 +83,13 @@ export async function sendBatches(connection: Connection, payer: PublicKey, requ
   hooks.onSigned();
 
   let signature = "";
+  let landed = 0;
   for (let index = 0; index < signed.length; index++) {
     const isLast = index === signed.length - 1;
     try {
       signature = await sendAndConfirm(connection, signed[index], latest.lastValidBlockHeight, isLast ? hooks : {});
+      landed += transactions[index].batches;
+      request.onLanded?.(landed);
     } catch (error) {
       if (index > 0 && !request.retrySafe) throw new PartialSendError(index, error);
       throw error;

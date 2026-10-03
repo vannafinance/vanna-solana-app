@@ -201,6 +201,43 @@ test("returning the stock to the wallet closes its position and a later open sta
   assert.equal(exitEntry.actions.map((item) => `${item.kind}:${item.amount.raw}`).join(","), "redeem:712,repay:700");
 });
 
+const plainTx = (signature, at, strategy, chips) => ({ signature, at, strategy, title: null, stock: null, chips });
+const depositOnly = (signature, at, stock, raw) => plainTx(signature, at, "unclassified", [{ type: "deposit", leg: leg(stock, raw, 8) }]);
+const borrowOnly = (signature, at, asset, raw, decimals) => plainTx(signature, at, "unclassified", [{ type: "borrow", leg: leg(asset, raw, decimals) }]);
+const supplyOnly = (signature, at, asset, raw, decimals) => farmTx(signature, at, [{ type: "deposit", leg: leg(asset, raw, decimals) }]);
+
+test("a deploy sent as a deposit and then a borrow with the supply still opens one position", () => {
+  const derived = deriveFarm([
+    farmTx("supply", 102, [{ type: "deposit", leg: leg("USDC", 741_000_000n, 6) }, { type: "borrow", leg: leg("USDC", 741_000_000n, 6) }]),
+    depositOnly("deposit", 101, "TSLAx", 200_000_000n),
+  ]);
+  assert.equal(derived.attributions.length, 1);
+  assert.equal(derived.attributions[0].stock, "TSLAx");
+  assert.equal(derived.attributions[0].collateral.raw, 200_000_000n);
+  assert.equal(derived.attributions[0].borrowed.raw, 741_000_000n);
+  assert.equal(derived.entries[0].actions.map((item) => item.kind).join(","), "deposit,deposit,borrow");
+});
+
+test("a deploy sent as a deposit, a borrow and a supply still opens one position", () => {
+  const derived = deriveFarm([
+    supplyOnly("supply", 103, "SOL", 31_000_000_000n, 9),
+    borrowOnly("borrow", 102, "SOL", 31_000_000_000n, 9),
+    depositOnly("deposit", 101, "TSLAx", 100_000_000n),
+  ]);
+  assert.equal(derived.attributions.length, 1);
+  assert.equal(derived.attributions[0].stock, "TSLAx");
+  assert.equal(derived.attributions[0].pool, "SOL");
+  assert.equal(derived.attributions[0].borrowed.raw, 31_000_000_000n);
+});
+
+test("a stock deposit long before a supply is not taken for part of it", () => {
+  const derived = deriveFarm([
+    farmTx("supply", 5_000, [{ type: "deposit", leg: leg("USDC", 100n, 6) }, { type: "borrow", leg: leg("USDC", 100n, 6) }]),
+    depositOnly("deposit", 100, "TSLAx", 200_000_000n),
+  ]);
+  assert.equal(derived.attributions.length, 0);
+});
+
 test("activity from perps is not part of Farm", () => {
   const perps = { signature: "p", at: 5, strategy: "perps", title: null, stock: "TSLAx", chips: [{ type: "deposit", leg: leg("TSLAx", 9n, 8) }] };
   assert.equal(deriveFarm([perps]).entries.length, 0);
