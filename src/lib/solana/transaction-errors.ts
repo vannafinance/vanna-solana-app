@@ -90,7 +90,7 @@ export function toTransactionError(error: unknown): TransactionError {
     return new TransactionError("expired", "Request expired", "It took too long to approve, so the network no longer accepts it. Nothing was sent. Try again.");
   }
   if (isNetworkFailure(error)) {
-    return new TransactionError("network", "Can't reach Solana", "Your connection dropped before this was sent. Nothing left your wallet. Check your connection and try again.");
+    return new TransactionError("network", "Can't reach Solana", "Your connection dropped before this was sent. Nothing left your wallet. Check your connection and try again.", detailOf(error));
   }
   if (error instanceof PriceImpactError) {
     return new TransactionError("network", "Price impact too high", `${error.message} Nothing was sent.`);
