@@ -29,13 +29,12 @@ const PAIRING_WINDOW_SECONDS = 600;
 
 type Pending = { stockDeposit?: HistoryLeg; borrow?: HistoryLeg; at: number };
 
+// A leg sent ahead holds only a stock deposit, only a pool borrow, or both together; anything else is not part of a deploy.
 function remember(pending: Pending | null, item: MarginActivity): Pending | null {
-  const only = (type: Single["type"], accept: (asset: string) => boolean) => {
-    const found = item.chips.filter((chip): chip is Single => chip.type !== "swap" && chip.type === type);
-    return found.length === item.chips.length && found.length > 0 && found.every((chip) => accept(chip.leg.asset)) ? found[0].leg : undefined;
-  };
-  const stockDeposit = only("deposit", isStock);
-  const borrow = only("borrow", isPool);
+  const isLeg = (chip: HistoryChip) => (chip.type === "deposit" && isStock(chip.leg.asset)) || (chip.type === "borrow" && isPool(chip.leg.asset));
+  if (item.chips.length === 0 || !item.chips.every(isLeg)) return pending;
+  const stockDeposit = legs(item.chips, "deposit")[0];
+  const borrow = legs(item.chips, "borrow")[0];
   if (!stockDeposit && !borrow) return pending;
   const current = pending !== null && item.at - pending.at <= PAIRING_WINDOW_SECONDS ? pending : { at: item.at };
   return { ...current, ...(stockDeposit ? { stockDeposit } : {}), ...(borrow ? { borrow } : {}), at: item.at };

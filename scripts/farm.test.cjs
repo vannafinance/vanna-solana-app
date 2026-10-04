@@ -230,6 +230,17 @@ test("a deploy sent as a deposit, a borrow and a supply still opens one position
   assert.equal(derived.attributions[0].borrowed.raw, 31_000_000_000n);
 });
 
+test("a deploy sent as the deposit and borrow together, then the supply, still opens one position", () => {
+  const derived = deriveFarm([
+    supplyOnly("supply", 102, "USDC", 742_750_000n, 6),
+    plainTx("deposit-borrow", 101, "unclassified", [{ type: "deposit", leg: leg("TSLAx", 200_000_000n, 8) }, { type: "borrow", leg: leg("USDC", 742_750_000n, 6) }]),
+  ]);
+  assert.equal(derived.attributions.length, 1);
+  assert.equal(derived.attributions[0].stock, "TSLAx");
+  assert.equal(derived.attributions[0].pool, "USDC");
+  assert.equal(derived.attributions[0].borrowed.raw, 742_750_000n);
+});
+
 test("a stock deposit long before a supply is not taken for part of it", () => {
   const derived = deriveFarm([
     farmTx("supply", 5_000, [{ type: "deposit", leg: leg("USDC", 100n, 6) }, { type: "borrow", leg: leg("USDC", 100n, 6) }]),
@@ -342,4 +353,18 @@ test("a deploy that borrows more than Vanna's pool can lend is refused before th
   assert.equal(tooBig.issue, "pool-liquidity");
   const fits = buildDeployForm(deployInput({ borrowable: 26_000_000_000n, amountText: "20", leverage: 2 }));
   assert.equal(fits.issue, null);
+});
+
+test("a position whose stock is unknown closes its Kamino part only and never repays more than it redeems", () => {
+  const { unplacedCloseQuote } = load("src/lib/farm/position-math.ts");
+  const position = { pool: "USDC", supplied: amount(742_750_000n, 6), debt: amount(742_760_000n, 6) };
+  const all = unplacedCloseQuote(position, 1_000_000n, 10000);
+  assert.equal(all.redeem.raw, 742_750_000n);
+  assert.equal(all.repay.raw, 742_750_000n);
+  assert.equal(all.leftover.raw, 0n);
+  assert.equal(all.collateralReturned.raw, 0n);
+  assert.equal(all.healthAfter, null);
+  const quarter = unplacedCloseQuote(position, 1_000_000n, 2500);
+  assert.equal(quarter.redeem.raw, 185_687_500n);
+  assert.equal(quarter.repay.raw, 185_687_500n);
 });

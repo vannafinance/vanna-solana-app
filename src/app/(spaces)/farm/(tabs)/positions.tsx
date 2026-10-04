@@ -9,6 +9,7 @@ import { Icon } from "@/components/ui/icon";
 import { ResourceView } from "@/components/ui/resource-view";
 import { SpaceHeader } from "@/components/ui/space-header";
 import { formatPercent, formatSignedUsd, formatUsd } from "@/format/format-amount";
+import { unplacedCloseId } from "@/hooks/use-farm-close";
 import { useFarmPositions } from "@/hooks/use-farm-positions";
 import { useHeaderProps } from "@/hooks/use-header-props";
 import { spaceRoutes } from "@/navigation/routes";
@@ -60,7 +61,7 @@ export default function FarmPositionsScreen() {
         settled ? (
           <View style={{ paddingHorizontal: 16, paddingTop: 12, gap: 12 }}>
             {unplaced.map((position) => (
-              <UnplacedPositionCard key={position.pool} position={position} />
+              <UnplacedPositionCard key={position.pool} position={position} onPress={() => router.push(`/farm/close/${unplacedCloseId(position.pool)}`)} />
             ))}
             <Pressable
               accessibilityRole="button"

@@ -62,22 +62,23 @@ function QuoteRow({ label, value, sub, height = 52 }: QuoteRowProps) {
 export function CloseSheet({ visible, view, onSelectFraction, onConfirm, onDismiss }: CloseSheetProps) {
   const { colors, radius } = useTheme();
   const { height } = useWindowDimensions();
-  const { position, quote } = view;
-  const pool = position.poolSymbol;
+  const { pool, stock, leverage, quote } = view;
   const all = quote.fractionBps === 10000;
-  const receive = `${withSymbol(quote.collateralReturned, position.collateralSymbol)} + ${withSymbol(quote.leftover, pool)}`;
+  const returnsStock = all && stock !== null;
+  const receive = stock === null ? withSymbol(quote.leftover, pool) : `${withSymbol(quote.collateralReturned, stock)} + ${withSymbol(quote.leftover, pool)}`;
+  const subtitle = stock === null ? `Kamino ${pool} position · stock not shown` : `${pairLabel(stock, pool)} · ${(leverage ?? 1).toFixed(2)}x`;
 
   return (
     <BottomSheet visible={visible} onDismiss={onDismiss}>
       <ScrollView style={{ maxHeight: height * SHEET_HEIGHT_SHARE }} showsVerticalScrollIndicator={false}>
         <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
-          <TokenIcon symbol={position.collateralSymbol} size={36} />
+          <TokenIcon symbol={stock ?? pool} size={36} />
           <View style={{ flex: 1 }}>
             <AppText variant="heading" style={{ lineHeight: 28 }}>
               Close position
             </AppText>
             <AppText variant="caption" color="textMuted" style={{ lineHeight: 16 }}>
-              {`${pairLabel(position.collateralSymbol, pool)} · ${position.leverage.toFixed(2)}x`}
+              {subtitle}
             </AppText>
           </View>
           <IconButton icon="close" label="Close" tone="tonal" size={44} onPress={onDismiss} />
@@ -107,17 +108,17 @@ export function CloseSheet({ visible, view, onSelectFraction, onConfirm, onDismi
         <View style={{ marginTop: 12 }}>
           <QuoteRow label="Redeem from Kamino" value={withSymbol(quote.redeem, pool)} sub={formatUsd(quote.redeemValueUsd)} />
           <QuoteRow label="Repay debt + interest" value={withSymbol(quote.repay, pool)} sub={formatUsd(quote.repayValueUsd)} />
-          <QuoteRow
-            label="Return collateral"
-            value={withSymbol(quote.collateralReturned, position.collateralSymbol)}
-            sub={formatUsd(quote.collateralReturnedValueUsd)}
-          />
+          {stock === null ? null : (
+            <QuoteRow label="Return collateral" value={withSymbol(quote.collateralReturned, stock)} sub={formatUsd(quote.collateralReturnedValueUsd)} />
+          )}
           <QuoteRow label={`Remaining ${pool} debt`} value={formatUsd(quote.remainingDebtValueUsd)} height={48} />
-          <QuoteRow
-            label="Position health"
-            value={quote.healthAfter === null ? "Position closed" : `${formatHealth(quote.healthAfter)} (unchanged)`}
-            height={48}
-          />
+          {stock === null ? null : (
+            <QuoteRow
+              label="Position health"
+              value={quote.healthAfter === null ? "Position closed" : `${formatHealth(quote.healthAfter)} (unchanged)`}
+              height={48}
+            />
+          )}
         </View>
         <View style={{ marginTop: 8, padding: 14, borderRadius: radius.md, backgroundColor: colors.purpleTint }}>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
@@ -133,7 +134,7 @@ export function CloseSheet({ visible, view, onSelectFraction, onConfirm, onDismi
             </AppText>
           </View>
           <AppText variant="caption" color="textMuted">
-            Back to your wallet · 2 approvals
+            {returnsStock ? "Back to your wallet · 2 approvals" : "Back to your wallet · 1 approval"}
           </AppText>
         </View>
         <View style={{ marginTop: 16 }}>

@@ -8,6 +8,10 @@ const PAGE_SIZE = 1000;
 // The fork RPC rejects JSON-RPC batches, so transactions are fetched one call each, a few at a time.
 const CONCURRENCY = 8;
 export const DEFAULT_MAX_SIGNATURES = 1000;
+const MISSING_ATTEMPTS = 3;
+const MISSING_RETRY_MS = 600;
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 // A confirmed transaction never changes, so each one is parsed from the network once. Refreshing the history then costs one
 // signature listing plus the transactions that are new since the last read.
@@ -28,14 +32,19 @@ export async function fetchWalletTransactions(connection: Connection, wallet: st
       before = page[page.length - 1].signature;
     }
 
-    const missing = signatures.filter((entry) => !parsedCache.has(entry.signature));
-    for (let i = 0; i < missing.length; i += CONCURRENCY) {
-      const batch = await Promise.all(
-        missing.slice(i, i + CONCURRENCY).map((entry) =>
-          connection.getParsedTransaction(entry.signature, { commitment: "confirmed", maxSupportedTransactionVersion: 0 }).then((tx) => ({ tx, signature: entry.signature })),
-        ),
-      );
-      for (const { tx, signature } of batch) if (tx && !tx.meta?.err) parsedCache.set(signature, tx);
+    // A transaction listed moments after it confirmed can still read as missing; dropping it would hide what it opened.
+    for (let attempt = 0; attempt < MISSING_ATTEMPTS; attempt++) {
+      const missing = signatures.filter((entry) => !parsedCache.has(entry.signature));
+      if (missing.length === 0) break;
+      if (attempt > 0) await sleep(MISSING_RETRY_MS);
+      for (let i = 0; i < missing.length; i += CONCURRENCY) {
+        const batch = await Promise.all(
+          missing.slice(i, i + CONCURRENCY).map((entry) =>
+            connection.getParsedTransaction(entry.signature, { commitment: "confirmed", maxSupportedTransactionVersion: 0 }).then((tx) => ({ tx, signature: entry.signature })),
+          ),
+        );
+        for (const { tx, signature } of batch) if (tx && !tx.meta?.err) parsedCache.set(signature, tx);
+      }
     }
 
     return signatures.flatMap(({ signature, blockTime }) => {

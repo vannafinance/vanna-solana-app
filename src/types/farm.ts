@@ -132,8 +132,11 @@ export type CloseQuote = {
   receiveValueUsd: bigint;
 };
 
+// A position whose stock the history does not show closes only its Kamino part, so it has no stock and no leverage to show.
 export type CloseView = {
-  position: FarmPositionView;
+  pool: PoolSymbol;
+  stock: CollateralSymbol | null;
+  leverage: number | null;
   quote: CloseQuote;
 };
 

@@ -1,5 +1,5 @@
 import type { TokenAmount } from "@/format/format-amount";
-import type { CloseQuote, ExitFractionBps, FarmPosition, FarmPositionView, FarmPositionsView } from "@/types/farm";
+import type { CloseQuote, ExitFractionBps, FarmPosition, FarmPositionView, FarmPositionsView, UnplacedFarmPosition } from "@/types/farm";
 
 import { netAprBps } from "./farm-math";
 import { scaleAmount, sumAmounts, toUsd } from "./units";
@@ -50,6 +50,28 @@ export function summarisePositions(positions: readonly FarmPosition[], unplaced:
     netAprBps: totalDebt > 0n ? Number(weightedApr / totalDebt) : 0,
     positions: views,
     unplaced,
+  };
+}
+
+// Redeems and repays the Kamino part only; any stock stays as margin collateral, so the health after cannot be told.
+export function unplacedCloseQuote(position: UnplacedFarmPosition, poolPriceUsd: bigint, fractionBps: ExitFractionBps): CloseQuote {
+  const redeem = scaleAmount(position.supplied, BigInt(fractionBps));
+  const owed = scaleAmount(position.debt, BigInt(fractionBps));
+  const repay: TokenAmount = owed.raw > redeem.raw ? redeem : owed;
+  const leftover: TokenAmount = { raw: redeem.raw - repay.raw, decimals: redeem.decimals };
+  const remainingDebt: TokenAmount = { raw: position.debt.raw - repay.raw, decimals: position.debt.decimals };
+  return {
+    fractionBps,
+    redeem,
+    redeemValueUsd: toUsd(redeem, poolPriceUsd),
+    repay,
+    repayValueUsd: toUsd(repay, poolPriceUsd),
+    collateralReturned: { raw: 0n, decimals: 0 },
+    collateralReturnedValueUsd: 0n,
+    leftover,
+    remainingDebtValueUsd: toUsd(remainingDebt, poolPriceUsd),
+    healthAfter: null,
+    receiveValueUsd: toUsd(leftover, poolPriceUsd),
   };
 }
 
