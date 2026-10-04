@@ -143,6 +143,8 @@ export async function buildStockWithdrawal(connection: Connection, owner: Public
   return [[createAssociatedTokenAccountIdempotent(owner, destination, owner, mint, tokenProgramOf(stock)), withdrawCollateralInstruction({ authority: owner, asset: stock, amount, destination, remaining })]];
 }
 
-export function withdrawStock(connection: Connection, owner: PublicKey, stock: AssetInfo, amount: bigint, hooks: SigningHooks): Promise<string> {
-  return buildStockWithdrawal(connection, owner, stock, amount).then((batches) => sendBatches(connection, owner, { computeUnits: EXIT_COMPUTE_UNITS, batches, retrySafe: true }, hooks));
+// The health scan names every position the account still holds, so an account with several needs the same tables as the exit.
+export async function withdrawStock(connection: Connection, owner: PublicKey, stock: AssetInfo, amount: bigint, hooks: SigningHooks): Promise<string> {
+  const [batches, tables] = await Promise.all([buildStockWithdrawal(connection, owner, stock, amount), kaminoTables(connection)]);
+  return sendBatches(connection, owner, { computeUnits: EXIT_COMPUTE_UNITS, batches, retrySafe: true, allowForkTable: true, tables }, hooks);
 }
