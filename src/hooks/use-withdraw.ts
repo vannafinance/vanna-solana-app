@@ -5,6 +5,7 @@ import { withdrawFromVault } from "@/lib/solana/earn-transactions";
 import { TransactionError } from "@/types/transaction";
 
 import { useConnectedWallet } from "./use-connected-wallet";
+import { useClearAfterSuccess } from "./use-clear-after-success";
 import { useEarnAmount } from "./use-earn-amount";
 import { useEarnMarket } from "./use-earn-market";
 import { useReviewStep } from "./use-review-step";
@@ -35,6 +36,8 @@ export function useWithdraw(id: string) {
     () => (found && quote && wallet && input.amount > 0n ? buildEarnReview({ mode: "withdraw", market: found, quote, amount: input.amount, wallet }) : null),
     flow.start,
   );
+
+  useClearAfterSuccess(flow.done, input.clear);
 
   return { market, input, quote, flow, review };
 }

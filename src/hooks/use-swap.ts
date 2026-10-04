@@ -21,6 +21,7 @@ import { useReviewStep } from "./use-review-step";
 import { useSwapQuote } from "./use-swap-quote";
 import { useSwapTokens } from "./use-swap-tokens";
 import { useWalletSigner } from "./use-wallet-signer";
+import { useClearAfterSuccess } from "./use-clear-after-success";
 import { useTransactionFlow } from "./use-transaction-flow";
 
 function findToken(tokens: readonly SwapToken[], symbol: SwapSymbol): SwapToken {
@@ -104,6 +105,8 @@ export function useSwap() {
       confirmLabel: "Confirm swap",
     };
   }, flow.start);
+
+  useClearAfterSuccess(flow.done, () => setAmountText(""));
 
   const viewHistory = () => {
     flow.close();

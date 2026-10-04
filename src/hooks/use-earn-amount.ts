@@ -25,5 +25,6 @@ export function useEarnAmount(decimals: number, limit: bigint) {
       if (sanitized !== null) setText(sanitized);
     },
     fill: (fraction: number) => setText(toInputText(fractionOf(limit, fraction), decimals)),
+    clear: () => setText(""),
   };
 }
