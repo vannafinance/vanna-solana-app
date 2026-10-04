@@ -115,7 +115,7 @@ export function CloseSheet({ visible, view, onSelectFraction, onConfirm, onDismi
           {stock === null ? null : (
             <QuoteRow
               label="Position health"
-              value={quote.healthAfter === null ? "Position closed" : `${formatHealth(quote.healthAfter)} (unchanged)`}
+              value={quote.healthAfter === null ? "Position closed" : `${formatHealth(quote.healthAfter)} after closing`}
               height={48}
             />
           )}
