@@ -27,7 +27,7 @@ function ActivityRow({ activity, onOpenTransaction }: { activity: LenderActivity
   const value = activity.valueLabel ?? (activity.valueUsd === undefined ? "" : activity.gain ? formatSignedUsd(activity.valueUsd) : formatUsd(activity.valueUsd));
 
   return (
-    <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.md, height: 64, borderTopWidth: 1, borderTopColor: colors.divider }}>
+    <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.md, minHeight: 64, paddingVertical: 10, borderTopWidth: 1, borderTopColor: colors.divider }}>
       <View
         style={{
           width: 36,
@@ -41,14 +41,14 @@ function ActivityRow({ activity, onOpenTransaction }: { activity: LenderActivity
         <Icon name={icon} size={18} color={tone === "teal" ? "onTealTint" : "onPurpleTint"} />
       </View>
       <View style={{ flex: 1, gap: 2 }}>
-        <AppText variant="body" strong>
+        <AppText variant="body" strong numberOfLines={1}>
           {activity.title}
         </AppText>
-        <AppText variant="caption" color="textMuted">
+        <AppText variant="caption" color="textMuted" numberOfLines={1}>
           {activity.detail}
         </AppText>
       </View>
-      <AppText variant="body" strong color={activity.gain ? "positive" : "text"}>
+      <AppText variant="body" strong numberOfLines={1} color={activity.gain ? "positive" : "text"}>
         {value}
       </AppText>
       {activity.signature === undefined ? null : <ExplorerLink signature={activity.signature} onOpen={onOpenTransaction} />}
