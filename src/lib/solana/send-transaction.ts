@@ -6,6 +6,7 @@ import { healStaleDexPools } from "./heal-pools";
 const POLL_MS = 700;
 const SEND_ATTEMPTS = 3;
 const MAX_POLL_FAILURES = 8;
+const RATE_LIMIT_PAUSE_MS = 1500;
 
 export class TransactionFailedError extends Error {
   constructor(readonly detail: string) {
@@ -29,6 +30,13 @@ export class ConfirmationLostError extends Error {
 }
 
 const NETWORK_FAILURE = /fetch failed|network request failed|UnknownHost|timed out|timeout|ECONN|ENOTFOUND/i;
+// The fork fetches accounts it has not seen from its upstream provider, which can answer "429 Too Many Requests". Nothing
+// has landed when that happens, so asking again a moment later is safe and usually works.
+const RATE_LIMITED = /429|Too Many Requests/i;
+
+export function isRateLimited(text: string): boolean {
+  return RATE_LIMITED.test(text);
+}
 
 export function isNetworkFailure(error: unknown): boolean {
   return error instanceof Error && NETWORK_FAILURE.test(error.message);
@@ -44,7 +52,14 @@ async function sendRaw(connection: Connection, raw: Uint8Array): Promise<string>
       return await connection.sendRawTransaction(raw, { skipPreflight: false, preflightCommitment: "confirmed" });
     } catch (error) {
       // The send's own check carries the program logs, which is where the reason for a refusal is.
-      if (error instanceof SendTransactionError) throw new TransactionFailedError(`${error.message} ${(error.logs ?? []).join(" ")}`);
+      if (error instanceof SendTransactionError) {
+        const detail = `${error.message} ${(error.logs ?? []).join(" ")}`;
+        if (attempt < SEND_ATTEMPTS && isRateLimited(detail)) {
+          await sleep(RATE_LIMIT_PAUSE_MS * attempt);
+          continue;
+        }
+        throw new TransactionFailedError(detail);
+      }
       if (attempt >= SEND_ATTEMPTS || !isNetworkFailure(error)) throw error;
       await sleep(POLL_MS * attempt * 2);
     }
@@ -104,12 +119,29 @@ export type SigningHooks = {
 };
 
 // Simulating first surfaces a bad instruction or route before the wallet is asked to sign anything.
+async function simulate(connection: Connection, transaction: VersionedTransaction) {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      const simulation = await connection.simulateTransaction(transaction, { sigVerify: false, commitment: "confirmed" });
+      const detail = `${JSON.stringify(simulation.value.err)} ${simulation.value.logs?.join(" ") ?? ""}`;
+      if (simulation.value.err && attempt < SEND_ATTEMPTS && isRateLimited(detail)) {
+        await sleep(RATE_LIMIT_PAUSE_MS * attempt);
+        continue;
+      }
+      return simulation;
+    } catch (error) {
+      if (attempt >= SEND_ATTEMPTS || !(error instanceof Error && isRateLimited(error.message))) throw error;
+      await sleep(RATE_LIMIT_PAUSE_MS * attempt);
+    }
+  }
+}
+
 export async function simulateSignAndSend(connection: Connection, transaction: VersionedTransaction, lastValidBlockHeight: number, hooks: SigningHooks): Promise<string> {
-  let simulation = await connection.simulateTransaction(transaction, { sigVerify: false, commitment: "confirmed" });
+  let simulation = await simulate(connection, transaction);
   // A pool the fork cloned earlier can fail a fresh quote in several ways, so any failed simulation tries the re-clone
   // once; it only does anything when a stale-prone pool is part of the transaction.
   if (simulation.value.err && (await healStaleDexPools(connection, transaction)) > 0) {
-    simulation = await connection.simulateTransaction(transaction, { sigVerify: false, commitment: "confirmed" });
+    simulation = await simulate(connection, transaction);
   }
   if (simulation.value.err) throw new TransactionFailedError(`${JSON.stringify(simulation.value.err)} ${simulation.value.logs?.join(" ") ?? ""}`);
 

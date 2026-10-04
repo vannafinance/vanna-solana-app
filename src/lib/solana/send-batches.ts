@@ -18,6 +18,24 @@ export class PartialSendError extends Error {
   }
 }
 
+// The wallet declined to sign while this order depended on a lookup table that only exists on the fork. Wallets such as Solflare
+// check every transaction against real mainnet, cannot read that table and refuse, so the user needs a different way out than
+// "try again".
+export class ForkTableSigningError extends Error {
+  constructor(readonly reason: unknown) {
+    super("The wallet did not sign an order that needs a temporary account on the fork.");
+    this.name = "ForkTableSigningError";
+  }
+}
+
+// Errors from signing, while the order depends on a fork table, are marked so they can be explained.
+function guardSigning(hooks: SigningHooks): SigningHooks {
+  const wrap = <T,>(call: () => Promise<T>) => call().catch((error: unknown) => {
+    throw new ForkTableSigningError(error);
+  });
+  return { ...hooks, sign: (transaction) => wrap(() => hooks.sign(transaction)), signAll: (transactions) => wrap(() => hooks.signAll(transactions)) };
+}
+
 export type BatchRequest = {
   computeUnits: number;
   // Instructions that must stay together in one transaction, in order. Neighbouring batches share a transaction when they fit.
@@ -65,19 +83,21 @@ function pack(payer: PublicKey, { computeUnits, batches }: BatchRequest, tables:
 // transactions as fit, using only tables that exist on mainnet, approves them together in one prompt and sends them in
 // order, each after the one before has confirmed. One that fits goes out as it is.
 export async function sendBatches(connection: Connection, payer: PublicKey, request: BatchRequest, hooks: SigningHooks): Promise<string> {
+  let signing = hooks;
   let tables = request.tables ?? [];
   let transactions: Packed[];
   try {
     transactions = pack(payer, request, tables);
   } catch (error) {
     if (!(error instanceof RangeError) || request.allowForkTable !== true) throw error;
-    const table = await createTemporaryTable(connection, payer, distinctAccounts(payer, request.batches.flat()), hooks);
+    const table = await createTemporaryTable(connection, payer, distinctAccounts(payer, request.batches.flat()), guardSigning(hooks));
     tables = [...tables, table];
+    signing = guardSigning(hooks);
     transactions = pack(payer, request, tables);
   }
   if (transactions.length === 0) throw new RangeError("There is nothing left to send");
   if (transactions.length === 1) {
-    const signature = await sendInstructions(connection, payer, transactions[0].instructions, hooks, [...tables]);
+    const signature = await sendInstructions(connection, payer, transactions[0].instructions, signing, [...tables]);
     request.onLanded?.(transactions[0].batches);
     return signature;
   }
@@ -90,16 +110,16 @@ export async function sendBatches(connection: Connection, payer: PublicKey, requ
   const simulation = await connection.simulateTransaction(unsigned[0], { sigVerify: false, commitment: "confirmed" });
   if (simulation.value.err) throw new TransactionFailedError(`${JSON.stringify(simulation.value.err)} ${simulation.value.logs?.join(" ") ?? ""}`);
 
-  hooks.onPrepared?.();
-  const signed = await hooks.signAll(unsigned);
-  hooks.onSigned();
+  signing.onPrepared?.();
+  const signed = await signing.signAll(unsigned);
+  signing.onSigned();
 
   let signature = "";
   let landed = 0;
   for (let index = 0; index < signed.length; index++) {
     const isLast = index === signed.length - 1;
     try {
-      signature = await sendAndConfirm(connection, signed[index], latest.lastValidBlockHeight, isLast ? hooks : {});
+      signature = await sendAndConfirm(connection, signed[index], latest.lastValidBlockHeight, isLast ? signing : {});
       landed += transactions[index].batches;
       request.onLanded?.(landed);
     } catch (error) {
