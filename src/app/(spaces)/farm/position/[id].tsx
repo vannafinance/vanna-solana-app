@@ -1,4 +1,5 @@
 import { router, useLocalSearchParams } from "expo-router";
+import { useState } from "react";
 import { ScrollView, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -8,13 +9,20 @@ import { PositionOverview } from "@/components/farm/position-overview";
 import { Button } from "@/components/ui/button";
 import { ResourceView } from "@/components/ui/resource-view";
 import { useFarmPosition } from "@/hooks/use-farm-position";
+import type { FarmPositionView } from "@/types/farm";
+import type { Resource } from "@/types/resource";
 import { useTheme } from "@/theme/use-theme";
 
 export default function FarmPositionScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
-  const position = useFarmPosition(id);
+  const live = useFarmPosition(id);
+  // Closing repays the loan, so the position drops out of the live data while the success sheet is still on screen. The page
+  // keeps the last position it showed until the sheet sends the user away, instead of flashing "Position not found".
+  const [lastShown, setLastShown] = useState<FarmPositionView | null>(null);
+  if (live.status === "ready" && live.data !== lastShown) setLastShown(live.data);
+  const position: Resource<FarmPositionView> = live.status === "empty" && lastShown !== null ? { status: "ready", data: lastShown } : live;
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
