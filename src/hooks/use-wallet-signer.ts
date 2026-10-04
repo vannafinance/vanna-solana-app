@@ -18,7 +18,7 @@ type SigningContext = { connection: Connection; owner: PublicKey; hooks: Signing
 // The wallet signs only. In development builds a developer wallet override can show another address's data, in
 // which case that address cannot be the signer and transactions are refused instead of sent from the wrong account.
 export function useWalletSigner() {
-  const { account, signTransactions } = useMobileWallet();
+  const { account, accounts, signTransactions, store } = useMobileWallet();
   const queryClient = useQueryClient();
   const owner = account?.address.toBase58() ?? null;
   const mismatch = DEV_WALLET_ADDRESS !== undefined && owner !== DEV_WALLET_ADDRESS;
@@ -30,6 +30,19 @@ export function useWalletSigner() {
   useEffect(() => {
     latest.current = signTransactions;
   }, [signTransactions]);
+
+  // A wallet that no longer knows our authorization token answers every request with "authorization request failed", and the
+  // library repeats that same token, so a plain retry can never succeed. Forgetting only the token (not the account, so the
+  // user stays connected) makes the next request ask the wallet to authorize the app again.
+  const wallet = useRef({ account, accounts, store });
+  useEffect(() => {
+    wallet.current = { account, accounts, store };
+  }, [account, accounts, store]);
+  const forgetStaleToken = useCallback(async () => {
+    const { account: selected, accounts: all, store: authorizationStore } = wallet.current;
+    if (!selected) return;
+    await authorizationStore.persist({ accounts: all ?? [selected], authToken: undefined as unknown as string, selectedAccount: selected });
+  }, []);
 
   const sign = useCallback((transaction: VersionedTransaction) => signWithFreshBlockhash(rpcConnection, [transaction], () => latest.current(transaction)), []);
   const signAll = useCallback((transactions: VersionedTransaction[]) => signWithFreshBlockhash(rpcConnection, transactions, () => latest.current(transactions)), []);
@@ -66,6 +79,7 @@ export function useWalletSigner() {
           return;
         } catch (error) {
           if (attempt < WALLET_ATTEMPTS && !signed && isWalletRefusal(error)) {
+            await forgetStaleToken();
             await new Promise((resolve) => setTimeout(resolve, RETRY_PAUSE_MS));
             continue;
           }
@@ -73,7 +87,7 @@ export function useWalletSigner() {
         }
       }
     },
-    [owner, mismatch, sign, signAll, refreshAfterTransaction],
+    [owner, mismatch, sign, signAll, refreshAfterTransaction, forgetStaleToken],
   );
 
   return { owner, mismatch, sign, signAll, refreshAfterTransaction, execute };
