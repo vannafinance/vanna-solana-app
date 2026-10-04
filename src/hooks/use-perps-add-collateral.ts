@@ -33,7 +33,7 @@ export function usePerpsAddCollateral(id: string) {
   const markets = useMarketList();
   const holdings = useWalletHoldings(wallet);
   const signer = useWalletSigner();
-  const [amount, setAmount] = useState(500n * USD);
+  const [amount, setAmount] = useState(COLLATERAL_PRESETS[0]);
 
   const walletUsdc = holdings.data?.holdings.find((holding) => holding.symbol === "USDC")?.raw ?? 0n;
 
