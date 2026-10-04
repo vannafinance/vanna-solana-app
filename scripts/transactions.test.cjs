@@ -16,6 +16,7 @@ const { sharesToRedeem } = load("src/lib/earn/share-math.ts");
 const { spendableBalance } = load("src/lib/earn/spendable-balance.ts");
 const { toTransactionError } = load("src/lib/solana/transaction-errors.ts");
 const { TransactionFailedError } = load("src/lib/solana/send-transaction.ts");
+const { PriceImpactError } = load("src/lib/solana/perps-errors.ts");
 
 const owner = Keypair.generate().publicKey;
 const asset = (symbol) => assets.find((candidate) => candidate.symbol === symbol);
@@ -485,4 +486,10 @@ test("without permission to make a table the same order is reported as too large
   const { connection, hooks, prompts } = tableFixture(keys);
   await assert.rejects(sendBatches(connection, owner, { computeUnits: 600_000, batches: [[instruction]], retrySafe: false }, hooks), RangeError);
   assert.deepEqual(prompts, []);
+});
+
+test("a price impact over the limit keeps its own message instead of the generic error", () => {
+  const error = toTransactionError(new PriceImpactError(860));
+  assert.equal(error.title, "Price impact too high");
+  assert.match(error.message, /8\.6%.*Try a smaller amount\. Nothing was sent\./);
 });

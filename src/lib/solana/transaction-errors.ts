@@ -1,6 +1,7 @@
 import { TransactionError } from "@/types/transaction";
 
 import { VANNA_PROGRAM_ID } from "./config";
+import { PriceImpactError } from "./perps-errors";
 import { ApiError } from "./request-json";
 import { PartialSendError } from "./send-batches";
 import { BlockhashExpiredError, ConfirmationLostError, isNetworkFailure, TransactionFailedError } from "./send-transaction";
@@ -76,6 +77,9 @@ export function toTransactionError(error: unknown): TransactionError {
   }
   if (isNetworkFailure(error)) {
     return new TransactionError("network", "Can't reach Solana", "Your connection dropped before this was sent. Nothing left your wallet. Check your connection and try again.");
+  }
+  if (error instanceof PriceImpactError) {
+    return new TransactionError("network", "Price impact too high", `${error.message} Nothing was sent.`);
   }
   const text = textOf(error);
   if (text.includes(WALLET_MISMATCH)) {
