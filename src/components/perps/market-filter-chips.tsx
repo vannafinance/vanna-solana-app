@@ -1,6 +1,7 @@
-import { ScrollView } from "react-native";
+import { View } from "react-native";
 
-import { Chip } from "@/components/ui/chip";
+import { PillTabs } from "@/components/ui/pill-tabs";
+import { useTheme } from "@/theme/use-theme";
 
 type MarketFilterChipsProps<T extends string> = {
   filters: readonly T[];
@@ -8,18 +9,15 @@ type MarketFilterChipsProps<T extends string> = {
   onChange: (value: T) => void;
 };
 
+// The same pill tabs the Earn vault page uses, in the Trade space's colour. The tabs carry their own side padding, so they
+// run the full width of the page.
 export function MarketFilterChips<T extends string>({ filters, value, onChange }: MarketFilterChipsProps<T>) {
+  const { colors, spacing } = useTheme();
+  const segments = filters.map((filter) => ({ value: filter, label: filter }));
+
   return (
-    <ScrollView
-      horizontal
-      accessibilityRole="tablist"
-      showsHorizontalScrollIndicator={false}
-      contentContainerStyle={{ gap: 8, paddingHorizontal: 16 }}
-      style={{ marginHorizontal: -16, flexGrow: 0 }}
-    >
-      {filters.map((filter) => (
-        <Chip key={filter} check label={filter} selected={filter === value} onPress={() => onChange(filter)} />
-      ))}
-    </ScrollView>
+    <View style={{ marginHorizontal: -spacing.lg }}>
+      <PillTabs segments={segments} value={value} onChange={onChange} activeColor={colors.tradeTab} />
+    </View>
   );
 }
