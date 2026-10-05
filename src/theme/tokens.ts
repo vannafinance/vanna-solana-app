@@ -8,6 +8,8 @@ export const palette = {
     textMuted: "#595959",
     divider: "#F4F4F4",
     border: "#E5E7EB",
+    // The outline of a button that has no fill, which has to read as a shape on its own.
+    borderStrong: "#E5E7EB",
     positive: "#1C7C83",
     negative: "#B33C3E",
     link: "#703AE6",
@@ -34,6 +36,7 @@ export const palette = {
     textMuted: "#BFBFBF",
     divider: "#2C2C2C",
     border: "#2C2C2C",
+    borderStrong: "#5A5A5A",
     positive: "#32EEE2",
     negative: "#FC5457",
     link: "#BDA4F4",
