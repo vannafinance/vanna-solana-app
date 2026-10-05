@@ -77,6 +77,13 @@ export function usePerpsOrder(symbol: string, initialSide: Side) {
   })();
 
   const ready = ticket.status === "ready" ? ticket.data : null;
+  // A short is collateralised with the stock itself while the amount is typed in USD, so say how much stock that is.
+  const collateralNote =
+    side === "short" && ready !== null && funds !== null
+      ? ready.collateral > 0n
+        ? `Amount in USD · ≈ ${formatToken({ raw: collateralBaseUnits(side, funds, ready.collateral, ready.market.markPrice), decimals: funds.decimals })} ${ready.market.symbol}`
+        : "Amount in USD"
+      : null;
   const flow = useTransactionFlow({
     steps: firstTrade ? 2 : 1,
     run: (stepNumber, runProgress) => {
@@ -165,6 +172,7 @@ export function usePerpsOrder(symbol: string, initialSide: Side) {
     setLeverage,
     quickFill,
     hasMarginAccount: marginAccount.exists,
+    collateralNote,
     blocked,
     submit,
     review,
