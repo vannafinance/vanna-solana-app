@@ -1,11 +1,10 @@
-import { Pressable, View } from "react-native";
+import { View } from "react-native";
 
 import { AppText } from "@/components/ui/app-text";
-import { ripple } from "@/components/ui/ripple";
+import { ExplorerLink } from "@/components/ui/explorer-link";
 import { isTokenSymbol, TokenIcon } from "@/components/ui/token-icon";
 import { formatDateTime } from "@/format/format-date";
 import { formatActivityAmount } from "@/format/format-perps";
-import { shortAddress } from "@/format/short-address";
 import { type ThemeColor, useTheme } from "@/theme/use-theme";
 import type { HistoryChip, MarginActivity } from "@/types/margin-history";
 
@@ -57,18 +56,7 @@ export function ActivityCard({ entry, onOpenTransaction }: { entry: MarginActivi
             {formatDateTime(entry.at)}
           </AppText>
         </View>
-        <Pressable
-          accessibilityRole="link"
-          accessibilityLabel={`View transaction ${shortAddress(entry.signature)}`}
-          android_ripple={ripple(colors.link)}
-          hitSlop={8}
-          onPress={() => onOpenTransaction(entry.signature)}
-          style={{ minHeight: 44, justifyContent: "center" }}
-        >
-          <AppText variant="caption" strong color="link">
-            {shortAddress(entry.signature)}
-          </AppText>
-        </Pressable>
+        <ExplorerLink signature={entry.signature} onOpen={onOpenTransaction} />
       </View>
       <View style={{ flexDirection: "row", flexWrap: "wrap", gap: spacing.sm }}>
         {entry.chips.map((chip, index) => (

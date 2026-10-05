@@ -15,7 +15,9 @@ const { assets } = load("src/lib/solana/assets.ts");
 const { sharesToRedeem } = load("src/lib/earn/share-math.ts");
 const { spendableBalance } = load("src/lib/earn/spendable-balance.ts");
 const { toTransactionError } = load("src/lib/solana/transaction-errors.ts");
-const { TransactionFailedError } = load("src/lib/solana/send-transaction.ts");
+const { TransactionFailedError, isRateLimited } = load("src/lib/solana/send-transaction.ts");
+const { PriceImpactError } = load("src/lib/solana/perps-errors.ts");
+const { ForkTableSigningError } = load("src/lib/solana/send-batches.ts");
 
 const owner = Keypair.generate().publicKey;
 const asset = (symbol) => assets.find((candidate) => candidate.symbol === symbol);
@@ -485,4 +487,29 @@ test("without permission to make a table the same order is reported as too large
   const { connection, hooks, prompts } = tableFixture(keys);
   await assert.rejects(sendBatches(connection, owner, { computeUnits: 600_000, batches: [[instruction]], retrySafe: false }, hooks), RangeError);
   assert.deepEqual(prompts, []);
+});
+
+test("a price impact over the limit keeps its own message instead of the generic error", () => {
+  const error = toTransactionError(new PriceImpactError(860));
+  assert.equal(error.title, "Price impact too high");
+  assert.match(error.message, /8\.6%.*Try a smaller amount\. Nothing was sent\./);
+});
+
+test("a rate limited fork answer is retried and, if it persists, reported as a busy network", () => {
+  const text = 'Simulation failed. Message: Internal error: "Failed to fetch accounts from remote: HTTP status client error (429 Too Many Requests)"';
+  assert.equal(isRateLimited(text), true);
+  assert.equal(isRateLimited("custom program error: 0x1771"), false);
+  const error = toTransactionError(new TransactionFailedError(text));
+  assert.equal(error.title, "Network is busy");
+  assert.match(error.message, /Nothing left your wallet/);
+});
+
+test("a wallet that will not sign an order built on a fork table is explained instead of reported as a plain cancel", () => {
+  const cancelled = toTransactionError(new ForkTableSigningError(new Error("ERROR_NOT_SIGNED request declined")));
+  assert.equal(cancelled.title, "Cancelled, or refused by your wallet");
+  assert.match(cancelled.message, /close or reduce another position/i);
+  assert.notEqual(cancelled.kind, "rejected");
+  // Anything else keeps its own explanation.
+  assert.equal(toTransactionError(new ForkTableSigningError(new Error("authorization request failed"))).title, "Your wallet refused this");
+  assert.equal(isWalletRefusal(new ForkTableSigningError(new Error("authorization request failed"))), true);
 });

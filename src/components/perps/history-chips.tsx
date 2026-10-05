@@ -1,6 +1,7 @@
 import { View } from "react-native";
 
-import { Chip } from "@/components/ui/chip";
+import { PillTabs } from "@/components/ui/pill-tabs";
+import { useTheme } from "@/theme/use-theme";
 
 type HistoryChipsProps<T extends string> = {
   options: readonly { value: T; label: string }[];
@@ -9,11 +10,11 @@ type HistoryChipsProps<T extends string> = {
 };
 
 export function HistoryChips<T extends string>({ options, value, onChange }: HistoryChipsProps<T>) {
+  const { colors } = useTheme();
+
   return (
-    <View accessibilityRole="tablist" style={{ flexDirection: "row", gap: 8, paddingHorizontal: 16, paddingTop: 16, paddingBottom: 12 }}>
-      {options.map((option) => (
-        <Chip key={option.value} check label={option.label} selected={option.value === value} onPress={() => onChange(option.value)} />
-      ))}
+    <View style={{ paddingTop: 16, paddingBottom: 12 }}>
+      <PillTabs segments={options} value={value} onChange={onChange} activeColor={colors.tradeTab} />
     </View>
   );
 }

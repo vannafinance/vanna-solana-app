@@ -1,9 +1,10 @@
 import { TransactionError } from "@/types/transaction";
 
 import { VANNA_PROGRAM_ID } from "./config";
+import { PriceImpactError } from "./perps-errors";
 import { ApiError } from "./request-json";
-import { PartialSendError } from "./send-batches";
-import { BlockhashExpiredError, ConfirmationLostError, isNetworkFailure, TransactionFailedError } from "./send-transaction";
+import { ForkTableSigningError, PartialSendError } from "./send-batches";
+import { BlockhashExpiredError, ConfirmationLostError, isNetworkFailure, isRateLimited, TransactionFailedError } from "./send-transaction";
 
 export const WALLET_MISMATCH = "wallet-mismatch";
 
@@ -56,11 +57,25 @@ function detailOf(error: unknown): string {
 // The wallet declined to authorize this app before anything was shown to the user. Wallets check the app's identity under a
 // tight time limit, so this one is often a slow answer and goes away on a second try.
 export function isWalletRefusal(error: unknown): boolean {
-  return CONNECTION_REFUSED.test(textOf(error));
+  return CONNECTION_REFUSED.test(textOf(error instanceof ForkTableSigningError ? error.reason : error));
 }
 
 export function toTransactionError(error: unknown): TransactionError {
   if (error instanceof TransactionError) return error;
+  if (error instanceof ForkTableSigningError) {
+    const cause = toTransactionError(error.reason);
+    // A wallet that was simply closed by the user is still a cancel. Anything else, a refusal included, is most likely the
+    // wallet unable to read the temporary account this order needs.
+    if (cause.kind === "rejected" || cause.title === "Request cancelled") {
+      // Not the "rejected" kind: that one is always shown as a plain cancel, which would hide this explanation.
+      return new TransactionError(
+        "network",
+        "Cancelled, or refused by your wallet",
+        "This account holds many positions, so this order needs a temporary account that exists only on the test network. Some wallets, Solflare included, cannot check it and refuse. If you did not cancel, close or reduce another position first, or use Phantom. Nothing was sent.",
+      );
+    }
+    return cause;
+  }
   if (error instanceof PartialSendError) {
     const cause = toTransactionError(error.reason);
     return new TransactionError("partial", "Only the first step went through", `${cause.title}. ${cause.message} What already went through stays in your margin account. Try again to finish.`, cause.detail);
@@ -75,7 +90,10 @@ export function toTransactionError(error: unknown): TransactionError {
     return new TransactionError("expired", "Request expired", "It took too long to approve, so the network no longer accepts it. Nothing was sent. Try again.");
   }
   if (isNetworkFailure(error)) {
-    return new TransactionError("network", "Can't reach Solana", "Your connection dropped before this was sent. Nothing left your wallet. Check your connection and try again.");
+    return new TransactionError("network", "Can't reach Solana", "Your connection dropped before this was sent. Nothing left your wallet. Check your connection and try again.", detailOf(error));
+  }
+  if (error instanceof PriceImpactError) {
+    return new TransactionError("network", "Price impact too high", `${error.message} Nothing was sent.`);
   }
   const text = textOf(error);
   if (text.includes(WALLET_MISMATCH)) {
@@ -101,6 +119,9 @@ export function toTransactionError(error: unknown): TransactionError {
   }
   if (/lookup table was not ready/i.test(text)) {
     return new TransactionError("network", "The network was slow", "Setting up this transaction took too long. Only a small temporary account was created. Try again.");
+  }
+  if (isRateLimited(text)) {
+    return new TransactionError("network", "Network is busy", "The test network is limiting requests right now. Nothing left your wallet. Wait a few seconds and try again.", detailOf(error));
   }
   if (error instanceof TransactionFailedError) {
     return new TransactionError("network", "Transaction failed", "Solana rejected this transaction before it was sent. Nothing left your wallet. Try again in a moment.", detailOf(error));

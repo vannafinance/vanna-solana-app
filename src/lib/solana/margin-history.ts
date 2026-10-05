@@ -86,5 +86,23 @@ export function marginActivityFrom(transactions: readonly WalletTransaction[], m
       const subject = deriveActivitySubject(ordered);
       return [{ signature, at: blockTime, strategy: classify(liteOpened.length + liteClosed.length > 0, hasSwap, hasBareStockWithdraw), title: subject?.title ?? null, stock: subject?.stock ?? null, chips: ordered }];
     })
-    .sort((a, b) => b.at - a.at);
+    .sort((a, b) => b.at - a.at)
+    .map(withSideFromOpeningLeg);
+}
+
+// An order on an account with several positions is sent as several transactions: the borrow first, the swap after. The swap
+// alone cannot say whether it opened a long or a short (buying the stock could also be closing a short), so a swap that
+// follows, within a few minutes, a borrow of the same position takes its side from that borrow.
+const OPENING_WINDOW_SECONDS = 300;
+
+function withSideFromOpeningLeg(entry: MarginActivity, index: number, newestFirst: readonly MarginActivity[]): MarginActivity {
+  const swap = entry.chips.find((chip) => chip.type === "swap");
+  if (swap?.type !== "swap" || entry.chips.some((chip) => chip.type === "borrow")) return entry;
+  const stock = STOCKS.has(swap.to.asset) ? swap.to.asset : STOCKS.has(swap.from.asset) ? swap.from.asset : null;
+  if (stock === null) return entry;
+  const opening = newestFirst.slice(index + 1).find((older) => entry.at - older.at <= OPENING_WINDOW_SECONDS && older.chips.some((chip) => chip.type === "borrow") && !older.chips.some((chip) => chip.type === "swap"));
+  const borrow = opening?.chips.find((chip) => chip.type === "borrow");
+  if (borrow?.type !== "borrow") return entry;
+  const side = borrow.leg.asset === "USDC" && swap.to.asset === stock ? "Long" : borrow.leg.asset === stock && swap.from.asset === stock ? "Short" : null;
+  return side === null ? entry : { ...entry, title: `${stock}-USDC ${side}`, stock };
 }

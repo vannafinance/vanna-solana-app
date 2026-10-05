@@ -25,6 +25,7 @@ export default function FarmPositionsScreen() {
 
   return (
     <FlatList
+      showsVerticalScrollIndicator={false}
       style={{ backgroundColor: colors.background }}
       data={items}
       keyExtractor={(position) => position.id}
