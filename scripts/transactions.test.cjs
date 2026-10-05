@@ -513,3 +513,11 @@ test("a wallet that will not sign an order built on a fork table is explained in
   assert.equal(toTransactionError(new ForkTableSigningError(new Error("authorization request failed"))).title, "Your wallet refused this");
   assert.equal(isWalletRefusal(new ForkTableSigningError(new Error("authorization request failed"))), true);
 });
+
+test("the wallet connection timing out is reported as the wallet being slow, not as Solana being unreachable", () => {
+  const error = toTransactionError(new Error("SolanaMobileWalletAdapterError java.util.concurrent.TimeoutException: Timed out waiting for response with id=2 Timed out waiting for response"));
+  assert.equal(error.title, "Your wallet took too long");
+  assert.match(error.detail, /id=2/);
+  // A real connection failure to the RPC keeps its own message.
+  assert.equal(toTransactionError(new Error("TypeError: Network request failed")).title, "Can't reach Solana");
+});

@@ -16,6 +16,9 @@ const BLOCKHASH_STALE = /blockhash not found/i;
 const TOO_LARGE = /too large to send in one transaction|encoding overruns/i;
 const CONNECTION_REFUSED = /authorization request failed/i;
 const WALLET_UNREACHABLE = /ConnectionFailedException|unable to connect to websocket|ERROR_SESSION_TIMEOUT|ERROR_WALLET_NOT_FOUND/i;
+// The wallet connection's own timer ran out while the wallet still held the request. It has nothing to do with Solana, but its
+// wording ("timed out") looks like a network failure.
+const WALLET_TIMED_OUT = /Timed out waiting for response|SolanaMobileWalletAdapterError.*Timeout/i;
 const NOT_ENOUGH_TOKENS = /insufficient funds|custom program error: 0x1\b/i;
 
 // Vanna program errors a lender or margin user can hit; codes are the program's custom error numbers.
@@ -88,6 +91,14 @@ export function toTransactionError(error: unknown): TransactionError {
   }
   if (BLOCKHASH_STALE.test(textOf(error))) {
     return new TransactionError("expired", "Request expired", "It took too long to approve, so the network no longer accepts it. Nothing was sent. Try again.");
+  }
+  if (WALLET_TIMED_OUT.test(textOf(error))) {
+    return new TransactionError(
+      "network",
+      "Your wallet took too long",
+      "The wallet did not answer before the connection to it timed out, and nothing was sent. A wallet that shows several warning screens can need more time than that, so approve as soon as it opens, or try Solflare. Try again.",
+      detailOf(error),
+    );
   }
   if (isNetworkFailure(error)) {
     return new TransactionError("network", "Can't reach Solana", "Your connection dropped before this was sent. Nothing left your wallet. Check your connection and try again.", detailOf(error));
