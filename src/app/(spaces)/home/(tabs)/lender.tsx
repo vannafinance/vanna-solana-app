@@ -87,7 +87,7 @@ export default function Lender() {
                     <EmptyCard title="Nothing supplied yet" message="Supply to a vault in Earn and your deposits show up here." actionLabel="Browse vaults" onAction={() => router.push("/earn")} />
                   ) : (
                     data.vaults.map((vault) => (
-                      <LenderVaultCard key={vault.id} vault={vault} onWithdraw={() => router.push("/earn")} onSupplyMore={() => router.push("/earn")} />
+                      <LenderVaultCard key={vault.id} vault={vault} onWithdraw={() => router.push(`/earn/withdraw/${vault.id}`)} onSupplyMore={() => router.push(`/earn/supply/${vault.id}`)} />
                     ))
                   )}
                 </>

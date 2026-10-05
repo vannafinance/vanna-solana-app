@@ -9,13 +9,16 @@ import { Button } from "./button";
 type ResourceViewProps<T> = {
   resource: Resource<T>;
   emptyLabel: string;
+  // Shown instead of the plain label when there is nothing to list.
+  emptyView?: ReactNode;
   children: (data: T) => ReactNode;
 };
 
-export function ResourceView<T>({ resource, emptyLabel, children }: ResourceViewProps<T>) {
+export function ResourceView<T>({ resource, emptyLabel, emptyView, children }: ResourceViewProps<T>) {
   const { colors, spacing, fontSize } = useTheme();
 
   if (resource.status === "ready") return <>{children(resource.data)}</>;
+  if (resource.status === "empty" && emptyView !== undefined) return <>{emptyView}</>;
 
   return (
     <View style={[styles.center, { padding: spacing.xl, gap: spacing.lg }]}>

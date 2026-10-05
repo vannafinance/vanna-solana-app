@@ -58,6 +58,8 @@ export default function PerpsOrderScreen() {
             <OrderMarketCard symbol={market.symbol} pair={market.pair} />
             <SideToggle value={order.side} onChange={order.setSide} />
             <CollateralCard
+              symbol={order.side === "long" ? "USDC" : market.symbol}
+              note={order.collateralNote}
               caption={`Available ${formatUsd(account.available)}`}
               value={order.amountText}
               onChangeText={order.setAmountText}

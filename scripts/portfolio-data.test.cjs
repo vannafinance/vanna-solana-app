@@ -6,6 +6,7 @@ const stubs = { "./config": { API_BASE_URL: "https://example.test", VANNA_PROGRA
 const { parseAccountSnapshot } = loadTs("src/lib/solana/account-api.ts", stubs);
 const { decodePriceUpdate } = loadTs("src/lib/solana/oracle-prices.ts", stubs);
 const { valueHoldings, totalValue } = loadTs("src/lib/portfolio/value-holdings.ts", stubs);
+const { staleMinutesOf } = loadTs("src/lib/portfolio/stale-minutes.ts", stubs);
 
 const wire = {
   hasMarginAccount: true,
@@ -362,4 +363,11 @@ test("wallet and chain failures map to the failure states the card shows", () =>
 test("only stale pool errors trigger a fresh quote retry", () => {
   assert.equal(isStalePoolError(new Error("custom program error: 0x1771")), true);
   assert.equal(isStalePoolError(new Error("User declined the request")), false);
+});
+
+test("the age of the data on screen is shown only when something was read before the failure", () => {
+  assert.equal(staleMinutesOf(1_000_000, 1_000_000 + 5 * 60_000 + 30_000), 5);
+  assert.equal(staleMinutesOf(1_000_000, 1_000_000), 0);
+  // The first refresh failed: nothing was ever read, so no age is claimed (it used to read as about 29 million minutes).
+  assert.equal(staleMinutesOf(0, 1_790_000_000_000), undefined);
 });

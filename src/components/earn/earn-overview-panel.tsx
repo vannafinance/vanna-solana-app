@@ -58,6 +58,8 @@ function OverviewChart({ overview, mode, range, onRangeChange }: OverviewChartPr
   const showValue = useCallback((usd: bigint) => (mode === "earnings" ? `+${formatUsd(usd)}` : formatUsd(usd)), [mode]);
   const points = useMemo(() => overview.points.map((point) => ({ at: point.at, value: usdToDollars(point.usd), text: showValue(point.usd) })), [overview.points, showValue]);
   const formatDate = useCallback((at: number) => formatChartDate(at, "axis", overview.stepMs, overview.now), [overview.stepMs, overview.now]);
+  // A wallet that has supplied nothing has a series of zeros: no line to read and no scale to draw, so say what to do instead.
+  const noHistory = overview.value === 0n && points.every((point) => point.value === 0);
   const label = `${mode === "earnings" ? "Net earnings" : "Overall deposit"} over ${range}`;
 
   return (
@@ -68,6 +70,11 @@ function OverviewChart({ overview, mode, range, onRangeChange }: OverviewChartPr
       <AppText variant="body" style={{ lineHeight: 20, color: colors.onHeroSoft }}>
         {formatChartDate(scrubbed?.at ?? overview.now, "head", overview.stepMs, overview.now)}
       </AppText>
+      {noHistory ? (
+        <AppText variant="body" style={{ marginTop: 20, marginBottom: 28, color: colors.onHeroSoft }}>
+          {mode === "earnings" ? "Earnings show up here once your deposits start accruing." : "Supply to a vault to see your deposits here."}
+        </AppText>
+      ) : (
       <View style={{ marginTop: 12 }}>
         <LiveChart
           points={points}
@@ -83,9 +90,12 @@ function OverviewChart({ overview, mode, range, onRangeChange }: OverviewChartPr
           onScrub={setScrubbed}
         />
       </View>
-      <View style={{ marginTop: 10 }}>
-        <RangeChips ranges={RANGES} value={range} onChange={onRangeChange} tone="hero" />
-      </View>
+      )}
+      {noHistory ? null : (
+        <View style={{ marginTop: 10 }}>
+          <RangeChips ranges={RANGES} value={range} onChange={onRangeChange} tone="hero" />
+        </View>
+      )}
     </View>
   );
 }

@@ -12,8 +12,10 @@ import { useHeaderProps } from "@/hooks/use-header-props";
 import { usePerpsPositions } from "@/hooks/use-perps-positions";
 import { usePerpsTabFocus } from "@/hooks/use-perps-tab-focus";
 import { useTheme } from "@/theme/use-theme";
+import { useResetScrollBetweenSpaces } from "@/navigation/use-reset-scroll-between-spaces";
 
 export default function PerpsPositionsScreen() {
+  const listRef = useResetScrollBetweenSpaces();
   usePerpsTabFocus("positions");
   const { colors } = useTheme();
   const headerProps = useHeaderProps();
@@ -51,6 +53,7 @@ export default function PerpsPositionsScreen() {
 
   return (
     <FlatList
+      ref={listRef}
       data={data.positions}
       keyExtractor={(position) => position.id}
       ListHeaderComponent={header}

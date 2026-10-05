@@ -8,8 +8,10 @@ import { formatSignedUsd } from "@/format/format-amount";
 import { useFarmHistory } from "@/hooks/use-farm-history";
 import { useHeaderProps } from "@/hooks/use-header-props";
 import { useTheme } from "@/theme/use-theme";
+import { useResetScrollBetweenSpaces } from "@/navigation/use-reset-scroll-between-spaces";
 
 export default function FarmHistoryScreen() {
+  const listRef = useResetScrollBetweenSpaces();
   const { colors } = useTheme();
   const headerProps = useHeaderProps();
   const { history, openTransaction } = useFarmHistory();
@@ -17,6 +19,7 @@ export default function FarmHistoryScreen() {
 
   return (
     <FlatList
+      ref={listRef}
       showsVerticalScrollIndicator={false}
       style={{ backgroundColor: colors.background }}
       data={entries}

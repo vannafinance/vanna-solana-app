@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { FlatList, View } from "react-native";
 
 import { AppText } from "@/components/ui/app-text";
+import { useResetScrollBetweenSpaces } from "@/navigation/use-reset-scroll-between-spaces";
 import { useTheme } from "@/theme/use-theme";
 import type { MarginActivity } from "@/types/margin-history";
 
@@ -16,9 +17,11 @@ type ActivityListProps = {
 
 export function ActivityList({ header, entries, emptyLabel, onOpenTransaction }: ActivityListProps) {
   const { colors, spacing } = useTheme();
+  const listRef = useResetScrollBetweenSpaces();
 
   return (
     <FlatList
+      ref={listRef}
       data={entries}
       keyExtractor={(entry) => entry.signature}
       ListHeaderComponent={<>{header}</>}

@@ -1,7 +1,9 @@
 import { isValidElement, type ReactNode } from "react";
-import { View } from "react-native";
-import Animated, { interpolate, useAnimatedScrollHandler, useAnimatedStyle, useSharedValue } from "react-native-reanimated";
+import { type NativeScrollEvent, type NativeSyntheticEvent, ScrollView, View } from "react-native";
+import Animated, { interpolate, useAnimatedStyle, useSharedValue } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+
+import { useResetScrollBetweenSpaces } from "@/navigation/use-reset-scroll-between-spaces";
 
 import { type Space, spaceHeaders } from "@/theme/tokens";
 import { useTheme } from "@/theme/use-theme";
@@ -27,15 +29,17 @@ export function Screen({ header, footer, gap, paddingTop, children }: ScreenProp
   const { colors, spacing } = useTheme();
   const insets = useSafeAreaInsets();
   const scroll = useSharedValue(0);
-  const onScroll = useAnimatedScrollHandler((event) => {
-    scroll.value = event.contentOffset.y;
-  });
+  const listRef = useResetScrollBetweenSpaces();
+  const onScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+    scroll.value = event.nativeEvent.contentOffset.y;
+  };
   const scrim = useAnimatedStyle(() => ({ opacity: interpolate(scroll.value, [0, SCRIM_SCROLL], [0, 1], "clamp") }));
   const space = headerSpace(header);
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
-      <Animated.ScrollView
+      <ScrollView
+        ref={listRef}
         contentContainerStyle={{ paddingBottom: spacing.xl }}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
@@ -44,7 +48,7 @@ export function Screen({ header, footer, gap, paddingTop, children }: ScreenProp
       >
         {header}
         <View style={{ padding: spacing.lg, paddingTop: paddingTop ?? spacing.lg, gap: gap ?? spacing.lg }}>{children}</View>
-      </Animated.ScrollView>
+      </ScrollView>
       {space === null ? null : (
         // The gradient header scrolls away but the status bar keeps its light icons, so once content slides under it, it is
         // backed by the header's own colour.

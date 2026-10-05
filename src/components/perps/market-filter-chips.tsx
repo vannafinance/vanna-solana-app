@@ -17,7 +17,7 @@ export function MarketFilterChips<T extends string>({ filters, value, onChange }
 
   return (
     <View style={{ marginHorizontal: -spacing.lg }}>
-      <PillTabs segments={segments} value={value} onChange={onChange} activeColor={colors.tradeTab} />
+      <PillTabs segments={segments} value={value} onChange={onChange} activeColor={colors.tradeTab} sidePadding={spacing.lg} />
     </View>
   );
 }

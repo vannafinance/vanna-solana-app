@@ -14,8 +14,10 @@ import { useFarmDeploy } from "@/hooks/use-farm-deploy";
 import { useHeaderProps } from "@/hooks/use-header-props";
 import { MAX_LEVERAGE, MIN_LEVERAGE } from "@/lib/farm/farm-math";
 import { useTheme } from "@/theme/use-theme";
+import { useResetScrollBetweenSpaces } from "@/navigation/use-reset-scroll-between-spaces";
 
 export default function FarmDeployScreen() {
+  const scrollRef = useResetScrollBetweenSpaces();
   const { colors } = useTheme();
   const headerProps = useHeaderProps();
   const deploy = useFarmDeploy();
@@ -23,7 +25,7 @@ export default function FarmDeployScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
-      <ScrollView contentContainerStyle={{ paddingBottom: 24 }} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+      <ScrollView ref={scrollRef} contentContainerStyle={{ paddingBottom: 24 }} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
         <SpaceHeader space="farm" {...headerProps}>
           {form.status === "ready" ? <DeployHero form={form.data} /> : undefined}
         </SpaceHeader>

@@ -45,7 +45,7 @@ export function Button({
     primary: { bg: colors.primary, fg: colors.onPrimary, border: "transparent" },
     tonal: { bg: colors.purpleTint, fg: colors.onPurpleTint, border: "transparent" },
     dark: { bg: colors.chipActive, fg: colors.onChipActive, border: "transparent" },
-    outline: { bg: colors.surface, fg: colors.text, border: colors.border },
+    outline: { bg: colors.surface, fg: colors.text, border: colors.borderStrong },
     text: { bg: "transparent", fg: colors.text, border: "transparent" },
     danger: { bg: colors.badgeNegative, fg: colors.onPrimary, border: "transparent" },
   }[variant];

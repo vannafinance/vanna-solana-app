@@ -14,8 +14,10 @@ import { useFarmPositions } from "@/hooks/use-farm-positions";
 import { useHeaderProps } from "@/hooks/use-header-props";
 import { spaceRoutes } from "@/navigation/routes";
 import { useTheme } from "@/theme/use-theme";
+import { useResetScrollBetweenSpaces } from "@/navigation/use-reset-scroll-between-spaces";
 
 export default function FarmPositionsScreen() {
+  const listRef = useResetScrollBetweenSpaces();
   const { colors, radius } = useTheme();
   const headerProps = useHeaderProps();
   const positions = useFarmPositions();
@@ -25,6 +27,7 @@ export default function FarmPositionsScreen() {
 
   return (
     <FlatList
+      ref={listRef}
       showsVerticalScrollIndicator={false}
       style={{ backgroundColor: colors.background }}
       data={items}
