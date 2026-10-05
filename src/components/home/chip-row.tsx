@@ -16,7 +16,7 @@ export function ChipRow<T extends string>({ options, value, onChange }: ChipRowP
 
   return (
     <View style={{ marginHorizontal: -spacing.lg }}>
-      <PillTabs segments={options} value={value} onChange={onChange} activeColor={colors.primary} />
+      <PillTabs segments={options} value={value} onChange={onChange} activeColor={colors.primary} sidePadding={spacing.lg} />
     </View>
   );
 }

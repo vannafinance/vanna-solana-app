@@ -14,11 +14,13 @@ type PillTabsProps<T extends string> = {
   onChange: (value: T) => void;
   // The selected pill's fill; the page's own colour for its space.
   activeColor: string;
+  // Space before the first pill, so it lines up with the content around the tabs.
+  sidePadding?: number;
 };
 
 const PILL_HEIGHT = 36;
 const PILL_GAP = 8;
-const SIDE_PADDING = 20;
+const DEFAULT_SIDE_PADDING = 20;
 const FADE_WIDTH = 72;
 const ARROW_SIZE = 32;
 const SCROLL_STEP = 160;
@@ -29,7 +31,7 @@ type Placement = { x: number; width: number };
 
 // Tabs that scroll sideways and say so: while there is more on a side, that edge fades into the page and shows an arrow
 // that moves the row along; at an end the fade and arrow go. Choosing a tab brings it fully into view.
-export function PillTabs<T extends string>({ segments, value, onChange, activeColor }: PillTabsProps<T>) {
+export function PillTabs<T extends string>({ segments, value, onChange, activeColor, sidePadding = DEFAULT_SIDE_PADDING }: PillTabsProps<T>) {
   const { colors } = useTheme();
   const scroller = useRef<ScrollView>(null);
   const placements = useRef(new Map<T, Placement>());
@@ -89,7 +91,7 @@ export function PillTabs<T extends string>({ segments, value, onChange, activeCo
         onScroll={onScroll}
         onLayout={(event: LayoutChangeEvent) => setViewport(event.nativeEvent.layout.width)}
         onContentSizeChange={(width) => setContent(width)}
-        contentContainerStyle={{ paddingHorizontal: SIDE_PADDING, gap: PILL_GAP, alignItems: "center" }}
+        contentContainerStyle={{ paddingHorizontal: sidePadding, gap: PILL_GAP, alignItems: "center" }}
       >
         {segments.map((segment) => {
           const selected = segment.value === value;
