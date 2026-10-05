@@ -539,6 +539,21 @@ test("a short open borrows the stock", () => {
   assert.equal(entry.strategy, "perps");
 });
 
+test("a long opened in two transactions: the swap that follows the borrow is a long, not a short", () => {
+  const entries = marginActivityFrom(
+    [
+      txOf("sig-borrow", 1_790_000_100, [events.deposit(holderMargin, mint("USDC"), 40_000_000n), events.borrow(holderMargin, reserveOf("USDC"), 80_000_000n)]),
+      txOf("sig-swap", 1_790_000_105, [events.swap(holderMargin, mint("USDC"), mint("TSLAx"), 120_000_000n, 322_811n)]),
+    ],
+    holderMargin.toBase58(),
+  );
+  assert.equal(entries[0].signature, "sig-swap");
+  assert.equal(entries[0].title, "TSLAx-USDC Long");
+  // A buy of the stock with no borrow before it still cannot be told apart from closing a short, and keeps its old label.
+  const [alone] = marginActivityFrom([txOf("sig-alone", 1_790_000_900, [events.swap(holderMargin, mint("USDC"), mint("TSLAx"), 120_000_000n, 322_811n)])], holderMargin.toBase58());
+  assert.equal(alone.title, "TSLAx-USDC Short");
+});
+
 test("Farm transactions are classified as farm, and other accounts' events are ignored", () => {
   const stranger = Keypair.generate().publicKey;
   const entries = marginActivityFrom(
