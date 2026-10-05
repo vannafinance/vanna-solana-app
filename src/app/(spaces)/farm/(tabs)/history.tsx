@@ -17,6 +17,7 @@ export default function FarmHistoryScreen() {
 
   return (
     <FlatList
+      showsVerticalScrollIndicator={false}
       style={{ backgroundColor: colors.background }}
       data={entries}
       keyExtractor={(entry) => entry.id}

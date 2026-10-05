@@ -78,7 +78,7 @@ export function TokenMenu({ tokens, selected, onSelect }: TokenMenuProps) {
               style={{ flex: 1, padding: 0, fontSize: fontSize.body, fontFamily: fontFamily.regular, color: colors.text }}
             />
           </View>
-          <ScrollView style={{ maxHeight: MAX_LIST_HEIGHT, marginTop: 4 }} keyboardShouldPersistTaps="handled">
+          <ScrollView style={{ maxHeight: MAX_LIST_HEIGHT, marginTop: 4 }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
             {visible.map((token) => {
               const active = token.symbol === selected.symbol;
               return (

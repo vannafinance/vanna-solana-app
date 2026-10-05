@@ -29,7 +29,7 @@ export function OptionSheet<T extends string>({ visible, title, options, selecte
 
   return (
     <BottomSheet visible={visible} title={title} onDismiss={onDismiss}>
-      <ScrollView style={{ maxHeight: 420 }}>
+      <ScrollView style={{ maxHeight: 420 }} showsVerticalScrollIndicator={false}>
         {options.map((option) => {
           const active = option.value === selected;
           return (
