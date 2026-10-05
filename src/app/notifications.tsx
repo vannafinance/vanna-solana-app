@@ -4,6 +4,8 @@ import { Pressable } from "react-native";
 import { ChipRow } from "@/components/home/chip-row";
 import { NotificationGroups } from "@/components/home/notification-groups";
 import { AppText } from "@/components/ui/app-text";
+import { BellArt } from "@/components/ui/bell-art";
+import { EmptyState } from "@/components/ui/empty-state";
 import { PlainHeader } from "@/components/ui/plain-header";
 import { ResourceView } from "@/components/ui/resource-view";
 import { ripple } from "@/components/ui/ripple";
@@ -48,7 +50,11 @@ export default function Notifications() {
       }
     >
       <ChipRow options={filters} value={filter} onChange={setFilter} />
-      <ResourceView resource={notifications} emptyLabel="You're all caught up">
+      <ResourceView
+        resource={notifications}
+        emptyLabel="You're all caught up"
+        emptyView={<EmptyState art={<BellArt />} title="You're all caught up" message="Health alerts, trade updates and Earn activity will show up here." />}
+      >
         {(items) => <NotificationGroups notifications={items} onAction={(item) => router.push(item.action?.target === "farm" ? "/farm" : "/trade")} />}
       </ResourceView>
     </Screen>
