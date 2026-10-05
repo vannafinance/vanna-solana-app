@@ -123,14 +123,16 @@ function SigningRow({ state }: SigningRowProps) {
       />
     );
   }
-  return (
-    <StatusRow
-      ring="wait"
-      title={`Approve in ${state.wallet}`}
-      detail={slow ? `Waiting for ${state.wallet}. If it did not open, cancel and try again. Nothing was sent.` : "Your wallet may warn that it could not check this on the test network. That is expected: confirm the amounts and approve."}
-      chip={chip}
-    />
-  );
+  // Phantom sits on its home screen for a few seconds after the last confirm before it answers and hands back. Pressing
+  // back in that gap closes the wallet session with no signature, which reads as a cancel, so the hint says to wait.
+  // The blockhash also dies about a minute after the wallet receives the transaction, hence the time limit.
+  const slowToReturn = /phantom/i.test(state.wallet);
+  const detail = slow
+    ? `Waiting for ${state.wallet}. If it did not open, cancel and try again. Nothing was sent.`
+    : slowToReturn
+      ? "Approve within a minute. Phantom brings you back to Vanna a few seconds after you confirm. Pressing back before that cancels it."
+      : "Your wallet may warn that it could not check this on the test network. That is expected: confirm the amounts and approve.";
+  return <StatusRow ring="wait" title={`Approve in ${state.wallet}`} detail={detail} chip={chip} />;
 }
 
 function FailureDetail({ text }: { text: string }) {
