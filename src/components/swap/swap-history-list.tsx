@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { FlatList, View } from "react-native";
 
 import { AppText } from "@/components/ui/app-text";
+import { useResetScrollBetweenSpaces } from "@/navigation/use-reset-scroll-between-spaces";
 import { useTheme } from "@/theme/use-theme";
 import type { SwapHistoryGroup } from "@/types/swap";
 
@@ -15,9 +16,11 @@ type SwapHistoryListProps = {
 
 export function SwapHistoryList({ header, groups, onOpenTransaction }: SwapHistoryListProps) {
   const { colors } = useTheme();
+  const listRef = useResetScrollBetweenSpaces();
 
   return (
     <FlatList
+      ref={listRef}
       data={groups}
       keyExtractor={(group) => group.day}
       ListHeaderComponent={<>{header}</>}
