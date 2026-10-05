@@ -8,6 +8,7 @@ import { exitFarm, withdrawStock, yieldAssetOf } from "@/lib/solana/farm-transac
 import { routes } from "@/navigation/routes";
 import type { CloseView, ExitFractionBps } from "@/types/farm";
 import type { Resource } from "@/types/resource";
+import { toTransactionError } from "@/lib/solana/transaction-errors";
 import { TransactionError } from "@/types/transaction";
 
 import { useFarmState } from "./use-farm-state";
@@ -51,11 +52,16 @@ export function useFarmClose(id: string) {
   // confirmed with, or the second step, its retry and the success text would all be built from a position that is gone.
   const [frozen, setFrozen] = useState<typeof livePlan | null>(null);
   const plan = frozen ?? livePlan;
-  const partialFailure = new TransactionError(
-    "partial",
-    "Step 2 of 2 did not go through",
-    `Your loan is repaid and the leftover ${plan.position?.poolSymbol ?? ""} is in your wallet. Your ${plan.collateralText} is still in the position. Try again to get it back.`,
-  );
+  // The reason step 2 failed goes in the detail line, or a tester sees only that it failed and not why.
+  const partialFailure = (cause: unknown) => {
+    const reason = toTransactionError(cause);
+    return new TransactionError(
+      "partial",
+      "Step 2 of 2 did not go through",
+      `Your loan is repaid and the leftover ${plan.position?.poolSymbol ?? ""} is in your wallet. Your ${plan.collateralText} is still in the position. Try again to get it back.`,
+      reason.detail ?? `${reason.title}. ${reason.message}`,
+    );
+  };
 
   const flow = useTransactionFlow({
     steps: plan.returnsStock ? 2 : 1,
@@ -84,8 +90,8 @@ export function useFarmClose(id: string) {
       }
       await signer
         .execute(({ connection, owner, hooks }) => withdrawStock(connection, owner, stock, target.collateral.raw, hooks), progress)
-        .catch(() => {
-          throw partialFailure;
+        .catch((error: unknown) => {
+          throw partialFailure(error);
         });
     },
   });
