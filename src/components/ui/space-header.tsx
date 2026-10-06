@@ -1,13 +1,15 @@
 import { type Href, router, useSegments } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
 import { StatusBar } from "expo-status-bar";
-import type { ReactNode } from "react";
+import { type ReactNode, useContext } from "react";
 import { Pressable, StyleSheet, View } from "react-native";
+import Animated, { useAnimatedStyle } from "react-native-reanimated";
 import Svg, { Defs, RadialGradient, Rect, Stop } from "react-native-svg";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { moduleFor, modules } from "@/navigation/modules";
 import { NAV_LAYOUT } from "@/navigation/nav-layout";
+import { PageMotionContext } from "@/navigation/page-motion";
 import { routes } from "@/navigation/routes";
 import { horizontalGradient, type Space, spaceGradients, spaceHeaders, spaceInk } from "@/theme/tokens";
 import { useTheme } from "@/theme/use-theme";
@@ -36,16 +38,16 @@ type SpaceHeaderProps = {
   children?: ReactNode;
 };
 
-function Glow({ color }: { color: string }) {
+function Glow({ color, id = "spaceGlow" }: { color: string; id?: string }) {
   return (
     <Svg pointerEvents="none" width="100%" height="100%" style={StyleSheet.absoluteFill}>
       <Defs>
-        <RadialGradient id="spaceGlow" cx="100%" cy="0%" rx="110%" ry="70%">
+        <RadialGradient id={id} cx="100%" cy="0%" rx="110%" ry="70%">
           <Stop offset="0" stopColor={color} />
           <Stop offset="0.6" stopColor={color} stopOpacity={0} />
         </RadialGradient>
       </Defs>
-      <Rect width="100%" height="100%" fill="url(#spaceGlow)" />
+      <Rect width="100%" height="100%" fill={`url(#${id})`} />
     </Svg>
   );
 }
@@ -228,13 +230,26 @@ export function SpaceHeader({ space, notificationCount = 0, onNotifications, onA
   const insets = useSafeAreaInsets();
   const header: { surface: readonly string[]; glow: string; start?: { x: number; y: number }; end?: { x: number; y: number } } = spaceHeaders[space];
   const { surface, glow } = header;
+  // Arriving from another module, the header starts in that module's colours and blends into its own while its figures fade in.
+  const motion = useContext(PageMotionContext);
+  const previous: typeof header | null = motion.from !== null && motion.from !== space ? spaceHeaders[motion.from] : null;
+  const arrive = useAnimatedStyle(() => ({ opacity: previous !== null && motion.reveal !== null ? motion.reveal.get() : 1 }));
+  const figures = useAnimatedStyle(() => ({ opacity: motion.reveal !== null ? motion.reveal.get() : 1 }));
 
   return (
     <View>
       <StatusBar style="light" />
       <View style={{ overflow: "hidden", borderBottomLeftRadius: radius.hero, borderBottomRightRadius: radius.hero }}>
-        <LinearGradient colors={surface as [string, string, string]} locations={SURFACE_STOPS} start={header.start} end={header.end} style={StyleSheet.absoluteFill} />
-        <Glow color={glow} />
+        {previous === null ? null : (
+          <>
+            <LinearGradient colors={previous.surface as [string, string, string]} locations={SURFACE_STOPS} start={previous.start} end={previous.end} style={StyleSheet.absoluteFill} />
+            <Glow color={previous.glow} id="spaceGlowFrom" />
+          </>
+        )}
+        <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, arrive]}>
+          <LinearGradient colors={surface as [string, string, string]} locations={SURFACE_STOPS} start={header.start} end={header.end} style={StyleSheet.absoluteFill} />
+          <Glow color={glow} />
+        </Animated.View>
         <LogoShade />
         <View style={{ paddingTop: insets.top, paddingHorizontal: spacing.md }}>
           <View style={{ flexDirection: "row", alignItems: "center", height: 52, paddingHorizontal: spacing.xs }}>
@@ -289,9 +304,9 @@ export function SpaceHeader({ space, notificationCount = 0, onNotifications, onA
         {/* Every module's header body is the same height (see ModuleHero), so the bars sit at the same place in each. With the
             modules inside the header (V4) nothing floats over its bottom edge, so the body ends with plain padding. */}
         {NAV_LAYOUT === "header-modules" ? (
-          <View style={{ height: MODULE_HERO_HEIGHT + 6 + 20, paddingHorizontal: spacing.lg, paddingTop: 6, paddingBottom: 20 }}>{children}</View>
+          <Animated.View style={[{ height: MODULE_HERO_HEIGHT + 6 + 20, paddingHorizontal: spacing.lg, paddingTop: 6, paddingBottom: 20 }, figures]}>{children}</Animated.View>
         ) : (
-          <View style={{ height: MODULE_HERO_HEIGHT + 6 + 20 + OVERLAP, paddingHorizontal: spacing.lg, paddingTop: 6, paddingBottom: 20 + OVERLAP }}>{children}</View>
+          <Animated.View style={[{ height: MODULE_HERO_HEIGHT + 6 + 20 + OVERLAP, paddingHorizontal: spacing.lg, paddingTop: 6, paddingBottom: 20 + OVERLAP }, figures]}>{children}</Animated.View>
         )}
       </View>
       {NAV_LAYOUT === "top-modules" ? <ModuleIsland space={space} /> : NAV_LAYOUT === "bottom-modules" ? <PageIsland space={space} /> : null}
