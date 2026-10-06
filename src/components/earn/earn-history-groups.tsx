@@ -9,7 +9,7 @@ import type { EarnHistoryEntry, EarnHistoryGroup } from "@/types/earn";
 
 import { ActivityRow, type ActivityRowProps } from "./activity-row";
 
-type RowView = Pick<ActivityRowProps, "icon" | "tone" | "title" | "detail" | "value" | "valueSub" | "positive" | "signature">;
+type RowView = Pick<ActivityRowProps, "icon" | "tone" | "title" | "detail" | "value" | "valueSub" | "positive" | "signature" | "failed">;
 
 function rowView(entry: EarnHistoryEntry): RowView {
   const vault = `${entry.asset} vault`;
@@ -21,11 +21,12 @@ function rowView(entry: EarnHistoryEntry): RowView {
       return {
         icon: entry.kind === "supply" ? "arrow_upward" : "arrow_downward",
         tone: "purple",
-        title: entry.kind === "supply" ? "Supplied" : "Withdrew",
-        detail: vault,
+        title: entry.failed ? `${entry.kind === "supply" ? "Supply" : "Withdrawal"} failed` : entry.kind === "supply" ? "Supplied" : "Withdrew",
+        detail: entry.failed && entry.reason ? `${vault} · ${entry.reason}` : vault,
         value: entry.amount === null ? "—" : formatFullAmount(entry.amount, entry.asset),
         valueSub: entry.usd === null ? undefined : formatUsd(entry.usd),
         signature: entry.signature,
+        failed: entry.failed,
       };
     case "shares":
       return { icon: "toll", tone: "teal", title: `Received v${entry.asset}`, detail: "Vault shares", value: `${formatSummaryNumber(entry.shares, entry.asset)} v${entry.asset}` };

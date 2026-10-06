@@ -29,7 +29,8 @@ export function useTradeEarnings(portfolio: Resource<PerpsPortfolio>) {
     if (activity.status === "loading" || activity.status === "error") return activity;
     if (account.data === undefined) return { status: "loading" };
 
-    const entries = activity.status === "ready" ? activity.data : [];
+    // Earnings come from what went through; failed transactions moved nothing.
+    const entries = activity.status === "ready" ? activity.data.filter((entry) => entry.status !== "failed") : [];
     const ledger = tradeLedger(entries);
     const readable = portfolio.data.positionsAvailable;
     const positions = readable ? portfolio.data.positions : [];

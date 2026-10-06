@@ -65,6 +65,8 @@ export type VaultPositionEvent = {
   amount: TokenAmount | null;
   date: string;
   signature: string;
+  failed: boolean;
+  reason: string | null;
 };
 
 export type VaultPosition = {
@@ -123,7 +125,8 @@ export type EarnPortfolioSummary = {
 
 export type EarnHistoryEntry =
   | { id: string; kind: "interest"; asset: EarnAsset; usd: bigint; when: string }
-  | { id: string; kind: "supply" | "withdraw"; asset: EarnAsset; amount: TokenAmount | null; usd: bigint | null; signature?: string }
+  // A failed supply or withdrawal is listed with what it tried, marked failed, and why when the chain says.
+  | { id: string; kind: "supply" | "withdraw"; asset: EarnAsset; amount: TokenAmount | null; usd: bigint | null; signature?: string; failed?: boolean; reason?: string | null }
   | { id: string; kind: "shares"; asset: EarnAsset; shares: TokenAmount };
 
 export type EarnHistoryGroup = {

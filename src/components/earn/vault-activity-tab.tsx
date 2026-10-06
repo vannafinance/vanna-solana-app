@@ -31,8 +31,9 @@ export function VaultActivityTab({ vault, onOpenTransaction }: VaultActivityTabP
             first={index === 0}
             icon={event.kind === "supply" ? "arrow_upward" : "arrow_downward"}
             tone="purple"
-            title={event.kind === "supply" ? "Supplied" : "Withdrew"}
-            detail={event.date}
+            title={event.failed ? `${event.kind === "supply" ? "Supply" : "Withdrawal"} failed` : event.kind === "supply" ? "Supplied" : "Withdrew"}
+            detail={event.failed && event.reason ? `${event.date} · ${event.reason}` : event.date}
+            failed={event.failed}
             value={event.amount === null ? "—" : formatFullAmount(event.amount, vault.symbol)}
             signature={event.signature}
             onOpenTransaction={onOpenTransaction}

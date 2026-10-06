@@ -3,6 +3,7 @@ import { View } from "react-native";
 import { AppText } from "@/components/ui/app-text";
 import { ExplorerLink } from "@/components/ui/explorer-link";
 import { Icon } from "@/components/ui/icon";
+import { StatusBadge } from "@/components/ui/status-badge";
 import type { IconName } from "@/components/ui/material-symbols";
 import { useTheme } from "@/theme/use-theme";
 
@@ -19,13 +20,15 @@ export type ActivityRowProps = {
   signature?: string;
   onOpenTransaction: (signature: string) => void;
   first?: boolean;
+  // A transaction that landed but failed: the badge takes the amount's place and the amount, what it tried, goes under it.
+  failed?: boolean;
 };
 
 const LINK_SIZE = 44;
 
 // One transaction in an Earn list: icon, what and where on the left, the amount on the right, then the explorer link.
 // Rows without a transaction keep the link's space, so every amount lines up on the same right edge.
-export function ActivityRow({ icon, tone, title, detail, value, valueSub, positive = false, signature, onOpenTransaction, first = false }: ActivityRowProps) {
+export function ActivityRow({ icon, tone, title, detail, value, valueSub, positive = false, signature, onOpenTransaction, first = false, failed = false }: ActivityRowProps) {
   const { colors, radius, spacing } = useTheme();
   const teal = tone === "teal";
 
@@ -48,15 +51,24 @@ export function ActivityRow({ icon, tone, title, detail, value, valueSub, positi
         <AppText variant="body" strong numberOfLines={1}>
           {title}
         </AppText>
-        <AppText variant="caption" color="textMuted" numberOfLines={1}>
+        <AppText variant="caption" color={failed ? "negative" : "textMuted"} numberOfLines={1}>
           {detail}
         </AppText>
       </View>
       <View style={{ flexShrink: 1, alignItems: "flex-end", gap: 2 }}>
-        <AppText variant="body" strong numberOfLines={1} color={positive ? "positive" : "text"} style={{ textAlign: "right" }}>
-          {value}
-        </AppText>
-        {valueSub ? (
+        {failed ? (
+          <>
+            <StatusBadge tone="failed" label="Failed" />
+            <AppText variant="caption" color="textMuted" numberOfLines={1} style={{ textAlign: "right" }}>
+              {value}
+            </AppText>
+          </>
+        ) : (
+          <AppText variant="body" strong numberOfLines={1} color={positive ? "positive" : "text"} style={{ textAlign: "right" }}>
+            {value}
+          </AppText>
+        )}
+        {valueSub && !failed ? (
           <AppText variant="caption" color="textMuted" numberOfLines={1} style={{ textAlign: "right" }}>
             {valueSub}
           </AppText>

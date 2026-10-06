@@ -63,14 +63,19 @@ export function deriveNotifications(input: NotificationInput): AppNotification[]
 
   for (const event of input.earnEvents) {
     const supplied = event.kind === "supply";
+    const failed = event.status === "failed";
     const amount = event.amount === null ? event.symbol : amountText(event.symbol, event.amount);
     add(event.timestamp, {
       id: `${event.signature}-${event.kind}`,
       kind: "earn",
       icon: event.symbol,
-      badge: supplied ? "opened" : "withdrawn",
-      title: supplied ? `Supplied ${amount}` : `Withdrew ${amount}`,
-      message: supplied ? `Now earning in the ${event.symbol} vault.` : `Sent from the ${event.symbol} vault to your wallet.`,
+      badge: failed ? "warning" : supplied ? "opened" : "withdrawn",
+      title: failed ? `${supplied ? "Supply" : "Withdrawal"} failed` : supplied ? `Supplied ${amount}` : `Withdrew ${amount}`,
+      message: failed
+        ? `${supplied ? `${amount} was not supplied` : `Nothing left the ${event.symbol} vault`}${event.reason ? `: ${event.reason}` : ""}.`
+        : supplied
+          ? `Now earning in the ${event.symbol} vault.`
+          : `Sent from the ${event.symbol} vault to your wallet.`,
       time: relativeTime(event.timestamp, now),
       group: groupOf(event.timestamp, now),
       unread: event.timestamp > lastSeen,
@@ -78,13 +83,17 @@ export function deriveNotifications(input: NotificationInput): AppNotification[]
   }
 
   for (const swap of input.swaps) {
+    const failed = swap.status === "failed";
+    const sold = `${formatToken({ raw: swap.amountIn, decimals: swap.decimalsIn }, 2)} ${swap.from}`;
     add(swap.timestamp, {
       id: `${swap.signature}-swap`,
       kind: "trade",
       icon: swap.to,
-      badge: "swapped",
-      title: `Swapped ${swap.from} for ${swap.to}`,
-      message: `${formatToken({ raw: swap.amountIn, decimals: swap.decimalsIn }, 2)} ${swap.from} for ${formatToken({ raw: swap.amountOut, decimals: swap.decimalsOut }, 2)} ${swap.to}.`,
+      badge: failed ? "warning" : "swapped",
+      title: failed ? `Swap of ${swap.from} for ${swap.to} failed` : `Swapped ${swap.from} for ${swap.to}`,
+      message: failed
+        ? `${sold} stayed in your wallet${swap.reason ? `: ${swap.reason}` : ""}.`
+        : `${sold} for ${formatToken({ raw: swap.amountOut, decimals: swap.decimalsOut }, 2)} ${swap.to}.`,
       time: relativeTime(swap.timestamp, now),
       group: groupOf(swap.timestamp, now),
       unread: swap.timestamp > lastSeen,

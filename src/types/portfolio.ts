@@ -63,6 +63,8 @@ export type LenderActivity = {
   kind: "interest" | "supply" | "withdraw" | "shares";
   title: string;
   detail: string;
+  // A transaction that landed but failed: listed, marked, and never counted.
+  failed?: boolean;
   valueUsd?: bigint;
   valueLabel?: string;
   gain?: boolean;

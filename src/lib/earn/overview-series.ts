@@ -1,6 +1,6 @@
 import { assets } from "@/lib/solana/assets";
 import type { AssetSymbol } from "@/lib/solana/assets";
-import type { EarnEvent } from "@/lib/solana/earn-history";
+import { type EarnEvent, succeededEarnEvents } from "@/lib/solana/earn-history";
 import type { OraclePrices } from "@/lib/solana/oracle-prices";
 import type { OverviewMode, OverviewRange, UsdPoint } from "@/types/earn";
 
@@ -31,7 +31,7 @@ function principalUsdAt(events: readonly EarnEvent[], prices: OraclePrices, curr
 // Deposit mode follows net principal over time, valued at today's prices (history has no past prices) and ending
 // at the current value. Earnings are only known as of now, so that mode is a flat line at the current figure.
 export function buildOverviewSeries(
-  events: readonly EarnEvent[],
+  history: readonly EarnEvent[],
   prices: OraclePrices,
   current: ReadonlyMap<AssetSymbol, bigint>,
   mode: OverviewMode,
@@ -39,6 +39,8 @@ export function buildOverviewSeries(
   now: number,
   currentValue: bigint,
 ): { points: UsdPoint[]; stepMs: number; now: number } {
+  // A failed supply or withdrawal moved nothing, so it is not on the chart.
+  const events = succeededEarnEvents(history);
   const first = events.length === 0 ? now : Math.min(...events.map((event) => event.timestamp));
   const span = range === "All" ? Math.max(now - first + 2 * DAY, 7 * DAY) : WINDOW_MS[range];
   const stepMs = Math.max(Math.floor(span / POINTS), HOUR);

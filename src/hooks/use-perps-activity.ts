@@ -10,14 +10,15 @@ import type { Resource } from "@/types/resource";
 
 import { useWalletTransactionsOptions } from "./use-wallet-transactions";
 
-// Every action of the margin account of the given kinds, one entry per transaction, newest first.
+// Every action of the margin account of the given kinds, one entry per transaction, newest first, failed ones included and
+// marked: history shows what was tried as well as what went through.
 // `strategies` must be a constant: a new array on each render would make the selector recompute every time.
 export function useMarginActivity(strategies: readonly HistoryStrategy[]): Resource<MarginActivity[]> {
   const wallet = useWalletAddress();
   const account = useAccountSnapshot(wallet);
   const margin = account.data?.address ?? null;
   const select = useCallback(
-    (data: WalletTransaction[]) => (margin === null ? [] : marginActivityFrom(data, margin).filter((entry) => strategies.includes(entry.strategy))),
+    (data: WalletTransaction[]) => (margin === null ? [] : marginActivityFrom(data, margin, { includeFailed: true }).filter((entry) => strategies.includes(entry.strategy))),
     [margin, strategies],
   );
   const transactions = useQuery({ ...useWalletTransactionsOptions(wallet), select });

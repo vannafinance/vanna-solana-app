@@ -21,6 +21,8 @@ export function groupEarnHistory(events: readonly EarnEvent[], prices: OraclePri
       amount: event.amount === null ? null : { raw: event.amount, decimals },
       usd: event.amount === null || price === undefined ? null : (event.amount * price) / 10n ** BigInt(decimals),
       signature: event.signature,
+      failed: event.status === "failed",
+      reason: event.reason,
     };
     const label = dayLabel(event.timestamp, today);
     const last = groups[groups.length - 1];

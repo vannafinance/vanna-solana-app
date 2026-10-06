@@ -1,5 +1,7 @@
 import { type Connection, type ParsedInstruction, type ParsedTransactionWithMeta, type PartiallyDecodedInstruction, PublicKey } from "@solana/web3.js";
 
+import { failureReason } from "@/lib/farm/failure-reason";
+
 import { APP_ONLY_ASSETS, type AssetSymbol, assetByMint } from "./assets";
 import { decodeBase58 } from "./base58";
 import { API_BASE_URL, VANNA_PROGRAM_ID } from "./config";
@@ -13,6 +15,9 @@ export type EarnEvent = {
   amount: bigint | null;
   signature: string;
   timestamp: number;
+  // A failed supply or withdrawal moved nothing; it is listed in history but never counted.
+  status: "succeeded" | "failed";
+  reason: string | null;
 };
 
 // Supplies and withdrawals as the web app's own history route reports them, so both apps show the same rows.
@@ -22,8 +27,8 @@ export function earnEventsFromPayload(payload: unknown): EarnEvent[] {
       const asset = assetOf(row.asset);
       const kind = row.type === "supply" || row.type === "withdraw" ? row.type : null;
       const failed = row.status !== undefined && row.status !== "success";
-      if (!asset || !kind || failed || typeof row.hash !== "string" || typeof row.timestamp !== "number") return [];
-      return [{ kind, symbol: asset.symbol, amount: baseUnits(row.amount, asset.decimals), signature: row.hash, timestamp: row.timestamp }];
+      if (!asset || !kind || typeof row.hash !== "string" || typeof row.timestamp !== "number") return [];
+      return [{ kind, symbol: asset.symbol, amount: baseUnits(row.amount, asset.decimals), signature: row.hash, timestamp: row.timestamp, status: failed ? "failed" : "succeeded", reason: null }];
     })
     .sort((a, b) => b.timestamp - a.timestamp);
 }
@@ -53,9 +58,11 @@ function tokenBalanceChange(tx: ParsedTransactionWithMeta, account: PublicKey): 
 }
 
 // Supplies and withdrawals from the wallet's own transaction: the Vanna supply and redeem instructions and the mint they
-// name. The fork reports a truncated blockTime on getTransaction, so the time comes from the signature list.
+// name. A failed one keeps the amount it tried to supply; a failed withdrawal paid nothing, so its size is unknown. The fork
+// reports a truncated blockTime on getTransaction, so the time comes from the signature list.
 export function decodeEarnEvents({ tx, signature, blockTime }: WalletTransaction): EarnEvent[] {
-  if (tx.meta?.err) return [];
+  const failed = Boolean(tx.meta?.err);
+  const reason = failed && tx.meta ? failureReason(tx.meta) : null;
   const events: EarnEvent[] = [];
   for (const instruction of tx.transaction.message.instructions) {
     if (!isRaw(instruction) || instruction.programId.toBase58() !== VANNA_PROGRAM_ID) continue;
@@ -69,23 +76,28 @@ export function decodeEarnEvents({ tx, signature, blockTime }: WalletTransaction
     // Redeem carries vault shares, not assets; the real payout is the change in the lender's token account.
     let amount: bigint | null = readU64(data, 8);
     if (kind === "withdraw") {
-      const change = tokenBalanceChange(tx, instruction.accounts[LENDER_TOKEN_ACCOUNT_INDEX]);
+      const change = failed ? null : tokenBalanceChange(tx, instruction.accounts[LENDER_TOKEN_ACCOUNT_INDEX]);
       amount = change !== null && change > 0n ? change : null;
     }
-    events.push({ kind, symbol: asset.symbol, amount, signature, timestamp: blockTime * 1000 });
+    events.push({ kind, symbol: asset.symbol, amount, signature, timestamp: blockTime * 1000, status: failed ? "failed" : "succeeded", reason });
   }
   return events;
 }
 
-// The web route's rows, plus the supplies and withdrawals it drops because it cannot name the asset (SKR, which the website
-// does not carry), read from the wallet's own transactions. A signature the route already reported is never listed twice.
-export function withAppOnlyEarnEvents(hosted: readonly EarnEvent[], transactions: readonly WalletTransaction[]): EarnEvent[] {
+// The web route's rows, plus what it leaves out, read from the wallet's own transactions: supplies and withdrawals of an
+// asset it cannot name (SKR, which the website does not carry) and every one that failed, which the route skips. A
+// signature the route already reported is never listed twice.
+export function withDeviceEarnEvents(hosted: readonly EarnEvent[], transactions: readonly WalletTransaction[]): EarnEvent[] {
   const known = new Set(hosted.map((event) => event.signature));
-  const extra = succeededOnly(transactions).flatMap((transaction) =>
+  const appOnly = succeededOnly(transactions).flatMap((transaction) =>
     decodeEarnEvents(transaction).filter((event) => !known.has(event.signature) && APP_ONLY_ASSETS.has(event.symbol)),
   );
-  return [...hosted, ...extra].sort((a, b) => b.timestamp - a.timestamp);
+  const failed = transactions.flatMap((transaction) => (transaction.status === "failed" && !known.has(transaction.signature) ? decodeEarnEvents(transaction) : []));
+  return [...hosted, ...appOnly, ...failed].sort((a, b) => b.timestamp - a.timestamp);
 }
+
+// What really moved: the supplies and withdrawals that went through. Every figure built from history starts here.
+export const succeededEarnEvents = (events: readonly EarnEvent[]) => events.filter((event) => event.status !== "failed");
 
 export async function fetchEarnEvents(connection: Connection, wallet: string, signal?: AbortSignal): Promise<EarnEvent[]> {
   const [hosted, transactions] = await Promise.all([
@@ -93,5 +105,5 @@ export async function fetchEarnEvents(connection: Connection, wallet: string, si
     // The web route's rows still show if the wallet's own history cannot be read.
     fetchWalletTransactions(connection, wallet).catch(() => []),
   ]);
-  return withAppOnlyEarnEvents(hosted, transactions);
+  return withDeviceEarnEvents(hosted, transactions);
 }

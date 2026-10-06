@@ -59,6 +59,9 @@ export type SwapHistoryEntry = {
   amountIn: TokenAmount;
   amountOut: TokenAmount;
   valueUsd: bigint;
+  // A failed swap moved nothing: its amounts are what it tried, and it is not counted in the volume.
+  failed: boolean;
+  reason: string | null;
 };
 
 export type SwapHistoryGroup = {

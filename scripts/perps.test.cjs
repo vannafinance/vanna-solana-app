@@ -702,3 +702,17 @@ test("SKR, Solana Mobile's Seeker token, is listed as a crypto market with its D
   assert.equal(chart.kind, "dexscreener");
   assert.equal(chart.pairAddress, "VY1ZQXjqBwvuWgVfTfhqanJe96GGoQrX7xZZDrWPGiT");
 });
+
+test("a failed margin transaction is listed and marked, with what it logged or with no legs at all", () => {
+  const failedMeta = (lines, accountKeys = []) => ({ err: { InstructionError: [2, { Custom: 6024 }] }, logMessages: lines });
+  const attempted = { signature: "sig-failed", blockTime: 1_790_001_000, status: "failed", tx: { meta: failedMeta([events.deposit(holderMargin, mint("USDC"), 10_000_000n)]), transaction: { message: { accountKeys: [] } } } };
+  const bare = { signature: "sig-bare", blockTime: 1_790_001_100, status: "failed", tx: { meta: failedMeta(["Program log: nothing"]), transaction: { message: { accountKeys: [{ pubkey: holderMargin }] } } } };
+  const elsewhere = { signature: "sig-elsewhere", blockTime: 1_790_001_200, status: "failed", tx: { meta: failedMeta(["Program log: nothing"]), transaction: { message: { accountKeys: [] } } } };
+  const listed = marginActivityFrom([attempted, bare, elsewhere], holderMargin.toBase58(), { includeFailed: true });
+  assert.deepEqual(listed.map((entry) => entry.signature).join(","), "sig-bare,sig-failed");
+  assert.ok(listed.every((entry) => entry.status === "failed"));
+  assert.equal(listed[0].chips.length, 0);
+  assert.equal(listed[1].chips[0].type, "deposit");
+  // Left out unless asked for: everything that counts money reads only what went through.
+  assert.equal(marginActivityFrom([attempted, bare], holderMargin.toBase58()).length, 0);
+});

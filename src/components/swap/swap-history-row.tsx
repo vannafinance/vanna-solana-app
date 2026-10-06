@@ -3,6 +3,7 @@ import { View } from "react-native";
 import { AppText } from "@/components/ui/app-text";
 import { Card } from "@/components/ui/card";
 import { ExplorerLink } from "@/components/ui/explorer-link";
+import { StatusBadge } from "@/components/ui/status-badge";
 import { TokenIcon } from "@/components/ui/token-icon";
 import { formatSwapAmount } from "@/format/format-swap-amount";
 import { useTheme } from "@/theme/use-theme";
@@ -29,11 +30,16 @@ export function SwapHistoryRow({ group, onOpenTransaction }: SwapHistoryRowProps
       {group.entries.map((entry) => {
         const received = `${formatSwapAmount(entry.amountOut.raw, entry.amountOut.decimals, entry.to)} ${entry.to}`;
         const paid = `${formatSwapAmount(entry.amountIn.raw, entry.amountIn.decimals, entry.from)} ${entry.from}`;
+        const time = new Date(entry.timestamp).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
         return (
           <View
             key={entry.id}
             accessible
-            accessibilityLabel={`${entry.from} to ${entry.to}, received ${received}, paid ${paid}`}
+            accessibilityLabel={
+              entry.failed
+                ? `${entry.from} to ${entry.to}, failed${entry.reason ? `, ${entry.reason}` : ""}, tried to swap ${paid}`
+                : `${entry.from} to ${entry.to}, received ${received}, paid ${paid}`
+            }
             style={{ height: 68, flexDirection: "row", alignItems: "center", gap: 12, borderTopWidth: 1, borderTopColor: colors.divider }}
           >
             <View style={{ flexDirection: "row" }}>
@@ -48,18 +54,28 @@ export function SwapHistoryRow({ group, onOpenTransaction }: SwapHistoryRowProps
               <AppText variant="body" strong numberOfLines={1}>
                 {`${entry.from} → ${entry.to}`}
               </AppText>
-              <AppText variant="caption" color="textMuted" numberOfLines={1}>
-                {new Date(entry.timestamp).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}
+              <AppText variant="caption" color={entry.failed ? "negative" : "textMuted"} numberOfLines={1}>
+                {entry.failed && entry.reason ? `${time} · ${entry.reason}` : time}
               </AppText>
             </View>
-            <View style={{ alignItems: "flex-end", gap: 2 }}>
-              <AppText variant="body" strong>
-                {`+${received}`}
-              </AppText>
-              <AppText variant="caption" color="textMuted">
-                {paid}
-              </AppText>
-            </View>
+            {entry.failed ? (
+              // Nothing moved: the badge says so, and the amount is what the swap tried to sell.
+              <View style={{ alignItems: "flex-end", gap: 2 }}>
+                <StatusBadge tone="failed" label="Failed" />
+                <AppText variant="caption" color="textMuted">
+                  {paid}
+                </AppText>
+              </View>
+            ) : (
+              <View style={{ alignItems: "flex-end", gap: 2 }}>
+                <AppText variant="body" strong>
+                  {`+${received}`}
+                </AppText>
+                <AppText variant="caption" color="textMuted">
+                  {paid}
+                </AppText>
+              </View>
+            )}
             <ExplorerLink signature={entry.signature} onOpen={onOpenTransaction} />
           </View>
         );

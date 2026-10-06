@@ -1,6 +1,9 @@
-import type { Connection, ParsedTransactionWithMeta } from "@solana/web3.js";
+import type { Connection, ParsedInstruction, ParsedTransactionWithMeta, PartiallyDecodedInstruction } from "@solana/web3.js";
+
+import { failureReason } from "@/lib/farm/failure-reason";
 
 import { APP_ONLY_ASSETS, type AssetSymbol, assetByMint, NATIVE_SOL_MINT } from "./assets";
+import { decodeBase58 } from "./base58";
 import { API_BASE_URL } from "./config";
 import { assetOf, baseUnits, rowsOf } from "./history-rows";
 import { requestJson } from "./request-json";
@@ -15,6 +18,10 @@ export type SpotSwap = {
   decimalsIn: number;
   amountOut: bigint;
   decimalsOut: number;
+  // A failed swap landed on the chain but moved nothing: its amounts are what it tried to sell and was quoted to receive.
+  status: "succeeded" | "failed";
+  // Why a failed swap failed, in a few words, when the chain says.
+  reason: string | null;
 };
 
 // A wallet's Jupiter swaps as the web app's own spot history route reports them, so both apps show the same rows.
@@ -27,7 +34,7 @@ export function spotSwapsFromPayload(payload: unknown): SpotSwap[] {
       const amountIn = baseUnits(row.amountIn, from.decimals);
       const amountOut = baseUnits(row.amountOut, to.decimals);
       if (amountIn === null || amountOut === null) return [];
-      return [{ signature: row.hash, timestamp: row.timestamp, from: from.symbol, to: to.symbol, amountIn, decimalsIn: from.decimals, amountOut, decimalsOut: to.decimals }];
+      return [{ signature: row.hash, timestamp: row.timestamp, from: from.symbol, to: to.symbol, amountIn, decimalsIn: from.decimals, amountOut, decimalsOut: to.decimals, status: "succeeded", reason: null }];
     })
     .sort((a, b) => b.timestamp - a.timestamp);
 }
@@ -98,18 +105,77 @@ export function decodeSpotSwap({ tx, signature, blockTime }: WalletTransaction, 
     decimalsIn: spent[1].decimals,
     amountOut: received[1].raw,
     decimalsOut: received[1].decimals,
+    status: "succeeded",
+    reason: null,
   };
 }
 
-// The web route's rows, plus the swaps it drops because it cannot name one side (SKR, which the website does not carry),
-// read from the wallet's own transactions. A signature the route already reported is never listed twice.
-export function withAppOnlySwaps(hosted: readonly SpotSwap[], transactions: readonly WalletTransaction[], wallet: string): SpotSwap[] {
+// Jupiter's exact-in swap instructions. Both end with in_amount (u64), quoted_out_amount (u64), slippage_bps (u16) and
+// platform_fee_bps (u8), after a route plan of varying length, so the amounts are read from the end.
+const ROUTE = [229, 23, 203, 151, 122, 227, 173, 42];
+const SHARED_ACCOUNTS_ROUTE = [193, 32, 155, 51, 65, 214, 156, 129];
+const AMOUNTS_TAIL = 19;
+
+function isRaw(instruction: ParsedInstruction | PartiallyDecodedInstruction): instruction is PartiallyDecodedInstruction {
+  return "data" in instruction;
+}
+
+const startsWith = (data: Uint8Array, discriminator: readonly number[]) => discriminator.every((byte, index) => data[index] === byte);
+
+// A swap that failed moved no balances, so what it tried to do is read from the Jupiter instruction itself: the token
+// account it sold from (its mint from the transaction's token balances) or the source mint it names, the mint it bought
+// and the amounts. Only exact-in routes are read; that is what the app and the web app send.
+export function decodeFailedSpotSwap({ tx, signature, blockTime }: WalletTransaction): SpotSwap | null {
+  if (!tx.meta?.err) return null;
+  const mintAt = (account: { toBase58(): string }) => {
+    const index = tx.transaction.message.accountKeys.findIndex((key) => key.pubkey.toBase58() === account.toBase58());
+    return [...(tx.meta?.preTokenBalances ?? []), ...(tx.meta?.postTokenBalances ?? [])].find((balance) => balance.accountIndex === index)?.mint;
+  };
+  for (const instruction of tx.transaction.message.instructions) {
+    if (!isRaw(instruction) || instruction.programId.toBase58() !== JUPITER_PROGRAM) continue;
+    const data = decodeBase58(instruction.data);
+    if (data === null || data.byteLength < 8 + AMOUNTS_TAIL) continue;
+    const accounts = instruction.accounts;
+    const shared = startsWith(data, SHARED_ACCOUNTS_ROUTE);
+    if (!shared && !startsWith(data, ROUTE)) continue;
+    const fromMint = shared ? accounts[7]?.toBase58() : accounts[2] && mintAt(accounts[2]);
+    const toMint = shared ? accounts[8]?.toBase58() : accounts[5]?.toBase58();
+    const from = fromMint === undefined ? undefined : assetByMint.get(fromMint);
+    const to = toMint === undefined ? undefined : assetByMint.get(toMint);
+    if (!from || !to) continue;
+    const view = new DataView(data.buffer, data.byteOffset, data.byteLength);
+    const tail = data.byteLength - AMOUNTS_TAIL;
+    return {
+      signature,
+      timestamp: blockTime * 1000,
+      from: from.symbol,
+      to: to.symbol,
+      amountIn: view.getBigUint64(tail, true),
+      decimalsIn: from.decimals,
+      amountOut: view.getBigUint64(tail + 8, true),
+      decimalsOut: to.decimals,
+      status: "failed",
+      reason: failureReason(tx.meta),
+    };
+  }
+  return null;
+}
+
+// The web route's rows, plus what it leaves out, read from the wallet's own transactions: swaps it cannot name one side of
+// (SKR, which the website does not carry) and every swap that failed, which the route skips. A signature the route already
+// reported is never listed twice.
+export function withDeviceSwaps(hosted: readonly SpotSwap[], transactions: readonly WalletTransaction[], wallet: string): SpotSwap[] {
   const known = new Set(hosted.map((swap) => swap.signature));
-  const extra = succeededOnly(transactions).flatMap((transaction) => {
+  const appOnly = succeededOnly(transactions).flatMap((transaction) => {
     const swap = decodeSpotSwap(transaction, wallet);
     return swap && !known.has(swap.signature) && (APP_ONLY_ASSETS.has(swap.from) || APP_ONLY_ASSETS.has(swap.to)) ? [swap] : [];
   });
-  return [...hosted, ...extra].sort((a, b) => b.timestamp - a.timestamp);
+  const failed = transactions.flatMap((transaction) => {
+    if (transaction.status !== "failed" || known.has(transaction.signature)) return [];
+    const swap = decodeFailedSpotSwap(transaction);
+    return swap === null ? [] : [swap];
+  });
+  return [...hosted, ...appOnly, ...failed].sort((a, b) => b.timestamp - a.timestamp);
 }
 
 export async function fetchSpotSwaps(connection: Connection, wallet: string, signal?: AbortSignal): Promise<SpotSwap[]> {
@@ -118,5 +184,5 @@ export async function fetchSpotSwaps(connection: Connection, wallet: string, sig
     // The web route's rows still show if the wallet's own history cannot be read.
     fetchWalletTransactions(connection, wallet).catch(() => []),
   ]);
-  return withAppOnlySwaps(hosted, transactions, wallet);
+  return withDeviceSwaps(hosted, transactions, wallet);
 }

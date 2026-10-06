@@ -3,6 +3,7 @@ import { View } from "react-native";
 import { AppText } from "@/components/ui/app-text";
 import { Card } from "@/components/ui/card";
 import { ExplorerLink } from "@/components/ui/explorer-link";
+import { StatusBadge } from "@/components/ui/status-badge";
 import { Icon } from "@/components/ui/icon";
 import type { IconName } from "@/components/ui/material-symbols";
 import { formatSignedUsd, formatUsd } from "@/format/format-amount";
@@ -44,13 +45,17 @@ function ActivityRow({ activity, onOpenTransaction }: { activity: LenderActivity
         <AppText variant="body" strong numberOfLines={1}>
           {activity.title}
         </AppText>
-        <AppText variant="caption" color="textMuted" numberOfLines={1}>
+        <AppText variant="caption" color={activity.failed ? "negative" : "textMuted"} numberOfLines={1}>
           {activity.detail}
         </AppText>
       </View>
-      <AppText variant="body" strong numberOfLines={1} color={activity.gain ? "positive" : "text"}>
-        {value}
-      </AppText>
+      {activity.failed ? (
+        <StatusBadge tone="failed" label="Failed" />
+      ) : (
+        <AppText variant="body" strong numberOfLines={1} color={activity.gain ? "positive" : "text"}>
+          {value}
+        </AppText>
+      )}
       {activity.signature === undefined ? null : <ExplorerLink signature={activity.signature} onOpen={onOpenTransaction} />}
     </View>
   );

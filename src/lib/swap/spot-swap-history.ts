@@ -25,10 +25,12 @@ export function toHistoryEntries(swaps: readonly SpotSwap[], prices: OraclePrice
       amountIn: { raw: swap.amountIn, decimals: swap.decimalsIn },
       amountOut: { raw: swap.amountOut, decimals: swap.decimalsOut },
       valueUsd,
+      failed: swap.status === "failed",
+      reason: swap.reason,
     };
   });
 }
 
 export function volumeSince(entries: readonly SwapHistoryEntry[], now: number): bigint {
-  return entries.filter((entry) => now - entry.timestamp <= THIRTY_DAYS_MS).reduce((sum, entry) => sum + entry.valueUsd, 0n);
+  return entries.filter((entry) => !entry.failed && now - entry.timestamp <= THIRTY_DAYS_MS).reduce((sum, entry) => sum + entry.valueUsd, 0n);
 }

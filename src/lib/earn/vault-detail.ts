@@ -81,6 +81,8 @@ export function buildVaultDetail({ id, pools, prices, accounts, deposit, events 
     amount: event.amount === null ? null : amount(event.amount),
     date: formatShortDate(event.timestamp / 1000),
     signature: event.signature,
+    failed: event.status === "failed",
+    reason: event.reason,
   }));
 
   return {

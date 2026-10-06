@@ -1,5 +1,6 @@
 import { PublicKey } from "@solana/web3.js";
 
+import { failureReason } from "@/lib/farm/failure-reason";
 import type { HistoryChip, HistoryLeg, HistoryStrategy, MarginActivity } from "@/types/margin-history";
 
 import { type AssetInfo, assetByMint, assets } from "./assets";
@@ -55,10 +56,13 @@ export function deriveActivitySubject(chips: readonly HistoryChip[]): Subject | 
 
 // Newest first. Only events of this margin account are used, so another account's activity in the same transaction
 // never shows up. Failed transactions are left out unless `includeFailed` is set; a failed one is read from the events it
-// logged before it failed, and the caller tells it apart by its signature.
+// logged before it failed and marked failed. One that failed before logging anything is still listed, with no legs, when it
+// names this margin account.
 export function marginActivityFrom(transactions: readonly WalletTransaction[], margin: string, { includeFailed = false } = {}): MarginActivity[] {
   return (includeFailed ? transactions : succeededOnly(transactions))
-    .flatMap(({ signature, blockTime, tx }) => {
+    .flatMap(({ signature, blockTime, tx, status }) => {
+      const failed = status === "failed";
+      const outcome = { status: failed ? ("failed" as const) : ("succeeded" as const), reason: failed && tx.meta ? failureReason(tx.meta) : null };
       const events = decodeMarginEvents(tx.meta?.logMessages ?? []);
       const own = <T extends { margin: string }>(list: readonly T[]) => list.filter((event) => event.margin === margin);
       const chips: HistoryChip[] = [];
@@ -80,12 +84,15 @@ export function marginActivityFrom(transactions: readonly WalletTransaction[], m
         chips.push(...single("repay", strategyAssets.get(event.strategy), event.debtRepaid), ...single("withdraw", strategyAssets.get(event.strategy), event.residual));
       }
 
-      if (chips.length === 0) return [];
+      if (chips.length === 0) {
+        const namesMargin = failed && tx.transaction.message.accountKeys.some((key) => key.pubkey.toBase58() === margin);
+        return namesMargin ? [{ signature, at: blockTime, strategy: "unclassified" as const, title: null, stock: null, chips: [], ...outcome }] : [];
+      }
       const hasSwap = chips.some((chip) => chip.type === "swap");
       const hasBareStockWithdraw = chips.some((chip) => chip.type === "withdraw" && STOCKS.has(chip.leg.asset));
       const ordered = chips.slice().sort((a, b) => ORDER[a.type] - ORDER[b.type]);
       const subject = deriveActivitySubject(ordered);
-      return [{ signature, at: blockTime, strategy: classify(liteOpened.length + liteClosed.length > 0, hasSwap, hasBareStockWithdraw), title: subject?.title ?? null, stock: subject?.stock ?? null, chips: ordered }];
+      return [{ signature, at: blockTime, strategy: classify(liteOpened.length + liteClosed.length > 0, hasSwap, hasBareStockWithdraw), title: subject?.title ?? null, stock: subject?.stock ?? null, chips: ordered, ...outcome }];
     })
     .sort((a, b) => b.at - a.at)
     .map(withSideFromOpeningLeg);
@@ -98,10 +105,10 @@ const OPENING_WINDOW_SECONDS = 300;
 
 function withSideFromOpeningLeg(entry: MarginActivity, index: number, newestFirst: readonly MarginActivity[]): MarginActivity {
   const swap = entry.chips.find((chip) => chip.type === "swap");
-  if (swap?.type !== "swap" || entry.chips.some((chip) => chip.type === "borrow")) return entry;
+  if (entry.status === "failed" || swap?.type !== "swap" || entry.chips.some((chip) => chip.type === "borrow")) return entry;
   const stock = STOCKS.has(swap.to.asset) ? swap.to.asset : STOCKS.has(swap.from.asset) ? swap.from.asset : null;
   if (stock === null) return entry;
-  const opening = newestFirst.slice(index + 1).find((older) => entry.at - older.at <= OPENING_WINDOW_SECONDS && older.chips.some((chip) => chip.type === "borrow") && !older.chips.some((chip) => chip.type === "swap"));
+  const opening = newestFirst.slice(index + 1).find((older) => older.status !== "failed" && entry.at - older.at <= OPENING_WINDOW_SECONDS && older.chips.some((chip) => chip.type === "borrow") && !older.chips.some((chip) => chip.type === "swap"));
   const borrow = opening?.chips.find((chip) => chip.type === "borrow");
   if (borrow?.type !== "borrow") return entry;
   const side = borrow.leg.asset === "USDC" && swap.to.asset === stock ? "Long" : borrow.leg.asset === stock && swap.from.asset === stock ? "Short" : null;

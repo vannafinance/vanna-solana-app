@@ -2,6 +2,7 @@ import { View } from "react-native";
 
 import { AppText } from "@/components/ui/app-text";
 import { ExplorerLink } from "@/components/ui/explorer-link";
+import { StatusBadge } from "@/components/ui/status-badge";
 import { isTokenSymbol, TokenIcon } from "@/components/ui/token-icon";
 import { formatDateTime } from "@/format/format-date";
 import { formatActivityAmount } from "@/format/format-perps";
@@ -60,6 +61,8 @@ function LegRow({ chip, first }: { chip: HistoryChip; first: boolean }) {
 export function ActivityCard({ entry, onOpenTransaction }: { entry: MarginActivity; onOpenTransaction: (signature: string) => void }) {
   const { colors, radius, spacing } = useTheme();
   const symbol = entry.stock !== null && isTokenSymbol(entry.stock) ? entry.stock : "USDC";
+  const failed = entry.status === "failed";
+  const title = entry.title ?? (failed && entry.chips.length === 0 ? "Transaction failed" : entry.strategy === "farm" ? "Farm position" : "Margin account");
 
   return (
     <View style={{ padding: spacing.lg, gap: spacing.md, borderRadius: radius.md, backgroundColor: colors.surface }}>
@@ -67,12 +70,14 @@ export function ActivityCard({ entry, onOpenTransaction }: { entry: MarginActivi
         <TokenIcon symbol={symbol} size={36} />
         <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
           <AppText variant="body" strong numberOfLines={1}>
-            {entry.title ?? (entry.strategy === "farm" ? "Farm position" : "Margin account")}
+            {title}
           </AppText>
-          <AppText variant="caption" color="textMuted">
-            {formatDateTime(entry.at)}
+          <AppText variant="caption" color={failed ? "negative" : "textMuted"} numberOfLines={1}>
+            {failed && entry.reason ? `${formatDateTime(entry.at)} · ${entry.reason}` : formatDateTime(entry.at)}
           </AppText>
         </View>
+        {/* A failed transaction changed nothing; its legs below are what it tried. */}
+        {failed ? <StatusBadge tone="failed" label="Failed" /> : null}
         <ExplorerLink signature={entry.signature} onOpen={onOpenTransaction} />
       </View>
       {entry.chips.length === 0 ? null : (

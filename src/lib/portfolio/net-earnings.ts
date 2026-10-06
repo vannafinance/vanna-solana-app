@@ -1,14 +1,14 @@
 import type { AssetSymbol } from "@/lib/solana/assets";
-import type { EarnEvent } from "@/lib/solana/earn-history";
+import { type EarnEvent, succeededEarnEvents } from "@/lib/solana/earn-history";
 
 import type { ValuedDeposit } from "./value-deposits";
 
 // Net principal per asset (supplied minus withdrawn). An asset whose history has a withdrawal of unknown
-// size is left out: its principal cannot be stated, so its earnings cannot either.
+// size is left out: its principal cannot be stated, so its earnings cannot either. Failed ones moved nothing.
 export function netPrincipal(events: readonly EarnEvent[]): Map<AssetSymbol, bigint> {
   const principal = new Map<AssetSymbol, bigint>();
   const unknown = new Set<AssetSymbol>();
-  for (const event of events) {
+  for (const event of succeededEarnEvents(events)) {
     if (event.amount === null) {
       unknown.add(event.symbol);
       continue;

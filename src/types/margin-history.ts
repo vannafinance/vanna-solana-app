@@ -15,4 +15,8 @@ export type MarginActivity = {
   // The stock the transaction is about, for its icon.
   stock: string | null;
   chips: HistoryChip[];
+  // A transaction that landed but failed changed nothing: its chips are what it logged before failing, and it is listed
+  // in history but never counted.
+  status: "succeeded" | "failed";
+  reason: string | null;
 };
