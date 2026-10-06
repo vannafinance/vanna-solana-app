@@ -349,6 +349,18 @@ test("a held position with no opening swap in history is reported unresolved, no
   assert.equal(unresolved.join(","), "TSLAx");
 });
 
+test("a 1x long, bought by a swap with nothing borrowed, is a position at 1x", () => {
+  const { positions } = derivePositions({
+    collateral: { TSLAx: 421_198_486n },
+    debt: {},
+    prices: { TSLAx: 356_930_000n },
+    swaps: [swap({ borrowed: null })],
+  });
+  assert.equal(positions.length, 1);
+  assert.equal(positions[0].side, "long");
+  assert.equal(positions[0].leverage, 1);
+});
+
 test("collateral with no debt is not a position", () => {
   const { positions, unresolved } = derivePositions({ collateral: { USDC: 3_000_000_000n, TSLAx: 70_000_000n }, debt: {}, prices: { TSLAx: 356_930_000n }, swaps: [] });
   assert.equal(positions.length, 0);

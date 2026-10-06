@@ -60,6 +60,7 @@ export function usePerpsPositions(): Resource<PerpsPortfolio> {
     status: "ready",
     stale: account.isError,
     refresh: retry,
-    data: { ...portfolio, positionsAvailable: derived !== null && derived.unresolved.length === 0, historyAvailable: false },
+    // A stock whose opening swap is not in history is left out on its own; it does not hide the positions that can be read.
+    data: { ...portfolio, positionsAvailable: derived !== null, historyAvailable: false },
   };
 }

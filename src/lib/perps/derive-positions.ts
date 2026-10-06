@@ -57,6 +57,12 @@ function opening(swap: MarginSwapRecord, symbol: PerpsSymbol, side: Side): { usd
   return null;
 }
 
+// Whether the most recent swap into this stock was paid without a loan, as a 1x long's is.
+function openedUnborrowed(swaps: readonly MarginSwapRecord[], symbol: PerpsSymbol): boolean {
+  const latest = swaps.filter((swap) => opening(swap, symbol, "long") !== null).reduce<MarginSwapRecord | null>((last, swap) => (last === null || swap.blockTime >= last.blockTime ? swap : last), null);
+  return latest !== null && (latest.borrowed === null || latest.borrowed.amount === 0n);
+}
+
 // Volume weighted average over every swap in the opening direction, so a position that was opened, partly closed and
 // reopened shows a blended entry, as on the web app. Null when history does not reach back to an opening swap.
 function averageEntry(swaps: readonly MarginSwapRecord[], symbol: PerpsSymbol, side: Side): { price: bigint; openedAt: number } | null {
@@ -105,10 +111,12 @@ export function derivePositions({ collateral, debt, prices, swaps }: Input): Der
     let equity: bigint;
     let notional: bigint;
     if (side === "long") {
-      if (usdcDebt <= USD_DUST) continue;
+      // With no USDC owed the stock is only a long if its latest opening swap borrowed nothing: a 1x long. Stock that was
+      // just deposited (a 1x Farm deploy), or left behind a Farm position, is not a position, as on the web app.
+      if (usdcDebt <= USD_DUST && !openedUnborrowed(swaps, symbol)) continue;
       tokensRaw = collateral[symbol] ?? 0n;
       const size = (tokensRaw * price) / scale;
-      equity = size - share(usdcDebt);
+      equity = usdcDebt <= USD_DUST ? size : size - share(usdcDebt);
       notional = size;
     } else {
       if (usdcCollateral <= USD_DUST) continue;
