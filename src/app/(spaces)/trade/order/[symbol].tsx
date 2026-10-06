@@ -18,7 +18,7 @@ import { TransactionSheet } from "@/components/ui/transaction-sheet";
 import { formatUsd } from "@/format/format-amount";
 import { formatPrice } from "@/format/format-earn";
 import { usePerpsOrder } from "@/hooks/use-perps-order";
-import { LIQUIDATION_HEALTH } from "@/lib/perps/account-health";
+import { CAUTION_HEALTH, LIQUIDATION_HEALTH } from "@/lib/perps/account-health";
 import type { OrderIssue, Side } from "@/types/perps";
 
 const QUICK_FILLS = [
@@ -35,6 +35,7 @@ function ctaLabel(side: Side, issue: OrderIssue, hasMarginAccount: boolean, symb
   if (issue === "opposite-open") return `Close ${symbol} ${sideName(otherSide(side))} first`;
   if (issue === "empty") return "Enter an amount";
   if (issue === "insufficient-margin") return "Not enough margin available";
+  if (issue === "health-low") return "Position too risky";
   return hasMarginAccount ? `Open ${side} · approve in wallet` : `Open account and ${side} · 2 approvals`;
 }
 
@@ -93,7 +94,7 @@ export default function PerpsOrderScreen() {
               value={order.leverage}
               onChange={order.setLeverage}
             />
-            <OrderSummary market={market} side={order.side} quote={quote} issue={issue} liquidationHealth={LIQUIDATION_HEALTH} />
+            <OrderSummary market={market} side={order.side} quote={quote} issue={issue} liquidationHealth={LIQUIDATION_HEALTH} cautionHealth={CAUTION_HEALTH} />
           </Screen>
         )}
       </ResourceView>

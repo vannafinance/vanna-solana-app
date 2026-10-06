@@ -30,7 +30,10 @@ export type PerpsPosition = {
   id: string;
   symbol: PerpsSymbol;
   side: Side;
+  // Rounded to 0.1x for display.
   leverage: number;
+  // Unrounded, for the liquidation estimate, as the web app computes it.
+  exactLeverage: number;
   openedOn: string;
   entryPrice: bigint;
   tokens: bigint;
@@ -99,6 +102,9 @@ export type CloseQuote = {
   pnl: bigint;
   fee: bigint;
   toWallet: bigint;
+  // A long sells the stock and sends what is left to the wallet. A short only buys back the stock it owes, so its USDC
+  // stays in the margin account, as on the web app.
+  returnsTo: "wallet" | "margin";
   liquidationPrice: bigint;
 };
 

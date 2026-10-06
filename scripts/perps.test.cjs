@@ -373,6 +373,12 @@ test("closing returns the equity share to the wallet with no fee, and does not c
   assert.equal(half.tokens, 2_105_992n);
 });
 
+test("a long's close goes to the wallet, a short's USDC stays in the margin account", () => {
+  const base = { tokens: 1n, markPrice: 1n, pnl: 0n, collateral: 10n };
+  assert.equal(quoteClose({ ...base, side: "long" }, 10_000).returnsTo, "wallet");
+  assert.equal(quoteClose({ ...base, side: "short" }, 10_000).returnsTo, "margin");
+});
+
 const holder = Keypair.generate().publicKey;
 
 test("repay from margin: amount, repay-all flag and the IDL account flags", () => {

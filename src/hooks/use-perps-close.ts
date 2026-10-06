@@ -45,7 +45,7 @@ export function usePerpsClose(id: string) {
       }, progress),
     success: {
       title: fractionBps === 10_000 ? "Position closed" : "Position reduced",
-      message: ready ? `${formatSignedUsd(ready.quote.pnl)} realized · ${formatUsd(ready.quote.toWallet)} is back in your wallet.` : "",
+      message: ready ? `${formatSignedUsd(ready.quote.pnl)} realized · ${formatUsd(ready.quote.toWallet)} ${ready.quote.returnsTo === "wallet" ? "is back in your wallet" : "stays in your margin account"}.` : "",
     },
   });
 

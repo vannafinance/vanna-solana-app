@@ -30,7 +30,8 @@ import { useWalletHoldings } from "./use-wallet-holdings";
 import { useWalletSigner } from "./use-wallet-signer";
 
 const DECIMALS = 6;
-const DEFAULT_LEVERAGE = 3;
+// As on the web app, which also goes back to it after every order.
+const DEFAULT_LEVERAGE = 1;
 
 export type OrderTicket = {
   market: PerpsMarket;
@@ -163,7 +164,10 @@ export function usePerpsOrder(symbol: string, initialSide: Side) {
   const closeFlow = () => {
     // An order that went through is done; leaving its amount in the form invites a second, identical order with one tap. A
     // cancelled or failed order keeps the amount so it can be tried again.
-    if (flow.done) setAmountText("");
+    if (flow.done) {
+      setAmountText("");
+      setLeverage(DEFAULT_LEVERAGE);
+    }
     landed.current = freshOpenProgress();
     flow.close();
     setFirstTrade(false);

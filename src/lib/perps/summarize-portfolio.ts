@@ -13,7 +13,7 @@ export function summarizePosition(position: PerpsPosition, market: PerpsMarket):
   const markPrice = market.markPrice;
   const pnl = positionPnl(position.side, position.tokens, position.entryPrice, markPrice);
   const borrowBps = position.side === "long" ? market.usdcBorrowBps : market.tokenBorrowBps;
-  const liquidation = estimatedLiquidationPrice(position.side, position.entryPrice, position.leverage, borrowBps);
+  const liquidation = estimatedLiquidationPrice(position.side, position.entryPrice, position.exactLeverage, borrowBps);
   return {
     ...position,
     pair: pairOf(position.symbol),

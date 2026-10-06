@@ -15,6 +15,7 @@ export function quoteClose(position: PositionSummary, fractionBps: number): Clos
     pnl: (position.pnl * fraction) / 10_000n,
     fee: 0n,
     toWallet: (position.collateral * fraction) / 10_000n,
+    returnsTo: position.side === "long" ? "wallet" : "margin",
     liquidationPrice: position.liquidationPrice,
   };
 }

@@ -123,12 +123,14 @@ export function derivePositions({ collateral, debt, prices, swaps }: Input): Der
       unresolved.push(symbol);
       continue;
     }
-    const leverage = equity > 0n ? Math.max(1, Math.round((Number(notional) / Number(equity)) * 10) / 10) : 1;
+    const exactLeverage = equity > 0n ? Number(notional) / Number(equity) : 1;
+    const leverage = Math.max(1, Math.round(exactLeverage * 10) / 10);
     positions.push({
       id: `${symbol}-${side}`,
       symbol,
       side,
       leverage,
+      exactLeverage,
       openedOn: formatShortDate(entry.openedAt),
       entryPrice: entry.price,
       tokens: (tokensRaw * UNIT) / scale,
