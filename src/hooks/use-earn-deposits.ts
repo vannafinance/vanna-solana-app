@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { valueDeposits } from "@/lib/portfolio/value-deposits";
 import { fetchShareBalances } from "@/lib/solana/earn-deposits";
 import { fetchOraclePrices } from "@/lib/solana/oracle-prices";
-import { fetchPools } from "@/lib/solana/pools-api";
+import { fetchAllPools } from "@/lib/solana/chain-pools";
 import { rpcConnection } from "@/lib/solana/rpc";
 
 import { useLiveInterval } from "./use-live-interval";
@@ -19,7 +19,7 @@ export function useEarnDeposits(wallet: string | null) {
     queryFn: async ({ signal }) => {
       const [shares, pools, prices] = await Promise.all([
         fetchShareBalances(rpcConnection, wallet as string),
-        fetchPools(signal),
+        fetchAllPools(rpcConnection, signal),
         fetchOraclePrices(rpcConnection),
       ]);
       return valueDeposits(shares, pools, prices);

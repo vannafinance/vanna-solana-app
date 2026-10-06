@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 
-import { fetchPools } from "@/lib/solana/pools-api";
+import { fetchAllPools } from "@/lib/solana/chain-pools";
+import { rpcConnection } from "@/lib/solana/rpc";
 
 import { useLiveInterval } from "./use-live-interval";
 
@@ -11,7 +12,7 @@ export function usePools() {
   const refetchInterval = useLiveInterval(LIVE_MS);
   return useQuery({
     queryKey: ["pools"],
-    queryFn: ({ signal }) => fetchPools(signal),
+    queryFn: ({ signal }) => fetchAllPools(rpcConnection, signal),
     staleTime: STALE_MS,
     refetchInterval,
     retry: 1,

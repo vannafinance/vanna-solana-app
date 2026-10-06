@@ -110,3 +110,34 @@ test("a position carries the interest earned on what was supplied, and none is c
   assert.equal(unknown.activity.length, 2);
   assert.equal(unknown.activity[1].amount, null);
 });
+
+const { poolStatsFromChain, assetsMissingFrom } = load("src/lib/solana/chain-pools.ts");
+
+test("the SKR pool read from its reserve matches what the web app's /api/pools reports", () => {
+  // The SKR reserve on the fork: 7,300 SKR idle, 4,000 SKR borrowed, 11,300 vSKR.
+  const reserve = decodeVaultReserve(reserveData({ liquidity: 7_300_000_000n, borrowed: 4_000_000_000n, fees: 0n }));
+  const pool = poolStatsFromChain(reserve, 11_300_000_000n, 6);
+  assert.equal(pool.totalSupply, 11_300);
+  assert.equal(pool.totalBorrowed, 4_000);
+  assert.equal(pool.utilizationPercent, 35.4);
+  assert.equal(pool.borrowApyPercent, 4.42);
+  assert.equal(pool.supplyApyPercent, 1.56);
+  assert.equal(pool.exchangeRate, 1_000_000_000n);
+});
+
+test("above the kink the borrow rate climbs on the steep slope, and fees are not supply", () => {
+  const reserve = decodeVaultReserve(reserveData({ liquidity: 100_000_000n, borrowed: 900_000_000n, fees: 10_000_000n }));
+  const pool = poolStatsFromChain(reserve, 900_000_000n, 6);
+  assert.equal(pool.utilizationPercent, 90);
+  // 10% at the 80% kink, plus half of the 60% slope.
+  assert.equal(pool.borrowApyPercent, 40);
+  assert.equal(pool.supplyApyPercent, 36);
+  assert.equal(pool.totalSupply, 990);
+  assert.equal(pool.exchangeRate, 1_100_000_000n);
+});
+
+test("only the assets the hosted API leaves out are read from the chain", () => {
+  const hosted = { SOL: {}, USDC: {}, TSLAx: {}, GOOGLx: {}, AAPLx: {}, ANTHROPIC: {}, OPENAI: {} };
+  assert.deepEqual(assetsMissingFrom(hosted).map((asset) => asset.symbol).join(","), "SKR");
+  assert.equal(assetsMissingFrom({ ...hosted, SKR: {} }).length, 0);
+});
