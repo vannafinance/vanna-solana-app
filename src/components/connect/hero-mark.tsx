@@ -1,4 +1,3 @@
-import { Image } from "expo-image";
 import { useEffect } from "react";
 import Animated, {
   Easing,
@@ -15,6 +14,7 @@ import Animated, {
 } from "react-native-reanimated";
 import Svg, { Circle, Defs, LinearGradient, Stop } from "react-native-svg";
 
+import { VannaMark } from "@/components/ui/vanna-mark";
 import { VannaWordmark } from "@/components/ui/vanna-wordmark";
 import { brand, palette, spaces } from "@/theme/tokens";
 
@@ -160,7 +160,7 @@ export function HeroMark({ intro }: { intro: boolean }) {
         </>
       ) : null}
       <Animated.View accessibilityLabel="Vanna" style={[{ position: "absolute", width: MARK_SIZE, height: MARK_SIZE, alignItems: "center", justifyContent: "center" }, markStyle]}>
-        <Image source={require("../../../assets/images/vanna-mark.png")} cachePolicy="memory" style={{ width: 60, height: 60 }} contentFit="contain" />
+        <VannaMark size={60} tone="logo" />
       </Animated.View>
       {playing ? (
         <Animated.View

@@ -1,4 +1,3 @@
-import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
 import { useEffect, useState } from "react";
 import { Pressable, View } from "react-native";
@@ -7,6 +6,7 @@ import Animated, { Easing, useAnimatedStyle, useSharedValue, withTiming } from "
 import { scheduleOnRN } from "react-native-worklets";
 
 import { AppText } from "@/components/ui/app-text";
+import { VannaMark } from "@/components/ui/vanna-mark";
 import { horizontalGradient } from "@/theme/tokens";
 import { useTheme } from "@/theme/use-theme";
 
@@ -26,7 +26,6 @@ const HIT_WIDTH = 44;
 const HIT_HEIGHT = 60;
 const THUMB_TOP = 5;
 const FILL_MS = 140;
-const mark = require("../../../assets/images/vanna-mark.png");
 
 export function LeverageSlider({ value, min, max, onChange }: LeverageSliderProps) {
   const { colors, radius, scheme } = useTheme();
@@ -126,7 +125,7 @@ export function LeverageSlider({ value, min, max, onChange }: LeverageSliderProp
             thumbStyle,
           ]}
         >
-          <Image source={mark} cachePolicy="memory" style={{ width: MARK, height: MARK }} />
+          <VannaMark size={MARK} tone="logo" />
         </Animated.View>
       </View>
     </GestureDetector>
