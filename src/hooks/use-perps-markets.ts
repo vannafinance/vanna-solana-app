@@ -11,7 +11,7 @@ import { usePerpsPositions } from "./use-perps-positions";
 
 export type MarketFilter = "All" | MarketKind | "Watchlist";
 
-export const MARKET_FILTERS: readonly MarketFilter[] = ["All", "xStocks", "PreStocks", "Watchlist"];
+export const MARKET_FILTERS: readonly MarketFilter[] = ["All", "xStocks", "PreStocks", "Crypto", "Watchlist"];
 export const TIMEFRAMES: readonly Timeframe[] = ["1H", "4H", "1D", "1W", "1M"];
 
 export type MarketDetail = {

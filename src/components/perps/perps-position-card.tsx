@@ -1,4 +1,5 @@
 import { formatPercent, formatSignedPercent, formatSignedUsd, formatUsd } from "@/format/format-amount";
+import { formatPrice } from "@/format/format-earn";
 import type { PositionSummary } from "@/types/perps";
 
 import { formatLiquidationPrice, formatTokenSize } from "@/format/format-perps";
@@ -27,8 +28,8 @@ export function PerpsPositionCard({ position, onAddCollateral, onClose }: PerpsP
       collateralToken="USDC"
       liquidationPrice={formatLiquidationPrice(position.liquidationPrice)}
       liquidationDistance={`${formatPercent(position.liquidationDistanceBps, 1)} away`}
-      entryPrice={formatUsd(position.entryPrice)}
-      markPrice={formatUsd(position.markPrice)}
+      entryPrice={formatPrice(position.entryPrice)}
+      markPrice={formatPrice(position.markPrice)}
       onAddCollateral={onAddCollateral}
       onClose={onClose}
     />

@@ -9,6 +9,8 @@ const SUMMARY_DIGITS: Record<EarnAsset, number> = {
   AAPLx: 4,
   ANTHROPIC: 2,
   OPENAI: 2,
+  // About two cents a token, so whole tokens are precise enough.
+  SKR: 0,
 };
 
 export function formatSummaryNumber(amount: TokenAmount, symbol: EarnAsset): string {

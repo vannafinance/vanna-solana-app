@@ -1,6 +1,6 @@
 import type { TokenAmount } from "@/format/format-amount";
 
-export type SwapSymbol = "USDC" | "SOL" | "TSLAx" | "GOOGLx" | "AAPLx" | "ANTHROPIC" | "OPENAI";
+export type SwapSymbol = "USDC" | "SOL" | "TSLAx" | "GOOGLx" | "AAPLx" | "ANTHROPIC" | "OPENAI" | "SKR";
 
 export type SwapToken = {
   symbol: SwapSymbol;

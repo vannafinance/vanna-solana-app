@@ -1,4 +1,4 @@
-export type AssetSymbol = "SOL" | "USDC" | "TSLAx" | "GOOGLx" | "AAPLx" | "ANTHROPIC" | "OPENAI";
+export type AssetSymbol = "SOL" | "USDC" | "TSLAx" | "GOOGLx" | "AAPLx" | "ANTHROPIC" | "OPENAI" | "SKR";
 
 export type AssetInfo = {
   symbol: AssetSymbol;
@@ -18,6 +18,8 @@ export const assets: readonly AssetInfo[] = [
   { symbol: "AAPLx", mint: "XsbEhLAtcf6HdfpFZ5xEMdqW8nfAvcsP5bdudRLJzJp", decimals: 8, pythFeedId: "aaba35e6f33fb973bb2201d48a79ae24795affa6ba8bd50a93dcaf7da0030f36", token2022: true },
   { symbol: "ANTHROPIC", mint: "Pren1FvFX6J3E4kXhJuCiAD5aDmGEb7qJRncwA8Lkhw", decimals: 9, pythFeedId: "e2b7d8199aa16dfcefcb89b6614e0a95c08bc283745412d209d0b3ca099b0721", token2022: true },
   { symbol: "OPENAI", mint: "PreweJYECqtQwBtpxHL171nL2K6umo692gTm7Q3rpgF", decimals: 9, pythFeedId: "1847efd0848d500cd781f05957ca787d64e80cfc7cefd734337fc9858626e634", token2022: true },
+  // Solana Mobile's Seeker token: a plain SPL token with its own Pyth feed.
+  { symbol: "SKR", mint: "SKRbvo6Gf7GondiT3BbTfuRDPqLWei4j2Qy2NPGZhW3", decimals: 6, pythFeedId: "38846ec4d0dbe808091817f5c0d6ab8058e25422348ddf97db52b6c378a93bf9", token2022: false },
 ];
 
 export const assetByMint = new Map(assets.map((asset) => [asset.mint, asset]));

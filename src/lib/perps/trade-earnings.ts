@@ -2,7 +2,7 @@ import type { AssetSymbol } from "@/lib/solana/assets";
 import type { HistoryChip, MarginActivity } from "@/types/margin-history";
 import type { EarningsPoint, EarningsRange, Side } from "@/types/perps";
 
-const STOCKS: ReadonlySet<string> = new Set(["TSLAx", "GOOGLx", "AAPLx", "ANTHROPIC", "OPENAI"]);
+const STOCKS: ReadonlySet<string> = new Set(["TSLAx", "GOOGLx", "AAPLx", "ANTHROPIC", "OPENAI", "SKR"]);
 // An order on an account with several positions borrows in one transaction and swaps in the next (see margin-history).
 const OPENING_WINDOW_SECONDS = 300;
 const HOUR = 3_600_000;

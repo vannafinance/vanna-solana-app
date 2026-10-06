@@ -5,7 +5,7 @@ import { API_BASE_URL } from "./config";
 import { ApiError, requestJson } from "./request-json";
 import { rpcConnection } from "./rpc";
 
-export const FAUCET_SYMBOLS = ["SOL", "USDC", "TSLAx", "GOOGLx", "AAPLx", "ANTHROPIC", "OPENAI"] as const satisfies readonly AssetSymbol[];
+export const FAUCET_SYMBOLS = ["SOL", "USDC", "TSLAx", "GOOGLx", "AAPLx", "ANTHROPIC", "OPENAI", "SKR"] as const satisfies readonly AssetSymbol[];
 
 export type FaucetSymbol = (typeof FAUCET_SYMBOLS)[number];
 
@@ -20,6 +20,7 @@ export const FAUCET_CLAIM_LABEL: Record<FaucetSymbol, string> = {
   AAPLx: "+20 AAPLx each claim",
   ANTHROPIC: "+20 ANTHROPIC each claim",
   OPENAI: "+20 OPENAI each claim",
+  SKR: "+2,000 SKR each claim",
 };
 
 const SOL_AIRDROP = 100n;

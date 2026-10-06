@@ -5,6 +5,7 @@ import { Card } from "@/components/ui/card";
 import { Icon } from "@/components/ui/icon";
 import { StatStrip } from "@/components/ui/stat-strip";
 import { formatPercent, formatUsd } from "@/format/format-amount";
+import { formatPrice } from "@/format/format-earn";
 import { formatLiquidationPrice, formatOrderTokens } from "@/format/format-perps";
 import type { OrderIssue, OrderQuote, PerpsMarket, Side } from "@/types/perps";
 
@@ -31,7 +32,7 @@ export function OrderSummary({ market, side, quote, issue, liquidationHealth }: 
       <StatStrip
         stats={[
           { label: "Position size", value: formatUsd(quote.size), sub: formatOrderTokens(quote.tokens, market.symbol) },
-          { label: "Entry price", value: formatUsd(market.markPrice) },
+          { label: "Entry price", value: formatPrice(market.markPrice) },
           { label: "Liq. price", value: formatLiquidationPrice(quote.liquidationPrice) },
         ]}
       />

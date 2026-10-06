@@ -13,7 +13,7 @@ export const MAX_LEVERAGE = 5;
 // The market the order ticket opens on when a flow does not name one.
 export const DEFAULT_MARKET: PerpsSymbol = "TSLAx";
 
-const STOCKS: readonly PerpsSymbol[] = ["TSLAx", "GOOGLx", "AAPLx", "ANTHROPIC", "OPENAI"];
+const STOCKS: readonly PerpsSymbol[] = ["TSLAx", "GOOGLx", "AAPLx", "ANTHROPIC", "OPENAI", "SKR"];
 const decimalsOf = new Map(assets.map((asset) => [asset.symbol, asset.decimals]));
 
 const toUsd = (tokens: number, symbol: AssetSymbol, price: bigint): bigint => {
@@ -21,6 +21,11 @@ const toUsd = (tokens: number, symbol: AssetSymbol, price: bigint): bigint => {
   const raw = parseUnits(Math.max(tokens, 0).toFixed(decimals), decimals);
   return raw === null ? 0n : (raw * price) / 10n ** BigInt(decimals);
 };
+
+function marketKind(symbol: PerpsSymbol): PerpsMarket["kind"] {
+  const category = vaultMeta[symbol].category;
+  return category === "PreStocks" || category === "Crypto" ? category : "xStocks";
+}
 
 // A market needs its own pool and price, and the USDC pool for the quote-side borrow rate; without all three it is not listed.
 export function buildMarkets(pools: Partial<Record<AssetSymbol, PoolStats>>, prices: OraclePrices): PerpsMarket[] {
@@ -35,7 +40,7 @@ export function buildMarkets(pools: Partial<Record<AssetSymbol, PoolStats>>, pri
         symbol,
         pair: pairOf(symbol),
         name: vaultMeta[symbol].name,
-        kind: vaultMeta[symbol].category === "PreStocks" ? "PreStocks" : "xStocks",
+        kind: marketKind(symbol),
         markPrice: price,
         tokenBorrowBps: Math.round(pool.borrowApyPercent * 100),
         usdcBorrowBps: Math.round(usdc.borrowApyPercent * 100),

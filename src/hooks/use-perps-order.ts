@@ -3,6 +3,7 @@ import { PublicKey } from "@solana/web3.js";
 import { useCallback, useRef, useState } from "react";
 
 import { formatToken, formatUsd, parseUnits } from "@/format/format-amount";
+import { formatPrice } from "@/format/format-earn";
 import { shortAddress } from "@/format/short-address";
 import { collateralBaseUnits, orderFunds } from "@/lib/perps/order-funds";
 import { orderIssue, quoteOrder } from "@/lib/perps/order-quote";
@@ -101,7 +102,7 @@ export function usePerpsOrder(symbol: string, initialSide: Side) {
     success: {
       title: `Your ${side} is open`,
       message: ready
-        ? `${formatToken({ raw: ready.quote.tokens, decimals: DECIMALS })} ${ready.market.symbol} ${side} at ${formatUsd(ready.market.markPrice)} · ${leverage}x · liq. ${formatUsd(ready.quote.liquidationPrice)}`
+        ? `${formatToken({ raw: ready.quote.tokens, decimals: DECIMALS })} ${ready.market.symbol} ${side} at ${formatPrice(ready.market.markPrice)} · ${leverage}x · liq. ${formatPrice(ready.quote.liquidationPrice)}`
         : "",
     },
   });
@@ -117,8 +118,8 @@ export function usePerpsOrder(symbol: string, initialSide: Side) {
         { label: `Your ${side}`, value: `${formatToken({ raw: quote.tokens, decimals: DECIMALS })} ${market.symbol}`, caption: `≈ ${formatUsd(quote.size)} at ${leverage}x` },
       ],
       rows: [
-        { label: "Entry price", value: formatUsd(market.markPrice) },
-        { label: "Liquidation price", value: formatUsd(quote.liquidationPrice), tone: "negative" },
+        { label: "Entry price", value: formatPrice(market.markPrice) },
+        { label: "Liquidation price", value: formatPrice(quote.liquidationPrice), tone: "negative" },
         { label: "Health after", value: quote.healthAfter.toFixed(2) },
         { label: "Network fee", value: NETWORK_FEE_ESTIMATE },
         ...(marginAccount.exists ? [] : [{ label: "Margin account", value: "Opens first, 2 approvals" }]),

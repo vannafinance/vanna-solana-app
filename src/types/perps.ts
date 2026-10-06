@@ -1,6 +1,7 @@
-export type PerpsSymbol = "TSLAx" | "GOOGLx" | "AAPLx" | "ANTHROPIC" | "OPENAI";
+export type PerpsSymbol = "TSLAx" | "GOOGLx" | "AAPLx" | "ANTHROPIC" | "OPENAI" | "SKR";
 
-export type MarketKind = "xStocks" | "PreStocks";
+// SKR (Solana Mobile's Seeker token) is a crypto token, not a stock.
+export type MarketKind = "xStocks" | "PreStocks" | "Crypto";
 
 export type Side = "long" | "short";
 

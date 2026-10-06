@@ -14,7 +14,7 @@ type MarketStatsProps = {
   liquidationNote: string;
 };
 
-const KIND_LABEL: Record<PerpsMarket["kind"], string> = { xStocks: "xStock", PreStocks: "PreStock" };
+const KIND_LABEL: Record<PerpsMarket["kind"], string> = { xStocks: "xStock", PreStocks: "PreStock", Crypto: "Token" };
 
 // What the market costs and how much it can fill, as one card: title row, the four figures as a 2×2 strip, then the note.
 export function MarketStats({ market, liquidityTokens, liquidationNote }: MarketStatsProps) {

@@ -14,6 +14,7 @@ import { Screen } from "@/components/ui/screen";
 import { ReviewSheet } from "@/components/ui/review-sheet";
 import { TransactionSheet } from "@/components/ui/transaction-sheet";
 import { formatUsd } from "@/format/format-amount";
+import { formatPrice } from "@/format/format-earn";
 import { usePerpsOrder } from "@/hooks/use-perps-order";
 import { LIQUIDATION_HEALTH } from "@/lib/perps/account-health";
 import type { OrderIssue, Side } from "@/types/perps";
@@ -55,7 +56,7 @@ export default function PerpsOrderScreen() {
               </View>
             }
           >
-            <OrderMarketCard symbol={market.symbol} pair={market.pair} price={formatUsd(market.markPrice)} />
+            <OrderMarketCard symbol={market.symbol} pair={market.pair} price={formatPrice(market.markPrice)} />
             <SideToggle value={order.side} onChange={order.setSide} />
             <CollateralCard
               symbol={order.side === "long" ? "USDC" : market.symbol}

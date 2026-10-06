@@ -7,6 +7,7 @@ import { Pill } from "@/components/ui/pill";
 import { StatStrip } from "@/components/ui/stat-strip";
 import { TokenIcon } from "@/components/ui/token-icon";
 import { formatPercent, formatUsd } from "@/format/format-amount";
+import { formatPrice } from "@/format/format-earn";
 import { useTheme } from "@/theme/use-theme";
 import type { FarmPosition, PerpPosition, Position } from "@/types/portfolio";
 
@@ -58,13 +59,13 @@ function PerpFigures({ position }: { position: PerpPosition }) {
         stats={[
           { label: "Size", value: formatUsd(position.size), sub: tokenText(position.sizeTokens, position.symbol) },
           { label: "Collateral", value: formatUsd(position.collateral), sub: "USDC" },
-          { label: "Liq. price", value: formatUsd(position.liquidationPrice), sub: `${formatPercent(position.liquidationAwayBps, 1)} away` },
+          { label: "Liq. price", value: formatPrice(position.liquidationPrice), sub: `${formatPercent(position.liquidationAwayBps, 1)} away` },
         ]}
       />
       <StatStrip
         stats={[
-          { label: "Entry price", value: formatUsd(position.entryPrice) },
-          { label: "Mark price", value: formatUsd(position.markPrice) },
+          { label: "Entry price", value: formatPrice(position.entryPrice) },
+          { label: "Mark price", value: formatPrice(position.markPrice) },
         ]}
       />
     </>
@@ -78,7 +79,7 @@ function FarmFigures({ position }: { position: FarmPosition }) {
         stats={[
           { label: "Collateral", value: formatUsd(position.collateral), sub: tokenText(position.sizeTokens, position.symbol) },
           { label: "Borrowed", value: formatUsd(position.borrowed), sub: position.pool },
-          { label: "Liq. price", value: formatUsd(position.liquidationPrice), sub: `${formatPercent(position.liquidationAwayBps, 0)} away` },
+          { label: "Liq. price", value: formatPrice(position.liquidationPrice), sub: `${formatPercent(position.liquidationAwayBps, 0)} away` },
         ]}
       />
       <StatStrip

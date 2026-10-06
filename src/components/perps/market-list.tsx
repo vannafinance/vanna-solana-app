@@ -2,7 +2,8 @@ import { View } from "react-native";
 
 import { AppText } from "@/components/ui/app-text";
 import { Card } from "@/components/ui/card";
-import { formatCompactUsd, formatPercent, formatUsd } from "@/format/format-amount";
+import { formatCompactUsd, formatPercent } from "@/format/format-amount";
+import { formatPrice } from "@/format/format-earn";
 import { useTheme } from "@/theme/use-theme";
 import type { MarketListItem, PerpsMarket } from "@/types/perps";
 
@@ -43,7 +44,7 @@ export function MarketList({ markets, onSelect }: MarketListProps) {
             pair={market.pair}
             borrowApy={formatPercent(market.tokenBorrowBps)}
             liquidity={formatCompactUsd(market.liquidityUsd)}
-            price={formatUsd(market.markPrice)}
+            price={formatPrice(market.markPrice)}
             watched={market.watched}
             maxLeverage={market.maxLeverage}
             open={market.open}

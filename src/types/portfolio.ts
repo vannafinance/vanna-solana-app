@@ -1,6 +1,6 @@
 import type { TokenAmount } from "@/format/format-amount";
 
-export type AssetSymbol = "TSLAx" | "GOOGLx" | "AAPLx" | "ANTHROPIC" | "OPENAI" | "SOL" | "USDC";
+export type AssetSymbol = "TSLAx" | "GOOGLx" | "AAPLx" | "ANTHROPIC" | "OPENAI" | "SKR" | "SOL" | "USDC";
 
 export type PositionSide = "long" | "short";
 

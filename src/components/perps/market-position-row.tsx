@@ -5,6 +5,7 @@ import { Icon } from "@/components/ui/icon";
 import { ripple } from "@/components/ui/ripple";
 import { StatStrip } from "@/components/ui/stat-strip";
 import { formatPercent, formatSignedPercent, formatSignedUsd, formatUsd } from "@/format/format-amount";
+import { formatPrice } from "@/format/format-earn";
 import { formatLiquidationPrice, formatTokenSize, sideLabel } from "@/format/format-perps";
 import { useTheme } from "@/theme/use-theme";
 import type { PositionSummary } from "@/types/perps";
@@ -60,7 +61,7 @@ export function MarketPositionRow({ position, onPress }: MarketPositionRowProps)
         stats={[
           { label: "Size", value: formatUsd(position.sizeUsd), sub: tokens },
           { label: "Collateral", value: formatUsd(position.collateral), sub: "USDC" },
-          { label: "Entry price", value: formatUsd(position.entryPrice) },
+          { label: "Entry price", value: formatPrice(position.entryPrice) },
           {
             label: "Liq. price",
             value: formatLiquidationPrice(position.liquidationPrice),

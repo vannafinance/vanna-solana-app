@@ -1,6 +1,6 @@
 import type { TokenAmount } from "@/format/format-amount";
 
-export type EarnAsset = "TSLAx" | "GOOGLx" | "AAPLx" | "ANTHROPIC" | "OPENAI" | "SOL" | "USDC";
+export type EarnAsset = "TSLAx" | "GOOGLx" | "AAPLx" | "ANTHROPIC" | "OPENAI" | "SKR" | "SOL" | "USDC";
 
 export type VaultCategory = "xStocks" | "PreStocks" | "Crypto" | "Stablecoins";
 

@@ -7,7 +7,7 @@ import { decodeMarginEvents } from "./margin-events";
 import { liteStrategyAddress, reserveAddress } from "./program-accounts";
 import { succeededOnly, type WalletTransaction } from "./wallet-transactions";
 
-const STOCKS = new Set(["TSLAx", "GOOGLx", "AAPLx", "ANTHROPIC", "OPENAI"]);
+const STOCKS = new Set(["TSLAx", "GOOGLx", "AAPLx", "ANTHROPIC", "OPENAI", "SKR"]);
 
 const reserveAssets = new Map<string, AssetInfo>(assets.map((asset) => [reserveAddress(new PublicKey(asset.mint)).toBase58(), asset]));
 const strategyAssets = new Map<string, AssetInfo>(assets.map((asset) => [liteStrategyAddress(new PublicKey(asset.mint)).toBase58(), asset]));

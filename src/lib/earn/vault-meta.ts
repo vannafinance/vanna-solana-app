@@ -9,6 +9,7 @@ export const vaultMeta: Record<AssetSymbol, { name: string; category: VaultCateg
   AAPLx: { name: "Apple xStock", category: "xStocks" },
   ANTHROPIC: { name: "Anthropic PreStock", category: "PreStocks" },
   OPENAI: { name: "OpenAI PreStock", category: "PreStocks" },
+  SKR: { name: "Seeker", category: "Crypto" },
 };
 
 export const vaultCategories: readonly VaultCategory[] = ["xStocks", "PreStocks", "Crypto", "Stablecoins"];

@@ -1,4 +1,5 @@
-import { formatUnits, formatUsd, formatToken, type TokenAmount } from "@/format/format-amount";
+import { formatUnits, formatToken, type TokenAmount } from "@/format/format-amount";
+import { formatPrice } from "@/format/format-earn";
 import type { PerpsSymbol, Side } from "@/types/perps";
 
 const TOKEN_DECIMALS = 6;
@@ -14,7 +15,7 @@ export function formatOrderTokens(tokens: bigint, symbol: PerpsSymbol) {
 }
 
 export function formatLiquidationPrice(price: bigint) {
-  return price === 0n ? "None" : formatUsd(price);
+  return price === 0n ? "None" : formatPrice(price);
 }
 
 export function sideLabel(side: Side) {

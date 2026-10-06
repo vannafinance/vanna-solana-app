@@ -685,3 +685,20 @@ test("the earnings series steps up at each close and ends at realized plus open 
   assert.equal(points[points.length - 1].at, now);
   assert.equal(points[points.length - 1].usd, 75_300_000n);
 });
+
+const { buildMarkets } = load("src/lib/perps/build-markets.ts");
+
+test("SKR, Solana Mobile's Seeker token, is listed as a crypto market with its DexScreener chart", () => {
+  const pool = { supplyApyPercent: 2, borrowApyPercent: 4, totalSupply: 1_000_000, totalBorrowed: 250_000, utilizationPercent: 25, exchangeRate: 1_000_000_000n };
+  const markets = buildMarkets({ USDC: pool, TSLAx: pool, SKR: pool }, { TSLAx: 400n * USD, SKR: 18_480n });
+  const skr = markets.find((entry) => entry.symbol === "SKR");
+  assert.equal(skr.kind, "Crypto");
+  assert.equal(skr.name, "Seeker");
+  assert.equal(skr.pair, "SKR-USDC");
+  // 750,000 SKR available at $0.01848.
+  assert.equal(skr.liquidityUsd, 13_860n * USD);
+  assert.equal(markets.find((entry) => entry.symbol === "TSLAx").kind, "xStocks");
+  const chart = chartSourceFor("SKR");
+  assert.equal(chart.kind, "dexscreener");
+  assert.equal(chart.pairAddress, "VY1ZQXjqBwvuWgVfTfhqanJe96GGoQrX7xZZDrWPGiT");
+});

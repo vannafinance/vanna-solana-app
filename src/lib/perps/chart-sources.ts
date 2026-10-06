@@ -1,7 +1,7 @@
 import type { ChartSource, PerpsSymbol } from "@/types/perps";
 
 // The same sources as the web app. Listed stocks use TradingView with the real ticker the token tracks; the PreStock
-// tokens have no public listing, so their chart is the DexScreener pair for the token itself on Solana.
+// tokens have no public listing and SKR is a crypto token, so their chart is the DexScreener pair for the token itself on Solana.
 const TRADINGVIEW_SYMBOLS: Partial<Record<PerpsSymbol, string>> = {
   TSLAx: "NASDAQ:TSLA",
   GOOGLx: "NASDAQ:GOOGL",
@@ -11,6 +11,8 @@ const TRADINGVIEW_SYMBOLS: Partial<Record<PerpsSymbol, string>> = {
 const DEXSCREENER_PAIRS: Partial<Record<PerpsSymbol, string>> = {
   ANTHROPIC: "9thgWVMJUKiiotrVmzhEy1MWPyvkNsUSwKbp8ZFsuhA2",
   OPENAI: "4HTy7aTjPm5PTSEws2yWRDPX6gjWM6sC2dV5mv9u8JsH",
+  // The deepest SKR/USDC pool (Orca), as on the web app.
+  SKR: "VY1ZQXjqBwvuWgVfTfhqanJe96GGoQrX7xZZDrWPGiT",
 };
 
 export function chartSourceFor(symbol: PerpsSymbol): ChartSource | null {

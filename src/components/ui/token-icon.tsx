@@ -8,6 +8,7 @@ const sources = {
   AAPLx: require("../../../assets/images/tokens/aaplx.png"),
   ANTHROPIC: require("../../../assets/images/tokens/anthropic.png"),
   OPENAI: require("../../../assets/images/tokens/openai.png"),
+  SKR: require("../../../assets/images/tokens/skr.png"),
   SOL: require("../../../assets/images/tokens/sol.png"),
   USDC: require("../../../assets/images/tokens/usdc.png"),
 } as const;

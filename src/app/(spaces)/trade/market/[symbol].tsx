@@ -13,7 +13,7 @@ import { Icon } from "@/components/ui/icon";
 import { PlainHeader } from "@/components/ui/plain-header";
 import { ResourceView } from "@/components/ui/resource-view";
 import { Screen } from "@/components/ui/screen";
-import { formatUsd } from "@/format/format-amount";
+import { formatPrice } from "@/format/format-earn";
 import { TIMEFRAMES, usePerpsMarket } from "@/hooks/use-perps-markets";
 import { LIQUIDATION_HEALTH } from "@/lib/perps/account-health";
 import { routes } from "@/navigation/routes";
@@ -56,12 +56,12 @@ export default function PerpsMarketScreen() {
         >
           <View style={{ marginHorizontal: 4 }}>
             <MarketSwitcher
-              selected={{ symbol: market.symbol, pair: market.pair, name: market.name, price: formatUsd(market.markPrice) }}
-              markets={markets.map((option) => ({ symbol: option.symbol, pair: option.pair, name: option.name, price: formatUsd(option.markPrice) }))}
+              selected={{ symbol: market.symbol, pair: market.pair, name: market.name, price: formatPrice(market.markPrice) }}
+              markets={markets.map((option) => ({ symbol: option.symbol, pair: option.pair, name: option.name, price: formatPrice(option.markPrice) }))}
               onSelect={(next: PerpsSymbol) => router.setParams({ symbol: next })}
             />
-            <AppText accessibilityLabel={`Mark price ${formatUsd(market.markPrice)}`} strong style={{ marginTop: 16, fontSize: 32, lineHeight: 40, letterSpacing: -0.32 }}>
-              {formatUsd(market.markPrice)}
+            <AppText accessibilityLabel={`Mark price ${formatPrice(market.markPrice)}`} strong style={{ marginTop: 16, fontSize: 32, lineHeight: 40, letterSpacing: -0.32 }}>
+              {formatPrice(market.markPrice)}
             </AppText>
             <View style={{ marginTop: 16, marginHorizontal: -4 }}>
               {chart !== null ? (
