@@ -1,8 +1,7 @@
 import { type Href, router, useSegments } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
-import { useEffect } from "react";
 import { Pressable, StyleSheet, View } from "react-native";
-import Animated, { Easing, useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
+import Animated, { Easing, useAnimatedStyle, withTiming } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { AppText } from "@/components/ui/app-text";
@@ -73,14 +72,10 @@ function SwapAction() {
   );
 }
 
+// The fade is worked out in the animated style itself, from `visible`. Setting a shared value from an effect lost the
+// update when the app opened straight onto another module (a link to /trade): the Portfolio pill stayed filled.
 export function GradientLayer({ space, visible }: { space: Space; visible: boolean }) {
-  const opacity = useSharedValue(visible ? 1 : 0);
-
-  useEffect(() => {
-    opacity.value = withTiming(visible ? 1 : 0, FADE);
-  }, [visible, opacity]);
-
-  const style = useAnimatedStyle(() => ({ opacity: opacity.value }));
+  const style = useAnimatedStyle(() => ({ opacity: withTiming(visible ? 1 : 0, FADE) }), [visible]);
 
   return (
     <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, { borderRadius: PILL_HEIGHT / 2, overflow: "hidden" }, style]}>
