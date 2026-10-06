@@ -1,5 +1,7 @@
 import { type AddressLookupTableAccount, ComputeBudgetProgram, type Connection, type PublicKey, type TransactionInstruction, TransactionMessage, VersionedTransaction } from "@solana/web3.js";
 
+import { freshenForkOracles } from "./fork-oracles";
+import { healStaleDexPools } from "./heal-pools";
 import { createTemporaryTable, distinctAccounts } from "./lookup-tables";
 import { sendAndConfirm, type SigningHooks, sendInstructions, TransactionFailedError } from "./send-transaction";
 
@@ -106,7 +108,9 @@ export async function sendBatches(connection: Connection, payer: PublicKey, requ
   const unsigned = transactions.map(
     ({ instructions }) => new VersionedTransaction(new TransactionMessage({ payerKey: payer, recentBlockhash: latest.blockhash, instructions }).compileToV0Message([...tables])),
   );
-  // Only the first can be checked now; the others read what the first leaves behind.
+  // Only the first can be checked now; the others read what the first leaves behind. So every pool the order swaps
+  // through is re-cloned up front, as a single transaction does after a failed simulation, and every stale price rewritten.
+  await Promise.all([freshenForkOracles(connection), ...unsigned.map((transaction) => healStaleDexPools(connection, transaction))]);
   const simulation = await connection.simulateTransaction(unsigned[0], { sigVerify: false, commitment: "confirmed" });
   if (simulation.value.err) throw new TransactionFailedError(`${JSON.stringify(simulation.value.err)} ${simulation.value.logs?.join(" ") ?? ""}`);
 
