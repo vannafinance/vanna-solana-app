@@ -38,6 +38,7 @@ export function quoteOrder({ market, margin, borrowed, side, collateral, leverag
     fee: 0n,
     healthAfter: healthRatio(margin + size, borrowed + newDebt),
     borrow: newDebt,
+    leverage,
   };
 }
 
@@ -47,6 +48,7 @@ const LENDABLE_SHARE_PCT = 99n;
 // `lendable` is what the pool this order borrows from can still lend, in USD units: USDC for a long, the stock for a short.
 export function orderIssue(available: bigint, collateral: bigint, quote: OrderQuote, oppositeOpen = false, lendable?: bigint): OrderIssue {
   if (oppositeOpen) return "opposite-open";
+  if (quote.leverage <= 1) return "low-leverage";
   if (collateral === 0n) return "empty";
   if (collateral > available) return "insufficient-margin";
   if (lendable !== undefined && quote.borrow > 0n && quote.borrow * 100n > lendable * LENDABLE_SHARE_PCT) return "pool-liquidity";

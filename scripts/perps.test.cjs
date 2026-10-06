@@ -760,5 +760,16 @@ test("an order whose loan is more than the pool can lend is refused before the w
   assert.equal(issue(1_000_000_000n, 100_000_000n, q, false, 150_000_000n), "pool-liquidity");
   assert.equal(issue(1_000_000_000n, 100_000_000n, q, false, 500_000_000n), null);
   const oneX = quote({ market: m, margin: 0n, borrowed: 0n, side: "long", collateral: 100_000_000n, leverage: 1 });
-  assert.equal(issue(1_000_000_000n, 100_000_000n, oneX, false, 0n), null);
+  assert.equal(issue(1_000_000_000n, 100_000_000n, oneX, false, 0n), "low-leverage");
+});
+
+test("1x is only where the slider starts: an order needs 2x or more", () => {
+  const m = { symbol: "TSLAx", markPrice: 400_000_000n, usdcBorrowBps: 500, tokenBorrowBps: 300 };
+  for (const side of ["long", "short"]) {
+    const oneX = quoteOrder({ market: m, margin: 0n, borrowed: 0n, side, collateral: 100_000_000n, leverage: 1 });
+    assert.equal(orderIssue(1_000_000_000n, 100_000_000n, oneX), "low-leverage");
+    assert.equal(orderIssue(1_000_000_000n, 0n, oneX), "low-leverage");
+    const twoX = quoteOrder({ market: m, margin: 0n, borrowed: 0n, side, collateral: 100_000_000n, leverage: 2 });
+    assert.equal(orderIssue(1_000_000_000n, 100_000_000n, twoX), null);
+  }
 });

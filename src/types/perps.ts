@@ -99,11 +99,14 @@ export type OrderQuote = {
   healthAfter: number;
   // The new loan, in USD units.
   borrow: bigint;
+  leverage: number;
 };
 
 // "opposite-open": the account already holds the other side of this market, which the web app also refuses until it is closed.
 // "pool-liquidity": the loan is more than the pool can lend right now, so the borrow would fail on chain.
-export type OrderIssue = "opposite-open" | "empty" | "insufficient-margin" | "pool-liquidity" | "health-low" | null;
+// "low-leverage": 1x is only where the slider starts; an order needs 2x or more (a 1x short is a plain sale, a 1x long a
+// plain buy, neither a leveraged position).
+export type OrderIssue = "opposite-open" | "low-leverage" | "empty" | "insufficient-margin" | "pool-liquidity" | "health-low" | null;
 
 export type CloseQuote = {
   fractionBps: number;

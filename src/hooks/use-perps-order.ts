@@ -30,7 +30,7 @@ import { useWalletHoldings } from "./use-wallet-holdings";
 import { useWalletSigner } from "./use-wallet-signer";
 
 const DECIMALS = 6;
-// As on the web app, which also goes back to it after every order.
+// The slider starts at 1x and an order needs 2x or more, as the team decided for Farm too.
 const DEFAULT_LEVERAGE = 1;
 
 export type OrderTicket = {

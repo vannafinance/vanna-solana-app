@@ -33,6 +33,7 @@ const otherSide = (side: Side): Side => (side === "long" ? "short" : "long");
 
 function ctaLabel(side: Side, issue: OrderIssue, hasMarginAccount: boolean, symbol: string) {
   if (issue === "opposite-open") return `Close ${symbol} ${sideName(otherSide(side))} first`;
+  if (issue === "low-leverage") return "Pick leverage above 1x";
   if (issue === "empty") return "Enter an amount";
   if (issue === "insufficient-margin") return "Not enough margin available";
   if (issue === "health-low") return "Position too risky";

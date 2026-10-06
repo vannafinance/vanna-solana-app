@@ -28,7 +28,8 @@ import { useWalletAddress } from "./use-wallet-address";
 import { useWalletHoldings } from "./use-wallet-holdings";
 import { useWalletSigner } from "./use-wallet-signer";
 
-const DEFAULT_LEVERAGE = 2;
+// The slider starts at 1x; deploying needs 2x or more ("Pick leverage above 1x" until then).
+const DEFAULT_LEVERAGE = 1;
 const LOW_PRECISION_DECIMALS = 6;
 const STOCK_SYMBOLS: readonly CollateralSymbol[] = ["TSLAx", "GOOGLx", "AAPLx", "ANTHROPIC", "OPENAI"];
 const NO_ACCOUNT: MarginNow = { hasAccount: false, collateralUsd: 0n, debtUsd: 0n, netUsd: 0n, health: null, leverage: null };
