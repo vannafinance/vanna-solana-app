@@ -1,7 +1,7 @@
 import { type Href, router, useSegments } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
 import { StatusBar } from "expo-status-bar";
-import { type ReactNode, useContext } from "react";
+import { type ReactNode, useContext, useState } from "react";
 import { Pressable, StyleSheet, View } from "react-native";
 import Animated, { useAnimatedStyle } from "react-native-reanimated";
 import Svg, { Defs, RadialGradient, Rect, Stop } from "react-native-svg";
@@ -82,17 +82,41 @@ function PageIsland({ space }: { space: Space }) {
   const segments = useSegments();
   const module = moduleFor(space);
   const current = activePage(segments, space);
+  const currentIndex = Math.max(
+    0,
+    module.pages.findIndex((page) => page.key === current),
+  );
+  // The highlight is one shape that slides from the page the user came from to this one, as the page arrives.
+  const motion = useContext(PageMotionContext);
+  const [inner, setInner] = useState(0);
+  const itemWidth = inner / module.pages.length;
+  const fromIndex = motion.fromIndex ?? currentIndex;
+  const glide = useAnimatedStyle(() => {
+    const progress = motion.reveal === null ? 1 : motion.reveal.get();
+    return { transform: [{ translateX: (fromIndex + (currentIndex - fromIndex) * progress) * itemWidth }] };
+  });
 
   return (
     <View style={{ marginTop: -OVERLAP, paddingHorizontal: 16 }}>
       <View
         accessibilityRole="tablist"
         accessibilityLabel={`${module.label} pages`}
+        onLayout={(event) => setInner(event.nativeEvent.layout.width - ISLAND_PADDING * 2)}
         style={[
           { alignSelf: "center", width: "100%", maxWidth: ISLAND_MAX_WIDTH, height: ISLAND_HEIGHT, padding: ISLAND_PADDING, flexDirection: "row", borderRadius: ISLAND_HEIGHT / 2, backgroundColor: colors.surface },
           shadow.floating,
         ]}
       >
+        <Animated.View
+          pointerEvents="none"
+          style={[
+            { position: "absolute", left: ISLAND_PADDING, top: ISLAND_PADDING, bottom: ISLAND_PADDING, width: itemWidth, borderRadius: ISLAND_HEIGHT / 2 - ISLAND_PADDING, overflow: "hidden" },
+            shadow.pill,
+            glide,
+          ]}
+        >
+          <LinearGradient colors={spaceGradients[space].nav} {...horizontalGradient} style={StyleSheet.absoluteFill} />
+        </Animated.View>
         {module.pages.map((page) => {
           const selected = page.key === current;
           const href = page.key === module.pages[0].key ? module.href : `${module.href}/${page.key}`;
@@ -104,9 +128,8 @@ function PageIsland({ space }: { space: Space }) {
               accessibilityState={{ selected }}
               android_ripple={selected ? undefined : ripple(colors.text)}
               onPress={() => !selected && router.navigate(href as Href)}
-              style={[{ flex: 1, borderRadius: ISLAND_HEIGHT / 2 - ISLAND_PADDING, overflow: "hidden", alignItems: "center", justifyContent: "center" }, selected ? shadow.pill : null]}
+              style={{ flex: 1, borderRadius: ISLAND_HEIGHT / 2 - ISLAND_PADDING, overflow: "hidden", alignItems: "center", justifyContent: "center" }}
             >
-              {selected ? <LinearGradient colors={spaceGradients[space].nav} {...horizontalGradient} style={StyleSheet.absoluteFill} /> : null}
               <AppText strong numberOfLines={1} style={{ fontSize: 14, lineHeight: 20, color: selected ? colors.onHero : colors.textMuted }}>
                 {page.label}
               </AppText>
