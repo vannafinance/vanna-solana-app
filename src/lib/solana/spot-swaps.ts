@@ -79,7 +79,7 @@ const asNumber = ({ raw, decimals }: Delta) => Number(raw) / 10 ** decimals;
 // One Jupiter swap from the wallet's own transaction, the same way the web route reads it: the biggest balance that fell is
 // what was sold, the biggest that rose is what was bought.
 export function decodeSpotSwap({ tx, signature, blockTime }: WalletTransaction, wallet: string): SpotSwap | null {
-  if (!tx.meta?.logMessages?.some((line) => line.includes(JUPITER_PROGRAM))) return null;
+  if (!callsJupiterItself(tx)) return null;
   const deltas = tokenDeltas(tx, wallet);
   const native = nativeSolDelta(tx, wallet);
   if (native !== null && (native > DUST_LAMPORTS || native < -DUST_LAMPORTS)) {
@@ -108,6 +108,12 @@ export function decodeSpotSwap({ tx, signature, blockTime }: WalletTransaction, 
     status: "succeeded",
     reason: null,
   };
+}
+
+// A wallet swap calls Jupiter itself. A Margin trade open or close also runs a Jupiter route, but from inside the Vanna
+// program, so Jupiter shows in its logs without being one of the transaction's own instructions.
+export function callsJupiterItself(tx: ParsedTransactionWithMeta): boolean {
+  return tx.transaction.message.instructions.some((instruction) => instruction.programId.toBase58() === JUPITER_PROGRAM);
 }
 
 // Jupiter's exact-in swap instructions. Both end with in_amount (u64), quoted_out_amount (u64), slippage_bps (u16) and
@@ -164,8 +170,16 @@ export function decodeFailedSpotSwap({ tx, signature, blockTime }: WalletTransac
 // The web route's rows, plus what it leaves out, read from the wallet's own transactions: swaps it cannot name one side of
 // (SKR, which the website does not carry) and every swap that failed, which the route skips. A signature the route already
 // reported is never listed twice.
-export function withDeviceSwaps(hosted: readonly SpotSwap[], transactions: readonly WalletTransaction[], wallet: string): SpotSwap[] {
-  const known = new Set(hosted.map((swap) => swap.signature));
+export function withDeviceSwaps(reported: readonly SpotSwap[], transactions: readonly WalletTransaction[], wallet: string): SpotSwap[] {
+  // The web route counts any transaction whose logs name Jupiter, so it lists a Margin trade close as a wallet swap (SOL ->
+  // USDC for a few lamports). A row whose transaction the wallet's own history holds is kept only if it is a real wallet
+  // swap; one older than that history is kept as reported.
+  const bySignature = new Map(transactions.map((transaction) => [transaction.signature, transaction]));
+  const hosted = reported.filter((swap) => {
+    const transaction = bySignature.get(swap.signature);
+    return transaction === undefined || callsJupiterItself(transaction.tx);
+  });
+  const known = new Set(reported.map((swap) => swap.signature));
   const appOnly = succeededOnly(transactions).flatMap((transaction) => {
     const swap = decodeSpotSwap(transaction, wallet);
     return swap && !known.has(swap.signature) && (APP_ONLY_ASSETS.has(swap.from) || APP_ONLY_ASSETS.has(swap.to)) ? [swap] : [];

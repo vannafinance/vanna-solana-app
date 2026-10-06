@@ -400,7 +400,7 @@ function walletSwap({ signature, from, to, spent, received, decimals = { USDC: 6
         preTokenBalances: [balance(1, from, spent), balance(2, to, 0)],
         postTokenBalances: [balance(1, from, 0), balance(2, to, received)],
       },
-      transaction: { message: { accountKeys: [{ pubkey: { toBase58: () => SWAP_WALLET } }] } },
+      transaction: { message: { accountKeys: [{ pubkey: { toBase58: () => SWAP_WALLET } }], instructions: [{ programId: { toBase58: () => "JUP6LkbZbjS1jKKwapdHNy74zcZ3tLUZoi5QNyVTaV4" } }] } },
     },
   };
 }
@@ -575,4 +575,15 @@ test("a failed supply is listed but adds nothing to the principal", () => {
   const listed = withDeviceEarnEvents([], [failed]);
   assert.equal(listed.length, 1);
   assert.equal(netPrincipal(listed).get("USDC"), undefined);
+});
+
+test("a Margin trade close the web route lists as a wallet swap is dropped; it runs Jupiter from inside the Vanna program", () => {
+  const close = walletSwap({ signature: "sigClose", from: "USDC", to: "TSLAx", spent: 1, received: 113_577_410 });
+  close.tx.transaction.message.instructions = [{ programId: { toBase58: () => "BZ812nUv4Qhr2p1JVgmoJGjYTGk1brAXckyhFSCNH3Zg" } }];
+  const misread = { signature: "sigClose", timestamp: 1, from: "SOL", to: "USDC", amountIn: 140_000n, decimalsIn: 9, amountOut: 113_577_410n, decimalsOut: 6, status: "succeeded", reason: null };
+  const older = { ...misread, signature: "sigOlder" };
+  const listed = withDeviceSwaps([misread, older], [close], SWAP_WALLET);
+  // The close is gone; a row older than the wallet's own history is kept as reported.
+  assert.deepEqual(listed.map((swap) => swap.signature).join(","), "sigOlder");
+  assert.equal(decodeSpotSwap(close, SWAP_WALLET), null);
 });
