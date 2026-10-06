@@ -16,6 +16,7 @@ import type { Resource } from "@/types/resource";
 import type { ReviewTone } from "@/types/review";
 import { TransactionError } from "@/types/transaction";
 
+import { useClearAfterSuccess } from "./use-clear-after-success";
 import { useConnectedWallet } from "./use-connected-wallet";
 import { useFarmPoolSources } from "./use-farm-pools";
 import { useMarginAccount } from "./use-margin-account";
@@ -132,6 +133,11 @@ export function useFarmDeploy(poolSymbol: PoolSymbol) {
         ? `${formatToken(data.amount, 2)} ${data.collateral.symbol} deposited · ${formatToken(data.quote.borrow, borrowDigits)} ${data.pool.symbol} earning ${formatPercent(data.pool.supplyApyBps)} on Kamino`
         : "",
     },
+  });
+
+  useClearAfterSuccess(flow.done, () => {
+    setAmountText("");
+    setLeverage(DEFAULT_LEVERAGE);
   });
 
   const selectCollateral = (symbol: CollateralSymbol) => {
