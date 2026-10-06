@@ -151,3 +151,13 @@ test("the web app's supply APY is worked out again without the reserve fee, and 
   assert.equal(parsePools({ SOL: { ...row, reserveFactorBps: 1000 } }).SOL.supplyApyPercent, 2.56);
   assert.equal(parsePools({ SOL: row }).SOL.supplyApyPercent, 2.84);
 });
+
+test("Earn lists the pools you supplied first, then the rest by APY", () => {
+  const { orderVaults } = load("src/lib/earn/build-vaults.ts");
+  const vault = (symbol, supplyApyBps, usd) => ({ symbol, supplyApyBps, yourSupply: usd === undefined ? undefined : { amount: { raw: 1n, decimals: 6 }, usd } });
+  // USDC and SOL were withdrawn to zero, SKR supplied: SKR leads despite the lowest APY.
+  const ordered = orderVaults([vault("USDC", 677), vault("SOL", 287), vault("SKR", 80, 8_770_000n), vault("TSLAx", 1)]);
+  assert.equal(ordered.map((v) => v.symbol).join(","), "SKR,USDC,SOL,TSLAx");
+  const two = orderVaults([vault("USDC", 677, 1_000_000n), vault("SKR", 80, 9_000_000n)]);
+  assert.equal(two.map((v) => v.symbol).join(","), "SKR,USDC");
+});

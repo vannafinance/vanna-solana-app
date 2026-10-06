@@ -4,7 +4,7 @@ import { useEarnDeposits } from "@/hooks/use-earn-deposits";
 import { useOraclePrices } from "@/hooks/use-oracle-prices";
 import { usePools } from "@/hooks/use-pools";
 import { useWalletAddress } from "@/hooks/use-wallet-address";
-import { buildVaultSummaries } from "@/lib/earn/build-vaults";
+import { buildVaultSummaries, orderVaults } from "@/lib/earn/build-vaults";
 import { vaultCategories } from "@/lib/earn/vault-meta";
 import type { PoolFilterOption, VaultSummary } from "@/types/earn";
 import type { Resource } from "@/types/resource";
@@ -29,7 +29,7 @@ export function useEarnVaults() {
       return failed ? { status: "error", error: failed, retry } : { status: "loading" };
     }
     const summaries = buildVaultSummaries(pools.data, prices.data, deposits.data ?? []);
-    const filtered = summaries.filter((vault) => filter === "all" || vault.category === filter).sort((a, b) => b.supplyApyBps - a.supplyApyBps);
+    const filtered = orderVaults(summaries.filter((vault) => filter === "all" || vault.category === filter));
     return filtered.length === 0 ? { status: "empty" } : { status: "ready", data: filtered };
   })();
 

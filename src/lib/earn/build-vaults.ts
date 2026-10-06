@@ -66,3 +66,14 @@ export function buildMarket(id: string, pools: Pools, prices: OraclePrices, wall
     supplied: { raw: deposit?.supplied ?? 0n, decimals: asset.decimals },
   };
 }
+
+// Pools the wallet has supplied come first, largest first, so a new supply is not buried under higher-APY pools it has left;
+// the rest follow by supply APY.
+export function orderVaults(vaults: readonly VaultSummary[]): VaultSummary[] {
+  return [...vaults].sort((a, b) => {
+    const mine = (b.yourSupply ? 1 : 0) - (a.yourSupply ? 1 : 0);
+    if (mine !== 0) return mine;
+    if (a.yourSupply && b.yourSupply && a.yourSupply.usd !== b.yourSupply.usd) return a.yourSupply.usd > b.yourSupply.usd ? -1 : 1;
+    return b.supplyApyBps - a.supplyApyBps;
+  });
+}
