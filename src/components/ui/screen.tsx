@@ -27,6 +27,7 @@ const SCRIM_SCROLL = 32;
 // bar. The header blends from the previous module's colours (see SpaceHeader) while its figures fade in with the content.
 const REVEAL = { duration: 340, easing: Easing.bezier(0.2, 0, 0, 1) } as const;
 const SLIDE_PX = 36;
+const GUARD_MS = 600;
 
 type Nav = {
   getParent: () => Nav | undefined;
@@ -88,8 +89,15 @@ export function Screen({ header, footer, gap, paddingTop, children }: ScreenProp
       reveal.set(withTiming(1, REVEAL));
       slide.set(withTiming(0, REVEAL));
     }
+    // A page that is showing is never left transparent: if the fade has not finished well after it should have (the app was busy, or
+    // an update reloaded the code mid-motion), it is shown in full.
+    const guard = setTimeout(() => {
+      reveal.set(1);
+      slide.set(0);
+    }, REVEAL.duration + GUARD_MS);
     // Leaving for another page parks this one hidden; a detail screen opened over it leaves it as it is.
     return () => {
+      clearTimeout(guard);
       if (!coveredByPushedScreen(navigation as unknown as Nav)) reveal.set(0);
     };
   }, [focused, space, navigation, page, reveal, slide]);
