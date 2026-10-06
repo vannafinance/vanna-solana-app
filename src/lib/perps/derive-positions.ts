@@ -116,6 +116,8 @@ export function derivePositions({ collateral, debt, prices, swaps }: Input): Der
       if (usdcDebt <= USD_DUST && !openedUnborrowed(swaps, symbol)) continue;
       tokensRaw = collateral[symbol] ?? 0n;
       const size = (tokensRaw * price) / scale;
+      // The few cents of stock a short's close buys back beyond its debt are not a 1x long.
+      if (usdcDebt <= USD_DUST && size <= USD_DUST) continue;
       equity = usdcDebt <= USD_DUST ? size : size - share(usdcDebt);
       notional = size;
     } else {

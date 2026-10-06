@@ -16,6 +16,9 @@ import type { SigningHooks } from "./send-transaction";
 import { createAssociatedTokenAccountIdempotent } from "./token-instructions";
 import { inputTransferFee } from "./transfer-fee";
 
+// The swap and repay, then the withdraw of what is left. They share one transaction when it fits.
+type CloseBuild = MarginSwapBuild & { withdraw: TransactionInstruction[] };
+
 export type ClosePositionRequest = {
   side: Side;
   stock: AssetInfo;
@@ -42,7 +45,7 @@ async function withdrawTo(connection: Connection, owner: PublicKey, asset: Asset
 // Sell the stock collateral, repay this long's share of the USDC debt, send what is left to the wallet. The swap's real
 // proceeds are only known once it has run, so repay and withdraw are sized from the quote's guaranteed minimum: a repay
 // that covers the whole pool uses repay-all, and any estimation error lands in a slightly smaller withdrawal.
-async function buildCloseLong(connection: Connection, owner: PublicKey, request: ClosePositionRequest): Promise<MarginSwapBuild> {
+async function buildCloseLong(connection: Connection, owner: PublicKey, request: ClosePositionRequest): Promise<CloseBuild> {
   const { stock } = request;
   const usdc = usdcAsset();
   const percent = BigInt(request.exitPercent);
@@ -72,18 +75,19 @@ async function buildCloseLong(connection: Connection, owner: PublicKey, request:
   }
 
   const leftover = guaranteed - repaid;
+  const withdraw: TransactionInstruction[] = [];
   if (leftover > USDC_DUST) {
-    // A full close swaps away the whole stock balance and a repay-all clears the debt slot, both earlier in this same
-    // transaction, so the withdraw's position scan must leave them out.
-    instructions.push(...(await withdrawTo(connection, owner, usdc, leftover, state, { collateral: percent === 100n ? ["USDC", stock.symbol] : ["USDC"], debt: repaidAll ? ["USDC"] : [] })));
+    // A full close swaps away the whole stock balance and a repay-all clears the debt slot, both before the withdraw runs,
+    // so the withdraw's position scan must leave them out.
+    withdraw.push(...(await withdrawTo(connection, owner, usdc, leftover, state, { collateral: percent === 100n ? ["USDC", stock.symbol] : ["USDC"], debt: repaidAll ? ["USDC"] : [] })));
   }
-  return { instructions, tables: swap.tables };
+  return { instructions, withdraw, tables: swap.tables };
 }
 
 // Buy the stock back with USDC collateral, repay the stock debt, send any stock left over to the wallet. A fee-charging
 // Token-2022 stock loses its fee twice on the way to the reserve (end of the swap, then the repay), so the buy is sized
 // to cover the debt plus the repay-leg fee from the swap's guaranteed output, growing the USDC side by at most two re-quotes.
-async function buildCloseShort(connection: Connection, owner: PublicKey, request: ClosePositionRequest): Promise<MarginSwapBuild> {
+async function buildCloseShort(connection: Connection, owner: PublicKey, request: ClosePositionRequest): Promise<CloseBuild> {
   const { stock, stockPrice } = request;
   const usdc = usdcAsset();
   const percent = BigInt(request.exitPercent);
@@ -118,28 +122,31 @@ async function buildCloseShort(connection: Connection, owner: PublicKey, request
 
   // A full repay also pulls the repay-leg fee out of the vault, so only what is guaranteed beyond that is safe to send.
   const leftover = repaidAll ? vaultReceives - vaultNeeded : vaultReceives - repaid;
+  const withdraw: TransactionInstruction[] = [];
   if (leftover > 5n * 10n ** BigInt(Math.max(stock.decimals - 6, 0))) {
     const usdcDrained = usdcToSwap >= usdcAvailable - 1n;
-    instructions.push(...(await withdrawTo(connection, owner, stock, leftover, state, { collateral: usdcDrained ? [stock.symbol, "USDC"] : [stock.symbol], debt: repaidAll ? [stock.symbol] : [] })));
+    withdraw.push(...(await withdrawTo(connection, owner, stock, leftover, state, { collateral: usdcDrained ? [stock.symbol, "USDC"] : [stock.symbol], debt: repaidAll ? [stock.symbol] : [] })));
   }
-  return { instructions, tables: swap.tables };
+  return { instructions, withdraw, tables: swap.tables };
 }
 
-export function buildClosePosition(connection: Connection, owner: PublicKey, request: ClosePositionRequest): Promise<MarginSwapBuild> {
+export function buildClosePosition(connection: Connection, owner: PublicKey, request: ClosePositionRequest): Promise<CloseBuild> {
   if (!Number.isInteger(request.exitPercent) || request.exitPercent < 1 || request.exitPercent > 100) throw new RangeError("Choose a close size between 1% and 100%");
   return request.side === "long" ? buildCloseLong(connection, owner, request) : buildCloseShort(connection, owner, request);
 }
 
 // The quote is fetched again on every attempt: a pool the fork cloned earlier can drift from an older quote. The swap, the
-// repay and the withdraw stay in one transaction, so a close either happens whole or not at all. An account that holds
-// many positions needs a lookup table for that, and the last resort is one made on the fork, as on the web app.
+// repay and the withdraw share one transaction when it fits. When it does not (an account holding many positions), the
+// withdraw follows as a second transaction approved in the same wallet prompt, instead of a lookup table made on the fork
+// that costs an extra prompt and that Solflare refuses; if only the withdraw fails, the proceeds stay in the margin account.
+// A table on the fork is left as the last resort, for a swap and repay too large on their own.
 export function closePosition(connection: Connection, owner: PublicKey, request: ClosePositionRequest, hooks: SigningHooks): Promise<string> {
   return withStalePoolRetry(hooks, async (tracked) => {
-    const [{ instructions, tables }, kamino] = await Promise.all([
+    const [{ instructions, withdraw, tables }, kamino] = await Promise.all([
       buildClosePosition(connection, owner, request),
       fetchLookupTables(connection, [KAMINO_LOOKUP_TABLE, ...KAMINO_EXTRA_LOOKUP_TABLES]),
     ]);
     const [, ...body] = instructions;
-    return sendBatches(connection, owner, { computeUnits: MARGIN_SWAP_COMPUTE_UNITS, batches: [body], retrySafe: true, allowForkTable: true, tables: [...tables, ...kamino] }, tracked);
+    return sendBatches(connection, owner, { computeUnits: MARGIN_SWAP_COMPUTE_UNITS, batches: withdraw.length > 0 ? [body, withdraw] : [body], retrySafe: true, allowForkTable: true, tables: [...tables, ...kamino] }, tracked);
   });
 }

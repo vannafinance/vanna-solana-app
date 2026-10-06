@@ -361,6 +361,16 @@ test("a 1x long, bought by a swap with nothing borrowed, is a position at 1x", (
   assert.equal(positions[0].leverage, 1);
 });
 
+test("stock left over from a short's buy-back is not a 1x long", () => {
+  const { positions } = derivePositions({
+    collateral: { GOOGLx: 809n },
+    debt: {},
+    prices: { GOOGLx: 346_000_000n },
+    swaps: [swap({ output: "GOOGLx", amountIn: 35_000_000n, amountOut: 100_809n, borrowed: null })],
+  });
+  assert.equal(positions.length, 0);
+});
+
 test("collateral with no debt is not a position", () => {
   const { positions, unresolved } = derivePositions({ collateral: { USDC: 3_000_000_000n, TSLAx: 70_000_000n }, debt: {}, prices: { TSLAx: 356_930_000n }, swaps: [] });
   assert.equal(positions.length, 0);
