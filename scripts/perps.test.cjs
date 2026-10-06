@@ -293,6 +293,16 @@ test("the live 3x long: stock collateral against USDC debt, entry from the openi
   assert.ok(summary.liquidationPrice > 0n && summary.liquidationPrice < p.entryPrice);
 });
 
+test("USDC debt left over from interest accrued between two reads is not a long", () => {
+  const { positions } = derivePositions({
+    collateral: { TSLAx: 1_294_339_587n },
+    debt: { USDC: 14n },
+    prices: { TSLAx: 380_470_000n },
+    swaps: [swap({})],
+  });
+  assert.equal(positions.length, 0);
+});
+
 test("a short is stock debt against USDC collateral and uses the swap proceeds as its entry", () => {
   const { positions } = derivePositions({
     collateral: { USDC: 300_000_000n },

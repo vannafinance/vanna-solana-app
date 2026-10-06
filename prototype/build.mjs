@@ -9,7 +9,6 @@
 //   --title   heading of the control panel and page title. Default: "Vanna · app prototype"
 //   --stage   working folder for the export (default prototype/.build). Give parallel builds different stages.
 //   --notes   an HTML fragment shown at the top of the panel (what changed in this version), e.g. prototype/notes/v2.html
-//   Navigation layout comes from the environment: EXPO_PUBLIC_NAV_LAYOUT=top-modules (see src/navigation/nav-layout.ts).
 //
 // Steps: make sure node_modules and the web-only dependencies are installed (without touching package.json /
 // package-lock.json), stage a copy of the app in prototype/.build with a web-enabled app config and the prototype
