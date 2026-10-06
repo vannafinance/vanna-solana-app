@@ -5,6 +5,8 @@ export type RateModel = {
   slope1: number;
   slope2: number;
   kink: number;
+  // The share of interest the protocol keeps (the reserve factor); lenders are paid the rest.
+  reserveFactor: number;
 };
 
 export function borrowRate(model: RateModel, utilization: number): number {
@@ -13,8 +15,10 @@ export function borrowRate(model: RateModel, utilization: number): number {
   return model.base + model.slope1 + (model.slope2 * (utilization - model.kink)) / (1 - model.kink);
 }
 
+// What lenders earn: borrowers' interest spread over all supplied funds, less the reserve fee the program keeps
+// (fee = interest x reserve_factor, in the program's math reference).
 export function lenderRate(model: RateModel, utilization: number): number {
-  return borrowRate(model, utilization) * utilization;
+  return borrowRate(model, utilization) * utilization * (1 - model.reserveFactor);
 }
 
 export function rateAt(model: RateModel, utilization: number): RateSample {

@@ -1,7 +1,7 @@
 import { type Connection, PublicKey } from "@solana/web3.js";
 
 import { type AssetInfo, assets } from "./assets";
-import { EXCHANGE_RATE_DECIMALS, fetchPools, type PoolStats } from "./pools-api";
+import { EXCHANGE_RATE_DECIMALS, fetchPools, type PoolStats, supplyApy } from "./pools-api";
 import { reserveAddress, shareMintAddress } from "./program-accounts";
 import { ApiError } from "./request-json";
 import { decodeShareSupply, decodeVaultReserve, type VaultReserve } from "./vault-accounts";
@@ -21,7 +21,8 @@ function borrowApr(utilizationPercent: number, reserve: VaultReserve): number {
 }
 
 // A pool's figures as the web app's /api/pools gives them (lib/pool-stats.ts), from the reserve and share mint on chain.
-// Rates are rounded to two decimals at the same steps, so a vault reads the same here and on the website.
+// Rates are rounded to two decimals at the same steps as the web app; the supply rate also takes off the reserve fee, as
+// the program does before paying lenders (see supplyApy in pools-api).
 export function poolStatsFromChain(reserve: VaultReserve, shareSupply: bigint, decimals: number): PoolStats {
   const liquidity = reserve.accountedLiquidity;
   const borrowed = reserve.totalBorrowAssets;
@@ -31,7 +32,7 @@ export function poolStatsFromChain(reserve: VaultReserve, shareSupply: bigint, d
   const borrowApyPercent = Number(borrowApr(utilizationPercent, reserve).toFixed(2));
   const scale = 10n ** BigInt(EXCHANGE_RATE_DECIMALS);
   return {
-    supplyApyPercent: Number(((borrowApyPercent * utilizationPercent) / 100).toFixed(2)),
+    supplyApyPercent: supplyApy(borrowApyPercent, utilizationPercent, reserve.reserveFactorBps),
     borrowApyPercent,
     totalSupply: toUnits(totalAssets, decimals),
     totalBorrowed: toUnits(borrowed, decimals),

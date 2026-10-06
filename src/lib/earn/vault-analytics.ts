@@ -15,7 +15,7 @@ export function buildVaultAnalytics(id: string, pools: Partial<Record<AssetSymbo
   const reserve = symbol === undefined ? undefined : reserves[symbol];
   if (!pool || !reserve) return null;
 
-  const model: RateModel = { base: reserve.baseRateBps / BPS, slope1: reserve.slope1Bps / BPS, slope2: reserve.slope2Bps / BPS, kink: reserve.optimalBps / BPS };
+  const model: RateModel = { base: reserve.baseRateBps / BPS, slope1: reserve.slope1Bps / BPS, slope2: reserve.slope2Bps / BPS, kink: reserve.optimalBps / BPS, reserveFactor: reserve.reserveFactorBps / BPS };
   return {
     supplyApyBps: Math.round(pool.supplyApyPercent * 100),
     borrowApyBps: Math.round(pool.borrowApyPercent * 100),

@@ -11,6 +11,13 @@ export type PoolStats = {
   exchangeRate: bigint;
 };
 
+// What lenders earn, in percent: the borrow rate spread over all supplied funds, less the reserve fee the program keeps
+// before paying them (math reference: fee = interest x reserve_factor). The web app's supplyAPY leaves the fee in, so
+// lenders would see about a tenth more than they get; the app works it out from the pool's own figures instead.
+export function supplyApy(borrowApyPercent: number, utilizationPercent: number, reserveFactorBps: number): number {
+  return Number(((borrowApyPercent * utilizationPercent * (1 - reserveFactorBps / 10_000)) / 100).toFixed(2));
+}
+
 // Share-to-underlying rate, kept as a nine-decimal integer so valuation stays in bigint.
 export const EXCHANGE_RATE_DECIMALS = 9;
 
@@ -38,8 +45,12 @@ export function parsePools(payload: unknown): Partial<Record<AssetSymbol, PoolSt
   const pools: Partial<Record<AssetSymbol, PoolStats>> = {};
   for (const [symbol, value] of Object.entries(payload)) {
     if (!isRecord(value)) throw new ApiError("invalid-response");
+    const reserveFactor = value.reserveFactorBps;
     pools[symbol as AssetSymbol] = {
-      supplyApyPercent: decimalString(value, "supplyAPY"),
+      supplyApyPercent:
+        typeof reserveFactor === "number" && Number.isFinite(reserveFactor)
+          ? supplyApy(decimalString(value, "borrowAPY"), decimalString(value, "utilizationRate"), reserveFactor)
+          : decimalString(value, "supplyAPY"),
       borrowApyPercent: decimalString(value, "borrowAPY"),
       totalSupply: decimalString(value, "totalSupply"),
       totalBorrowed: decimalString(value, "totalBorrowed"),
