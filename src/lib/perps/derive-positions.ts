@@ -6,7 +6,10 @@ import type { PerpsPosition, PerpsSymbol, Side } from "@/types/perps";
 import { UNIT } from "./position-math";
 
 const STOCKS: readonly PerpsSymbol[] = ["TSLAx", "GOOGLx", "AAPLx", "ANTHROPIC", "OPENAI"];
-const USD_DUST = 1n;
+// Below one dollar the shared USDC balance is not a position. Farm debt is subtracted from the account's debt (withoutFarm),
+// and the two are read at slightly different moments while interest accrues, so a few raw units can be left over; with a
+// one-unit threshold that leftover turned the stock behind a Farm position into a "Long 1x" on alternate polls.
+const USD_DUST = 1_000_000n;
 
 type Balances = Partial<Record<AssetSymbol, bigint>>;
 
