@@ -27,7 +27,7 @@ export type DerivedPositions = {
 };
 
 const decimalsOf = (symbol: AssetSymbol) => assets.find((asset) => asset.symbol === symbol)?.decimals ?? 0;
-const dustOf = (symbol: AssetSymbol) => 10n ** BigInt(Math.max(decimalsOf(symbol) - 6, 0));
+export const dustOf = (symbol: AssetSymbol) => 10n ** BigInt(Math.max(decimalsOf(symbol) - 6, 0));
 const scaleOf = (symbol: AssetSymbol) => 10n ** BigInt(decimalsOf(symbol));
 
 // A long is stock collateral with USDC debt and no stock debt; a short is stock debt with USDC collateral and no stock

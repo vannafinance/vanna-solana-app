@@ -79,6 +79,10 @@ export type PerpsAccount = {
 export type PerpsPortfolio = {
   account: PerpsAccount;
   positionsAvailable: boolean;
+  // Stocks the account holds or owes outside Farm, raw. A stock both held and owed shows as no position, so the order ticket
+  // reads these too, to refuse the opposite side of a position the list cannot show.
+  heldStocks?: readonly string[];
+  owedStocks?: readonly string[];
   historyAvailable: boolean;
   positions: PositionSummary[];
   openPnl: bigint;

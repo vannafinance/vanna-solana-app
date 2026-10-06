@@ -81,7 +81,12 @@ export function usePerpsOrder(symbol: string, initialSide: Side) {
     if (portfolio.status !== "ready") return portfolio.status === "empty" ? { status: "empty" } : portfolio;
     if (funds === null) return holdings.isError ? { status: "error", error: holdings.error, retry } : { status: "loading" };
     const { account, positions } = portfolio.data;
-    const oppositeOpen = positions.some((position) => position.symbol === market.data.symbol && position.side !== side);
+    // From the positions shown and from the balances: a short owes the stock, a long holds it, and a stock both held and owed
+    // shows as no position at all, so the list alone would let the other side be opened on top.
+    const symbol = market.data.symbol;
+    const oppositeOpen =
+      positions.some((position) => position.symbol === symbol && position.side !== side) ||
+      (side === "long" ? (portfolio.data.owedStocks ?? []).includes(symbol) : (portfolio.data.heldStocks ?? []).includes(symbol));
     const quote = quoteOrder({ market: market.data, margin: account.margin, borrowed: account.borrowed, side, collateral, leverage });
     // Collateral is deposited from the wallet in the same transaction, as on the web app, so what can be committed is
     // the wallet's balance of the collateral asset, not the margin account's free balance.

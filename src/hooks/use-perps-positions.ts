@@ -3,7 +3,8 @@ import { useCallback } from "react";
 
 import { useAccountSnapshot } from "@/hooks/use-account-snapshot";
 import { useWalletAddress } from "@/hooks/use-wallet-address";
-import { derivePositions } from "@/lib/perps/derive-positions";
+import { derivePositions, dustOf } from "@/lib/perps/derive-positions";
+import type { AssetSymbol } from "@/lib/solana/assets";
 import { withoutFarm } from "@/lib/perps/without-farm";
 import { summarizePortfolio } from "@/lib/perps/summarize-portfolio";
 import { marginSwapsFrom } from "@/lib/solana/margin-activity";
@@ -39,11 +40,14 @@ export function usePerpsPositions(): Resource<PerpsPortfolio> {
   const snapshot = account.data;
   // Farm positions share the margin account's balances, so they are read first and taken out of what perps sees.
   const ready = markets.status === "ready" && activity.data !== undefined && farm.status === "ready" ? { markets: markets.data, swaps: activity.data, farm: farm.data.positions } : null;
+  const balances = ready === null ? null : withoutFarm({ collateral: snapshot.collateralBalances, debt: snapshot.borrowedBalances }, ready.farm);
+  const above = (entries: Record<string, bigint | undefined>) =>
+    Object.entries(entries).flatMap(([symbol, raw]) => (symbol !== "USDC" && symbol !== "SOL" && raw !== undefined && raw > dustOf(symbol as AssetSymbol) ? [symbol] : []));
   const derived =
-    ready === null
+    ready === null || balances === null
       ? null
       : derivePositions({
-          ...withoutFarm({ collateral: snapshot.collateralBalances, debt: snapshot.borrowedBalances }, ready.farm),
+          ...balances,
           prices: Object.fromEntries(ready.markets.map((market) => [market.symbol, market.markPrice])),
           swaps: ready.swaps,
         });
@@ -61,6 +65,6 @@ export function usePerpsPositions(): Resource<PerpsPortfolio> {
     stale: account.isError,
     refresh: retry,
     // A stock whose opening swap is not in history is left out on its own; it does not hide the positions that can be read.
-    data: { ...portfolio, positionsAvailable: derived !== null, historyAvailable: false },
+    data: { ...portfolio, positionsAvailable: derived !== null, historyAvailable: false, heldStocks: balances ? above(balances.collateral) : [], owedStocks: balances ? above(balances.debt) : [] },
   };
 }
