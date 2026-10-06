@@ -1,7 +1,6 @@
 import { Tabs } from "expo-router";
 
 import { ModuleBar } from "@/components/navigation/module-bar";
-import { NAV_LAYOUT } from "@/navigation/nav-layout";
 import { useTheme } from "@/theme/use-theme";
 
 export default function SpacesLayout() {
@@ -19,7 +18,7 @@ export default function SpacesLayout() {
         // under the container's background, so the switch flashed the page colour.
         animation: "none",
       }}
-      tabBar={({ state }) => (NAV_LAYOUT === "bottom-modules" ? <ModuleBar activeRoute={state.routes[state.index].name} /> : null)}
+      tabBar={({ state }) => <ModuleBar activeRoute={state.routes[state.index].name} />}
     >
       <Tabs.Screen name="home" />
       <Tabs.Screen name="earn" />

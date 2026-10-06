@@ -3,9 +3,9 @@ import type { Space } from "@/theme/tokens";
 
 import { spaceRoutes } from "./routes";
 
-// The four modules are the app's top level; each has its own pages. Where each sits on screen depends on NAV_LAYOUT
-// (navigation/nav-layout.ts). Swap is not a module: it uses the wallet, not the margin account, so it is a separate round
-// action in the middle of whichever bar holds the modules.
+// The four modules are the app's top level and sit in the bottom bar (ModuleBar); each module's pages are the pill bar in its
+// header (SpaceHeader). Swap is not a module: it uses the wallet, not the margin account, so it is a separate round
+// action in the middle of the bottom bar.
 export type ModulePage = { key: string; label: string; icon: IconName };
 
 export type Module = { space: Space; label: string; icon: IconName; href: string; pages: readonly ModulePage[] };

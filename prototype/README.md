@@ -90,11 +90,11 @@ listed in `overrides.js`. New native-only packages need a redirect in `overrides
 
 ## Versions and the comparison page
 
-Two navigation layouts are being compared (`src/navigation/nav-layout.ts`), chosen at build time:
+The team chose V2 (modules in the bottom bar, pages in the header pill); the V3 and V4 layouts were removed from `src/`.
+To build the app as it is now, or V1 to compare against:
 
 ```bash
 node prototype/build.mjs --title "Vanna app · V2 (modules at the bottom)" --notes prototype/notes/v2.html --out <dir>/v2.html
-EXPO_PUBLIC_NAV_LAYOUT=top-modules node prototype/build.mjs --title "Vanna app · V3 (modules on top)" --notes prototype/notes/v3.html --out <dir>/v3.html
 # V1 = the app before the restructure, from a clean worktree of 287e5a4:
 git worktree add /tmp/app-base 287e5a4
 node prototype/build.mjs --root /tmp/app-base --branch fix/wallet-timeout-message --title "Vanna app · V1 (original)" --notes prototype/notes/v1.html --out <dir>/v1.html

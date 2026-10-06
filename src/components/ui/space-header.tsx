@@ -6,10 +6,8 @@ import { Pressable, StyleSheet, View } from "react-native";
 import Svg, { Defs, RadialGradient, Rect, Stop } from "react-native-svg";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { moduleFor, modules } from "@/navigation/modules";
-import { NAV_LAYOUT } from "@/navigation/nav-layout";
-import { routes } from "@/navigation/routes";
-import { horizontalGradient, type Space, spaceGradients, spaceHeaders, spaceInk } from "@/theme/tokens";
+import { moduleFor } from "@/navigation/modules";
+import { horizontalGradient, type Space, spaceGradients, spaceHeaders } from "@/theme/tokens";
 import { useTheme } from "@/theme/use-theme";
 
 import { AppText } from "./app-text";
@@ -98,113 +96,6 @@ function PageIsland({ space }: { space: Space }) {
   );
 }
 
-// The other layout (NAV_LAYOUT "top-modules", the original app's): the four modules in the white bar over the header's bottom
-// edge, with Swap as a round button in its middle; the current module is filled with its gradient. The module's pages are
-// then the bottom bar.
-function ModuleIsland({ space }: { space: Space }) {
-  const { colors, shadow } = useTheme();
-  const [first, second, third, fourth] = modules;
-
-  const tab = (module: (typeof modules)[number]) => {
-    const selected = module.space === space;
-    return (
-      <Pressable
-        key={module.space}
-        accessibilityRole="tab"
-        accessibilityLabel={module.label}
-        accessibilityState={{ selected }}
-        android_ripple={selected ? undefined : ripple(colors.text)}
-        onPress={() => !selected && router.navigate(module.href as Href)}
-        // Tabs size to their labels ("Margin trade" is longer than "Earn"), sharing what is left equally.
-        style={[{ flexGrow: 1, flexShrink: 1, flexBasis: "auto", paddingHorizontal: 8, borderRadius: ISLAND_HEIGHT / 2 - ISLAND_PADDING, overflow: "hidden", alignItems: "center", justifyContent: "center" }, selected ? shadow.pill : null]}
-      >
-        {selected ? <LinearGradient colors={spaceGradients[module.space].nav} {...horizontalGradient} style={StyleSheet.absoluteFill} /> : null}
-        <AppText strong numberOfLines={1} style={{ fontSize: 13, lineHeight: 18, color: selected ? colors.onHero : colors.textMuted }}>
-          {module.label}
-        </AppText>
-      </Pressable>
-    );
-  };
-
-  return (
-    <View style={{ marginTop: -OVERLAP, paddingHorizontal: 16 }}>
-      <View
-        accessibilityRole="tablist"
-        style={[
-          { alignSelf: "center", width: "100%", maxWidth: ISLAND_MAX_WIDTH, height: ISLAND_HEIGHT, padding: ISLAND_PADDING, flexDirection: "row", gap: 2, borderRadius: ISLAND_HEIGHT / 2, backgroundColor: colors.surface },
-          shadow.floating,
-        ]}
-      >
-        {tab(first)}
-        {tab(second)}
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Swap tokens in your wallet"
-          onPress={() => router.push(routes.swap as Href)}
-          style={{ alignSelf: "center", width: ISLAND_HEIGHT - ISLAND_PADDING * 2, height: ISLAND_HEIGHT - ISLAND_PADDING * 2, marginHorizontal: 2, borderRadius: ISLAND_HEIGHT, backgroundColor: colors.chipActive, alignItems: "center", justifyContent: "center" }}
-        >
-          <View style={{ zIndex: 1 }}>
-            <Icon name="swap_vert" size={22} color={colors.onChipActive} />
-          </View>
-        </Pressable>
-        {tab(third)}
-        {tab(fourth)}
-      </View>
-    </View>
-  );
-}
-
-// V4 (NAV_LAYOUT "header-modules"): the four modules as a glass bar inside the header, under the Vanna logo, with Swap as a
-// round button in its middle. The current module is a white pill in the module's colour. The module's pages are the bottom bar.
-const HEADER_BAR = 44;
-const HEADER_BAR_PADDING = 4;
-
-function HeaderModules({ space }: { space: Space }) {
-  const { colors } = useTheme();
-  const [first, second, third, fourth] = modules;
-
-  const tab = (module: (typeof modules)[number]) => {
-    const selected = module.space === space;
-    return (
-      <Pressable
-        key={module.space}
-        accessibilityRole="tab"
-        accessibilityLabel={module.label}
-        accessibilityState={{ selected }}
-        android_ripple={selected ? undefined : ripple(colors.onHero)}
-        onPress={() => !selected && router.navigate(module.href as Href)}
-        style={{ flexGrow: 1, flexShrink: 1, flexBasis: "auto", paddingHorizontal: 8, borderRadius: HEADER_BAR / 2, alignItems: "center", justifyContent: "center", backgroundColor: selected ? colors.onHero : "transparent" }}
-      >
-        <AppText strong numberOfLines={1} style={{ fontSize: 13, lineHeight: 18, color: selected ? spaceInk[module.space] : colors.onHero }}>
-          {module.label}
-        </AppText>
-      </Pressable>
-    );
-  };
-
-  return (
-    <View
-      accessibilityRole="tablist"
-      style={{ flexDirection: "row", gap: 2, height: HEADER_BAR, padding: HEADER_BAR_PADDING, borderRadius: HEADER_BAR / 2, backgroundColor: colors.heroGlass }}
-    >
-      {tab(first)}
-      {tab(second)}
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel="Swap tokens in your wallet"
-        onPress={() => router.push(routes.swap as Href)}
-        style={{ alignSelf: "center", width: HEADER_BAR - HEADER_BAR_PADDING * 2, height: HEADER_BAR - HEADER_BAR_PADDING * 2, marginHorizontal: 2, borderRadius: HEADER_BAR, backgroundColor: colors.engraved, alignItems: "center", justifyContent: "center" }}
-      >
-        <View style={{ zIndex: 1 }}>
-          <Icon name="swap_vert" size={20} color={colors.onHero} />
-        </View>
-      </Pressable>
-      {tab(third)}
-      {tab(fourth)}
-    </View>
-  );
-}
-
 export function SpaceHeader({ space, notificationCount = 0, onNotifications, onAvatar, avatar = <TokenIcon symbol="SOL" size={40} />, children }: SpaceHeaderProps) {
   const { colors, radius, spacing } = useTheme();
   const insets = useSafeAreaInsets();
@@ -261,21 +152,11 @@ export function SpaceHeader({ space, notificationCount = 0, onNotifications, onA
               {avatar}
             </Pressable>
           </View>
-          {NAV_LAYOUT === "header-modules" ? (
-            <View style={{ paddingHorizontal: spacing.xs, paddingTop: spacing.xs, paddingBottom: spacing.sm }}>
-              <HeaderModules space={space} />
-            </View>
-          ) : null}
         </View>
-        {/* Every module's header body is the same height (see ModuleHero), so the bars sit at the same place in each. With the
-            modules inside the header (V4) nothing floats over its bottom edge, so the body ends with plain padding. */}
-        {NAV_LAYOUT === "header-modules" ? (
-          <View style={{ height: MODULE_HERO_HEIGHT + 6 + 20, paddingHorizontal: spacing.lg, paddingTop: 6, paddingBottom: 20 }}>{children}</View>
-        ) : (
-          <View style={{ height: MODULE_HERO_HEIGHT + 6 + 20 + OVERLAP, paddingHorizontal: spacing.lg, paddingTop: 6, paddingBottom: 20 + OVERLAP }}>{children}</View>
-        )}
+        {/* Every module's header body is the same height (see ModuleHero), so the page bar sits at the same place in each. */}
+        <View style={{ height: MODULE_HERO_HEIGHT + 6 + 20 + OVERLAP, paddingHorizontal: spacing.lg, paddingTop: 6, paddingBottom: 20 + OVERLAP }}>{children}</View>
       </View>
-      {NAV_LAYOUT === "top-modules" ? <ModuleIsland space={space} /> : NAV_LAYOUT === "bottom-modules" ? <PageIsland space={space} /> : null}
+      <PageIsland space={space} />
     </View>
   );
 }
