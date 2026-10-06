@@ -291,8 +291,9 @@ test("refreshing the history only fetches transactions it has not seen", async (
 
   listed = [{ signature: "sigC", blockTime: 30, err: null }, ...listed, { signature: "sigFailed", blockTime: 5, err: { InstructionError: [0, "Custom"] } }];
   const second = await fetchWalletTransactions(connection, wallet);
-  assert.equal(second.map((entry) => entry.signature).join(","), "sigC,sigB,sigA");
-  assert.equal(fetched.join(","), "sigB,sigA,sigC");
+  assert.equal(second.map((entry) => entry.signature).join(","), "sigC,sigB,sigA,sigFailed");
+  assert.equal(second.map((entry) => entry.status).join(","), "success,success,success,failed");
+  assert.equal(fetched.join(","), "sigB,sigA,sigC,sigFailed");
 });
 
 test("the wallet is only asked once the transaction has been built and checked, and that is announced first", async () => {

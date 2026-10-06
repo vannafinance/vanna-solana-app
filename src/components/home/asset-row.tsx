@@ -8,6 +8,7 @@ import { pnlColor } from "./position-format";
 
 type AssetRowProps = {
   symbol: TokenSymbol;
+  // The muted line under the symbol: the amount held.
   detail: string;
   value: string;
   change?: string;
@@ -15,12 +16,14 @@ type AssetRowProps = {
   first?: boolean;
 };
 
+// One token in a list: icon, symbol over the amount held, and on the right its value over today's change.
 export function AssetRow({ symbol, detail, value, change, changeBps, first = false }: AssetRowProps) {
   const { colors, spacing } = useTheme();
 
   return (
     <View
-      accessibilityLabel={change ? `${symbol}, ${value}, ${change}` : `${symbol}, ${value}`}
+      accessible
+      accessibilityLabel={change ? `${symbol}, ${detail}, ${value}, ${change}` : `${symbol}, ${detail}, ${value}`}
       style={{
         flexDirection: "row",
         alignItems: "center",
@@ -31,20 +34,20 @@ export function AssetRow({ symbol, detail, value, change, changeBps, first = fal
       }}
     >
       <TokenIcon symbol={symbol} size={36} />
-      <View style={{ flex: 1 }}>
-        <AppText variant="bodyLg" strong>
+      <View style={{ flex: 1, gap: 2 }}>
+        <AppText variant="body" strong numberOfLines={1}>
           {symbol}
         </AppText>
-        <AppText variant="caption" color="textMuted">
+        <AppText variant="caption" color="textMuted" numberOfLines={1}>
           {detail}
         </AppText>
       </View>
-      <View style={{ alignItems: "flex-end" }}>
-        <AppText variant="bodyLg" strong>
+      <View style={{ alignItems: "flex-end", gap: 2 }}>
+        <AppText variant="body" strong numberOfLines={1}>
           {value}
         </AppText>
         {change === undefined || changeBps === undefined ? null : (
-          <AppText variant="caption" color={pnlColor(BigInt(changeBps))}>
+          <AppText variant="caption" color={pnlColor(BigInt(changeBps))} numberOfLines={1}>
             {change}
           </AppText>
         )}

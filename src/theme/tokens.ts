@@ -106,20 +106,36 @@ export const spaces = {
 
 export type Space = keyof typeof spaces;
 
+// One palette family per module, so the four never read as the same place: Portfolio is Vanna's home in the brand's
+// coral-to-violet gradient, Earn is Electric Blue (teal), Margin trade is Violet, Farm is Rose.
 export const spaceGradients = {
-  portfolio: { nav: ["#FC5457", "#8B4DF7"], cta: ["#8B4DF7", "#5A26C9"] },
+  portfolio: { nav: ["#FC5457", "#703AE6"], cta: ["#8B4DF7", "#5A26C9"] },
   earn: { nav: ["#2FC9C1", "#11838B"], cta: ["#14919A", "#0B5F66"] },
-  trade: { nav: ["#8B4DF7", "#4B44E0"], cta: ["#6C63FF", "#4B44E0"] },
-  farm: { nav: ["#FC5457", "#FF007A"], cta: ["#E2087A", "#B0005A"] },
+  trade: { nav: ["#8D61EB", "#5029A3"], cta: ["#703AE6", "#5029A3"] },
+  // Rose only: the coral that used to start this gradient read as red (Short / loss) and did not match the header.
+  farm: { nav: ["#FF3395", "#E2087A"], cta: ["#E2087A", "#B0005A"] },
 } as const satisfies Record<Space, { nav: readonly [string, string]; cta: readonly [string, string] }>;
 
 // The header of each space is one surface that runs from a deep top into the space's colour, with a glow in its top right corner.
+// Portfolio, Vanna's home, wears the brand gradient itself (coral to violet to deep violet, corner to corner, as in the logo), so
+// it stays distinct from Margin trade's plain violet and never sinks into the dark page. `scrim` backs the status bar once the
+// page scrolls under it.
+type SpaceHeader = {
+  surface: readonly [string, string, string];
+  glow: string;
+  scrim: string;
+  start?: { x: number; y: number };
+  end?: { x: number; y: number };
+};
+
 export const spaceHeaders = {
-  portfolio: { surface: ["#3E1A9E", "#7B3FEA", "#5A26C9"], glow: "rgba(196,160,255,0.75)" },
-  earn: { surface: ["#07494F", "#11838B", "#0B5F66"], glow: "rgba(110,236,226,0.6)" },
-  trade: { surface: ["#221D8C", "#5A52F0", "#3A33C4"], glow: "rgba(130,170,255,0.8)" },
-  farm: { surface: ["#86003F", "#E2087A", "#A3004F"], glow: "rgba(255,120,190,0.72)" },
-} as const satisfies Record<Space, { surface: readonly [string, string, string]; glow: string }>;
+  portfolio: { surface: ["#FC5457", "#703AE6", "#2F1B61"], glow: "rgba(255,176,214,0.38)", scrim: "#6B3BD8", start: { x: 0, y: 0 }, end: { x: 1, y: 1 } },
+  earn: { surface: ["#07494F", "#11838B", "#0B5F66"], glow: "rgba(110,236,226,0.6)", scrim: "#07494F" },
+  trade: { surface: ["#2F1861", "#703AE6", "#5029A3"], glow: "rgba(189,164,244,0.7)", scrim: "#2F1861" },
+  farm: { surface: ["#86003F", "#E2087A", "#A3004F"], glow: "rgba(255,120,190,0.72)", scrim: "#86003F" },
+} as const satisfies Record<Space, SpaceHeader>;
+
+export const spaceInk = { portfolio: "#703AE6", earn: "#11838B", trade: "#5029A3", farm: "#E2087A" } as const satisfies Record<Space, string>;
 
 export const brandGradient = ["#FC5457", "#703AE6"] as const;
 

@@ -36,7 +36,7 @@ export function MarginAccountSheet({ view }: MarginAccountSheetProps) {
           Open your margin account
         </AppText>
         <AppText variant="body" color="textMuted" style={{ marginTop: spacing.xs, textAlign: "center" }}>
-          One approval in your wallet. It holds your collateral for Perps and Farm.
+          One approval in your wallet. It holds your collateral for Margin trade and Farm.
         </AppText>
         <View style={{ marginTop: spacing.lg, gap: spacing.md }}>
           {unlocks.map(({ icon, text }) => (

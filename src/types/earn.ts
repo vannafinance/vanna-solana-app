@@ -7,11 +7,19 @@ export type VaultCategory = "xStocks" | "PreStocks" | "Crypto" | "Stablecoins";
 export type VaultSummary = {
   id: string;
   symbol: EarnAsset;
+  name: string;
   category: VaultCategory;
   supplyApyBps: number;
+  // Pool totals, in the vault's own token and in dollars at the oracle price.
+  totalSupply: TokenAmount;
   suppliedUsd: bigint;
   borrowedUsd: bigint;
-  yourSupply?: TokenAmount;
+  // Supplied less borrowed: what is left in the pool to withdraw or borrow.
+  available: TokenAmount;
+  availableUsd: bigint;
+  utilizationBps: number;
+  // Only when the connected wallet has something in this vault.
+  yourSupply?: { amount: TokenAmount; usd: bigint };
 };
 
 export type OverviewMode = "deposit" | "earnings";

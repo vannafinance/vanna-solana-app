@@ -2,8 +2,8 @@ import { View } from "react-native";
 
 import { AppText } from "@/components/ui/app-text";
 import { Card } from "@/components/ui/card";
-import { DetailRow } from "@/components/ui/detail-row";
 import { Icon } from "@/components/ui/icon";
+import { StatStrip } from "@/components/ui/stat-strip";
 import { formatPercent, formatUsd } from "@/format/format-amount";
 import { formatLiquidationPrice, formatOrderTokens } from "@/format/format-perps";
 import type { OrderIssue, OrderQuote, PerpsMarket, Side } from "@/types/perps";
@@ -16,30 +16,40 @@ type OrderSummaryProps = {
   liquidationHealth: number;
 };
 
+// What the order opens, as two strips: the position itself, then what it costs and what it leaves the account at.
 export function OrderSummary({ market, side, quote, issue, liquidationHealth }: OrderSummaryProps) {
-  const borrowCost =
-    side === "long"
-      ? `${formatPercent(market.usdcBorrowBps)} USDC APY`
-      : `${formatPercent(market.tokenBorrowBps)} ${market.symbol} APY`;
+  const borrowBps = side === "long" ? market.usdcBorrowBps : market.tokenBorrowBps;
+  const borrowAsset = side === "long" ? "USDC" : market.symbol;
   const health = Number.isFinite(quote.healthAfter) ? quote.healthAfter.toFixed(2) : "∞";
   const risky = issue === "health-low";
-  const tone = risky ? "negative" : "textMuted";
 
   return (
-    <Card padded={false} style={{ paddingHorizontal: 16, paddingVertical: 4 }}>
-      <DetailRow label="Position size" value={`${formatUsd(quote.size)} · ${formatOrderTokens(quote.tokens, market.symbol)}`} />
-      <DetailRow label="Entry price" value={formatUsd(market.markPrice)} />
-      <DetailRow label="Liquidation price" value={formatLiquidationPrice(quote.liquidationPrice)} />
-      <DetailRow label="Borrow cost" value={borrowCost} />
-      <DetailRow label="Fees" value={formatUsd(quote.fee)} />
-      <View accessibilityRole={risky ? "alert" : undefined} style={{ flexDirection: "row", gap: 8, paddingVertical: 12 }}>
-        <Icon name="info" size={16} color={tone} />
-        <AppText variant="caption" color={tone} style={{ flex: 1 }}>
-          {risky
-            ? `Account health would drop to ${health}, close to liquidation at ${liquidationHealth.toFixed(2)}. Lower the leverage or the amount.`
-            : `After this trade your account health is ${health}. Liquidation happens at ${liquidationHealth.toFixed(2)}.`}
-        </AppText>
-      </View>
+    <Card style={{ gap: 12 }}>
+      <AppText variant="bodyLg" strong>
+        Summary
+      </AppText>
+      <StatStrip
+        stats={[
+          { label: "Position size", value: formatUsd(quote.size), sub: formatOrderTokens(quote.tokens, market.symbol) },
+          { label: "Entry price", value: formatUsd(market.markPrice) },
+          { label: "Liq. price", value: formatLiquidationPrice(quote.liquidationPrice) },
+        ]}
+      />
+      <StatStrip
+        stats={[
+          { label: "Borrow APY", value: formatPercent(borrowBps), sub: borrowAsset },
+          { label: "Fees", value: formatUsd(quote.fee) },
+          { label: "Health after", value: health, sub: `Liq. at ${liquidationHealth.toFixed(2)}`, valueColor: risky ? "negative" : "text" },
+        ]}
+      />
+      {risky ? (
+        <View accessibilityRole="alert" style={{ flexDirection: "row", gap: 8 }}>
+          <Icon name="info" size={16} color="negative" />
+          <AppText variant="caption" color="negative" style={{ flex: 1 }}>
+            {`Account health would drop to ${health}, close to liquidation at ${liquidationHealth.toFixed(2)}. Lower the leverage or the amount.`}
+          </AppText>
+        </View>
+      ) : null}
     </Card>
   );
 }

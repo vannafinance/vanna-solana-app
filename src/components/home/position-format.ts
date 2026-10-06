@@ -33,7 +33,8 @@ export function healthLabel(value: number) {
   return value >= health.liquidation ? "Watch" : "At risk";
 }
 
+// A health figure written as text: the watch band uses the readable warning ink, not the gauge's light pink.
 export function healthColor(value: number): ThemeColor {
   if (value >= health.safeFrom) return "positive";
-  return value >= health.liquidation ? "healthWatch" : "negative";
+  return value >= health.liquidation ? "warning" : "negative";
 }

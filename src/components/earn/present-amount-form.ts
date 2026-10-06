@@ -16,8 +16,8 @@ export type AmountFormView = {
 };
 
 const COPY = {
-  supply: { label: "Supply amount", caption: "Wallet", sharesRow: "You receive", idle: "Supply · approve in wallet", over: (symbol: string) => `Not enough ${symbol}` },
-  withdraw: { label: "Withdraw amount", caption: "Supplied", sharesRow: "You burn", idle: "Withdraw · approve in wallet", over: () => "More than you supplied" },
+  supply: { label: "Supply amount", caption: "Wallet", sharesRow: "You receive", idle: "Supply", over: (symbol: string) => `Not enough ${symbol}` },
+  withdraw: { label: "Withdraw amount", caption: "Supplied", sharesRow: "You burn", idle: "Withdraw", over: () => "More than you supplied" },
 } as const;
 
 export function presentAmountForm(mode: AmountFormMode, market: EarnMarket, quote: AmountQuote, problem: AmountProblem | null): AmountFormView {
@@ -42,6 +42,6 @@ export function presentAmountForm(mode: AmountFormMode, market: EarnMarket, quot
         ? { label: "Enter an amount", disabled: true }
         : problem === "insufficient"
           ? { label: copy.over(market.symbol), disabled: true }
-          : { label: copy.idle, disabled: false },
+          : { label: `${copy.idle} ${market.symbol}`, disabled: false },
   };
 }

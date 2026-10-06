@@ -588,3 +588,90 @@ test("history amounts keep up to six decimals without trailing zeros, like the w
 test("history times read like Oct 2, 5:31 PM", () => {
   assert.match(formatDateTime(1_790_000_000), /^[A-Z][a-z]{2} \d{1,2}, \d{1,2}:\d{2} (AM|PM)$/);
 });
+
+const { tradeLedger, interestAccrued, earningsSeries } = load("src/lib/perps/trade-earnings.ts");
+
+const amt = (raw, decimals) => ({ raw, decimals });
+const usdc = (raw) => amt(raw, 6);
+const stockOf = (raw) => amt(raw, 8);
+const borrowChip = (asset, amount) => ({ type: "borrow", leg: { asset, amount } });
+const swapChip = (fromAsset, fromAmount, toAsset, toAmount) => ({ type: "swap", from: { asset: fromAsset, amount: fromAmount }, to: { asset: toAsset, amount: toAmount } });
+const entryAt = (at, chips) => ({ signature: `sig-${at}`, at, strategy: chips.some((chip) => chip.type === "swap") ? "perps" : "unclassified", title: null, stock: null, chips });
+
+test("a closed long realizes its price P&L and repays its principal", () => {
+  const ledger = tradeLedger([
+    entryAt(200, [swapChip("AAPLx", stockOf(210_000_000n), "USDC", usdc(726_300_000n))]),
+    entryAt(100, [borrowChip("USDC", usdc(466_000_000n)), swapChip("USDC", usdc(699_000_000n), "AAPLx", stockOf(210_000_000n))]),
+  ]);
+  assert.equal(ledger.realized.length, 1);
+  assert.equal(ledger.realized[0].at, 200);
+  assert.equal(ledger.realized[0].pnl, 27_300_000n);
+  assert.equal(ledger.principal.size, 0);
+  assert.equal(ledger.unmatched, 0);
+  assert.equal(ledger.firstAt, 100);
+});
+
+test("a short sold with deposited stock is only what is owed, and its interest is the extra stock owed", () => {
+  const ledger = tradeLedger([entryAt(100, [borrowChip("OPENAI", amt(458_716_000n, 9)), swapChip("OPENAI", amt(917_432_000n, 9), "USDC", usdc(2_000_000_000n))])]);
+  assert.equal(ledger.principal.get("OPENAI-short"), 458_716_000n);
+  const interest = interestAccrued({
+    positions: [{ id: "OPENAI-short", symbol: "OPENAI", side: "short" }],
+    principal: ledger.principal,
+    debt: { OPENAI: 468_716_000n },
+    prices: { OPENAI: 2_000_000_000n },
+    decimals: () => 9,
+  });
+  // 0.01 OPENAI more owed than borrowed, at $2,000.
+  assert.equal(interest, 20_000_000n);
+  // Buying the owed stock back at a lower price closes it at a profit on what was owed, not on the deposit.
+  const closed = tradeLedger([
+    entryAt(100, [borrowChip("OPENAI", amt(458_716_000n, 9)), swapChip("OPENAI", amt(917_432_000n, 9), "USDC", usdc(2_000_000_000n))]),
+    entryAt(300, [swapChip("USDC", usdc(900_000_000n), "OPENAI", amt(458_716_000n, 9))]),
+  ]);
+  assert.equal(closed.realized[0].pnl, 100_000_000n);
+  assert.equal(closed.principal.size, 0);
+});
+
+test("a borrow sent just before its swap opens the position with that principal", () => {
+  const ledger = tradeLedger([
+    entryAt(100, [borrowChip("USDC", usdc(1_000_000_000n))]),
+    entryAt(160, [swapChip("USDC", usdc(1_500_000_000n), "TSLAx", stockOf(421_000_000n))]),
+  ]);
+  assert.equal(ledger.principal.get("TSLAx-long"), 1_000_000_000n);
+  const late = tradeLedger([entryAt(100, [borrowChip("USDC", usdc(1_000_000_000n))]), entryAt(1_000, [swapChip("USDC", usdc(1_500_000_000n), "TSLAx", stockOf(421_000_000n))])]);
+  assert.equal(late.principal.get("TSLAx-long"), 0n);
+});
+
+test("a partial close realizes its share and leaves the rest of the principal", () => {
+  const ledger = tradeLedger([
+    entryAt(100, [borrowChip("USDC", usdc(1_000_000_000n)), swapChip("USDC", usdc(1_500_000_000n), "TSLAx", stockOf(400_000_000n))]),
+    entryAt(200, [swapChip("TSLAx", stockOf(100_000_000n), "USDC", usdc(400_000_000n))]),
+  ]);
+  // A quarter closed: $375 cost basis sold for $400.
+  assert.equal(ledger.realized[0].pnl, 25_000_000n);
+  assert.equal(ledger.principal.get("TSLAx-long"), 750_000_000n);
+});
+
+test("a close whose opening is older than history is not counted", () => {
+  const ledger = tradeLedger([entryAt(200, [swapChip("TSLAx", stockOf(100_000_000n), "USDC", usdc(400_000_000n))])]);
+  assert.equal(ledger.realized.length, 0);
+  assert.equal(ledger.unmatched, 1);
+});
+
+test("longs share the USDC debt; interest is unknown when a position's principal is not in history", () => {
+  const principal = new Map([["TSLAx-long", 1_000_000_000n], ["GOOGLx-long", 500_000_000n]]);
+  const positions = [{ id: "TSLAx-long", symbol: "TSLAx", side: "long" }, { id: "GOOGLx-long", symbol: "GOOGLx", side: "long" }];
+  assert.equal(interestAccrued({ positions, principal, debt: { USDC: 1_503_200_000n }, prices: {}, decimals: () => 8 }), 3_200_000n);
+  assert.equal(interestAccrued({ positions, principal: new Map([["TSLAx-long", 1_000_000_000n]]), debt: { USDC: 1_503_200_000n }, prices: {}, decimals: () => 8 }), null);
+  assert.equal(interestAccrued({ positions: [], principal, debt: { USDC: 9n }, prices: {}, decimals: () => 8 }), 0n);
+});
+
+test("the earnings series steps up at each close and ends at realized plus open P&L", () => {
+  const day = 86_400_000;
+  const now = 100 * day;
+  const { points } = earningsSeries([{ at: (now - 6 * day) / 1000, pnl: 27_300_000n }], 48_000_000n, (now - 9 * day) / 1000, "1W", now);
+  assert.equal(points[0].usd, 0n);
+  assert.equal(points[points.length - 2].usd, 27_300_000n);
+  assert.equal(points[points.length - 1].at, now);
+  assert.equal(points[points.length - 1].usd, 75_300_000n);
+});

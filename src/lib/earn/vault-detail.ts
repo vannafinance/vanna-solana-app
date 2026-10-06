@@ -2,6 +2,7 @@ import { PublicKey } from "@solana/web3.js";
 
 import { formatPercent } from "@/format/format-amount";
 import { formatShortDate } from "@/format/format-date";
+import { formatSummaryAmount } from "@/format/format-earn";
 import { netPrincipal } from "@/lib/portfolio/net-earnings";
 import type { ValuedDeposit } from "@/lib/portfolio/value-deposits";
 import { type AssetSymbol, assets } from "@/lib/solana/assets";
@@ -69,7 +70,7 @@ export function buildVaultDetail({ id, pools, prices, accounts, deposit, events 
   const limitRows: VaultLimit[] = [
     { label: "Loan to value", value: formatPercent(limits.ltvBps, 0) },
     { label: "Liquidation threshold", value: formatPercent(limits.liquidationThresholdBps, 0) },
-    { label: "Per margin account", value: limits.maxCollateralPerMargin === 0n ? "No limit" : `${limits.maxCollateralPerMargin} base units` },
+    { label: "Per margin account", value: limits.maxCollateralPerMargin === 0n ? "No limit" : formatSummaryAmount(amount(limits.maxCollateralPerMargin), symbol) },
   ];
   const collateralAssets: VaultCollateralAsset[] = assets.flatMap((other) => {
     const config = accounts[other.symbol]?.limits;

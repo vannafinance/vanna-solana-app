@@ -49,7 +49,7 @@ export function SwapHistoryRow({ group, onOpenTransaction }: SwapHistoryRowProps
                 {`${entry.from} → ${entry.to}`}
               </AppText>
               <AppText variant="caption" color="textMuted" numberOfLines={1}>
-                From wallet
+                {new Date(entry.timestamp).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}
               </AppText>
             </View>
             <View style={{ alignItems: "flex-end", gap: 2 }}>

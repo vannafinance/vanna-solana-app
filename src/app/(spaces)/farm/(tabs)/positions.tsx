@@ -1,29 +1,36 @@
 import { router } from "expo-router";
 import { FlatList, Pressable, View } from "react-native";
 
-import { FarmHero } from "@/components/farm/farm-hero";
+import { FarmOverviewCard, FarmOverviewEmpty } from "@/components/farm/farm-overview-card";
 import { FarmPositionCard } from "@/components/farm/farm-position-card";
 import { UnplacedPositionCard } from "@/components/farm/unplaced-position-card";
+import { MarginHero } from "@/components/margin/margin-hero";
 import { AppText } from "@/components/ui/app-text";
 import { Icon } from "@/components/ui/icon";
 import { ResourceView } from "@/components/ui/resource-view";
 import { SpaceHeader } from "@/components/ui/space-header";
-import { formatPercent, formatSignedUsd, formatUsd } from "@/format/format-amount";
 import { unplacedCloseId } from "@/hooks/use-farm-close";
+import { useFarmOverview } from "@/hooks/use-farm-overview";
 import { useFarmPositions } from "@/hooks/use-farm-positions";
 import { useHeaderProps } from "@/hooks/use-header-props";
+import { useMarginOverview } from "@/hooks/use-margin-overview";
 import { spaceRoutes } from "@/navigation/routes";
-import { useTheme } from "@/theme/use-theme";
 import { useResetScrollBetweenSpaces } from "@/navigation/use-reset-scroll-between-spaces";
+import { useTheme } from "@/theme/use-theme";
 
+// The header is the whole margin account. Under it, net earnings over time and the interest the loans have accrued, then
+// each farm position with its own figures.
 export default function FarmPositionsScreen() {
   const listRef = useResetScrollBetweenSpaces();
   const { colors, radius } = useTheme();
   const headerProps = useHeaderProps();
+  const margin = useMarginOverview();
   const positions = useFarmPositions();
+  const { overview, mode, setMode, range, setRange } = useFarmOverview();
   const items = positions.status === "ready" ? positions.data.positions : [];
   const unplaced = positions.status === "ready" ? positions.data.unplaced : [];
   const settled = positions.status === "ready" || positions.status === "empty";
+  const deployLabel = positions.status === "empty" ? "Deploy a strategy" : "Deploy another strategy";
 
   return (
     <FlatList
@@ -35,30 +42,32 @@ export default function FarmPositionsScreen() {
       contentContainerStyle={{ paddingBottom: 24 }}
       ItemSeparatorComponent={() => <View style={{ height: 12 }} />}
       ListHeaderComponent={
-        <View style={{ marginBottom: 16 }}>
+        <View style={{ gap: 16, marginBottom: 12 }}>
           <SpaceHeader space="farm" {...headerProps}>
-            {positions.status === "ready" ? (
-              <FarmHero
-                label="Farm net value"
-                value={formatUsd(positions.data.netValueUsd)}
-                stats={[
-                  { label: "Open positions", value: String(positions.data.positions.length) },
-                  { label: "Earnings", value: formatSignedUsd(positions.data.earningsUsd) },
-                  { label: "Net APR", value: formatPercent(positions.data.netAprBps) },
-                ]}
-              />
-            ) : undefined}
+            <MarginHero module="farm" overview={margin} />
           </SpaceHeader>
+          {overview.status === "ready" ? (
+            <View style={{ paddingHorizontal: 16 }}>
+              <FarmOverviewCard overview={overview.data} mode={mode} onModeChange={setMode} range={range} onRangeChange={setRange} />
+            </View>
+          ) : overview.status === "empty" ? (
+            <View style={{ paddingHorizontal: 16 }}>
+              <FarmOverviewEmpty />
+            </View>
+          ) : null}
         </View>
       }
       ListEmptyComponent={
-        <ResourceView resource={positions} emptyLabel="No open farm positions">
-          {() => null}
-        </ResourceView>
+        // With no farm and no history the card above already says so.
+        overview.status === "empty" ? null : (
+          <ResourceView resource={positions} emptyLabel="No open farm positions">
+            {() => null}
+          </ResourceView>
+        )
       }
       renderItem={({ item }) => (
         <View style={{ paddingHorizontal: 16 }}>
-          <FarmPositionCard position={item} onPress={() => router.push(`/farm/position/${item.id}`)} />
+          <FarmPositionCard position={item} onDetails={() => router.push(`/farm/position/${item.id}`)} onClose={() => router.push(`/farm/close/${item.id}`)} />
         </View>
       )}
       ListFooterComponent={
@@ -69,7 +78,7 @@ export default function FarmPositionsScreen() {
             ))}
             <Pressable
               accessibilityRole="button"
-              accessibilityLabel={positions.status === "empty" ? "Deploy a strategy" : "Deploy another strategy"}
+              accessibilityLabel={deployLabel}
               onPress={() => router.navigate(spaceRoutes.farm)}
               style={{
                 height: 52,
@@ -85,7 +94,7 @@ export default function FarmPositionsScreen() {
             >
               <Icon name="add" size={18} color="text" />
               <AppText variant="body" strong>
-                {positions.status === "empty" ? "Deploy a strategy" : "Deploy another strategy"}
+                {deployLabel}
               </AppText>
             </Pressable>
           </View>

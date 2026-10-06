@@ -15,10 +15,9 @@ type Pools = Partial<Record<AssetSymbol, PoolStats>>;
 const POOL_RATE_TO_UI_RATE = 1000n;
 const decimalsOf = new Map(assets.map((asset) => [asset.symbol, asset.decimals]));
 
-const toUsd = (tokens: number, decimals: number, price: bigint): bigint => {
-  const raw = parseUnits(tokens.toFixed(decimals), decimals);
-  return raw === null ? 0n : (raw * price) / 10n ** BigInt(decimals);
-};
+const toRaw = (tokens: number, decimals: number): bigint => parseUnits(Math.max(tokens, 0).toFixed(decimals), decimals) ?? 0n;
+
+const toUsd = (raw: bigint, decimals: number, price: bigint): bigint => (raw * price) / 10n ** BigInt(decimals);
 
 // A vault is listed only when its pool and price are both known; one missing value never shows as zero.
 export function buildVaultSummaries(pools: Pools, prices: OraclePrices, deposits: readonly ValuedDeposit[]): VaultSummary[] {
@@ -27,15 +26,23 @@ export function buildVaultSummaries(pools: Pools, prices: OraclePrices, deposits
     const price = prices[symbol];
     if (pool === undefined || price === undefined) return [];
     const deposit = deposits.find((entry) => entry.symbol === symbol);
+    const supplied = toRaw(pool.totalSupply, decimals);
+    const borrowed = toRaw(pool.totalBorrowed, decimals);
+    const available = supplied > borrowed ? supplied - borrowed : 0n;
     return [
       {
         id: vaultId(symbol),
         symbol,
+        name: vaultMeta[symbol].name,
         category: vaultMeta[symbol].category,
         supplyApyBps: Math.round(pool.supplyApyPercent * 100),
-        suppliedUsd: toUsd(pool.totalSupply, decimals, price),
-        borrowedUsd: toUsd(pool.totalBorrowed, decimals, price),
-        yourSupply: deposit ? { raw: deposit.supplied, decimals } : undefined,
+        totalSupply: { raw: supplied, decimals },
+        suppliedUsd: toUsd(supplied, decimals, price),
+        borrowedUsd: toUsd(borrowed, decimals, price),
+        available: { raw: available, decimals },
+        availableUsd: toUsd(available, decimals, price),
+        utilizationBps: Math.round(pool.utilizationPercent * 100),
+        yourSupply: deposit && deposit.supplied > 0n ? { amount: { raw: deposit.supplied, decimals }, usd: deposit.value } : undefined,
       },
     ];
   });

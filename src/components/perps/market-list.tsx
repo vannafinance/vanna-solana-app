@@ -6,34 +6,47 @@ import { formatCompactUsd, formatPercent, formatUsd } from "@/format/format-amou
 import { useTheme } from "@/theme/use-theme";
 import type { MarketListItem, PerpsMarket } from "@/types/perps";
 
-import { MarketRow } from "./market-row";
+import { MARKET_COLUMNS, MarketRow } from "./market-row";
 
 type MarketListProps = {
   markets: readonly MarketListItem[];
   onSelect: (market: PerpsMarket) => void;
 };
 
+// A column label, right-aligned over its figures. `overhang` lets a label wider than its column reach left into the gap.
+function HeaderCell({ label, width, overhang = 0 }: { label: string; width: number; overhang?: number }) {
+  return (
+    <AppText variant="caption" color="textMuted" numberOfLines={1} style={{ width: width + overhang, marginLeft: -overhang, textAlign: "right" }}>
+      {label}
+    </AppText>
+  );
+}
+
+// The markets as a table: one header row of column labels, then one row per market with its figures in aligned columns.
 export function MarketList({ markets, onSelect }: MarketListProps) {
   const { colors } = useTheme();
 
   return (
     <Card padded={false} style={{ paddingHorizontal: 16 }}>
-      <View style={{ height: 40, flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-        <AppText variant="caption" color="textMuted">
+      <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants" style={{ height: 40, flexDirection: "row", alignItems: "center", gap: MARKET_COLUMNS.gap }}>
+        <AppText variant="caption" color="textMuted" style={{ flex: 1 }}>
           Market
         </AppText>
-        <AppText variant="caption" color="textMuted">
-          Mark price
-        </AppText>
+        <HeaderCell label="Borrow APY" width={MARKET_COLUMNS.apy} overhang={24} />
+        <HeaderCell label="Liquidity" width={MARKET_COLUMNS.liquidity} />
+        <HeaderCell label="Price" width={MARKET_COLUMNS.price} />
       </View>
       {markets.map((market) => (
         <View key={market.symbol} style={{ borderTopWidth: 1, borderTopColor: colors.divider }}>
           <MarketRow
             symbol={market.symbol}
             pair={market.pair}
-            detail={`Borrow ${formatPercent(market.tokenBorrowBps)} · Liquidity ${formatCompactUsd(market.liquidityUsd)}`}
+            borrowApy={formatPercent(market.tokenBorrowBps)}
+            liquidity={formatCompactUsd(market.liquidityUsd)}
             price={formatUsd(market.markPrice)}
             watched={market.watched}
+            maxLeverage={market.maxLeverage}
+            open={market.open}
             onPress={() => onSelect(market)}
           />
         </View>

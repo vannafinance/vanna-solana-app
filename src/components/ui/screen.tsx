@@ -1,6 +1,7 @@
-import { isValidElement, type ReactNode } from "react";
+import { useFocusEffect } from "expo-router";
+import { isValidElement, type ReactNode, useCallback } from "react";
 import { type NativeScrollEvent, type NativeSyntheticEvent, ScrollView, View } from "react-native";
-import Animated, { interpolate, useAnimatedStyle, useSharedValue } from "react-native-reanimated";
+import Animated, { Easing, interpolate, useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useResetScrollBetweenSpaces } from "@/navigation/use-reset-scroll-between-spaces";
@@ -20,6 +21,8 @@ type ScreenProps = {
 
 // How far the page scrolls before the status bar backing is fully shown.
 const SCRIM_SCROLL = 32;
+// Module pages switch in place; their content (not the header, which has the same shape in every module) fades in.
+const CONTENT_FADE = { duration: 180, easing: Easing.bezier(0.2, 0, 0, 1) } as const;
 
 function headerSpace(header: ReactNode): Space | null {
   return isValidElement<{ space: Space }>(header) && header.type === SpaceHeader ? header.props.space : null;
@@ -35,6 +38,16 @@ export function Screen({ header, footer, gap, paddingTop, children }: ScreenProp
   };
   const scrim = useAnimatedStyle(() => ({ opacity: interpolate(scroll.value, [0, SCRIM_SCROLL], [0, 1], "clamp") }));
   const space = headerSpace(header);
+  const content = useSharedValue(1);
+  const fadeIn = useAnimatedStyle(() => ({ opacity: content.value }));
+
+  useFocusEffect(
+    useCallback(() => {
+      if (space === null) return;
+      content.set(0);
+      content.set(withTiming(1, CONTENT_FADE));
+    }, [space, content]),
+  );
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
@@ -47,12 +60,12 @@ export function Screen({ header, footer, gap, paddingTop, children }: ScreenProp
         onScroll={onScroll}
       >
         {header}
-        <View style={{ padding: spacing.lg, paddingTop: paddingTop ?? spacing.lg, gap: gap ?? spacing.lg }}>{children}</View>
+        <Animated.View style={[{ padding: spacing.lg, paddingTop: paddingTop ?? spacing.lg, gap: gap ?? spacing.lg }, fadeIn]}>{children}</Animated.View>
       </ScrollView>
       {space === null ? null : (
         // The gradient header scrolls away but the status bar keeps its light icons, so once content slides under it, it is
         // backed by the header's own colour.
-        <Animated.View pointerEvents="none" style={[{ position: "absolute", top: 0, left: 0, right: 0, height: insets.top, backgroundColor: spaceHeaders[space].surface[0] }, scrim]} />
+        <Animated.View pointerEvents="none" style={[{ position: "absolute", top: 0, left: 0, right: 0, height: insets.top, backgroundColor: spaceHeaders[space].scrim }, scrim]} />
       )}
       {footer ? (
         <View style={{ paddingHorizontal: spacing.lg, paddingTop: spacing.sm, paddingBottom: Math.max(insets.bottom, spacing.lg) }}>

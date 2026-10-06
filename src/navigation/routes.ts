@@ -3,7 +3,8 @@ export const routes = {
   profile: "/profile",
   faucet: "/faucet",
   marginCreate: "/margin/create",
-  tradeSwap: "/trade/swap",
+  // Swap is wallet-only and sits outside the modules (the round button in the bottom bar).
+  swap: "/swap",
   tradePositions: "/trade/positions",
   tradeHistory: "/trade/history",
   farmPositions: "/farm/positions",

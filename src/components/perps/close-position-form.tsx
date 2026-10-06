@@ -1,10 +1,10 @@
 import { View } from "react-native";
 
+import { AppText } from "@/components/ui/app-text";
 import { Button } from "@/components/ui/button";
-import { DetailRow } from "@/components/ui/detail-row";
+import { StatStrip } from "@/components/ui/stat-strip";
 import { formatSignedUsd, formatUsd } from "@/format/format-amount";
-import { formatLiquidationPrice, formatTokenSize, sideLabel } from "@/format/format-perps";
-import { useTheme } from "@/theme/use-theme";
+import { formatLiquidationPrice, formatTokenSize } from "@/format/format-perps";
 import type { CloseQuote, PositionSummary } from "@/types/perps";
 
 import { SheetChoiceRow } from "./sheet-choice-row";
@@ -21,28 +21,30 @@ type ClosePositionFormProps = {
 };
 
 export function ClosePositionForm({ position, quote, fractionsBps, onSelectFraction, onSubmit, onDismiss }: ClosePositionFormProps) {
-  const { colors } = useTheme();
   const closingAll = quote.fractionBps === 10_000;
 
   return (
     <View>
-      <SheetHeader
-        symbol={position.symbol}
-        title="Close position"
-        subtitle={`${position.pair} · ${sideLabel(position.side)} ${position.leverage}x`}
-        onClose={onDismiss}
-      />
+      <SheetHeader symbol={position.symbol} title="Close position" pair={position.pair} side={position.side} leverage={position.leverage} onClose={onDismiss} />
       <SheetSectionLabel label="Close amount" />
       <SheetChoiceRow
         selectedTone="tint"
         choices={fractionsBps.map((bps) => ({ label: `${bps / 100}%`, selected: bps === quote.fractionBps, onPress: () => onSelectFraction(bps) }))}
       />
-      <View style={{ marginTop: 12, borderTopWidth: 1, borderTopColor: colors.divider }}>
-        <DetailRow label="Closing" value={`${formatTokenSize(quote.tokens, position.symbol)} · ${formatUsd(quote.size)}`} />
-        <DetailRow label="Realized PnL" value={formatSignedUsd(quote.pnl)} valueColor={quote.pnl >= 0n ? "positive" : "negative"} />
-        <DetailRow label="Trading fee" value={`-${formatUsd(quote.fee)}`} />
-        <DetailRow label="Back to your wallet" value={formatUsd(quote.toWallet)} last={closingAll} />
-        {closingAll ? null : <DetailRow label="Liquidation price" value={`Unchanged · ${formatLiquidationPrice(quote.liquidationPrice)}`} last />}
+      <View style={{ marginTop: 16, gap: 12 }}>
+        <StatStrip
+          stats={[
+            { label: "Closing", value: formatUsd(quote.size), sub: formatTokenSize(quote.tokens, position.symbol) },
+            { label: "Realized PnL", value: formatSignedUsd(quote.pnl), valueColor: quote.pnl >= 0n ? "positive" : "negative" },
+            { label: "Trading fee", value: quote.fee > 0n ? `-${formatUsd(quote.fee)}` : formatUsd(0n) },
+            { label: "Back to your wallet", value: formatUsd(quote.toWallet) },
+          ]}
+        />
+        {closingAll ? null : (
+          <AppText variant="caption" color="textMuted">
+            {`The rest stays open. Its liquidation price stays at ${formatLiquidationPrice(quote.liquidationPrice)}.`}
+          </AppText>
+        )}
       </View>
       <View style={{ marginTop: 16 }}>
         <Button brand label={`Close ${closingAll ? "all" : `${quote.fractionBps / 100}%`} · approve in wallet`} onPress={onSubmit} />

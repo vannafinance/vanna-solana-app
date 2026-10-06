@@ -23,7 +23,7 @@ export function groupLenderHistory(events: readonly EarnEvent[], now = new Date(
       signature: event.signature,
       kind: event.kind,
       title: amount === null ? `${event.kind === "supply" ? "Supplied" : "Withdrew"} ${event.symbol}` : `${event.kind === "supply" ? "Supplied" : "Withdrew"} ${amount}`,
-      detail: `${event.symbol} vault · ${event.kind === "supply" ? "from wallet" : "to wallet"}`,
+      detail: `${event.symbol} vault`,
     } as const;
     const last = groups[groups.length - 1];
     if (last && last.label === label) last.items.push(item);

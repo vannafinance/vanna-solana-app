@@ -1,7 +1,7 @@
 import { parseUnits, type TokenAmount } from "@/format/format-amount";
 import type { CollateralSymbol, DeployForm, DeployIssue, DeployQuote, FarmCollateral, FarmPool, PoolSymbol } from "@/types/farm";
 
-import { deployQuote, heldCollaterals, MIN_LEVERAGE } from "./farm-math";
+import { accountAfterDeploy, deployQuote, heldCollaterals, MIN_LEVERAGE } from "./farm-math";
 
 // Below this the web app refuses to open a position; liquidation starts at 1.1.
 const MIN_OPENING_HEALTH = 1.15;
@@ -29,8 +29,8 @@ function findIssue(collateral: FarmCollateral, pool: FarmPool, amount: bigint, l
   if (leverage <= MIN_LEVERAGE) return "low-leverage";
   if (amount <= 0n) return "no-amount";
   if (quote.borrow.raw > pool.borrowable) return "pool-liquidity";
-  const debt = account.debtUsd + quote.debtUsd;
-  if (debt > 0n && Number(account.collateralUsd + quote.collateralValueUsd + quote.debtUsd) / Number(debt) <= MIN_OPENING_HEALTH) return "too-risky";
+  const { health } = accountAfterDeploy({ ...account, netUsd: account.collateralUsd - account.debtUsd }, quote);
+  if (health !== null && health <= MIN_OPENING_HEALTH) return "too-risky";
   return null;
 }
 

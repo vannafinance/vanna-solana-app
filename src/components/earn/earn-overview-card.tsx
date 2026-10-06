@@ -2,17 +2,17 @@ import { useCallback, useMemo, useState } from "react";
 import { View } from "react-native";
 
 import { AppText } from "@/components/ui/app-text";
+import { Card } from "@/components/ui/card";
 import { ResourceView } from "@/components/ui/resource-view";
+import { SegmentedControl } from "@/components/ui/segmented-control";
 import { formatUsd } from "@/format/format-amount";
 import { formatAxisUsd, formatChartDate, usdToDollars } from "@/format/format-earn";
-import { spaces } from "@/theme/tokens";
 import { useTheme } from "@/theme/use-theme";
 import type { EarnOverview, OverviewMode, OverviewRange } from "@/types/earn";
 import type { Resource } from "@/types/resource";
 
-import { HeroTabs } from "./hero-tabs";
-import { type ChartPoint, LiveChart } from "./live-chart";
-import { RangeChips } from "./range-chips";
+import { type ChartPoint, LiveChart } from "@/components/ui/live-chart";
+import { RangeChips } from "@/components/ui/range-chips";
 
 const MODES = [
   { value: "deposit", label: "Overall deposit" },
@@ -26,7 +26,7 @@ const RANGES = [
   { value: "All", label: "All Time" },
 ] as const;
 
-type EarnOverviewPanelProps = {
+type EarnOverviewCardProps = {
   overview: Resource<EarnOverview>;
   mode: OverviewMode;
   onModeChange: (mode: OverviewMode) => void;
@@ -34,14 +34,19 @@ type EarnOverviewPanelProps = {
   onRangeChange: (range: OverviewRange) => void;
 };
 
-export function EarnOverviewPanel({ overview, mode, onModeChange, range, onRangeChange }: EarnOverviewPanelProps) {
+// The deposit value over time (or net earnings), first on the Positions page.
+export function EarnOverviewCard({ overview, mode, onModeChange, range, onRangeChange }: EarnOverviewCardProps) {
+  const { spacing } = useTheme();
+
   return (
-    <View>
-      <HeroTabs tabs={MODES} value={mode} onChange={onModeChange} />
-      <ResourceView resource={overview} emptyLabel="No deposits yet">
-        {(data) => <OverviewChart overview={data} mode={mode} range={range} onRangeChange={onRangeChange} />}
-      </ResourceView>
-    </View>
+    <Card padded={false} style={{ overflow: "hidden" }}>
+      <SegmentedControl segments={MODES} value={mode} onChange={onModeChange} dense />
+      <View style={{ padding: spacing.lg }}>
+        <ResourceView resource={overview} emptyLabel={mode === "earnings" ? "Earnings unavailable right now" : "No deposits yet"}>
+          {(data) => <OverviewChart overview={data} mode={mode} range={range} onRangeChange={onRangeChange} />}
+        </ResourceView>
+      </View>
+    </Card>
   );
 }
 
@@ -53,7 +58,7 @@ type OverviewChartProps = {
 };
 
 function OverviewChart({ overview, mode, range, onRangeChange }: OverviewChartProps) {
-  const { colors } = useTheme();
+  const { colors, spacing } = useTheme();
   const [scrubbed, setScrubbed] = useState<ChartPoint | null>(null);
   const showValue = useCallback((usd: bigint) => (mode === "earnings" ? `+${formatUsd(usd)}` : formatUsd(usd)), [mode]);
   const points = useMemo(() => overview.points.map((point) => ({ at: point.at, value: usdToDollars(point.usd), text: showValue(point.usd) })), [overview.points, showValue]);
@@ -64,37 +69,37 @@ function OverviewChart({ overview, mode, range, onRangeChange }: OverviewChartPr
 
   return (
     <View>
-      <AppText style={{ marginTop: 14, fontSize: 40, lineHeight: 48, letterSpacing: -0.8, color: colors.onHero }} strong accessibilityLiveRegion="polite">
+      <AppText variant="heading" strong color={mode === "earnings" && overview.value > 0n ? "positive" : "text"} numberOfLines={1} accessibilityLiveRegion="polite">
         {scrubbed?.text ?? showValue(overview.value)}
       </AppText>
-      <AppText variant="body" style={{ lineHeight: 20, color: colors.onHeroSoft }}>
+      <AppText variant="caption" color="textMuted">
         {formatChartDate(scrubbed?.at ?? overview.now, "head", overview.stepMs, overview.now)}
       </AppText>
       {noHistory ? (
-        <AppText variant="body" style={{ marginTop: 20, marginBottom: 28, color: colors.onHeroSoft }}>
+        <AppText variant="body" color="textMuted" style={{ marginTop: spacing.lg }}>
           {mode === "earnings" ? "Earnings show up here once your deposits start accruing." : "Supply to a vault to see your deposits here."}
         </AppText>
       ) : (
-      <View style={{ marginTop: 12 }}>
-        <LiveChart
-          points={points}
-          label={label}
-          line={colors.onHero}
-          ink={colors.onHero}
-          inkMuted={colors.onHeroMuted}
-          grid={colors.heroRule}
-          ring={spaces.earn.panel[0]}
-          includeZero
-          formatAxis={formatAxisUsd}
-          formatDate={formatDate}
-          onScrub={setScrubbed}
-        />
-      </View>
-      )}
-      {noHistory ? null : (
-        <View style={{ marginTop: 10 }}>
-          <RangeChips ranges={RANGES} value={range} onChange={onRangeChange} tone="hero" />
-        </View>
+        <>
+          <View style={{ marginTop: spacing.md }}>
+            <LiveChart
+              points={points}
+              label={label}
+              line={colors.positive}
+              ink={colors.text}
+              inkMuted={colors.textMuted}
+              grid={colors.border}
+              ring={colors.surface}
+              includeZero
+              formatAxis={formatAxisUsd}
+              formatDate={formatDate}
+              onScrub={setScrubbed}
+            />
+          </View>
+          <View style={{ marginTop: spacing.md }}>
+            <RangeChips ranges={RANGES} value={range} onChange={onRangeChange} tone="surface" />
+          </View>
+        </>
       )}
     </View>
   );

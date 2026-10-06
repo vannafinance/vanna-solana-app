@@ -5,6 +5,7 @@ import Svg, { Line } from "react-native-svg";
 import { AppText } from "@/components/ui/app-text";
 import { Card } from "@/components/ui/card";
 import { ResourceView } from "@/components/ui/resource-view";
+import { StatStrip } from "@/components/ui/stat-strip";
 import { formatPercent } from "@/format/format-amount";
 import { formatRatePercent } from "@/format/format-earn";
 import { useTheme } from "@/theme/use-theme";
@@ -19,7 +20,7 @@ export function VaultAnalyticsTab({ analytics }: { analytics: Resource<VaultAnal
     <ResourceView resource={analytics} emptyLabel="No analytics for this vault">
       {(data) => (
         <View>
-          <SectionTitle title="Rates today" marginTop={16} marginBottom={8} />
+          <SectionTitle title="Rates today" marginTop={12} marginBottom={8} />
           <RatesCard analytics={data} />
           <SectionTitle title="Interest rate curve" marginTop={20} marginBottom={8} />
           <RateCurveCard analytics={data} />
@@ -30,26 +31,17 @@ export function VaultAnalyticsTab({ analytics }: { analytics: Resource<VaultAnal
 }
 
 function RatesCard({ analytics }: { analytics: VaultAnalytics }) {
-  const stats = [
-    { label: "Supply APY", value: formatPercent(analytics.supplyApyBps), color: "positive" },
-    { label: "Borrow APY", value: formatPercent(analytics.borrowApyBps), color: "text" },
-  ] as const;
+  const { spacing } = useTheme();
 
   return (
-    <Card>
-      <View style={{ flexDirection: "row", gap: 24 }}>
-        {stats.map((stat) => (
-          <View key={stat.label}>
-            <AppText strong color={stat.color} style={{ fontSize: 24, lineHeight: 32 }}>
-              {stat.value}
-            </AppText>
-            <AppText variant="caption" color="textMuted">
-              {stat.label}
-            </AppText>
-          </View>
-        ))}
-      </View>
-      <AppText variant="caption" color="textMuted" style={{ marginTop: 12 }}>
+    <Card style={{ gap: spacing.md }}>
+      <StatStrip
+        stats={[
+          { label: "Supply APY", value: formatPercent(analytics.supplyApyBps), valueColor: "positive" },
+          { label: "Borrow APY", value: formatPercent(analytics.borrowApyBps) },
+        ]}
+      />
+      <AppText variant="caption" color="textMuted">
         Rate history is not recorded yet, so only today’s rates are shown.
       </AppText>
     </Card>
@@ -57,36 +49,30 @@ function RatesCard({ analytics }: { analytics: VaultAnalytics }) {
 }
 
 function RateCurveCard({ analytics }: { analytics: VaultAnalytics }) {
-  const { colors } = useTheme();
+  const { colors, spacing } = useTheme();
   const [scrubbed, setScrubbed] = useState<RateSample | null>(null);
   const { samples, kink, current } = analytics.curve;
   const shown = scrubbed ?? current;
-  const stats = [
-    { label: "Borrowers pay", value: formatRatePercent(shown.borrow * 100), color: "text" },
-    { label: "Lenders earn", value: formatRatePercent(shown.lender * 100), color: "positive" },
-  ] as const;
+  const used = `${Math.round(shown.utilization * 100)}% borrowed`;
 
   return (
-    <Card>
-      <AppText variant="caption" color="textMuted" style={{ lineHeight: 16 }}>
-        {scrubbed ? `If ${Math.round(scrubbed.utilization * 100)}% of the pool is borrowed` : "At today’s usage (drag to try others)"}
-      </AppText>
-      <View style={{ marginTop: 2, flexDirection: "row", gap: 20 }}>
-        {stats.map((stat) => (
-          <View key={stat.label}>
-            <AppText strong color={stat.color} style={{ fontSize: 24, lineHeight: 32 }}>
-              {stat.value}
-            </AppText>
-            <AppText variant="caption" color="textMuted">
-              {stat.label}
-            </AppText>
-          </View>
-        ))}
+    <Card style={{ gap: spacing.md }}>
+      <View style={{ flexDirection: "row", justifyContent: "space-between", gap: spacing.md }}>
+        <AppText variant="body" strong numberOfLines={1}>
+          {scrubbed ? `If ${used}` : `Today, ${used}`}
+        </AppText>
+        <AppText variant="caption" color="textMuted" numberOfLines={1}>
+          Drag to explore
+        </AppText>
       </View>
-      <View style={{ marginTop: 14 }}>
-        <RateCurveChart samples={samples} kink={kink} current={current} onScrub={setScrubbed} />
-      </View>
-      <View style={{ marginTop: 6, flexDirection: "row", gap: 16 }}>
+      <StatStrip
+        stats={[
+          { label: "Borrowers pay", value: formatRatePercent(shown.borrow * 100) },
+          { label: "Lenders earn", value: formatRatePercent(shown.lender * 100), valueColor: "positive" },
+        ]}
+      />
+      <RateCurveChart samples={samples} kink={kink} current={current} onScrub={setScrubbed} />
+      <View style={{ flexDirection: "row", gap: spacing.lg }}>
         <LegendItem label="Borrow rate" color={colors.link} width={2.5} />
         <LegendItem label="Lender rate" color={colors.positive} width={2} dashed />
       </View>

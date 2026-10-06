@@ -20,7 +20,7 @@ export function useMarginCreate(): MarginAccountView {
 
   const flow = useTransactionFlow({
     run: (_step, progress) => signer.execute(({ connection, owner, hooks }) => createMarginAccount(connection, owner, hooks), progress),
-    success: { title: "Your margin account is open", message: address === "" ? "You can now trade Perps and Farm." : `Account ${address} is ready. Go long or short up to 5x.` },
+    success: { title: "Your margin account is open", message: address === "" ? "You can now use Margin trade and Farm." : `Account ${address} is ready. Go long or short up to 5x.` },
   });
 
   useEffect(() => {

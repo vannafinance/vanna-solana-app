@@ -21,14 +21,6 @@ import type { PerpsSymbol } from "@/types/perps";
 
 const LIQUIDATION_NOTE = `You borrow from Vanna vaults to open leverage and pay the borrow APY while the position is open. If your account health reaches ${LIQUIDATION_HEALTH.toFixed(2)}, the position is liquidated with a dynamic penalty of 0–15%.`;
 
-function SectionTitle({ title }: { title: string }) {
-  return (
-    <AppText variant="bodyLg" strong style={{ lineHeight: 24, marginTop: 28, marginBottom: 4 }}>
-      {title}
-    </AppText>
-  );
-}
-
 export default function PerpsMarketScreen() {
   const { symbol } = useLocalSearchParams<{ symbol: string }>();
   const { detail, timeframe, setTimeframe, toggleWatch } = usePerpsMarket(symbol);
@@ -89,13 +81,9 @@ export default function PerpsMarketScreen() {
                 <TimeframeTabs options={TIMEFRAMES} value={timeframe} onChange={setTimeframe} />
               </View>
             )}
-            {position ? (
-              <>
-                <SectionTitle title="Your position" />
-                <MarketPositionRow position={position} onPress={() => router.navigate(routes.tradePositions)} />
-              </>
-            ) : null}
-            <SectionTitle title="Market" />
+          </View>
+          <View style={{ marginTop: 24, gap: 12 }}>
+            {position ? <MarketPositionRow position={position} onPress={() => router.navigate(routes.tradePositions)} /> : null}
             <MarketStats market={market} liquidityTokens={liquidityTokens} liquidationNote={LIQUIDATION_NOTE} />
           </View>
         </Screen>

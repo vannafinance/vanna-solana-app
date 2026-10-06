@@ -10,6 +10,7 @@ import { useWalletHoldings } from "@/hooks/use-wallet-holdings";
 import { toPortfolioFarmPosition } from "@/lib/farm/portfolio-position";
 import { toPortfolioPosition } from "@/lib/perps/portfolio-position";
 import { totalEarned, vaultEarnings } from "@/lib/portfolio/net-earnings";
+import { netWorth } from "@/lib/portfolio/net-worth";
 import type { Portfolio } from "@/types/portfolio";
 import type { Resource } from "@/types/resource";
 
@@ -40,12 +41,24 @@ export function usePortfolio(): Resource<Portfolio> {
   }
 
   const snapshot = account.data;
+  const walletBalance = holdings.data?.total ?? null;
+  const earnSupplied = deposits.data ? deposits.data.reduce((sum, deposit) => sum + deposit.value, 0n) : null;
+  const worth = netWorth({ wallet: walletBalance, earn: earnSupplied, margin: snapshot.hasMarginAccount ? snapshot.netAvailable : 0n });
+  // Perps and Farm positions together. When either cannot be read the list is unavailable rather than shown empty.
+  const positions =
+    perps.status === "ready" && perps.data.positionsAvailable && farm.status === "ready"
+      ? [...perps.data.positions.map(toPortfolioPosition), ...farm.data.positions.map(toPortfolioFarmPosition)]
+      : null;
   return {
     status: "ready",
     stale: account.isError,
     refresh: retry,
     data: {
-      walletBalance: holdings.data?.total ?? null,
+      walletBalance,
+      earnSupplied,
+      netWorth: worth.total,
+      netWorthMissing: worth.missing,
+      tradingPnl: positions === null ? null : positions.reduce((sum, position) => sum + position.pnl, 0n),
       marginBalance: snapshot.collateral,
       totalBorrowed: snapshot.borrowed,
       netAvailable: snapshot.netAvailable,
@@ -56,11 +69,7 @@ export function usePortfolio(): Resource<Portfolio> {
       hasMarginAccount: snapshot.hasMarginAccount,
       walletAddress: wallet,
       marginAddress: snapshot.address,
-      // Perps and Farm positions together. When either cannot be read the list is unavailable rather than shown empty.
-      positions:
-        perps.status === "ready" && perps.data.positionsAvailable && farm.status === "ready"
-          ? [...perps.data.positions.map(toPortfolioPosition), ...farm.data.positions.map(toPortfolioFarmPosition)]
-          : null,
+      positions,
       assets: holdings.data?.holdings.map((holding) => ({
         symbol: holding.symbol,
         tokens: { raw: holding.raw, decimals: holding.decimals },

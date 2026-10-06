@@ -1,4 +1,4 @@
-import type { CollateralSymbol, FarmAttribution, FarmHistoryAction, FarmHistoryEntry, PoolSymbol } from "@/types/farm";
+import type { CollateralSymbol, FarmAttribution, FarmHistoryAction, FarmHistoryEntry, FarmHistoryEvent, PoolSymbol } from "@/types/farm";
 import type { HistoryChip, HistoryLeg, MarginActivity } from "@/types/margin-history";
 
 const STOCKS: readonly CollateralSymbol[] = ["TSLAx", "GOOGLx", "AAPLx", "ANTHROPIC", "OPENAI"];
@@ -40,10 +40,54 @@ function remember(pending: Pending | null, item: MarginActivity): Pending | null
   return { ...current, ...(stockDeposit ? { stockDeposit } : {}), ...(borrow ? { borrow } : {}), at: item.at };
 }
 
+// In the order a deploy runs: the stock in, the pool asset borrowed, then supplied to Kamino.
+function deployActions(stockDeposit: HistoryLeg, borrow: HistoryLeg | undefined, poolDeposit: HistoryLeg | undefined): FarmHistoryAction[] {
+  return [action("deposit", stockDeposit), ...(borrow ? [action("borrow", borrow)] : []), ...(poolDeposit ? [action("supply", poolDeposit)] : [])];
+}
+
+type Failure = { reason: string | null };
+
+function historyEntry(item: MarginActivity, event: FarmHistoryEvent, stock: CollateralSymbol, pool: PoolSymbol, actions: FarmHistoryAction[], failure: Failure | null = null): FarmHistoryEntry {
+  return {
+    id: item.signature,
+    event,
+    status: failure === null ? "succeeded" : "failed",
+    reason: failure?.reason ?? null,
+    collateralSymbol: stock,
+    poolSymbol: pool,
+    occurredAt: item.at * 1000,
+    signature: item.signature,
+    actions,
+  };
+}
+
+// A failed transaction is a Farm one when it is about a stock and a pool and has no swap (a swap makes it a perps order).
+// What it tried to do is read from the events it logged before it failed.
+function failedEntry(item: MarginActivity, reason: string | null): FarmHistoryEntry | null {
+  if (item.chips.some((chip) => chip.type === "swap")) return null;
+  const stockDeposit = legs(item.chips, "deposit").find((leg) => isStock(leg.asset));
+  const stockWithdraw = legs(item.chips, "withdraw").find((leg) => isStock(leg.asset));
+  const poolDeposit = legs(item.chips, "deposit").find((leg) => isPool(leg.asset));
+  const borrow = legs(item.chips, "borrow").find((leg) => isPool(leg.asset));
+  const repay = legs(item.chips, "repay").find((leg) => isPool(leg.asset));
+  const failedWith = (event: FarmHistoryEvent, stock: CollateralSymbol, pool: PoolSymbol, actions: FarmHistoryAction[]) => historyEntry(item, event, stock, pool, actions, { reason });
+
+  const funding = borrow ?? poolDeposit;
+  if (stockDeposit && isStock(stockDeposit.asset) && funding && isPool(funding.asset)) {
+    return failedWith("deploy", stockDeposit.asset, funding.asset, deployActions(stockDeposit, borrow, poolDeposit));
+  }
+  if (item.strategy !== "farm") return null;
+  if (repay && isPool(repay.asset) && item.stock !== null && isStock(item.stock)) return failedWith("exit", item.stock, repay.asset, [action("repay", repay)]);
+  if (stockWithdraw && isStock(stockWithdraw.asset)) return failedWith("return", stockWithdraw.asset, repay && isPool(repay.asset) ? repay.asset : "USDC", [action("withdraw", stockWithdraw)]);
+  return null;
+}
+
 // Replays the Farm transactions of one margin account, oldest first. A stock's deposit and the pool asset borrowed in the
 // same transaction, or in the transactions right before it, are what a position was opened with; returning the stock to the
 // wallet closes it. The split between two stocks sharing one pool is only an estimate from this history, as on the web app.
-export function deriveFarm(activity: readonly MarginActivity[]): FarmDerived {
+// `failed` holds the transactions that landed but failed, with why when known: they are listed, marked failed, and change
+// nothing, so they never open, close or pair with a position.
+export function deriveFarm(activity: readonly MarginActivity[], failed: ReadonlyMap<string, string | null> = new Map()): FarmDerived {
   const open = new Map<string, FarmAttribution>();
   const poolOf = new Map<CollateralSymbol, PoolSymbol>();
   const entries: FarmHistoryEntry[] = [];
@@ -52,6 +96,11 @@ export function deriveFarm(activity: readonly MarginActivity[]): FarmDerived {
 
   let pending: Pending | null = null;
   for (const item of [...activity].reverse()) {
+    if (failed.has(item.signature)) {
+      const attempt = failedEntry(item, failed.get(item.signature) ?? null);
+      if (attempt !== null) entries.push(attempt);
+      continue;
+    }
     if (item.strategy !== "farm") {
       pending = remember(pending, item);
       continue;
@@ -65,14 +114,7 @@ export function deriveFarm(activity: readonly MarginActivity[]): FarmDerived {
     const repay = legs(item.chips, "repay").find((leg) => isPool(leg.asset));
     const stockWithdraw = legs(item.chips, "withdraw").find((leg) => isStock(leg.asset));
     const poolWithdraw = legs(item.chips, "withdraw").find((leg) => isPool(leg.asset));
-    const entry = (stock: CollateralSymbol, pool: PoolSymbol, actions: FarmHistoryAction[]): FarmHistoryEntry => ({
-      id: item.signature,
-      collateralSymbol: stock,
-      poolSymbol: pool,
-      occurredAt: item.at * 1000,
-      signature: item.signature,
-      actions,
-    });
+    const entry = (event: FarmHistoryEvent, stock: CollateralSymbol, pool: PoolSymbol, actions: FarmHistoryAction[]) => historyEntry(item, event, stock, pool, actions);
 
     if (stockDeposit && isStock(stockDeposit.asset) && (borrow || poolDeposit)) {
       const funding = borrow ?? poolDeposit;
@@ -87,12 +129,12 @@ export function deriveFarm(activity: readonly MarginActivity[]): FarmDerived {
         openedAt: previous?.openedAt ?? item.at,
       });
       poolOf.set(stockDeposit.asset, funding.asset);
-      entries.push(entry(stockDeposit.asset, funding.asset, [action("deposit", stockDeposit), ...(poolDeposit ? [action("deposit", poolDeposit)] : []), ...(borrow ? [action("borrow", borrow)] : [])]));
+      entries.push(entry("deploy", stockDeposit.asset, funding.asset, deployActions(stockDeposit, borrow, poolDeposit)));
     } else if (stockWithdraw && isStock(stockWithdraw.asset)) {
       const pool = poolOf.get(stockWithdraw.asset) ?? "USDC";
       for (const key of [...open.keys()]) if (key.startsWith(`${stockWithdraw.asset}-`)) open.delete(key);
       closedCount += 1;
-      entries.push(entry(stockWithdraw.asset, pool, [action("withdraw", stockWithdraw)]));
+      entries.push(entry("return", stockWithdraw.asset, pool, [action("withdraw", stockWithdraw)]));
     } else if (repay && isPool(repay.asset)) {
       const candidates = [...open.values()].filter((position) => position.pool === repay.asset);
       const stock = candidates[candidates.length - 1]?.stock ?? STOCKS.find((symbol) => poolOf.get(symbol) === repay.asset);
@@ -100,7 +142,7 @@ export function deriveFarm(activity: readonly MarginActivity[]): FarmDerived {
       const kept = poolWithdraw?.amount.raw ?? 0n;
       yieldKept.push({ pool: repay.asset, raw: kept });
       const redeemed = { asset: repay.asset, amount: { raw: repay.amount.raw + kept, decimals: repay.amount.decimals } };
-      entries.push(entry(stock, repay.asset, [action("redeem", redeemed), action("repay", repay)]));
+      entries.push(entry("exit", stock, repay.asset, [action("redeem", redeemed), action("repay", repay)]));
     }
   }
 

@@ -7,7 +7,7 @@ import { scheduleOnRN } from "react-native-worklets";
 import { useTheme } from "@/theme/use-theme";
 import type { RateSample } from "@/types/earn";
 
-import { niceTicks } from "./chart-scale";
+import { niceTicks } from "@/components/ui/chart-scale";
 
 type RateCurveChartProps = {
   samples: readonly RateSample[];

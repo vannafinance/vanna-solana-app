@@ -3,7 +3,6 @@ import { lazy, Suspense } from "react";
 import { View } from "react-native";
 
 import { AccountCard } from "@/components/profile/account-card";
-import { AccountHealthCard } from "@/components/profile/account-health-card";
 import { AppearanceCard } from "@/components/profile/appearance-card";
 import { DisconnectButton } from "@/components/profile/disconnect-button";
 import { FaucetCard } from "@/components/profile/faucet-card";
@@ -42,21 +41,7 @@ export default function Profile() {
     <Screen gap={12} paddingTop={8} header={<PlainHeader title="Profile" onBack={() => router.back()} />}>
       {wallet.address ? <ProfileWalletCard address={wallet.address} onCopy={() => share(wallet.address)} /> : null}
       <ResourceView resource={portfolio} emptyLabel="No account data">
-        {(data) => (
-          <>
-            {data.health === null ? null : (
-              <AccountHealthCard
-                health={data.health}
-                leverage={data.leverage}
-                roomBeforeLiquidation={data.roomBeforeLiquidation}
-                netAvailable={data.netAvailable}
-                collateral={data.marginBalance}
-                debt={data.totalBorrowed}
-              />
-            )}
-            <AccountCard walletBalance={data.walletBalance} marginAddress={data.marginAddress} />
-          </>
-        )}
+        {(data) => <AccountCard walletBalance={data.walletBalance} marginAddress={data.marginAddress} />}
       </ResourceView>
       <AppearanceCard value={appearance.preference} onChange={appearance.choose} />
       {faucet.available ? <FaucetCard onOpen={() => router.push(routes.faucet)} /> : null}

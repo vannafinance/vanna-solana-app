@@ -9,6 +9,7 @@ import { ripple } from "@/components/ui/ripple";
 import { VannaMark } from "@/components/ui/vanna-mark";
 import { horizontalGradient, type Space, spaceGradients } from "@/theme/tokens";
 import { type ThemeColor, useTheme } from "@/theme/use-theme";
+import { NAV_LAYOUT } from "@/navigation/nav-layout";
 
 type Choice = {
   space: Exclude<Space, "portfolio">;
@@ -32,10 +33,10 @@ const choices: readonly Choice[] = [
   },
   {
     space: "trade",
-    title: "Trade",
+    title: "Margin trade",
     audience: "For traders",
     audienceColor: "link",
-    summary: "Long or short TSLAx, AAPLx and pre-IPO stocks, and swap any token.",
+    summary: "Long or short TSLAx, AAPLx and pre-IPO stocks.",
     detail: "Up to 5x",
     icon: "candlestick_chart",
   },
@@ -111,7 +112,7 @@ export function SpaceChooser({ onChoose }: SpaceChooserProps) {
           What do you want to do?
         </AppText>
         <AppText variant="bodyLg" color="textMuted" style={{ marginTop: 8, lineHeight: 24 }}>
-          Pick one to start. Everything stays one tap away at the top.
+          {`Pick one to start. Everything stays one tap away ${NAV_LAYOUT === "bottom-modules" ? "in the bottom bar" : "at the top"}.`}
         </AppText>
       </View>
       {choices.map((choice) => (

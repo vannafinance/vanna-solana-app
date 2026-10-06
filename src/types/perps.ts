@@ -18,7 +18,10 @@ export type PerpsMarket = {
   maxLeverage: number;
 };
 
-export type MarketListItem = PerpsMarket & { watched: boolean };
+// The user's own open position in a market, as the market list shows it: which side and at what leverage.
+export type MarketExposure = { side: Side; leverage: number };
+
+export type MarketListItem = PerpsMarket & { watched: boolean; open: MarketExposure | null };
 
 export type Candle = { open: bigint; high: bigint; low: bigint; close: bigint };
 
@@ -106,3 +109,26 @@ export type AddCollateralQuote = {
 
 // Where a market's chart comes from: TradingView for listed stocks, a DexScreener pair for tokens with no listing.
 export type ChartSource = { kind: "tradingview"; symbol: string } | { kind: "dexscreener"; pairAddress: string };
+
+export type EarningsRange = "1W" | "1M" | "3M" | "All";
+
+// A USD figure (6 decimals) at a time in ms.
+export type EarningsPoint = { at: number; usd: bigint };
+
+// The Positions page chart and the figures under it. Net earnings is the price P&L of every closed margin trade plus the
+// open P&L of today's positions; borrow interest is not taken out of it and is shown on its own.
+export type TradeEarnings = {
+  net: bigint;
+  points: readonly EarningsPoint[];
+  stepMs: number;
+  now: number;
+  // No margin trade in history and nothing open: there is nothing to chart.
+  noTrades: boolean;
+  // Some closes in history have no opening in history (it is older than what was read), so they are not counted.
+  partial: boolean;
+  // Null when the open positions cannot be read.
+  openPnl: bigint | null;
+  openCount: number | null;
+  // Borrow interest owed so far on the open positions; null when a position's borrowed principal is not in history.
+  interest: bigint | null;
+};

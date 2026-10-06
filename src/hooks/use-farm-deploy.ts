@@ -1,26 +1,27 @@
 import { router } from "expo-router";
 import { useRef, useState } from "react";
 
-import { formatPercent, formatToken, formatUsd } from "@/format/format-amount";
+import { formatPercent, formatSignedPercent, formatToken, formatUsd } from "@/format/format-amount";
+import { DASH, FARM_HEALTH, healthText, yearlyText } from "@/format/format-farm";
 import { toInputText } from "@/lib/farm/amount-text";
 import { buildDeployForm } from "@/lib/farm/deploy-form";
-import { stepHeld } from "@/lib/farm/farm-math";
+import { heldCollaterals, stepHeld } from "@/lib/farm/farm-math";
+import { strategyPreview } from "@/lib/farm/strategy-preview";
 import { assets } from "@/lib/solana/assets";
 import { NETWORK_FEE_ESTIMATE, NETWORK_LABEL } from "@/lib/solana/config";
 import { deployFarm, freshDeployProgress, yieldAssetOf } from "@/lib/solana/farm-transactions";
-import { YIELD_SYMBOLS } from "@/lib/solana/kamino";
 import { routes } from "@/navigation/routes";
-import type { CollateralSymbol, DeployForm, FarmCollateral, FarmPool, PoolSymbol } from "@/types/farm";
+import type { CollateralSymbol, DeployForm, FarmCollateral, MarginNow, PoolSymbol, StrategyPreview } from "@/types/farm";
 import type { Resource } from "@/types/resource";
+import type { ReviewTone } from "@/types/review";
 import { TransactionError } from "@/types/transaction";
 
-import { useAccountSnapshot } from "./use-account-snapshot";
 import { useConnectedWallet } from "./use-connected-wallet";
-import { useKaminoStats } from "./use-kamino-stats";
+import { useFarmPoolSources } from "./use-farm-pools";
 import { useMarginAccount } from "./use-margin-account";
+import { useMarginOverview } from "./use-margin-overview";
 import { useOraclePrices } from "./use-oracle-prices";
 import { useReviewStep } from "./use-review-step";
-import { usePools } from "./use-pools";
 import { useTransactionFlow } from "./use-transaction-flow";
 import { useWalletAddress } from "./use-wallet-address";
 import { useWalletHoldings } from "./use-wallet-holdings";
@@ -28,61 +29,41 @@ import { useWalletSigner } from "./use-wallet-signer";
 
 const DEFAULT_LEVERAGE = 2;
 const LOW_PRECISION_DECIMALS = 6;
-const MARKET = "Kamino Main Market";
 const STOCK_SYMBOLS: readonly CollateralSymbol[] = ["TSLAx", "GOOGLx", "AAPLx", "ANTHROPIC", "OPENAI"];
+const NO_ACCOUNT: MarginNow = { hasAccount: false, collateralUsd: 0n, debtUsd: 0n, netUsd: 0n, health: null, leverage: null };
 
-// Interest accrues between the read and the transaction, so a little of the free liquidity is kept back.
-const LIQUIDITY_MARGIN = 0.99;
+export type DeployScreen = { form: DeployForm; preview: StrategyPreview | null };
 
-function borrowableOf(totalSupply: number, totalBorrowed: number, decimals: number): bigint {
-  return BigInt(Math.max(0, Math.floor((totalSupply - totalBorrowed) * LIQUIDITY_MARGIN * 10 ** decimals)));
+export function isPoolSymbol(value: string | undefined): value is PoolSymbol {
+  return value === "USDC" || value === "SOL";
+}
+
+function reviewTone(value: number): ReviewTone {
+  if (value > 0) return "positive";
+  return value < 0 ? "negative" : "default";
 }
 
 function balanceText(collateral: FarmCollateral) {
   return toInputText({ raw: collateral.balance, decimals: collateral.decimals });
 }
 
-export function useFarmDeploy() {
+// The Deploy screen of one pool: the stock deposit, the leverage, the live strategy preview, the review and the transaction.
+export function useFarmDeploy(poolSymbol: PoolSymbol) {
   const wallet = useWalletAddress();
   const connected = useConnectedWallet();
   const margin = useMarginAccount();
-  const account = useAccountSnapshot(wallet);
+  const overview = useMarginOverview();
   const holdings = useWalletHoldings(wallet);
   const prices = useOraclePrices();
-  const stats = useKaminoStats();
-  const vanna = usePools();
+  const sources = useFarmPoolSources();
   const signer = useWalletSigner();
-  const [poolSymbol, setPoolSymbol] = useState<PoolSymbol>("USDC");
-  const [collateralSymbol, setCollateralSymbol] = useState<CollateralSymbol>("TSLAx");
+  // Until the user picks one, the first stock the wallet holds.
+  const [collateralSymbol, setCollateralSymbol] = useState<CollateralSymbol | null>(null);
   const [amountText, setAmountText] = useState("");
   const [leverage, setLeverage] = useState(DEFAULT_LEVERAGE);
   // How far the last attempt got, so trying again after a stop does not deposit or borrow a second time.
   const progress = useRef(freshDeployProgress());
 
-  // Everything here is a live read: the pool's rates and liquidity from Kamino, what the program charges to borrow, the
-  // wallet's stock balances and the oracle prices that value them.
-  const pools: FarmPool[] = YIELD_SYMBOLS.flatMap((symbol) => {
-    const price = prices.data?.[symbol];
-    const kamino = stats.data?.[symbol];
-    const borrowPercent = vanna.data?.[symbol]?.borrowApyPercent;
-    const decimals = assets.find((asset) => asset.symbol === symbol)?.decimals;
-    const reserve = vanna.data?.[symbol];
-    if (price === undefined || !kamino || borrowPercent === undefined || decimals === undefined || reserve === undefined) return [];
-    return [
-      {
-        symbol,
-        market: MARKET,
-        decimals,
-        priceUsd: price,
-        supplyApyBps: kamino.supplyApyBps,
-        borrowApyBps: Math.round(borrowPercent * 100),
-        available: kamino.available,
-        borrowable: borrowableOf(reserve.totalSupply, reserve.totalBorrowed, decimals),
-        totalSupplied: kamino.totalSupplied,
-        utilizationBps: kamino.utilizationBps,
-      },
-    ];
-  });
   const collaterals: FarmCollateral[] = STOCK_SYMBOLS.flatMap((symbol) => {
     const price = prices.data?.[symbol];
     const asset = assets.find((candidate) => candidate.symbol === symbol);
@@ -91,33 +72,46 @@ export function useFarmDeploy() {
     return [{ symbol, decimals: asset.decimals, priceUsd: price, balance: held?.raw ?? 0n }];
   });
 
-  const selectedPool = pools.find((pool) => pool.symbol === poolSymbol)?.symbol ?? pools[0]?.symbol;
-  const selectedCollateral = collaterals.find((collateral) => collateral.symbol === collateralSymbol)?.symbol ?? collaterals[0]?.symbol;
+  const account: MarginNow =
+    overview.status === "ready" && overview.data.hasMarginAccount
+      ? {
+          hasAccount: true,
+          collateralUsd: overview.data.collateral,
+          debtUsd: overview.data.borrowed,
+          netUsd: overview.data.net,
+          health: overview.data.health,
+          leverage: overview.data.leverage,
+        }
+      : NO_ACCOUNT;
+
+  const pool = sources.pools.find((candidate) => candidate.symbol === poolSymbol);
+  const selectedCollateral = collaterals.find((collateral) => collateral.symbol === collateralSymbol)?.symbol ?? heldCollaterals(collaterals)[0]?.symbol;
   const data: DeployForm | null =
-    holdings.data !== undefined && selectedPool !== undefined && selectedCollateral !== undefined
+    holdings.data !== undefined && pool !== undefined && selectedCollateral !== undefined
       ? buildDeployForm({
-          pools,
+          pools: sources.pools,
           collaterals,
-          poolSymbol: selectedPool,
+          poolSymbol: pool.symbol,
           collateralSymbol: selectedCollateral,
           amountText,
           leverage,
-          account: { collateralUsd: account.data?.collateral ?? 0n, debtUsd: account.data?.borrowed ?? 0n },
+          account: { collateralUsd: account.collateralUsd, debtUsd: account.debtUsd },
         })
       : null;
+  const preview = data === null ? null : strategyPreview(data, account);
 
-  const failed = [prices, stats, vanna, holdings].find((query) => query.isError && query.data === undefined);
+  const holdingsFailed = holdings.isError && holdings.data === undefined ? holdings.error : null;
+  const pricesFailed = prices.isError && prices.data === undefined ? prices.error : null;
+  const failed = sources.error ?? holdingsFailed ?? pricesFailed;
   const refetchAll = () => {
-    void prices.refetch();
-    void stats.refetch();
-    void vanna.refetch();
+    sources.retry();
     void holdings.refetch();
   };
-  const form: Resource<DeployForm> = data
-    ? { status: "ready", data }
-    : failed?.error
-      ? { status: "error", error: failed.error, retry: refetchAll }
-      : wallet === null
+  const screen: Resource<DeployScreen> = data
+    ? { status: "ready", data: { form: data, preview } }
+    : failed
+      ? { status: "error", error: failed, retry: refetchAll }
+      : wallet === null || (sources.settled && pool === undefined)
         ? { status: "empty" }
         : { status: "loading" };
 
@@ -156,24 +150,32 @@ export function useFarmDeploy() {
     router.navigate(routes.farmPositions);
   };
 
-  // What the user sees before the wallet opens: what leaves their wallet, what is borrowed against it and where that goes.
+  // What the user sees before the wallet opens: what leaves their wallet, what is borrowed against it and where it goes,
+  // what it should earn, and how far the stock can fall before the position is liquidated.
   const review = useReviewStep(() => {
-    if (!(data && connected)) return null;
+    if (!(data && preview && connected)) return null;
+    const stock = data.collateral.symbol;
+    const borrowed = `${formatToken(preview.borrow, borrowDigits)} ${data.pool.symbol}`;
     return {
       title: "Review strategy",
       legs: [
-        { label: "You deposit", value: `${formatToken(data.amount, 2)} ${data.collateral.symbol}`, caption: `≈ ${formatUsd(data.quote.collateralValueUsd)} kept as collateral` },
+        { label: "You deposit", value: `${formatToken(data.amount, 2)} ${stock}`, caption: `${formatUsd(data.quote.collateralValueUsd)} kept as collateral` },
         {
-          label: "Borrowed and supplied to Kamino",
-          value: `${formatToken(data.quote.borrow, borrowDigits)} ${data.pool.symbol}`,
-          caption: `≈ ${formatUsd(data.quote.debtUsd)} earning ${formatPercent(data.pool.supplyApyBps)}`,
+          label: "Borrowed from Vanna, supplied to Kamino",
+          value: borrowed,
+          caption: `${formatUsd(preview.borrowUsd)} · pays ${formatPercent(preview.borrowApyBps)}, earns ${formatPercent(preview.supplyApyBps)}`,
         },
       ],
       rows: [
         { label: "Leverage", value: `${data.leverage}x` },
-        { label: "Health factor", value: data.quote.healthFactor === null ? "No debt" : data.quote.healthFactor.toFixed(2) },
-        { label: "Liquidated below", value: `${formatUsd(data.quote.liquidationPriceUsd)} per ${data.collateral.symbol}`, tone: "negative" },
-        { label: "Net APY on the borrow", value: formatPercent(data.quote.netApyBps), tone: data.quote.netApyBps >= 0 ? "positive" : "negative" },
+        // Five rows, as before the restructure, so the sheet fits a phone without scrolling.
+        { label: "Projected net return", value: `${yearlyText(preview.yearlyNetUsd)} · ${formatSignedPercent(preview.netApyBps)}`, tone: reviewTone(preview.netApyBps) },
+        { label: `Health after (liq. ${FARM_HEALTH.liquidation.toFixed(2)})`, value: healthText(preview.health.after) },
+        {
+          label: `${stock} liquidation price`,
+          value: preview.liquidationPriceUsd > 0n ? `${formatUsd(preview.liquidationPriceUsd)} · ${formatPercent(preview.liquidationDropBps, 0)} drop` : DASH,
+          tone: "negative",
+        },
         { label: "Network fee", value: NETWORK_FEE_ESTIMATE },
       ],
       wallet: connected,
@@ -183,9 +185,9 @@ export function useFarmDeploy() {
   }, flow.start);
 
   return {
-    form,
+    screen,
+    needsWallet: wallet === null,
     needsMarginAccount: !margin.exists,
-    selectPool: setPoolSymbol,
     selectCollateral,
     stepCollateral: (direction: 1 | -1) => {
       if (data) selectCollateral(stepHeld(data.held, data.collateral.symbol, direction));

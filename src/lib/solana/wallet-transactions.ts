@@ -2,7 +2,15 @@ import { type Connection, type ParsedTransactionWithMeta, PublicKey } from "@sol
 
 import { ApiError } from "./request-json";
 
-export type WalletTransaction = { signature: string; blockTime: number; tx: ParsedTransactionWithMeta };
+// A transaction that landed but failed changed nothing on chain; it is kept so a history can show it as failed.
+export type WalletTransactionStatus = "success" | "failed";
+
+export type WalletTransaction = { signature: string; blockTime: number; status: WalletTransactionStatus; tx: ParsedTransactionWithMeta };
+
+// What every reader that rebuilds balances or positions works from: failed transactions moved nothing.
+export function succeededOnly(transactions: readonly WalletTransaction[]): WalletTransaction[] {
+  return transactions.filter((transaction) => transaction.status !== "failed");
+}
 
 const PAGE_SIZE = 1000;
 // The fork RPC rejects JSON-RPC batches, so transactions are fetched one call each, a few at a time.
@@ -17,17 +25,17 @@ const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 // signature listing plus the transactions that are new since the last read.
 const parsedCache = new Map<string, ParsedTransactionWithMeta>();
 
-// Newest first. Failed transactions are dropped before they are fetched. The block time comes from the
-// signature list because the fork reports a truncated one on getTransaction.
+// Newest first, failed ones included and marked (see succeededOnly). The block time comes from the signature list because
+// the fork reports a truncated one on getTransaction.
 export async function fetchWalletTransactions(connection: Connection, wallet: string, maxSignatures = DEFAULT_MAX_SIGNATURES): Promise<WalletTransaction[]> {
   const owner = new PublicKey(wallet);
-  const signatures: { signature: string; blockTime: number }[] = [];
+  const signatures: { signature: string; blockTime: number; failed: boolean }[] = [];
   let before: string | undefined;
 
   try {
     while (signatures.length < maxSignatures) {
       const page = await connection.getSignaturesForAddress(owner, { limit: Math.min(PAGE_SIZE, maxSignatures - signatures.length), before }, "confirmed");
-      signatures.push(...page.filter((entry) => !entry.err).map((entry) => ({ signature: entry.signature, blockTime: entry.blockTime ?? 0 })));
+      signatures.push(...page.map((entry) => ({ signature: entry.signature, blockTime: entry.blockTime ?? 0, failed: Boolean(entry.err) })));
       if (page.length < PAGE_SIZE) break;
       before = page[page.length - 1].signature;
     }
@@ -43,13 +51,13 @@ export async function fetchWalletTransactions(connection: Connection, wallet: st
             connection.getParsedTransaction(entry.signature, { commitment: "confirmed", maxSupportedTransactionVersion: 0 }).then((tx) => ({ tx, signature: entry.signature })),
           ),
         );
-        for (const { tx, signature } of batch) if (tx && !tx.meta?.err) parsedCache.set(signature, tx);
+        for (const { tx, signature } of batch) if (tx) parsedCache.set(signature, tx);
       }
     }
 
-    return signatures.flatMap(({ signature, blockTime }) => {
+    return signatures.flatMap(({ signature, blockTime, failed }) => {
       const tx = parsedCache.get(signature);
-      return tx ? [{ signature, blockTime, tx }] : [];
+      return tx ? [{ signature, blockTime, status: failed || tx.meta?.err ? ("failed" as const) : ("success" as const), tx }] : [];
     });
   } catch {
     throw new ApiError("network");

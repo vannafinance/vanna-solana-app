@@ -72,11 +72,11 @@ export function EarnAmountScreen({
         <View style={{ paddingTop: 8, paddingHorizontal: 16, gap: 12 }}>
           <SegmentedControl segments={MODES} value={view.mode} onChange={onModeChange} />
           <Card>
-            <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
-              <AppText variant="caption" color="textMuted" style={{ lineHeight: 16 }}>
+            <View style={{ flexDirection: "row", justifyContent: "space-between", gap: 12 }}>
+              <AppText variant="caption" color="textMuted" numberOfLines={1}>
                 {view.label}
               </AppText>
-              <AppText variant="caption" color="textMuted" style={{ lineHeight: 16 }}>
+              <AppText variant="caption" color="textMuted" numberOfLines={1} style={{ flexShrink: 1, textAlign: "right" }}>
                 {view.caption}
               </AppText>
             </View>
@@ -88,7 +88,7 @@ export function EarnAmountScreen({
                 keyboardType="decimal-pad"
                 placeholder="0.00"
                 placeholderTextColor={colors.textMuted}
-                style={{ flex: 1, padding: 0, fontSize: 32, lineHeight: 40, fontFamily: fontFamily.semibold, color: view.over ? colors.negative : colors.text }}
+                style={{ flex: 1, minWidth: 0, padding: 0, fontSize: 32, lineHeight: 40, fontFamily: fontFamily.semibold, color: view.over ? colors.negative : colors.text }}
               />
               <TokenPill symbol={symbol} />
             </View>

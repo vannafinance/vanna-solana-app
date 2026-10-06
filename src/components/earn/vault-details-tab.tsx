@@ -1,7 +1,9 @@
 import { Pressable, View } from "react-native";
 
 import { AppText } from "@/components/ui/app-text";
+import { Card } from "@/components/ui/card";
 import { Icon } from "@/components/ui/icon";
+import { StatStrip } from "@/components/ui/stat-strip";
 import { formatPercent } from "@/format/format-amount";
 import { formatExchangeRate, formatPrice, formatSummaryAmount } from "@/format/format-earn";
 import { shortAddress } from "@/format/short-address";
@@ -15,33 +17,52 @@ type VaultDetailsTabProps = {
   onCopyAddress: (contract: VaultContract) => void;
 };
 
+// The vault's settings: rates and liquidation in a strip, then the oracle, the limits and the contracts as one-line rows.
 export function VaultDetailsTab({ vault, onCopyAddress }: VaultDetailsTabProps) {
-  const { colors } = useTheme();
+  const { colors, spacing } = useTheme();
 
   return (
-    <View style={{ marginTop: 12 }}>
+    <View style={{ marginTop: spacing.md }}>
+      <Card>
+        <StatStrip
+          stats={[
+            { label: "Borrow APY", value: formatPercent(vault.borrowApyBps) },
+            { label: "Reserve factor", value: formatPercent(vault.reserveFactorBps) },
+            { label: "Liquidation bonus", value: formatPercent(vault.liquidationBonusBps) },
+            { label: "Liquidated at", value: `Health ≤ ${vault.liquidationHealthFactor}` },
+          ]}
+        />
+      </Card>
+      <SectionTitle title="Oracle" marginTop={20} marginBottom={8} />
       <FactCard>
-        <FactRow first label="Borrow APY" value={formatPercent(vault.borrowApyBps)} />
-        <FactRow label="Liquidation bonus" value={formatPercent(vault.liquidationBonusBps)} detail={`Liquidatable at HF ≤ ${vault.liquidationHealthFactor}`} />
-        <FactRow label="Oracle price" value={formatPrice(vault.priceUsd)} detail={`${vault.oracleSource} · max age ${vault.oracleMaxAgeSeconds}s`} />
-        <FactRow label="Share token exchange rate" value={formatExchangeRate(vault.shareExchangeRate)} detail={`${vault.symbol} per ${vault.shareSymbol}`} />
-        <FactRow label="Reserve factor" value={formatPercent(vault.reserveFactorBps)} />
+        <FactRow first label="Price" value={formatPrice(vault.priceUsd)} />
+        <FactRow label="Source" value={vault.oracleSource} />
+        <FactRow label="Max price age" value={`${vault.oracleMaxAgeSeconds}s`} />
+      </FactCard>
+      <SectionTitle title="Limits" marginTop={20} marginBottom={8} />
+      <FactCard>
+        <FactRow first label={`1 ${vault.shareSymbol} is worth`} value={`${formatExchangeRate(vault.shareExchangeRate)} ${vault.symbol}`} />
         <FactRow label="Supply cap" value={vault.supplyCap ? formatSummaryAmount(vault.supplyCap, vault.symbol) : "No cap"} />
         {vault.limits.map((limit) => (
           <FactRow key={limit.label} label={limit.label} value={limit.value} />
         ))}
       </FactCard>
-      <SectionTitle title="Contracts" marginTop={20} marginBottom={6} />
+      <SectionTitle title="Contracts" marginTop={20} marginBottom={8} />
       <FactCard>
         {vault.contracts.map((contract, index) => (
-          <View key={contract.label} style={{ height: 52, flexDirection: "row", alignItems: "center", gap: 10, borderTopWidth: index === 0 ? 0 : 1, borderTopColor: colors.divider }}>
-            <AppText variant="body" color="textMuted" style={{ flex: 1 }}>
+          <View key={contract.label} style={{ minHeight: 52, flexDirection: "row", alignItems: "center", gap: spacing.md, borderTopWidth: index === 0 ? 0 : 1, borderTopColor: colors.divider }}>
+            <AppText variant="body" color="textMuted" numberOfLines={1} style={{ flex: 1 }}>
               {contract.label}
             </AppText>
             <AppText variant="caption" style={{ fontFamily: "monospace" }}>
               {shortAddress(contract.address)}
             </AppText>
-            <Pressable accessibilityRole="button" accessibilityLabel={`Share ${contract.label} address`} hitSlop={14} onPress={() => onCopyAddress(contract)}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={`Share ${contract.label} address`}
+              onPress={() => onCopyAddress(contract)}
+              style={{ width: 44, height: 44, marginRight: -spacing.md, alignItems: "center", justifyContent: "center" }}
+            >
               <Icon name="content_copy" size={16} color="link" />
             </Pressable>
           </View>

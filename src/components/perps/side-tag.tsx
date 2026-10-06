@@ -6,12 +6,13 @@ import type { Side } from "@/types/perps";
 
 type SideTagProps = { side: Side; leverage: number };
 
+// The side and leverage of one position: violet for a long, red for a short.
 export function SideTag({ side, leverage }: SideTagProps) {
   const { colors, radius } = useTheme();
 
   return (
-    <View style={{ height: 20, paddingHorizontal: 8, borderRadius: radius.tag, backgroundColor: side === "long" ? colors.primary : colors.badgeNegative, justifyContent: "center" }}>
-      <AppText variant="caption" strong color="onPrimary" style={{ lineHeight: 20 }}>
+    <View style={{ height: 20, paddingHorizontal: 6, borderRadius: radius.tag, backgroundColor: side === "long" ? colors.primary : colors.badgeNegative, justifyContent: "center" }}>
+      <AppText variant="caption" strong color="onPrimary" numberOfLines={1} style={{ lineHeight: 20 }}>
         {`${side === "long" ? "Long" : "Short"} ${leverage}x`}
       </AppText>
     </View>

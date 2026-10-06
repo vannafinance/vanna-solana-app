@@ -1,82 +1,39 @@
 import { router } from "expo-router";
-import { View } from "react-native";
 
-import { AssetRow } from "@/components/home/asset-row";
+import { EarnSummaryCard } from "@/components/home/earn-summary-card";
 import { EmptyCard } from "@/components/home/empty-card";
-import { HeroMetrics } from "@/components/home/hero-metrics";
+import { MarginAccountCard } from "@/components/home/margin-account-card";
 import { NotificationDropdown } from "@/components/home/notification-dropdown";
 import { OfflineBanner } from "@/components/home/offline-banner";
-import { healthLabel } from "@/components/home/position-format";
-import { PositionRow } from "@/components/home/position-row";
-import { Card } from "@/components/ui/card";
+import { PortfolioHero } from "@/components/home/portfolio-hero";
+import { WalletCard } from "@/components/home/wallet-card";
 import { ResourceView } from "@/components/ui/resource-view";
 import { Screen } from "@/components/ui/screen";
-import { SectionHeader } from "@/components/ui/section-header";
 import { SpaceHeader } from "@/components/ui/space-header";
-import { formatSignedUsd, formatUsd, formatUsdOrDash } from "@/format/format-amount";
-import { assetDetail, changeToday } from "@/format/format-asset";
 import { useConnectivity } from "@/hooks/use-connectivity";
 import { useHeaderProps } from "@/hooks/use-header-props";
+import { useLenderSummary } from "@/hooks/use-lender-summary";
+import { useMarginOverview } from "@/hooks/use-margin-overview";
 import { useNotificationMenu } from "@/hooks/use-notification-menu";
 import { usePortfolio } from "@/hooks/use-portfolio";
+import { useTraderSummary } from "@/hooks/use-trader-summary";
 import { routes } from "@/navigation/routes";
-import { useTheme } from "@/theme/use-theme";
-import type { Portfolio, Position, TokenBalance } from "@/types/portfolio";
+import type { Position } from "@/types/portfolio";
 
-const PREVIEW_POSITIONS = 3;
-
-function Positions({ positions }: { positions: Position[] }) {
-  const { spacing } = useTheme();
-  const shown = positions.slice(0, PREVIEW_POSITIONS);
-
-  return (
-    <>
-      <View style={{ marginTop: spacing.xs }}>
-        <SectionHeader title="Your positions" actionLabel="See all" onAction={() => router.navigate("/home/trader")} />
-      </View>
-      <Card padded={false} style={{ paddingHorizontal: spacing.lg, paddingVertical: spacing.xs }}>
-        {shown.map((position, index) => (
-          <PositionRow key={position.id} position={position} first={index === 0} onPress={() => router.navigate("/home/trader")} />
-        ))}
-      </Card>
-    </>
-  );
+// A Margin trade position opens the Trade module's positions tab; a Farm position has its own page.
+function openPosition(position: Position) {
+  if (position.kind === "perp") router.navigate(routes.tradePositions);
+  else router.push(`/farm/position/${position.id}`);
 }
 
-function Assets({ assets }: { assets: TokenBalance[] }) {
-  const { spacing } = useTheme();
-
-  return (
-    <>
-      <View style={{ marginTop: spacing.xs }}>
-        <SectionHeader title="Your assets" />
-      </View>
-      <Card padded={false} style={{ paddingHorizontal: spacing.lg, paddingVertical: spacing.xs }}>
-        {assets.map((asset, index) => (
-          <AssetRow
-            key={asset.symbol}
-            symbol={asset.symbol}
-            detail={assetDetail(asset.symbol, asset.tokens, asset.value)}
-            value={formatUsd(asset.value)}
-            change={asset.changeTodayBps === undefined ? undefined : changeToday(asset.changeTodayBps)}
-            changeBps={asset.changeTodayBps}
-            first={index === 0}
-          />
-        ))}
-      </Card>
-    </>
-  );
-}
-
-function healthText(data: Portfolio) {
-  if (!data.hasMarginAccount) return "—";
-  return data.health === null ? "No debt" : `${data.health.toFixed(2)} · ${healthLabel(data.health)}`;
-}
-
+// Where the money is, one card per place: the margin account (Margin trade and Farm), what is lent in Earn, and the wallet.
 export default function Overview() {
   const header = useHeaderProps();
   const menu = useNotificationMenu();
   const portfolio = usePortfolio();
+  const margin = useMarginOverview();
+  const trader = useTraderSummary();
+  const lender = useLenderSummary();
   const connectivity = useConnectivity();
 
   return (
@@ -85,22 +42,7 @@ export default function Overview() {
         gap={12}
         header={
           <SpaceHeader space="portfolio" {...header} onNotifications={menu.toggle}>
-            <ResourceView resource={portfolio} emptyLabel="No balances yet">
-              {(data) => (
-                <HeroMetrics
-                  primary={[
-                    { label: "Wallet balance", value: formatUsdOrDash(data.walletBalance) },
-                    { label: "Margin account", value: formatUsd(data.marginBalance) },
-                  ]}
-                  secondary={[
-                    { label: "Net available", value: formatUsd(data.netAvailable) },
-                    { label: "Health", value: healthText(data), dot: data.hasMarginAccount && data.health !== null },
-                    { label: "Total borrowed", value: formatUsd(data.totalBorrowed) },
-                    { label: "Net earnings", value: data.netEarnings === null ? "—" : formatSignedUsd(data.netEarnings), positive: data.netEarnings !== null && data.netEarnings > 0n },
-                  ]}
-                />
-              )}
-            </ResourceView>
+            <PortfolioHero portfolio={portfolio} />
           </SpaceHeader>
         }
       >
@@ -114,20 +56,29 @@ export default function Overview() {
         <ResourceView resource={portfolio} emptyLabel="No balances yet">
           {(data) => (
             <>
-              {data.hasMarginAccount ? null : (
-                <EmptyCard
-                  title="No margin account yet"
-                  message="Create one to borrow, trade with leverage and farm. It holds your collateral."
-                  actionLabel="Create margin account"
-                  onAction={() => router.push(routes.marginCreate)}
-                />
-              )}
-              {data.positions === null ? null : data.positions.length === 0 ? (
-                data.hasMarginAccount ? <EmptyCard title="No open positions" message="Open a long or short in Trade, or deploy into Farm. Positions show up here." /> : null
-              ) : (
-                <Positions positions={data.positions} />
-              )}
-              {data.assets === null ? null : <Assets assets={data.assets} />}
+              <ResourceView resource={margin} emptyLabel="No margin account yet">
+                {(account) =>
+                  account.hasMarginAccount ? (
+                    <MarginAccountCard
+                      health={account.health}
+                      positions={trader.status === "ready" && trader.data.positionsAvailable ? trader.data.current : null}
+                      onSeeAll={() => router.navigate("/home/trader")}
+                      onOpenPosition={openPosition}
+                    />
+                  ) : (
+                    <EmptyCard
+                      title="No margin account yet"
+                      message="Create one to borrow, trade with leverage and farm. It holds your collateral."
+                      actionLabel="Create margin account"
+                      onAction={() => router.push(routes.marginCreate)}
+                    />
+                  )
+                }
+              </ResourceView>
+              <ResourceView resource={lender} emptyLabel="Nothing supplied yet">
+                {(earn) => <EarnSummaryCard data={earn} onOpen={() => router.navigate("/home/lender")} onBrowse={() => router.push("/earn")} />}
+              </ResourceView>
+              <WalletCard total={data.walletBalance} assets={data.assets} onSwap={() => router.push(routes.swap)} />
             </>
           )}
         </ResourceView>

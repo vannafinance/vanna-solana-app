@@ -4,6 +4,7 @@ import { useCallback } from "react";
 
 import { composePositions, unplacedPositions } from "@/lib/farm/compose-positions";
 import { deriveFarm, type FarmDerived } from "@/lib/farm/derive-farm";
+import { failureReason } from "@/lib/farm/failure-reason";
 import { fetchKaminoPositions } from "@/lib/solana/farm-positions";
 import { marginActivityFrom } from "@/lib/solana/margin-history";
 import type { OraclePrices } from "@/lib/solana/oracle-prices";
@@ -33,7 +34,14 @@ export type FarmState = {
   unplaced: readonly UnplacedFarmPosition[];
   derived: FarmDerived;
   prices: OraclePrices;
+  // When the positions were last read from the chain (ms).
+  updatedAt: number;
 };
+
+// The transactions that landed but failed, with why when the chain says.
+function failures(data: readonly WalletTransaction[]): Map<string, string | null> {
+  return new Map(data.flatMap(({ signature, status, tx }) => (status === "failed" ? [[signature, tx.meta ? failureReason(tx.meta) : null] as const] : [])));
+}
 
 // A position is read from the chain; which stock backs it comes from the margin account's own transaction history.
 export function useFarmState(): Resource<FarmState> {
@@ -50,7 +58,7 @@ export function useFarmState(): Resource<FarmState> {
     retry: 1,
   });
   // A stable selector, so the history is read through only when it changes and not on every render.
-  const select = useCallback((data: WalletTransaction[]) => (wallet === null ? null : deriveFarm(marginActivityFrom(data, marginAddress(new PublicKey(wallet)).toBase58()))), [wallet]);
+  const select = useCallback((data: WalletTransaction[]) => (wallet === null ? null : deriveFarm(marginActivityFrom(data, marginAddress(new PublicKey(wallet)).toBase58(), { includeFailed: true }), failures(data))), [wallet]);
   const history = useQuery({ ...useWalletTransactionsOptions(wallet), select });
 
   const { refetch: refetchChain } = chain;
@@ -77,6 +85,7 @@ export function useFarmState(): Resource<FarmState> {
       unplaced: unplacedPositions(chain.data, history.data.attributions, POOL_DECIMALS),
       derived: history.data,
       prices: prices.data,
+      updatedAt: chain.dataUpdatedAt,
     },
   };
 }

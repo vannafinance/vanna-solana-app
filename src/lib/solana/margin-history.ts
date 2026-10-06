@@ -5,7 +5,7 @@ import type { HistoryChip, HistoryLeg, HistoryStrategy, MarginActivity } from "@
 import { type AssetInfo, assetByMint, assets } from "./assets";
 import { decodeMarginEvents } from "./margin-events";
 import { liteStrategyAddress, reserveAddress } from "./program-accounts";
-import type { WalletTransaction } from "./wallet-transactions";
+import { succeededOnly, type WalletTransaction } from "./wallet-transactions";
 
 const STOCKS = new Set(["TSLAx", "GOOGLx", "AAPLx", "ANTHROPIC", "OPENAI"]);
 
@@ -54,9 +54,10 @@ export function deriveActivitySubject(chips: readonly HistoryChip[]): Subject | 
 }
 
 // Newest first. Only events of this margin account are used, so another account's activity in the same transaction
-// never shows up.
-export function marginActivityFrom(transactions: readonly WalletTransaction[], margin: string): MarginActivity[] {
-  return transactions
+// never shows up. Failed transactions are left out unless `includeFailed` is set; a failed one is read from the events it
+// logged before it failed, and the caller tells it apart by its signature.
+export function marginActivityFrom(transactions: readonly WalletTransaction[], margin: string, { includeFailed = false } = {}): MarginActivity[] {
+  return (includeFailed ? transactions : succeededOnly(transactions))
     .flatMap(({ signature, blockTime, tx }) => {
       const events = decodeMarginEvents(tx.meta?.logMessages ?? []);
       const own = <T extends { margin: string }>(list: readonly T[]) => list.filter((event) => event.margin === margin);

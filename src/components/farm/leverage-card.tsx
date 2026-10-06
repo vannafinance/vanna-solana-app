@@ -1,40 +1,29 @@
 import { View } from "react-native";
 
 import { AppText } from "@/components/ui/app-text";
-import { formatPercent } from "@/format/format-amount";
-import { useTheme } from "@/theme/use-theme";
-import type { DeployForm } from "@/types/farm";
+import { Card } from "@/components/ui/card";
 
 import { CapsLabel } from "./caps-label";
-import { formatBorrow } from "./farm-format";
 import { LeverageSlider } from "./leverage-slider";
-import { PoolDetails } from "./pool-details";
 
 type LeverageCardProps = {
-  form: DeployForm;
+  leverage: number;
   minLeverage: number;
   maxLeverage: number;
   onChangeLeverage: (value: number) => void;
 };
 
-function subtitle(form: DeployForm) {
-  if (form.quote.healthFactor === null) return "At 1x nothing is borrowed, so nothing is farmed.";
-  return `Borrows ${formatBorrow(form)} from Vanna at ${formatPercent(form.pool.borrowApyBps)}`;
-}
-
-export function LeverageCard({ form, minLeverage, maxLeverage, onChangeLeverage }: LeverageCardProps) {
-  const { colors, radius, shadow } = useTheme();
-
+// The borrow it leads to is shown in the strategy preview below, so this card is only the choice.
+export function LeverageCard({ leverage, minLeverage, maxLeverage, onChangeLeverage }: LeverageCardProps) {
   return (
-    <View style={[{ borderRadius: radius.md, backgroundColor: colors.surface, paddingHorizontal: 16 }, shadow.card]}>
-      <View style={{ height: 44, justifyContent: "center" }}>
+    <Card padded={false} style={{ paddingHorizontal: 16, paddingBottom: 8 }}>
+      <View style={{ height: 44, flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
         <CapsLabel>LEVERAGE</CapsLabel>
+        <AppText variant="body" strong color="link">
+          {`${leverage}x`}
+        </AppText>
       </View>
-      <LeverageSlider value={form.leverage} min={minLeverage} max={maxLeverage} onChange={onChangeLeverage} />
-      <AppText variant="caption" color="textMuted" style={{ marginBottom: 14, lineHeight: 16 }}>
-        {subtitle(form)}
-      </AppText>
-      <PoolDetails form={form} />
-    </View>
+      <LeverageSlider value={leverage} min={minLeverage} max={maxLeverage} onChange={onChangeLeverage} />
+    </Card>
   );
 }

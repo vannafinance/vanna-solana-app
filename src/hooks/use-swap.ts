@@ -1,4 +1,3 @@
-import { router } from "expo-router";
 import { useCallback, useState } from "react";
 
 import { formatPriceImpact, formatSlippage, formatSwapAmount } from "@/format/format-swap-amount";
@@ -6,7 +5,6 @@ import { formatUsd, parseUnits } from "@/format/format-amount";
 import { fractionOfBalance } from "@/lib/swap/fraction-of-balance";
 import { defaultSwapSettings, swapRoutes } from "@/lib/swap/routes";
 import { AUTO_SLIPPAGE_BPS, effectiveSlippageBps } from "@/lib/swap/slippage";
-import { routes } from "@/navigation/routes";
 import type { Resource } from "@/types/resource";
 import type { SwapIssue, SwapRouteId, SwapSettings, SwapState, SwapSymbol, SwapToken } from "@/types/swap";
 
@@ -16,7 +14,6 @@ import { executeWalletSwap } from "@/lib/solana/swap-execution";
 import { TransactionError } from "@/types/transaction";
 
 import { useConnectedWallet } from "./use-connected-wallet";
-import { usePerpsTabFocus } from "./use-perps-tab-focus";
 import { useReviewStep } from "./use-review-step";
 import { useSwapQuote } from "./use-swap-quote";
 import { useSwapTokens } from "./use-swap-tokens";
@@ -34,8 +31,9 @@ const HIGH_IMPACT_BPS = 300;
 const DEFAULT_FROM: SwapSymbol = "USDC";
 const DEFAULT_TO: SwapSymbol = "TSLAx";
 
-export function useSwap() {
-  usePerpsTabFocus("swap");
+// Swap is a wallet tool: it spends wallet balances through Jupiter and never touches the margin account.
+// `onViewHistory` is where the success sheet's "View in swap history" leads; the Swap screen shows its own History.
+export function useSwap(onViewHistory: () => void) {
   const tokens = useSwapTokens();
   const [fromSymbol, setFromSymbol] = useState<SwapSymbol>(DEFAULT_FROM);
   const [toSymbol, setToSymbol] = useState<SwapSymbol>(DEFAULT_TO);
@@ -110,7 +108,7 @@ export function useSwap() {
 
   const viewHistory = () => {
     flow.close();
-    router.navigate(routes.tradeHistory);
+    onViewHistory();
   };
 
   const pickToken = useCallback(

@@ -1,60 +1,35 @@
-import { ScrollView, View } from "react-native";
+import { type Href, router } from "expo-router";
 
-import { DepositCard } from "@/components/farm/deposit-card";
-import { DeployHero } from "@/components/farm/deploy-hero";
-import { deployCtaLabel } from "@/components/farm/farm-format";
-import { LeverageCard } from "@/components/farm/leverage-card";
-import { YieldPoolCard } from "@/components/farm/yield-pool-card";
-import { Button } from "@/components/ui/button";
+import { FarmPoolCard } from "@/components/farm/farm-pool-card";
+import { MarginHero } from "@/components/margin/margin-hero";
 import { ResourceView } from "@/components/ui/resource-view";
-import { ReviewSheet } from "@/components/ui/review-sheet";
+import { Screen } from "@/components/ui/screen";
 import { SpaceHeader } from "@/components/ui/space-header";
-import { TransactionSheet } from "@/components/ui/transaction-sheet";
-import { useFarmDeploy } from "@/hooks/use-farm-deploy";
+import { useFarmPools } from "@/hooks/use-farm-pools";
 import { useHeaderProps } from "@/hooks/use-header-props";
-import { MAX_LEVERAGE, MIN_LEVERAGE } from "@/lib/farm/farm-math";
-import { useTheme } from "@/theme/use-theme";
-import { useResetScrollBetweenSpaces } from "@/navigation/use-reset-scroll-between-spaces";
+import { useMarginOverview } from "@/hooks/use-margin-overview";
 
-export default function FarmDeployScreen() {
-  const scrollRef = useResetScrollBetweenSpaces();
-  const { colors } = useTheme();
+// The Kamino pools a stock can be farmed into. Picking one opens its Deploy screen. The header is the margin account,
+// shared with Margin trade.
+export default function FarmPoolsScreen() {
   const headerProps = useHeaderProps();
-  const deploy = useFarmDeploy();
-  const { form } = deploy;
+  const margin = useMarginOverview();
+  const pools = useFarmPools();
 
   return (
-    <View style={{ flex: 1, backgroundColor: colors.background }}>
-      <ScrollView ref={scrollRef} contentContainerStyle={{ paddingBottom: 24 }} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+    <Screen
+      gap={12}
+      header={
         <SpaceHeader space="farm" {...headerProps}>
-          {form.status === "ready" ? <DeployHero form={form.data} /> : undefined}
+          <MarginHero module="farm" overview={margin} />
         </SpaceHeader>
-        <View style={{ paddingHorizontal: 16, paddingTop: 16, gap: 12 }}>
-          <ResourceView resource={form} emptyLabel="No farm pools available">
-            {(data) => (
-              <>
-                <YieldPoolCard pools={data.pools} selected={data.pool} onSelect={deploy.selectPool} />
-                <DepositCard
-                  form={data}
-                  onChangeAmount={deploy.setAmountText}
-                  onMax={deploy.fillMax}
-                  onSelectCollateral={deploy.selectCollateral}
-                  onStepCollateral={deploy.stepCollateral}
-                />
-                <LeverageCard form={data} minLeverage={MIN_LEVERAGE} maxLeverage={MAX_LEVERAGE} onChangeLeverage={deploy.setLeverage} />
-                <Button
-                  label={deployCtaLabel(data, deploy.needsMarginAccount)}
-                  icon="account_balance_wallet"
-                  disabled={data.issue !== null}
-                  onPress={deploy.deploy}
-                />
-              </>
-            )}
-          </ResourceView>
-        </View>
-      </ScrollView>
-      <ReviewSheet data={deploy.review.data} onConfirm={deploy.review.confirm} onCancel={deploy.review.cancel} />
-      <TransactionSheet {...deploy.sheet} />
-    </View>
+      }
+    >
+      <ResourceView resource={pools} emptyLabel="No farm pools available">
+        {(rows) =>
+          rows.map((row) => <FarmPoolCard key={row.pool.symbol} row={row} onPress={() => router.push(`/farm/deploy/${row.pool.symbol}` as Href)} />)
+        }
+      </ResourceView>
+    </Screen>
   );
 }

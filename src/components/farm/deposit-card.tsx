@@ -2,6 +2,7 @@ import { useRef, useState } from "react";
 import { Pressable, TextInput, View } from "react-native";
 
 import { AppText } from "@/components/ui/app-text";
+import { Card } from "@/components/ui/card";
 import { TokenIcon } from "@/components/ui/token-icon";
 import { formatToken, formatUsd } from "@/format/format-amount";
 import { useTheme } from "@/theme/use-theme";
@@ -24,20 +25,20 @@ function issueText({ issue, collateral, pool }: DeployForm) {
   if (issue === "no-balance") return `No ${collateral.symbol} in your wallet. Pick another asset.`;
   if (issue === "over-balance") return "That is more than your wallet balance.";
   if (issue === "pool-liquidity") return `Vanna has only ${formatToken({ raw: pool.borrowable, decimals: pool.decimals }, 0)} ${pool.symbol} free to lend right now. Lower the leverage or the amount.`;
-  if (issue === "too-risky") return "Together with your open positions this would leave your account too close to liquidation. Lower the leverage.";
+  if (issue === "too-risky") return "With your open positions this leaves the account too close to liquidation. Lower the leverage.";
   return null;
 }
 
 export function DepositCard({ form, onChangeAmount, onMax, onSelectCollateral, onStepCollateral }: DepositCardProps) {
-  const { colors, fontFamily, radius, shadow } = useTheme();
+  const { colors, fontFamily, radius } = useTheme();
   const [open, setOpen] = useState(false);
   const chip = useRef<View>(null);
   const error = issueText(form);
   const balance = formatToken({ raw: form.collateral.balance, decimals: form.collateral.decimals }, 2);
 
   return (
-    <View style={[{ borderRadius: radius.md, backgroundColor: colors.surface, paddingHorizontal: 16, paddingVertical: 14 }, shadow.card]}>
-      <View style={{ paddingHorizontal: 14, paddingVertical: 12, borderRadius: radius.md, backgroundColor: colors.background }}>
+    <Card padded={false} style={{ paddingHorizontal: 16, paddingVertical: 14 }}>
+      <View style={{ paddingHorizontal: 14, paddingVertical: 12, borderRadius: radius.sm, backgroundColor: colors.background }}>
         <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
           <CapsLabel>YOU DEPOSIT</CapsLabel>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
@@ -67,6 +68,7 @@ export function DepositCard({ form, onChangeAmount, onMax, onSelectCollateral, o
             placeholderTextColor={colors.textMuted}
             style={{
               flex: 1,
+              minWidth: 0,
               padding: 0,
               fontSize: 28,
               lineHeight: 36,
@@ -105,7 +107,7 @@ export function DepositCard({ form, onChangeAmount, onMax, onSelectCollateral, o
         </View>
         <View style={{ marginTop: 2, flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
           <AppText variant="caption" color="textMuted">
-            {`≈ ${formatUsd(form.quote.collateralValueUsd)}`}
+            {formatUsd(form.quote.collateralValueUsd)}
           </AppText>
           {form.held.length > 1 ? (
             <View
@@ -156,6 +158,6 @@ export function DepositCard({ form, onChangeAmount, onMax, onSelectCollateral, o
           );
         })}
       </AnchoredMenu>
-    </View>
+    </Card>
   );
 }

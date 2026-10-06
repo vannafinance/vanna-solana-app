@@ -30,13 +30,13 @@ export function RouteMenu({ routes, selected, onSelect }: RouteMenuProps) {
           android_ripple={ripple(colors.text)}
           onPress={toggle}
           style={{
-            height: 40,
+            height: 44,
             flexDirection: "row",
             alignItems: "center",
             gap: 6,
             paddingLeft: 14,
             paddingRight: 12,
-            borderRadius: 20,
+            borderRadius: 22,
             borderWidth: 1,
             borderColor: open ? colors.primary : colors.border,
             backgroundColor: colors.surface,

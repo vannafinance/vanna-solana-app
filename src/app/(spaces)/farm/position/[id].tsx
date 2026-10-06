@@ -27,7 +27,7 @@ export default function FarmPositionScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
       <ScrollView contentContainerStyle={{ paddingBottom: 24 }} showsVerticalScrollIndicator={false}>
-        <PositionDetailHeader onBack={() => router.back()} health={position.status === "ready" ? position.data.healthFactor : undefined} />
+        <PositionDetailHeader onBack={() => router.back()} />
         <View style={{ paddingHorizontal: 16, paddingTop: 4, gap: 12 }}>
           <ResourceView resource={position} emptyLabel="Position not found">
             {(data) => (

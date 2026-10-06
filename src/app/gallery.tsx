@@ -100,9 +100,18 @@ function ComponentPreview() {
         </View>
 
         <Card>
-          <MarketRow symbol="TSLAx" pair="TSLAx-USDC" detail="Borrow 4.77% · Liquidity $24.0K" price="$353.59" watched onPress={noop} />
-          <VaultRow symbol="USDC" supplied="$55.0K" borrowed="$2.8K" apy="0.03%" yourSupply="2,500" onPress={noop} />
+          <MarketRow symbol="TSLAx" pair="TSLAx-USDC" borrowApy="4.77%" liquidity="$24.0K" price="$353.59" watched onPress={noop} />
         </Card>
+        <VaultRow
+          symbol="USDC"
+          name="USD Coin"
+          apy="2.84%"
+          totalSupply={{ tokens: "59.0K USDC", usd: "$59.0K" }}
+          available={{ tokens: "14.4K USDC", usd: "$14.4K" }}
+          utilization="75.6%"
+          yourSupply={{ short: "2,501", full: "2,501.00 USDC", usd: "$2,500.84" }}
+          onPress={noop}
+        />
 
         <Card>
           <AmountField

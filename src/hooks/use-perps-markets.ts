@@ -3,7 +3,7 @@ import { useMemo, useState, useSyncExternalStore } from "react";
 import { chartSourceFor } from "@/lib/perps/chart-sources";
 import { usdToTokens } from "@/lib/perps/position-math";
 import { getWatchlist, subscribeWatchlist, toggleWatchlist } from "@/lib/perps/watchlist-store";
-import type { Candle, ChartSource, MarketKind, MarketListItem, PerpsMarket, PositionSummary, Timeframe } from "@/types/perps";
+import type { Candle, ChartSource, MarketExposure, MarketKind, MarketListItem, PerpsMarket, PositionSummary, Timeframe } from "@/types/perps";
 import type { Resource } from "@/types/resource";
 
 import { useMarketList } from "./use-market-list";
@@ -30,17 +30,26 @@ function matches(item: MarketListItem, filter: MarketFilter, query: string) {
   return inFilter && (needle === "" || item.pair.toLowerCase().includes(needle) || item.name.toLowerCase().includes(needle));
 }
 
+// The list never waits for positions: until they are read (or with no margin account) every market shows no open side.
 export function usePerpsMarkets() {
   const watched = useSyncExternalStore(subscribeWatchlist, getWatchlist);
   const list = useMarketList();
+  const portfolio = usePerpsPositions();
   const [filter, setFilter] = useState<MarketFilter>("All");
   const [query, setQuery] = useState("");
 
   const markets = useMemo<Resource<MarketListItem[]>>(() => {
     if (list.status !== "ready") return list;
-    const visible = list.data.map((market) => ({ ...market, watched: watched.has(market.symbol) })).filter((item) => matches(item, filter, query));
+    const positions = portfolio.status === "ready" ? portfolio.data.positions : [];
+    const openIn = (symbol: PerpsMarket["symbol"]): MarketExposure | null => {
+      const position = positions.find((candidate) => candidate.symbol === symbol);
+      return position ? { side: position.side, leverage: position.leverage } : null;
+    };
+    const visible = list.data
+      .map((market) => ({ ...market, watched: watched.has(market.symbol), open: openIn(market.symbol) }))
+      .filter((item) => matches(item, filter, query));
     return visible.length === 0 ? { status: "empty" } : { ...list, data: visible };
-  }, [list, watched, filter, query]);
+  }, [list, portfolio, watched, filter, query]);
 
   return { markets, filter, setFilter, query, setQuery, toggleWatch: toggleWatchlist };
 }

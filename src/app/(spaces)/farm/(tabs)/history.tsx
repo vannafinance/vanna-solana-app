@@ -1,19 +1,20 @@
 import { FlatList, View } from "react-native";
 
-import { FarmHero } from "@/components/farm/farm-hero";
 import { FarmHistoryCard } from "@/components/farm/farm-history-card";
+import { MarginHero } from "@/components/margin/margin-hero";
 import { ResourceView } from "@/components/ui/resource-view";
 import { SpaceHeader } from "@/components/ui/space-header";
-import { formatSignedUsd } from "@/format/format-amount";
 import { useFarmHistory } from "@/hooks/use-farm-history";
 import { useHeaderProps } from "@/hooks/use-header-props";
-import { useTheme } from "@/theme/use-theme";
+import { useMarginOverview } from "@/hooks/use-margin-overview";
 import { useResetScrollBetweenSpaces } from "@/navigation/use-reset-scroll-between-spaces";
+import { useTheme } from "@/theme/use-theme";
 
 export default function FarmHistoryScreen() {
   const listRef = useResetScrollBetweenSpaces();
   const { colors } = useTheme();
   const headerProps = useHeaderProps();
+  const margin = useMarginOverview();
   const { history, openTransaction } = useFarmHistory();
   const entries = history.status === "ready" ? history.data.entries : [];
 
@@ -29,16 +30,7 @@ export default function FarmHistoryScreen() {
       ListHeaderComponent={
         <View style={{ marginBottom: 16 }}>
           <SpaceHeader space="farm" {...headerProps}>
-            {history.status === "ready" ? (
-              <FarmHero
-                label="Earned from farms"
-                value={formatSignedUsd(history.data.earnedUsd)}
-                stats={[
-                  { label: "Closed", value: String(history.data.closedCount) },
-                  { label: "Open", value: String(history.data.openCount) },
-                ]}
-              />
-            ) : undefined}
+            <MarginHero module="farm" overview={margin} />
           </SpaceHeader>
         </View>
       }

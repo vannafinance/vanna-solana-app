@@ -2,11 +2,23 @@ import type { TokenAmount } from "@/format/format-amount";
 import type { CloseQuote, ExitFractionBps, FarmPosition, FarmPositionView, FarmPositionsView, UnplacedFarmPosition } from "@/types/farm";
 
 import { netAprBps } from "./farm-math";
-import { scaleAmount, sumAmounts, toUsd } from "./units";
+import { BPS, scaleAmount, sumAmounts, toUsd } from "./units";
+
+// Liquidation starts when the position's assets fall to this multiple of its debt.
+const LIQUIDATION_HEALTH_NUMERATOR = 11n;
+const LIQUIDATION_HEALTH_DENOMINATOR = 10n;
 
 // Everything the position holds against what it owes: the stock plus what Kamino holds, over the debt.
 function healthOf(assetsUsd: bigint, debtUsd: bigint): number | null {
   return debtUsd > 0n ? Number(assetsUsd) / Number(debtUsd) : null;
+}
+
+// The stock price at which the stock plus what Kamino holds is worth 1.1 times the debt. Zero when what Kamino holds
+// alone already covers that, so no fall in the stock can liquidate the position.
+function liquidationPriceOf(collateral: TokenAmount, debtValueUsd: bigint, suppliedValueUsd: bigint): bigint {
+  const needed = (debtValueUsd * LIQUIDATION_HEALTH_NUMERATOR) / LIQUIDATION_HEALTH_DENOMINATOR - suppliedValueUsd;
+  if (needed <= 0n || collateral.raw === 0n) return 0n;
+  return (needed * 10n ** BigInt(collateral.decimals)) / collateral.raw;
 }
 
 export function toPositionView(position: FarmPosition): FarmPositionView {
@@ -15,6 +27,9 @@ export function toPositionView(position: FarmPosition): FarmPositionView {
   const debtValueUsd = toUsd(debt, position.poolPriceUsd);
   const suppliedValueUsd = toUsd(position.supplied, position.poolPriceUsd);
   const yieldEarned: TokenAmount = { raw: position.supplied.raw > position.principal.raw ? position.supplied.raw - position.principal.raw : 0n, decimals: position.supplied.decimals };
+  const price = position.collateralPriceUsd;
+  const liquidationPriceUsd = liquidationPriceOf(position.collateral, debtValueUsd, suppliedValueUsd);
+  const yearlyNetUsd = (suppliedValueUsd * BigInt(position.supplyApyBps) - debtValueUsd * BigInt(position.borrowApyBps)) / BPS;
 
   return {
     id: position.id,
@@ -26,6 +41,7 @@ export function toPositionView(position: FarmPosition): FarmPositionView {
     collateralValueUsd,
     principal: position.principal,
     interest: position.interest,
+    interestValueUsd: toUsd(position.interest, position.poolPriceUsd),
     debt,
     debtValueUsd,
     supplied: position.supplied,
@@ -36,6 +52,11 @@ export function toPositionView(position: FarmPosition): FarmPositionView {
     supplyApyBps: position.supplyApyBps,
     borrowApyBps: position.borrowApyBps,
     netAprBps: netAprBps(position.supplyApyBps, position.borrowApyBps),
+    collateralPriceUsd: price,
+    liquidationPriceUsd,
+    liquidationAwayBps: price > 0n && liquidationPriceUsd < price ? Number(((price - liquidationPriceUsd) * BPS) / price) : 0,
+    yearlyNetUsd,
+    netApyBps: collateralValueUsd > 0n ? Number((yearlyNetUsd * BPS) / collateralValueUsd) : 0,
   };
 }
 

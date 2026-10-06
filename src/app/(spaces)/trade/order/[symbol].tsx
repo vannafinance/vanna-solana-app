@@ -55,7 +55,7 @@ export default function PerpsOrderScreen() {
               </View>
             }
           >
-            <OrderMarketCard symbol={market.symbol} pair={market.pair} />
+            <OrderMarketCard symbol={market.symbol} pair={market.pair} price={formatUsd(market.markPrice)} />
             <SideToggle value={order.side} onChange={order.setSide} />
             <CollateralCard
               symbol={order.side === "long" ? "USDC" : market.symbol}

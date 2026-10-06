@@ -4,14 +4,17 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { AppText } from "@/components/ui/app-text";
 import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
 import { PlainHeader } from "@/components/ui/plain-header";
 import { PillTabs } from "@/components/ui/pill-tabs";
+import { StatStrip } from "@/components/ui/stat-strip";
 import { TokenIcon } from "@/components/ui/token-icon";
 import { formatCompactUsd, formatPercent } from "@/format/format-amount";
 import { useTheme } from "@/theme/use-theme";
 import type { VaultAnalytics, VaultContract, VaultDetail } from "@/types/earn";
 import type { Resource } from "@/types/resource";
 
+import { formatCompactToken } from "./compact-amount";
 import { VaultActivityTab } from "./vault-activity-tab";
 import { VaultAnalyticsTab } from "./vault-analytics-tab";
 import { VaultCollateralTab } from "./vault-collateral-tab";
@@ -28,6 +31,9 @@ const TABS: readonly { value: VaultTab; label: string }[] = [
   { value: "analytics", label: "Analytics" },
 ];
 
+// The page's side margin, shared by the header card, the tabs and the tab content.
+const SIDE = 16;
+
 type VaultScreenProps = {
   vault: VaultDetail;
   analytics: Resource<VaultAnalytics>;
@@ -39,51 +45,47 @@ type VaultScreenProps = {
 };
 
 export function VaultScreen({ vault, analytics, onBack, onSupply, onWithdraw, onCopyAddress, onOpenTransaction }: VaultScreenProps) {
-  const { colors } = useTheme();
+  const { colors, spacing } = useTheme();
   const insets = useSafeAreaInsets();
   const tabs = vault.position ? TABS : TABS.filter((tab) => tab.value !== "positions");
   const [tab, setTab] = useState<VaultTab>(tabs[0].value);
-  const stats = [
-    { label: "Total supply", value: formatCompactUsd(vault.suppliedUsd) },
-    { label: "Available", value: formatCompactUsd(vault.suppliedUsd - vault.borrowedUsd) },
-    { label: "Utilization", value: formatPercent(vault.utilizationBps, 1) },
-  ];
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 24 }}>
         <PlainHeader onBack={onBack} />
-        <View style={{ paddingHorizontal: 20 }}>
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
-            <TokenIcon symbol={vault.symbol} size={36} />
-            <View>
-              <AppText variant="bodyLg" strong style={{ lineHeight: 22 }}>{`${vault.symbol} vault`}</AppText>
-              <AppText variant="caption" color="textMuted" style={{ lineHeight: 16 }}>{`${vault.name} · Vanna lending pool`}</AppText>
-            </View>
-          </View>
-          <AppText variant="caption" color="textMuted" style={{ marginTop: 16 }}>
-            Supply APY
-          </AppText>
-          <AppText strong color="positive" style={{ fontSize: 32, lineHeight: 40 }}>
-            {formatPercent(vault.supplyApyBps)}
-          </AppText>
-          <View style={{ marginTop: 16, paddingTop: 14, flexDirection: "row", gap: 10, borderTopWidth: 1, borderTopColor: colors.divider }}>
-            {stats.map((stat) => (
-              <View key={stat.label} style={{ flex: 1, gap: 2 }}>
-                <AppText variant="caption" color="textMuted" style={{ lineHeight: 16 }}>
-                  {stat.label}
-                </AppText>
-                <AppText variant="bodyLg" strong style={{ lineHeight: 22 }}>
-                  {stat.value}
+        <View style={{ paddingHorizontal: SIDE }}>
+          <Card style={{ gap: spacing.md }}>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.md }}>
+              <TokenIcon symbol={vault.symbol} size={40} />
+              <View style={{ flex: 1, gap: 2 }}>
+                <AppText variant="bodyLg" strong numberOfLines={1}>{`${vault.symbol} vault`}</AppText>
+                <AppText variant="caption" color="textMuted" numberOfLines={1}>
+                  {vault.name}
                 </AppText>
               </View>
-            ))}
-          </View>
+            </View>
+            <View style={{ gap: 2 }}>
+              <AppText variant="caption" color="textMuted">
+                Supply APY
+              </AppText>
+              <AppText strong color="positive" style={{ fontSize: 32, lineHeight: 40 }}>
+                {formatPercent(vault.supplyApyBps)}
+              </AppText>
+            </View>
+            <StatStrip
+              stats={[
+                { label: "Total supply", value: `${formatCompactToken(vault.totalSupply)} ${vault.symbol}`, sub: formatCompactUsd(vault.suppliedUsd) },
+                { label: "Available", value: `${formatCompactToken(vault.available)} ${vault.symbol}`, sub: formatCompactUsd(vault.availableUsd) },
+                { label: "Utilization", value: formatPercent(vault.utilizationBps, 1) },
+              ]}
+            />
+          </Card>
         </View>
         <View style={{ marginTop: 12 }}>
-          <PillTabs segments={tabs} value={tab} onChange={setTab} activeColor={colors.earnTab} />
+          <PillTabs segments={tabs} value={tab} onChange={setTab} activeColor={colors.earnTab} sidePadding={SIDE} />
         </View>
-        <View style={{ paddingHorizontal: 20 }}>
+        <View style={{ paddingHorizontal: SIDE }}>
           {tab === "positions" && vault.position ? <VaultPositionTab vault={vault} position={vault.position} /> : null}
           {tab === "details" ? <VaultDetailsTab vault={vault} onCopyAddress={onCopyAddress} /> : null}
           {tab === "activity" ? <VaultActivityTab vault={vault} onOpenTransaction={onOpenTransaction} /> : null}
@@ -91,8 +93,8 @@ export function VaultScreen({ vault, analytics, onBack, onSupply, onWithdraw, on
           {tab === "analytics" ? <VaultAnalyticsTab analytics={analytics} /> : null}
         </View>
       </ScrollView>
-      <View style={{ flexDirection: "row", gap: 10, paddingTop: 12, paddingHorizontal: 16, paddingBottom: Math.max(insets.bottom, 12) + 16, backgroundColor: colors.background }}>
-        <Button label="Withdraw" variant="outline" flex onPress={onWithdraw} />
+      <View style={{ flexDirection: "row", gap: spacing.sm, paddingTop: spacing.md, paddingHorizontal: SIDE, paddingBottom: Math.max(insets.bottom, 12) + 16, backgroundColor: colors.background }}>
+        <Button label="Withdraw" variant="outline" flex disabled={!vault.position} onPress={onWithdraw} />
         <Button label="Supply" flex onPress={onSupply} />
       </View>
     </View>

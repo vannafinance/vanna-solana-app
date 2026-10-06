@@ -34,6 +34,7 @@ function Navigation() {
           <Stack screenOptions={{ headerShown: false, animation: "slide_from_right" }}>
             <Stack.Screen name="faucet" options={{ presentation: "transparentModal", animation: "none" }} />
             <Stack.Screen name="margin" options={{ presentation: "transparentModal", animation: "none" }} />
+            <Stack.Screen name="swap" options={{ animation: "slide_from_bottom" }} />
           </Stack>
         </SpaceScope>
       )}

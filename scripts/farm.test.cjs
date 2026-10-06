@@ -215,7 +215,7 @@ test("a deploy sent as a deposit and then a borrow with the supply still opens o
   assert.equal(derived.attributions[0].stock, "TSLAx");
   assert.equal(derived.attributions[0].collateral.raw, 200_000_000n);
   assert.equal(derived.attributions[0].borrowed.raw, 741_000_000n);
-  assert.equal(derived.entries[0].actions.map((item) => item.kind).join(","), "deposit,deposit,borrow");
+  assert.equal(derived.entries[0].actions.map((item) => item.kind).join(","), "deposit,borrow,supply");
 });
 
 test("a deploy sent as a deposit, a borrow and a supply still opens one position", () => {
@@ -247,6 +247,25 @@ test("a stock deposit long before a supply is not taken for part of it", () => {
     depositOnly("deposit", 100, "TSLAx", 200_000_000n),
   ]);
   assert.equal(derived.attributions.length, 0);
+});
+
+test("a failed deploy is listed as failed with its reason and opens nothing", () => {
+  const failedDeploy = open("f", 15, "TSLAx", 100n, 400n);
+  const derived = deriveFarm([open("a", 20, "TSLAx", 100n, 400n), failedDeploy], new Map([["f", "Price moved"]]));
+  assert.equal(derived.attributions.length, 1);
+  assert.equal(derived.attributions[0].collateral.raw, 100n);
+  assert.equal(derived.entries.length, 2);
+  const failed = derived.entries.find((entry) => entry.signature === "f");
+  assert.equal(failed.status, "failed");
+  assert.equal(failed.reason, "Price moved");
+  assert.equal(failed.event, "deploy");
+  assert.equal(derived.entries.find((entry) => entry.signature === "a").status, "succeeded");
+});
+
+test("a failed perps order is not part of Farm", () => {
+  const swap = { type: "swap", from: leg("USDC", 1n, 6), to: leg("TSLAx", 1n, 8) };
+  const perps = { signature: "p", at: 5, strategy: "perps", title: null, stock: "TSLAx", chips: [{ type: "deposit", leg: leg("TSLAx", 9n, 8) }, { type: "borrow", leg: leg("USDC", 1n, 6) }, swap] };
+  assert.equal(deriveFarm([perps], new Map([["p", null]])).entries.length, 0);
 });
 
 test("activity from perps is not part of Farm", () => {
@@ -367,4 +386,196 @@ test("a position whose stock is unknown closes its Kamino part only and never re
   const quarter = unplacedCloseQuote(position, 1_000_000n, 2500);
   assert.equal(quarter.redeem.raw, 185_687_500n);
   assert.equal(quarter.repay.raw, 185_687_500n);
+});
+
+const { accountAfterDeploy, liquidationDropBps, netApyAtLeverageBps } = load("src/lib/farm/farm-math.ts");
+const { strategyPreview } = load("src/lib/farm/strategy-preview.ts");
+const { farmPoolRows } = load("src/lib/farm/pool-rows.ts");
+
+const usdcPool = (supplyApyBps, borrowApyBps) => ({
+  symbol: "USDC",
+  market: "Kamino Main Market",
+  decimals: 6,
+  priceUsd: 1_000_000n,
+  supplyApyBps,
+  borrowApyBps,
+  available: 0n,
+  borrowable: 10_000_000_000n,
+  totalSupplied: 2_500_000_000_000n,
+  utilizationBps: 7800,
+});
+
+function googlForm(amountText, leverage, account = { collateralUsd: 0n, debtUsd: 0n }) {
+  const collateral = { symbol: "GOOGLx", decimals: 8, priceUsd: 340_000_000n, balance: 200_000_000n };
+  return buildDeployForm({ pools: [usdcPool(628, 342)], collaterals: [collateral], poolSymbol: "USDC", collateralSymbol: "GOOGLx", amountText, leverage, account });
+}
+
+const NO_ACCOUNT = { hasAccount: false, collateralUsd: 0n, debtUsd: 0n, netUsd: 0n, health: null, leverage: null };
+
+test("a deploy borrows the deposit times leverage minus one, supplies all of it to Kamino and earns the spread on it", () => {
+  // 1.5 GOOGLx at $340 = $510 at 4x: borrow $1,530, supplied at 6.28%, paid at 3.42%.
+  const preview = strategyPreview(googlForm("1.5", 4), NO_ACCOUNT);
+  assert.equal(preview.borrowUsd, 1_530_000_000n);
+  assert.equal(preview.borrow.raw, 1_530_000_000n);
+  assert.equal(preview.supplied.raw, preview.borrow.raw);
+  // $1,530 × (6.28% - 3.42%) = $43.758 a year, (4 - 1) × 2.86% = 8.58% on the $510 deposit.
+  assert.equal(preview.yearlyNetUsd, 43_758_000n);
+  assert.equal(preview.netApyBps, 858);
+  // Kamino holds the borrowed amount, so the stock only has to cover 10% of the debt: $340 × 3 ÷ 10.
+  assert.equal(preview.liquidationPriceUsd, 102_000_000n);
+  assert.equal(preview.liquidationDropBps, 7000);
+});
+
+test("without a margin account or debt only the new health and leverage are given", () => {
+  const preview = strategyPreview(googlForm("1.5", 4), NO_ACCOUNT);
+  assert.equal(preview.health.now, null);
+  assert.equal(preview.leverage.now, null);
+  assert.ok(Math.abs(preview.health.after - 4 / 3) < 1e-9);
+  assert.equal(preview.leverage.after, 4);
+  const debtFree = strategyPreview(googlForm("1.5", 4), { hasAccount: true, collateralUsd: 100_000_000n, debtUsd: 0n, netUsd: 100_000_000n, health: null, leverage: 1 });
+  assert.equal(debtFree.leverage.now, null);
+});
+
+test("with debt already in the account the preview moves the whole account from now to after", () => {
+  // $2,000 held against $1,250 owed: health 1.60, leverage 2.67x. Adding $510 of stock, $1,530 supplied and $1,530 owed.
+  const account = { hasAccount: true, collateralUsd: 2_000_000_000n, debtUsd: 1_250_000_000n, netUsd: 750_000_000n, health: 1.6, leverage: 2000 / 750 };
+  const preview = strategyPreview(googlForm("1.5", 4, account), account);
+  assert.equal(preview.health.now, 1.6);
+  assert.ok(Math.abs(preview.health.after - 4040 / 2780) < 1e-9);
+  assert.ok(Math.abs(preview.leverage.after - 4040 / 1260) < 1e-9);
+  assert.ok(preview.health.after < preview.health.now);
+});
+
+test("no amount, or more than the wallet holds, gives no preview", () => {
+  assert.equal(strategyPreview(googlForm("", 4), NO_ACCOUNT), null);
+  assert.equal(strategyPreview(googlForm("3", 4), NO_ACCOUNT), null);
+  // At 1x nothing is borrowed: the figures are real zeros, not dashes.
+  const flat = strategyPreview(googlForm("1", 1), NO_ACCOUNT);
+  assert.equal(flat.borrowUsd, 0n);
+  assert.equal(flat.health.after, null);
+  assert.equal(flat.leverage.after, 1);
+});
+
+test("the liquidation drop shrinks by ten points per step of leverage", () => {
+  assert.equal(liquidationDropBps(1), 10_000);
+  assert.equal(liquidationDropBps(2), 9000);
+  assert.equal(liquidationDropBps(5), 6000);
+  const empty = accountAfterDeploy({ collateralUsd: 0n, debtUsd: 0n, netUsd: 0n }, { collateralValueUsd: 0n, debtUsd: 0n });
+  assert.equal(empty.health, null);
+  assert.equal(empty.leverage, 1);
+});
+
+test("a pool lists its net APY at 5x, negative when the borrow costs more than Kamino pays, and what the user holds in it", () => {
+  assert.equal(netApyAtLeverageBps(628, 342, 5), 1144);
+  assert.equal(netApyAtLeverageBps(300, 400, 5), -400);
+  const held = [{ poolSymbol: "USDC", netValueUsd: 513_000_000n }, { poolSymbol: "SOL", netValueUsd: 1n }];
+  const [usdc] = farmPoolRows([usdcPool(628, 342)], held);
+  assert.equal(usdc.maxLeverage, 5);
+  assert.equal(usdc.maxNetApyBps, 1144);
+  assert.equal(usdc.totalSuppliedUsd, 2_500_000_000_000n);
+  assert.equal(usdc.yoursUsd, 513_000_000n);
+  assert.equal(farmPoolRows([usdcPool(300, 400)], []).at(0).yoursUsd, null);
+  assert.equal(farmPoolRows([usdcPool(300, 400)], []).at(0).maxNetApyBps, -400);
+});
+
+test("a position's net APY is the Kamino yield minus the borrow interest over the stock deposited", () => {
+  // 2 TSLAx ($744.28) with 700 USDC in Kamino at 4.98% and 700 USDC owed at 6.02%: the borrow costs more, so it is negative.
+  const live = [{ pool: "USDC", supplied: 700_000_000n, debt: 700_000_010n, borrowRateBps: 602 }];
+  const [position] = composePositions(live, [attribution("TSLAx", 200_000_000n, 700_000_000n)], prices, { USDC: 498, SOL: null });
+  const view = toPositionView(position);
+  assert.ok(view.yearlyNetUsd < 0n);
+  assert.equal(view.netApyBps, Number((view.yearlyNetUsd * 10_000n) / view.collateralValueUsd));
+  assert.ok(view.netApyBps < -90 && view.netApyBps > -110);
+  assert.equal(view.liquidationPriceUsd, toPortfolioFarmPosition(position).liquidationPrice);
+  assert.ok(view.liquidationAwayBps > 9000);
+});
+
+const { accruedShare, farmOverview } = load("src/lib/farm/overview-series.ts");
+
+test("a farm's earnings to date are spread over its deploys at one steady rate, weighted by what each borrowed", () => {
+  assert.equal(accruedShare([{ at: 0, weight: 1n }], 50, 100), 0.5);
+  assert.equal(accruedShare([{ at: 0, weight: 1n }], -10, 100), 0);
+  assert.equal(accruedShare([{ at: 0, weight: 1n }], 100, 100), 1);
+  // 100 borrowed at 0 and 100 more at 50: by 100 they have earned for 100 + 50 units of time; by 50 only the first had, for 50.
+  const twice = [
+    { at: 0, weight: 100n },
+    { at: 50, weight: 100n },
+  ];
+  assert.equal(accruedShare(twice, 50, 100), 1 / 3);
+  assert.equal(accruedShare(twice, 75, 100), 2 / 3);
+  // Without a known deploy it is all earned at the end and nothing before.
+  assert.equal(accruedShare([], 99, 100), 0);
+  assert.equal(accruedShare([], 100, 100), 1);
+  assert.equal(accruedShare([{ at: 0, weight: 0n }, { at: 50, weight: 0n }], 50, 100), 1 / 3);
+});
+
+const DAY_S = 86_400;
+const T0 = 1_700_000_000;
+const flatPrices = { USDC: 1_000_000n, TSLAx: 372_140_000n, GOOGLx: 340_000_000n };
+// 2 TSLAx with 700 USDC borrowed into Kamino at T0; ten days on Kamino holds 710 and the loan owes 704.
+const tslaLive = [{ pool: "USDC", supplied: 710_000_000n, debt: 704_000_000n, borrowRateBps: 602 }];
+const overviewOf = (activity, live, mode, now = (T0 + 10 * DAY_S) * 1000) => {
+  const derived = deriveFarm(activity);
+  const positions = composePositions(live, derived.attributions, flatPrices, { USDC: 500, SOL: null });
+  return farmOverview({ positions, entries: derived.entries, prices: flatPrices, mode, range: "All", now });
+};
+
+test("net earnings are what Kamino paid minus the borrow interest the loan has accrued, ending at today's figure", () => {
+  const overview = overviewOf([open("a", T0, "TSLAx", 200_000_000n, 700_000_000n)], tslaLive, "earnings");
+  // Interest accrued = debt - principal = 704 - 700; Kamino earned = 710 - 700.
+  assert.equal(overview.earnings.interestUsd, 4_000_000n);
+  assert.equal(overview.earnings.kaminoUsd, 10_000_000n);
+  assert.equal(overview.earnings.closedUsd, 0n);
+  assert.equal(overview.earnings.netUsd, 6_000_000n);
+  assert.equal(overview.earnings.borrowApyBps, 602);
+  assert.equal(overview.earnings.supplyApyBps, 500);
+  const { points, value, now } = overview.chart;
+  assert.equal(value, 6_000_000n);
+  assert.equal(points.at(-1).at, now);
+  assert.equal(points.at(-1).usd, 6_000_000n);
+  // Zero before the deploy, then rising steadily: halfway through the ten days it has earned half.
+  assert.ok(points.filter((point) => point.at <= T0 * 1000).every((point) => point.usd === 0n));
+  assert.ok(points.every((point, index) => index === 0 || point.usd >= points[index - 1].usd));
+  const mid = points.find((point) => point.at > T0 * 1000);
+  assert.equal(mid.usd, BigInt(Math.round(6_000_000 * ((mid.at - T0 * 1000) / (10 * DAY_S * 1000)))));
+});
+
+test("a closed farm keeps what its exit paid out beyond the debt, from the exit on", () => {
+  const activity = [
+    open("a", T0, "TSLAx", 200_000_000n, 700_000_000n),
+    returnStock("z", T0 - 10 * DAY_S + 60, "GOOGLx", 100_000_000n),
+    exit("y", T0 - 10 * DAY_S, 303_000_000n, 4_000_000n),
+    open("x", T0 - 20 * DAY_S, "GOOGLx", 100_000_000n, 300_000_000n),
+  ];
+  const earnings = overviewOf(activity, tslaLive, "earnings");
+  assert.equal(earnings.earnings.closedUsd, 4_000_000n);
+  assert.equal(earnings.earnings.interestUsd, 4_000_000n);
+  assert.equal(earnings.earnings.netUsd, 10_000_000n);
+  const between = earnings.chart.points.filter((point) => point.at >= (T0 - 10 * DAY_S) * 1000 && point.at <= T0 * 1000);
+  assert.ok(between.length > 0 && between.every((point) => point.usd === 4_000_000n));
+  assert.equal(earnings.chart.points.at(-1).usd, 10_000_000n);
+
+  // Deployed: 1 GOOGLx ($340) and 300 USDC in Kamino until the exit, nothing after the stock went back, then 2 TSLAx and
+  // 700 USDC; today it is the stock plus what Kamino holds now.
+  const deployed = overviewOf(activity, tslaLive, "deployed").chart;
+  const at = (seconds) => deployed.points.filter((point) => point.at > seconds[0] * 1000 && point.at < seconds[1] * 1000).map((point) => point.usd);
+  assert.ok(at([T0 - 20 * DAY_S, T0 - 10 * DAY_S]).every((usd) => usd === 640_000_000n));
+  assert.ok(at([T0 - 10 * DAY_S + 60, T0]).every((usd) => usd === 0n));
+  assert.ok(at([T0, T0 + 10 * DAY_S]).every((usd) => usd === 1_444_280_000n));
+  assert.equal(deployed.value, 1_454_280_000n);
+  assert.equal(deployed.points.at(-1).usd, 1_454_280_000n);
+
+  // Returning the stock ends the farm even when no exit was read before it, so its Kamino part stops counting too.
+  const returnedOnly = overviewOf([returnStock("z", T0 - 10 * DAY_S, "GOOGLx", 100_000_000n), open("x", T0 - 20 * DAY_S, "GOOGLx", 100_000_000n, 300_000_000n)], [], "deployed").chart;
+  assert.ok(returnedOnly.points.filter((point) => point.at > (T0 - 10 * DAY_S) * 1000).every((point) => point.usd === 0n));
+});
+
+test("with no farm open and no Farm transaction that went through there is nothing to chart", () => {
+  assert.equal(overviewOf([], [], "earnings"), null);
+  const failedOnly = deriveFarm([open("f", T0, "TSLAx", 100n, 400n)], new Map([["f", "Price moved"]]));
+  assert.equal(farmOverview({ positions: [], entries: failedOnly.entries, prices: flatPrices, mode: "earnings", range: "All", now: T0 * 1000 }), null);
+  // History alone still charts what the closed farms earned.
+  const closed = overviewOf([exit("y", T0 + 60, 303_000_000n, 4_000_000n), open("x", T0, "GOOGLx", 100_000_000n, 300_000_000n)], [], "earnings");
+  assert.equal(closed.earnings.netUsd, 4_000_000n);
+  assert.equal(closed.earnings.borrowApyBps, null);
 });

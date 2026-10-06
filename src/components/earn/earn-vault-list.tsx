@@ -1,14 +1,13 @@
 import { View } from "react-native";
 
-import { AppText } from "@/components/ui/app-text";
-import { Card } from "@/components/ui/card";
 import { ResourceView } from "@/components/ui/resource-view";
-import { formatCompactUsd, formatPercent } from "@/format/format-amount";
-import { formatSummaryNumber } from "@/format/format-earn";
+import { formatCompactUsd, formatPercent, formatUsd } from "@/format/format-amount";
+import { formatFullAmount, formatSummaryNumber } from "@/format/format-earn";
 import { useTheme } from "@/theme/use-theme";
 import type { VaultSummary } from "@/types/earn";
 import type { Resource } from "@/types/resource";
 
+import { formatCompactToken } from "./compact-amount";
 import { VaultRow } from "./vault-row";
 
 type EarnVaultListProps = {
@@ -18,33 +17,34 @@ type EarnVaultListProps = {
 };
 
 export function EarnVaultList({ vaults, emptyLabel, onSelect }: EarnVaultListProps) {
-  const { colors, spacing } = useTheme();
+  const { spacing } = useTheme();
 
   return (
     <ResourceView resource={vaults} emptyLabel={emptyLabel}>
       {(data) => (
-        <Card padded={false} style={{ paddingHorizontal: spacing.lg }}>
-          <View style={{ height: 40, flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-            <AppText variant="caption" color="textMuted">
-              Vault
-            </AppText>
-            <AppText variant="caption" color="textMuted">
-              Supply APY
-            </AppText>
-          </View>
+        <View style={{ gap: spacing.md }}>
           {data.map((vault) => (
-            <View key={vault.id} style={{ borderTopWidth: 1, borderTopColor: colors.divider }}>
-              <VaultRow
-                symbol={vault.symbol}
-                supplied={formatCompactUsd(vault.suppliedUsd)}
-                borrowed={formatCompactUsd(vault.borrowedUsd)}
-                apy={formatPercent(vault.supplyApyBps)}
-                yourSupply={vault.yourSupply ? formatSummaryNumber(vault.yourSupply, vault.symbol) : undefined}
-                onPress={() => onSelect(vault.id)}
-              />
-            </View>
+            <VaultRow
+              key={vault.id}
+              symbol={vault.symbol}
+              name={vault.name}
+              apy={formatPercent(vault.supplyApyBps)}
+              totalSupply={{ tokens: formatCompactToken(vault.totalSupply), usd: formatCompactUsd(vault.suppliedUsd) }}
+              available={{ tokens: formatCompactToken(vault.available), usd: formatCompactUsd(vault.availableUsd) }}
+              utilization={formatPercent(vault.utilizationBps, 1)}
+              yourSupply={
+                vault.yourSupply
+                  ? {
+                      short: formatSummaryNumber(vault.yourSupply.amount, vault.symbol),
+                      full: formatFullAmount(vault.yourSupply.amount, vault.symbol),
+                      usd: formatUsd(vault.yourSupply.usd),
+                    }
+                  : undefined
+              }
+              onPress={() => onSelect(vault.id)}
+            />
           ))}
-        </Card>
+        </View>
       )}
     </ResourceView>
   );

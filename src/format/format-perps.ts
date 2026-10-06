@@ -30,3 +30,10 @@ export function formatActivityAmount({ raw, decimals }: TokenAmount): string {
   const text = formatUnits(raw, decimals, Math.min(decimals, 6));
   return text.includes(".") ? text.replace(/0+$/, "").replace(/\.$/, "") : text;
 }
+
+// Chart axis labels for a figure that can be below zero: $0, $50, -$25, $1.2K.
+export function formatAxisSignedUsd(dollars: number): string {
+  const size = Math.abs(dollars);
+  const text = size >= 1000 ? `$${(size / 1000).toFixed(size % 1000 ? 1 : 0)}K` : `$${size.toFixed(size % 1 ? 2 : 0)}`;
+  return dollars < 0 ? `-${text}` : text;
+}

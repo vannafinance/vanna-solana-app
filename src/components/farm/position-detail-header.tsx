@@ -6,15 +6,12 @@ import { Icon } from "@/components/ui/icon";
 import { ripple } from "@/components/ui/ripple";
 import { useTheme } from "@/theme/use-theme";
 
-import { formatHealth } from "./farm-format";
-import { HealthGauge } from "./health-gauge";
-
 type PositionDetailHeaderProps = {
   onBack: () => void;
-  health?: number;
 };
 
-export function PositionDetailHeader({ onBack, health }: PositionDetailHeaderProps) {
+// The position's health is in its title row below, so the bar is only the way back.
+export function PositionDetailHeader({ onBack }: PositionDetailHeaderProps) {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
 
@@ -30,15 +27,6 @@ export function PositionDetailHeader({ onBack, health }: PositionDetailHeaderPro
         <Icon name="arrow_back" size={20} color="text" />
         <AppText variant="body">Positions</AppText>
       </Pressable>
-      <View style={{ flex: 1 }} />
-      {health === undefined ? null : (
-        <View style={{ height: 32, paddingHorizontal: 12, borderRadius: 16, backgroundColor: colors.surface, flexDirection: "row", alignItems: "center", gap: 6 }}>
-          <HealthGauge health={health} width={16} />
-          <AppText variant="body" strong>
-            {`HF ${formatHealth(health)}`}
-          </AppText>
-        </View>
-      )}
     </View>
   );
 }
