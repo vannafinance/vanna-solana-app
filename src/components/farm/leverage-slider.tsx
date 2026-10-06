@@ -126,7 +126,7 @@ export function LeverageSlider({ value, min, max, onChange }: LeverageSliderProp
             thumbStyle,
           ]}
         >
-          <Image source={mark} style={{ width: MARK, height: MARK }} />
+          <Image source={mark} cachePolicy="memory" style={{ width: MARK, height: MARK }} />
         </Animated.View>
       </View>
     </GestureDetector>

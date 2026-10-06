@@ -50,7 +50,7 @@ export function SwapFlipButton({ onPress }: SwapFlipButtonProps) {
         }}
       >
         <Animated.View style={spin}>
-          <Image source={require("../../../assets/images/vanna-mark.png")} accessibilityLabel="Vanna" style={{ width: 28, height: 28 }} contentFit="contain" />
+          <Image source={require("../../../assets/images/vanna-mark.png")} cachePolicy="memory" accessibilityLabel="Vanna" style={{ width: 28, height: 28 }} contentFit="contain" />
         </Animated.View>
       </Pressable>
     </View>

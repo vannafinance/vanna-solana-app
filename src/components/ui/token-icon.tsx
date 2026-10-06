@@ -27,5 +27,7 @@ type TokenIconProps = {
 export function TokenIcon({ symbol, size = 40 }: TokenIconProps) {
   const { radius } = useTheme();
 
-  return <Image accessibilityLabel={symbol} source={sources[symbol]} style={{ width: size, height: size, borderRadius: radius.pill }} />;
+  // Memory only: on Android the disk cache keys a bundled image by its resource id, and those ids shift whenever an image
+  // is added (SKR moved every later token up by one), so a phone updated from an older build showed the wrong logos.
+  return <Image accessibilityLabel={symbol} source={sources[symbol]} cachePolicy="memory" style={{ width: size, height: size, borderRadius: radius.pill }} />;
 }

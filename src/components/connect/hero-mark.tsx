@@ -160,7 +160,7 @@ export function HeroMark({ intro }: { intro: boolean }) {
         </>
       ) : null}
       <Animated.View accessibilityLabel="Vanna" style={[{ position: "absolute", width: MARK_SIZE, height: MARK_SIZE, alignItems: "center", justifyContent: "center" }, markStyle]}>
-        <Image source={require("../../../assets/images/vanna-mark.png")} style={{ width: 60, height: 60 }} contentFit="contain" />
+        <Image source={require("../../../assets/images/vanna-mark.png")} cachePolicy="memory" style={{ width: 60, height: 60 }} contentFit="contain" />
       </Animated.View>
       {playing ? (
         <Animated.View
