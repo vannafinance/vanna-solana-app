@@ -16,12 +16,14 @@ type UnplacedPositionCardProps = {
 };
 
 // A position the chain shows but whose stock the app cannot place, so it carries only what is certain: the amounts. It can
-// still be closed: the Kamino part is redeemed and repaid, and any stock stays in the margin account.
+// still be closed: the Kamino part is redeemed and repaid, and any stock stays in the margin account. One with no loan is a
+// 1x deploy, whose stock was swapped into the pool asset, so there is no stock to place.
 export function UnplacedPositionCard({ position, onPress }: UnplacedPositionCardProps) {
   const { spacing } = useTheme();
+  const plain = position.debt.raw === 0n;
 
   return (
-    <Pressable accessibilityRole="button" accessibilityLabel={`Kamino ${position.pool} position, stock unknown. Close it`} onPress={onPress}>
+    <Pressable accessibilityRole="button" accessibilityLabel={plain ? `Kamino ${position.pool} position at 1x, no loan. Manage it` : `Kamino ${position.pool} position, stock unknown. Close it`} onPress={onPress}>
       <Card>
         <View style={{ gap: spacing.md }}>
           <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.md, minHeight: 44 }}>
@@ -31,7 +33,7 @@ export function UnplacedPositionCard({ position, onPress }: UnplacedPositionCard
                 {`Kamino ${position.pool} position`}
               </AppText>
               <AppText variant="caption" color="textMuted" numberOfLines={1}>
-                Stock unknown, tap to close
+                {plain ? "1x · no loan, tap to manage" : "Stock unknown, tap to close"}
               </AppText>
             </View>
             <Icon name="chevron_right" size={22} color="textMuted" />
@@ -39,7 +41,7 @@ export function UnplacedPositionCard({ position, onPress }: UnplacedPositionCard
           <StatStrip
             stats={[
               { label: "In Kamino", value: withSymbol(position.supplied, position.pool) },
-              { label: "Owed to Vanna", value: withSymbol(position.debt, position.pool), sub: "With interest" },
+              plain ? { label: "Loan", value: "None", sub: "Nothing to liquidate" } : { label: "Owed to Vanna", value: withSymbol(position.debt, position.pool), sub: "With interest" },
             ]}
           />
         </View>

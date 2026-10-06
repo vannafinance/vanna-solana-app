@@ -586,3 +586,32 @@ test("with no farm open and no Farm transaction that went through there is nothi
   assert.equal(closed.earnings.netUsd, 4_000_000n);
   assert.equal(closed.earnings.borrowApyBps, null);
 });
+
+test("a 1x deploy swaps the stock into the pool asset: no stock is attributed, and its deploy and exit are in history", () => {
+  const swapChip = { type: "swap", from: leg("TSLAx", 200_000_000n, 8), to: leg("USDC", 760_000_000n, 6) };
+  // Sent as three transactions: the deposit, the margin swap, then the Kamino supply.
+  const split = deriveFarm([
+    farmTx("exit", 300, [{ type: "withdraw", leg: leg("USDC", 752_400_000n, 6) }]),
+    supplyOnly("supply", 103, "USDC", 752_000_000n, 6),
+    plainTx("swap", 102, "perps", [swapChip]),
+    depositOnly("deposit", 101, "TSLAx", 200_000_000n),
+  ]);
+  assert.equal(split.attributions.length, 0);
+  assert.equal(split.entries.map((entry) => `${entry.event}:${entry.collateralSymbol}->${entry.poolSymbol}`).join(","), "exit:TSLAx->USDC,deploy:TSLAx->USDC");
+  assert.equal(split.closedCount, 1);
+  // All in one transaction.
+  const one = deriveFarm([farmTx("all", 10, [{ type: "deposit", leg: leg("TSLAx", 200_000_000n, 8) }, swapChip, { type: "deposit", leg: leg("USDC", 752_000_000n, 6) }])]);
+  assert.equal(one.attributions.length, 0);
+  assert.equal(one.entries[0].actions.map((item) => item.kind).join(","), "deposit,supply");
+});
+
+test("1x supplies the whole deposit and earns the full supply APY, with no loan", () => {
+  const plain = buildDeployForm(deployInput({ borrowable: 0n, amountText: "5", leverage: 1 }));
+  assert.equal(plain.quote.borrow.raw, 0n);
+  assert.equal(plain.quote.suppliedUsd, plain.quote.collateralValueUsd);
+  assert.equal(plain.quote.netApyBps, 498);
+  assert.equal(plain.quote.projectedYearlyUsd, (plain.quote.collateralValueUsd * 498n) / 10_000n);
+  assert.equal(plain.quote.liquidationPriceUsd, 0n);
+  const twoX = buildDeployForm(deployInput({ borrowable: 10n ** 12n, amountText: "5", leverage: 2 }));
+  assert.equal(twoX.quote.suppliedUsd, twoX.quote.debtUsd);
+});

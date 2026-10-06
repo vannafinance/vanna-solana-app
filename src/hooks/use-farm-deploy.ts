@@ -131,7 +131,9 @@ export function useFarmDeploy(poolSymbol: PoolSymbol) {
     success: {
       title: "Strategy deployed",
       message: data
-        ? `${formatToken(data.amount, 2)} ${data.collateral.symbol} deposited · ${formatToken(data.quote.borrow, borrowDigits)} ${data.pool.symbol} earning ${formatPercent(data.pool.supplyApyBps)} on Kamino`
+        ? data.leverage <= 1
+          ? `${formatToken(data.amount, 2)} ${data.collateral.symbol} swapped to about ${formatToken(data.quote.supplied, borrowDigits)} ${data.pool.symbol}, earning ${formatPercent(data.pool.supplyApyBps)} on Kamino`
+          : `${formatToken(data.amount, 2)} ${data.collateral.symbol} deposited · ${formatToken(data.quote.borrow, borrowDigits)} ${data.pool.symbol} earning ${formatPercent(data.pool.supplyApyBps)} on Kamino`
         : "",
     },
   });
@@ -166,12 +168,23 @@ export function useFarmDeploy(poolSymbol: PoolSymbol) {
     return {
       title: "Review strategy",
       legs: [
-        { label: "You deposit", value: `${formatToken(data.amount, 2)} ${stock}`, caption: `${formatUsd(data.quote.collateralValueUsd)} kept as collateral` },
-        {
-          label: "Borrowed from Vanna, supplied to Kamino",
-          value: borrowed,
-          caption: `${formatUsd(preview.borrowUsd)} · pays ${formatPercent(preview.borrowApyBps)}, earns ${formatPercent(preview.supplyApyBps)}`,
-        },
+        ...(data.leverage <= 1
+          ? [
+              { label: "You deposit", value: `${formatToken(data.amount, 2)} ${stock}`, caption: `${formatUsd(data.quote.collateralValueUsd)}, swapped to ${data.pool.symbol} in your margin account` },
+              {
+                label: "Supplied to Kamino, no loan",
+                value: `≈ ${formatToken(preview.supplied, borrowDigits)} ${data.pool.symbol}`,
+                caption: `${formatUsd(preview.suppliedUsd)} · earns ${formatPercent(preview.supplyApyBps)}. Closing returns ${data.pool.symbol}, not ${stock}`,
+              },
+            ]
+          : [
+              { label: "You deposit", value: `${formatToken(data.amount, 2)} ${stock}`, caption: `${formatUsd(data.quote.collateralValueUsd)} kept as collateral` },
+              {
+                label: "Borrowed from Vanna, supplied to Kamino",
+                value: borrowed,
+                caption: `${formatUsd(preview.borrowUsd)} · pays ${formatPercent(preview.borrowApyBps)}, earns ${formatPercent(preview.supplyApyBps)}`,
+              },
+            ]),
       ],
       rows: [
         { label: "Leverage", value: `${data.leverage}x` },

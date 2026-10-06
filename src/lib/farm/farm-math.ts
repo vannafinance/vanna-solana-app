@@ -51,19 +51,24 @@ type QuoteInput = {
   pool: FarmPool;
 };
 
-// Borrowed = deposit value × (L - 1); all of it is supplied to Kamino.
+// Borrowed = deposit value × (L - 1); all of it is supplied to Kamino. At 1x nothing is borrowed: the deposit itself is
+// swapped into the pool asset and supplied, so it earns the full supply APY with no loan and nothing to liquidate.
 export function deployQuote({ collateral, collateralPriceUsd, leverage, pool }: QuoteInput): DeployQuote {
   const collateralValueUsd = toUsd(collateral, collateralPriceUsd);
   const debtUsd = collateralValueUsd * BigInt(leverage - MIN_LEVERAGE);
-  const projectedYearlyUsd = (debtUsd * BigInt(netAprBps(pool.supplyApyBps, pool.borrowApyBps))) / BPS;
+  const plain = leverage <= MIN_LEVERAGE;
+  const suppliedUsd = plain ? collateralValueUsd : debtUsd;
+  const projectedYearlyUsd = plain ? (collateralValueUsd * BigInt(pool.supplyApyBps)) / BPS : (debtUsd * BigInt(netAprBps(pool.supplyApyBps, pool.borrowApyBps))) / BPS;
 
   return {
     collateralValueUsd,
     debtUsd,
     borrow: fromUsd(debtUsd, pool.priceUsd, pool.decimals),
+    supplied: fromUsd(suppliedUsd, pool.priceUsd, pool.decimals),
+    suppliedUsd,
     projectedYearlyUsd,
     projectedMonthlyUsd: projectedYearlyUsd / 12n,
-    netApyBps: netApyAtLeverageBps(pool.supplyApyBps, pool.borrowApyBps, leverage),
+    netApyBps: plain ? pool.supplyApyBps : netApyAtLeverageBps(pool.supplyApyBps, pool.borrowApyBps, leverage),
     liquidationPriceUsd: liquidationPriceUsd(collateralPriceUsd, leverage),
     liquidationDropBps: liquidationDropBps(leverage),
     healthFactor: healthFactor(leverage),

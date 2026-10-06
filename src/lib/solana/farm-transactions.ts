@@ -1,4 +1,4 @@
-import { type Connection, PublicKey, type TransactionInstruction } from "@solana/web3.js";
+import { type AddressLookupTableAccount, type Connection, PublicKey, type TransactionInstruction } from "@solana/web3.js";
 
 import { type AssetInfo, assets } from "./assets";
 import { KAMINO_LOOKUP_TABLE, type YieldSymbol } from "./kamino";
@@ -7,6 +7,10 @@ import { liteReduceRedeemInstruction, liteReduceRepayInstruction, liteSupplyInst
 import { fetchLitePositions, resolveLitePosition } from "./lite-position";
 import { borrowInstruction, depositCollateralInstruction, openDebtPositionInstruction, withdrawCollateralInstruction } from "./margin-instructions";
 import { assetIndexOf, fetchMarginState, type MarginState, positionAccounts } from "./margin-state";
+import { buildMarginSwap, MARGIN_SWAP_COMPUTE_UNITS } from "./margin-swap";
+import { fetchPerpsQuote } from "./perps-transactions";
+import { withStalePoolRetry } from "./retry-stale-pool";
+import { inputTransferFee } from "./transfer-fee";
 import { NoFarmPositionError } from "./perps-errors";
 import { associatedTokenAddress, debtPositionAddress, marginAddress, reserveAddress, tokenProgramOf } from "./program-accounts";
 import { assetsToDebtSharesUp, clockTimestamp, decodeReserveDebt, projectReserveDebt } from "./reserve-debt";
@@ -40,9 +44,11 @@ export type FarmDeployRequest = {
 // How far a deploy got, so trying again after it stopped does not repeat what already landed. A deploy is three legs:
 // the deposit (with the debt account if the pool asset has none yet), the borrow and the Kamino supply. The shares the
 // borrow mints are worked out once and kept, because the supply must attribute exactly those to the Kamino position.
-export type FarmDeployProgress = { landed: number; sharesDelta: bigint | null };
+// `supplied` is what a 1x deploy's swap guarantees, fixed on the first build so a retry after the swap landed supplies
+// exactly that and does not quote again.
+export type FarmDeployProgress = { landed: number; sharesDelta: bigint | null; supplied: bigint | null };
 
-export const freshDeployProgress = (): FarmDeployProgress => ({ landed: 0, sharesDelta: null });
+export const freshDeployProgress = (): FarmDeployProgress => ({ landed: 0, sharesDelta: null, supplied: null });
 
 async function ensureDebtPosition(connection: Connection, owner: PublicKey, asset: AssetInfo): Promise<TransactionInstruction[]> {
   const margin = marginAddress(owner);
@@ -63,7 +69,36 @@ async function borrowedShares(connection: Connection, pool: AssetInfo, borrow: b
 // Deposit the stock, borrow the pool asset against it and supply that into Kamino, as the legs a transaction can hold.
 // Neighbouring legs share a transaction when they fit, which keeps a loan next to its Kamino position wherever it can. The
 // stock stays as ordinary margin collateral; the debt is in the pool asset.
-export async function buildFarmDeploy(connection: Connection, owner: PublicKey, request: FarmDeployRequest, progress: FarmDeployProgress = freshDeployProgress()): Promise<TransactionInstruction[][]> {
+export type FarmDeployBuild = { batches: TransactionInstruction[][]; tables: AddressLookupTableAccount[] };
+
+// 1x borrows nothing, so the stock itself is what earns: it is swapped inside the margin account into the pool asset and
+// that is supplied to Kamino with no loan behind it (the program accepts a supply that attributes no debt). The position
+// then holds only the pool asset and closes like any other, back to the wallet in USDC or SOL.
+async function buildPlainDeploy(connection: Connection, owner: PublicKey, request: FarmDeployRequest, state: MarginState, deposit: TransactionInstruction[], progress: FarmDeployProgress): Promise<FarmDeployBuild> {
+  const { stock, pool, collateral } = request;
+  const litePosition = await resolveLitePosition(connection, state.margin, new PublicKey(pool.mint), assetIndexOf(state, pool.symbol), state.slots.lite);
+  let swapLeg: TransactionInstruction[] = [];
+  let tables: AddressLookupTableAccount[] = [];
+  if (progress.landed < 2 || progress.supplied === null) {
+    // A Token-2022 stock with a transfer fee loses it on the deposit and again on the swap's first leg.
+    const vaultAmount = collateral - (await inputTransferFee(connection, stock, collateral));
+    const swapAmount = vaultAmount - (await inputTransferFee(connection, stock, vaultAmount));
+    const { quote, response } = await fetchPerpsQuote(stock, pool, swapAmount);
+    const swap = await buildMarginSwap(connection, { quote: response, owner, state, grossAmountIn: vaultAmount });
+    [, ...swapLeg] = swap.instructions;
+    tables = swap.tables;
+    if (progress.landed < 2) progress.supplied = quote.minReceived;
+  }
+  const supplied = progress.supplied ?? 0n;
+  const legs = [
+    [...deposit, ...(await ensureDebtPosition(connection, owner, pool))],
+    swapLeg,
+    [liteSupplyInstruction({ owner, asset: pool, litePosition, amount: supplied, attributeSharesDelta: 0n })],
+  ];
+  return { batches: legs.slice(progress.landed), tables };
+}
+
+export async function buildFarmDeploy(connection: Connection, owner: PublicKey, request: FarmDeployRequest, progress: FarmDeployProgress = freshDeployProgress()): Promise<FarmDeployBuild> {
   const { stock, pool, collateral, borrow } = request;
   if (collateral <= 0n) throw new RangeError("Enter a deposit amount");
   if (borrow < 0n) throw new RangeError("The borrow amount is invalid");
@@ -75,7 +110,7 @@ export async function buildFarmDeploy(connection: Connection, owner: PublicKey, 
     createAssociatedTokenAccountIdempotent(owner, source, owner, stockMint, tokenProgramOf(stock)),
     depositCollateralInstruction({ authority: owner, asset: stock, amount: collateral, source }),
   ];
-  if (borrow === 0n) return [deposit].slice(progress.landed);
+  if (borrow === 0n) return buildPlainDeploy(connection, owner, request, state, deposit, progress);
 
   // The deposit ahead of the borrow may not be in the account when this is built, so the health scan is told to count it, and
   // the pool asset is excluded because the borrow names it itself.
@@ -87,15 +122,21 @@ export async function buildFarmDeploy(connection: Connection, owner: PublicKey, 
     [borrowInstruction({ authority: owner, asset: pool, amount: borrow, remaining })],
     [liteSupplyInstruction({ owner, asset: pool, litePosition, amount: borrow, attributeSharesDelta: progress.sharesDelta })],
   ];
-  return legs.slice(progress.landed);
+  return { batches: legs.slice(progress.landed), tables: [] };
 }
 
 const kaminoTables = (connection: Connection) => fetchLookupTables(connection, [KAMINO_LOOKUP_TABLE]);
 
 export async function deployFarm(connection: Connection, owner: PublicKey, request: FarmDeployRequest, hooks: SigningHooks, progress: FarmDeployProgress = freshDeployProgress()): Promise<string> {
-  const [batches, tables] = await Promise.all([buildFarmDeploy(connection, owner, request, progress), kaminoTables(connection)]);
-  const alreadyLanded = progress.landed;
-  return sendBatches(connection, owner, { computeUnits: DEPLOY_COMPUTE_UNITS, batches, retrySafe: false, allowForkTable: true, tables, onLanded: (count) => (progress.landed = alreadyLanded + count) }, hooks);
+  // A 1x deploy swaps, and a swap needs the larger compute budget and a fresh quote on every attempt.
+  const plain = request.borrow === 0n;
+  const run = async (tracked: SigningHooks) => {
+    const [{ batches, tables }, kamino] = await Promise.all([buildFarmDeploy(connection, owner, request, progress), kaminoTables(connection)]);
+    const alreadyLanded = progress.landed;
+    const computeUnits = plain ? MARGIN_SWAP_COMPUTE_UNITS : DEPLOY_COMPUTE_UNITS;
+    return sendBatches(connection, owner, { computeUnits, batches, retrySafe: false, allowForkTable: true, tables: [...tables, ...kamino], onLanded: (count) => (progress.landed = alreadyLanded + count) }, tracked);
+  };
+  return plain ? withStalePoolRetry(hooks, run) : run(hooks);
 }
 
 export type FarmExitRequest = {
