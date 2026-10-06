@@ -34,8 +34,8 @@ function LeverageTag({ leverage }: { leverage: number }) {
   const { colors, radius } = useTheme();
 
   return (
-    <View style={{ height: 20, paddingHorizontal: 5, borderRadius: radius.tag, justifyContent: "center", backgroundColor: colors.segment }}>
-      <AppText variant="caption" strong color="textMuted" style={{ lineHeight: 20 }}>{`${leverage}x`}</AppText>
+    <View style={{ height: 20, paddingHorizontal: 5, borderRadius: radius.tag, justifyContent: "center", backgroundColor: colors.purpleTint }}>
+      <AppText variant="caption" strong color="onPurpleTint" style={{ lineHeight: 20 }}>{`${leverage}x`}</AppText>
     </View>
   );
 }

@@ -50,6 +50,24 @@ function Glow({ color }: { color: string }) {
   );
 }
 
+// A deep shade in the top-left corner, behind the Vanna logo: the logo's coral and purple are the hues of these headers, so the
+// logo gets a darker ground to stand on while it keeps its real colours.
+function LogoShade() {
+  return (
+    <Svg pointerEvents="none" width="100%" height="100%" style={StyleSheet.absoluteFill}>
+      <Defs>
+        <RadialGradient id="logoShade" cx="0%" cy="0%" rx="85%" ry="40%">
+          <Stop offset="0" stopColor="#0E001F" stopOpacity={0.95} />
+          <Stop offset="0.35" stopColor="#0E001F" stopOpacity={0.82} />
+          <Stop offset="0.7" stopColor="#0E001F" stopOpacity={0.32} />
+          <Stop offset="1" stopColor="#0E001F" stopOpacity={0} />
+        </RadialGradient>
+      </Defs>
+      <Rect width="100%" height="100%" fill="url(#logoShade)" />
+    </Svg>
+  );
+}
+
 // The module's own pages as a white bar floating over the header's bottom edge; the current page is filled with the module's
 // gradient. The modules themselves live in the bottom bar.
 function activePage(segments: readonly string[], space: Space) {
@@ -217,10 +235,11 @@ export function SpaceHeader({ space, notificationCount = 0, onNotifications, onA
       <View style={{ overflow: "hidden", borderBottomLeftRadius: radius.hero, borderBottomRightRadius: radius.hero }}>
         <LinearGradient colors={surface as [string, string, string]} locations={SURFACE_STOPS} start={header.start} end={header.end} style={StyleSheet.absoluteFill} />
         <Glow color={glow} />
+        <LogoShade />
         <View style={{ paddingTop: insets.top, paddingHorizontal: spacing.md }}>
           <View style={{ flexDirection: "row", alignItems: "center", height: 52, paddingHorizontal: spacing.xs }}>
             <View accessibilityLabel="Vanna" style={{ flex: 1, flexDirection: "row", alignItems: "center", gap: spacing.sm }}>
-              <VannaMark size={30} />
+              <VannaMark size={30} tone="logo" />
               <VannaWordmark color={colors.onHero} height={17} />
             </View>
             <Pressable

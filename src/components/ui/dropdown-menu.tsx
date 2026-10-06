@@ -17,23 +17,28 @@ export type MenuOption<T extends string> = {
   leading?: ReactNode;
 };
 
+type TriggerState = { open: boolean; toggle: () => void };
+
 type DropdownMenuProps<T extends string> = {
-  label: string;
+  // The label of the default pill trigger; unused when `renderTrigger` supplies the control.
+  label?: string;
   options: readonly MenuOption<T>[];
   value: T;
   onSelect: (value: T) => void;
   accessibilityLabel: string;
   menuWidth?: number;
+  // Replaces the pill with the caller's own control (a whole card, say); the menu then opens under it, as wide as the control.
+  renderTrigger?: (state: TriggerState) => ReactNode;
 };
 
-type Anchor = { x: number; y: number };
+type Anchor = { x: number; y: number; width?: number };
 
 const CLOSE_MS = 140;
 const GAP = 8;
 const EDGE = 16;
 const EASE = Easing.bezier(0.2, 0, 0, 1);
 
-export function DropdownMenu<T extends string>({ label, options, value, onSelect, accessibilityLabel, menuWidth = 260 }: DropdownMenuProps<T>) {
+export function DropdownMenu<T extends string>({ label, options, value, onSelect, accessibilityLabel, menuWidth = 260, renderTrigger }: DropdownMenuProps<T>) {
   const { colors } = useTheme();
   const { width: screenWidth } = useWindowDimensions();
   const trigger = useRef<View>(null);
@@ -50,8 +55,8 @@ export function DropdownMenu<T extends string>({ label, options, value, onSelect
   const chevronStyle = useAnimatedStyle(() => ({ transform: [{ rotate: `${chevron.value * 180}deg` }] }));
 
   const show = () => {
-    trigger.current?.measureInWindow((x, y, _width, height) => {
-      setAnchor({ x: Math.min(x, screenWidth - menuWidth - EDGE), y: y + height + GAP });
+    trigger.current?.measureInWindow((x, y, width, height) => {
+      setAnchor(renderTrigger ? { x, y: y + height + GAP, width } : { x: Math.min(x, screenWidth - menuWidth - EDGE), y: y + height + GAP });
       setOpen(true);
     });
   };
@@ -61,14 +66,19 @@ export function DropdownMenu<T extends string>({ label, options, value, onSelect
     setTimeout(() => setAnchor(null), CLOSE_MS);
   };
 
+  const toggle = open ? close : show;
+
   return (
     <View ref={trigger} collapsable={false}>
+      {renderTrigger ? (
+        <CustomTrigger render={renderTrigger} open={open} toggle={toggle} />
+      ) : (
       <Pressable
         accessibilityRole="button"
         accessibilityLabel={accessibilityLabel}
         accessibilityState={{ expanded: open }}
         android_ripple={ripple(colors.text)}
-        onPress={open ? close : show}
+        onPress={toggle}
         style={{
           height: 40,
           flexDirection: "row",
@@ -90,10 +100,11 @@ export function DropdownMenu<T extends string>({ label, options, value, onSelect
           <Icon name="keyboard_arrow_down" size={18} color="text" />
         </Animated.View>
       </Pressable>
+      )}
       <Modal visible={anchor !== null} transparent animationType="none" statusBarTranslucent navigationBarTranslucent onRequestClose={close}>
         <Pressable accessibilityLabel="Close menu" style={{ flex: 1 }} onPress={close}>
           {anchor ? (
-            <MenuSurface anchor={anchor} width={menuWidth} progress={progress}>
+            <MenuSurface anchor={anchor} width={anchor.width ?? menuWidth} progress={progress}>
               {options.map((option, index) => (
                 <MenuItem
                   key={option.value}
@@ -113,6 +124,10 @@ export function DropdownMenu<T extends string>({ label, options, value, onSelect
       </Modal>
     </View>
   );
+}
+
+function CustomTrigger({ render, open, toggle }: TriggerState & { render: (state: TriggerState) => ReactNode }) {
+  return <>{render({ open, toggle })}</>;
 }
 
 type MenuSurfaceProps = {

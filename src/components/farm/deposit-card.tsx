@@ -60,6 +60,7 @@ export function DepositCard({ form, onChangeAmount, onMax, onSelectCollateral, o
         </View>
         <View style={{ marginTop: 6, flexDirection: "row", alignItems: "center", gap: 10 }}>
           <TextInput
+            scrollEnabled={false}
             accessibilityLabel={`${form.collateral.symbol} amount to deposit`}
             value={form.amountText}
             onChangeText={onChangeAmount}
@@ -69,7 +70,7 @@ export function DepositCard({ form, onChangeAmount, onMax, onSelectCollateral, o
             style={{
               flex: 1,
               minWidth: 0,
-              padding: 0,
+              padding: 0, includeFontPadding: false, textAlignVertical: "center",
               fontSize: 28,
               lineHeight: 36,
               fontFamily: fontFamily.semibold,

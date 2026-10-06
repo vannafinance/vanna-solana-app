@@ -3,7 +3,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { useEffect, useState } from "react";
 import { Pressable, View } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
-import Animated, { Easing, useAnimatedStyle, useSharedValue, withSpring, withTiming } from "react-native-reanimated";
+import Animated, { Easing, useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
 import { scheduleOnRN } from "react-native-worklets";
 
 import { AppText } from "@/components/ui/app-text";
@@ -17,23 +17,22 @@ type LeverageSliderProps = {
   onChange: (value: number) => void;
 };
 
-const THUMB = 28;
-const MARK = 16;
+const THUMB = 32;
+const MARK = 22;
 const TRACK = 4;
 const TRACK_TOP = 19;
 const DOT = 14;
 const HIT_WIDTH = 44;
 const HIT_HEIGHT = 60;
-const THUMB_TOP = 7;
-const FILL_MS = 260;
+const THUMB_TOP = 5;
+const FILL_MS = 140;
 const mark = require("../../../assets/images/vanna-mark.png");
 
 export function LeverageSlider({ value, min, max, onChange }: LeverageSliderProps) {
-  const { colors, radius } = useTheme();
+  const { colors, radius, scheme } = useTheme();
   const [width, setWidth] = useState(0);
   const steps = max - min;
   const position = useSharedValue(value - min);
-  const thumb = useSharedValue(value - min);
   const lastStep = useSharedValue(value - min);
   const span = useSharedValue(0);
 
@@ -41,32 +40,25 @@ export function LeverageSlider({ value, min, max, onChange }: LeverageSliderProp
     span.set(width);
   }, [width, span]);
 
+  // The thumb and fill only ever rest on a mark: a drag steps between marks, it never floats between them.
   useEffect(() => {
-    position.set(withTiming(value - min, { duration: FILL_MS, easing: Easing.out(Easing.quad) }));
-    thumb.set(withSpring(value - min, { damping: 12, stiffness: 180 }));
+    position.set(withTiming(value - min, { duration: FILL_MS, easing: Easing.out(Easing.cubic) }));
     lastStep.set(value - min);
-  }, [value, min, position, thumb, lastStep]);
+  }, [value, min, position, lastStep]);
 
   const pan = Gesture.Pan()
     .minDistance(4)
     .onUpdate((event) => {
-      const raw = Math.min(Math.max((event.x / Math.max(span.get(), 1)) * steps, 0), steps);
-      position.set(raw);
-      thumb.set(raw);
-      const snapped = Math.round(raw);
+      const snapped = Math.round(Math.min(Math.max((event.x / Math.max(span.get(), 1)) * steps, 0), steps));
       if (snapped !== lastStep.get()) {
         lastStep.set(snapped);
+        position.set(withTiming(snapped, { duration: FILL_MS, easing: Easing.out(Easing.cubic) }));
         scheduleOnRN(onChange, snapped + min);
       }
-    })
-    .onEnd(() => {
-      const snapped = Math.round(position.get());
-      position.set(withTiming(snapped, { duration: FILL_MS }));
-      thumb.set(withSpring(snapped, { damping: 12, stiffness: 180 }));
     });
 
   const fillStyle = useAnimatedStyle(() => ({ width: (position.get() / steps) * span.get() }));
-  const thumbStyle = useAnimatedStyle(() => ({ transform: [{ translateX: (thumb.get() / steps) * span.get() - THUMB / 2 }] }));
+  const thumbStyle = useAnimatedStyle(() => ({ transform: [{ translateX: (position.get() / steps) * span.get() - THUMB / 2 }] }));
   const marks = Array.from({ length: steps + 1 }, (_, index) => min + index);
 
   return (
@@ -119,7 +111,10 @@ export function LeverageSlider({ value, min, max, onChange }: LeverageSliderProp
               width: THUMB,
               height: THUMB,
               borderRadius: radius.pill,
-              backgroundColor: colors.primary,
+              // A white disc on a light card, a near-black one on a dark card: the logo keeps its own colours on either, and the purple ring marks it.
+              backgroundColor: scheme === "dark" ? colors.background : "#FFFFFF",
+              borderWidth: 2,
+              borderColor: colors.primary,
               alignItems: "center",
               justifyContent: "center",
               shadowColor: colors.primary,
@@ -131,7 +126,7 @@ export function LeverageSlider({ value, min, max, onChange }: LeverageSliderProp
             thumbStyle,
           ]}
         >
-          <Image source={mark} tintColor={colors.onPrimary} style={{ width: MARK, height: MARK }} />
+          <Image source={mark} style={{ width: MARK, height: MARK }} />
         </Animated.View>
       </View>
     </GestureDetector>

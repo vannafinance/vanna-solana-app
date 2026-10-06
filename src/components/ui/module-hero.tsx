@@ -87,7 +87,8 @@ function Chip({ chip }: { chip: HeroChip }) {
         height: 24,
         paddingHorizontal: 10,
         borderRadius: radius.pill,
-        backgroundColor: colors.heroGlass,
+        // A dark glass, not a light one: the teal and pink figures read on it in both themes, where on the header's own colour they fade.
+        backgroundColor: chip.tone === undefined ? colors.heroGlass : "rgba(10,2,30,0.55)",
       }}
     >
       {chip.icon ? <Icon name={chip.icon} size={14} color={colors[ink]} /> : null}

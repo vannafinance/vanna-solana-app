@@ -114,8 +114,9 @@ function ButtonSegments<T extends string>({
     >
       {segments.map((segment) => {
         const selected = segment.value === value;
-        const fill = activeColor ?? colors.purpleTint;
-        const onFill = activeColor ? colors.onPrimary : colors.onPurpleTint;
+        // The chosen segment is the solid brand purple unless a colour is given, as on Long, so it reads clearly in light and dark.
+        const fill = activeColor ?? colors.primary;
+        const onFill = colors.onPrimary;
         return (
           <Pressable
             key={segment.value}
