@@ -77,8 +77,6 @@ export function deployCtaLabel({ issue, collateral }: DeployForm, needsMarginAcc
       return `Not enough ${collateral.symbol}`;
     case "no-amount":
       return "Enter an amount";
-    case "low-leverage":
-      return "Pick leverage above 1x";
     case "too-risky":
       return "Too close to liquidation";
     case "pool-liquidity":

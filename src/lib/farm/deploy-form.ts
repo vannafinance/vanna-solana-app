@@ -1,7 +1,7 @@
 import { parseUnits, type TokenAmount } from "@/format/format-amount";
 import type { CollateralSymbol, DeployForm, DeployIssue, DeployQuote, FarmCollateral, FarmPool, PoolSymbol } from "@/types/farm";
 
-import { accountAfterDeploy, deployQuote, heldCollaterals, MIN_LEVERAGE } from "./farm-math";
+import { accountAfterDeploy, deployQuote, heldCollaterals } from "./farm-math";
 
 // Below this the web app refuses to open a position; liquidation starts at 1.1.
 const MIN_OPENING_HEALTH = 1.15;
@@ -26,7 +26,6 @@ function findBySymbol<T extends { symbol: string }>(items: readonly T[], symbol:
 function findIssue(collateral: FarmCollateral, pool: FarmPool, amount: bigint, leverage: number, quote: DeployQuote, account: DeployInput["account"]): DeployIssue | null {
   if (collateral.balance <= 0n) return "no-balance";
   if (amount > collateral.balance) return "over-balance";
-  if (leverage <= MIN_LEVERAGE) return "low-leverage";
   if (amount <= 0n) return "no-amount";
   if (quote.borrow.raw > pool.borrowable) return "pool-liquidity";
   const { health } = accountAfterDeploy({ ...account, netUsd: account.collateralUsd - account.debtUsd }, quote);
