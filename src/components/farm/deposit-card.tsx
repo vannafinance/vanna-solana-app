@@ -82,6 +82,7 @@ export function DepositCard({ form, onChangeAmount, onMax, onSelectCollateral, o
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel={`Collateral token, ${form.collateral.symbol}`}
+                accessibilityHint={form.held.length > 1 ? "Swipe up or down to switch asset" : undefined}
                 accessibilityState={{ expanded: open }}
                 onPress={() => setOpen(!open)}
                 style={{
@@ -110,24 +111,6 @@ export function DepositCard({ form, onChangeAmount, onMax, onSelectCollateral, o
           <AppText variant="caption" color="textMuted">
             {formatUsd(form.quote.collateralValueUsd)}
           </AppText>
-          {form.held.length > 1 ? (
-            <View
-              accessibilityLabel={`${form.held.length} assets in your wallet, swipe the token to switch`}
-              style={{ flexDirection: "row", gap: 4, marginTop: 6, marginRight: 14 }}
-            >
-              {form.held.map((collateral) => (
-                <View
-                  key={collateral.symbol}
-                  style={{
-                    width: 6,
-                    height: 6,
-                    borderRadius: radius.pill,
-                    backgroundColor: collateral.symbol === form.collateral.symbol ? colors.primary : colors.border,
-                  }}
-                />
-              ))}
-            </View>
-          ) : null}
         </View>
         {error ? (
           <AppText variant="caption" color="negative" style={{ marginTop: 6 }}>
