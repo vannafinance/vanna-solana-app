@@ -1,7 +1,12 @@
+import { type Connection, PublicKey } from "@solana/web3.js";
+
 import type { MarginAccountSnapshot } from "@/types/account";
+
+import { fetchAppOnlyBalances, withAppOnlyBalances } from "./app-only-account";
 
 import { API_BASE_URL } from "./config";
 import { assets, type AssetSymbol } from "./assets";
+import { fetchOraclePrices } from "./oracle-prices";
 import { ApiError, requestJson } from "./request-json";
 import { usdToUnits } from "./usd";
 
@@ -77,7 +82,15 @@ export function parseAccountSnapshot(payload: unknown): MarginAccountSnapshot {
   };
 }
 
-export async function fetchAccountSnapshot(wallet: string, signal?: AbortSignal): Promise<MarginAccountSnapshot> {
+// The hosted web app's account figures, with what the account holds and owes in assets the website does not carry (SKR)
+// read from the chain and added in. Without that, an SKR long would show its debt but not its collateral.
+export async function fetchAccountSnapshot(connection: Connection, wallet: string, signal?: AbortSignal): Promise<MarginAccountSnapshot> {
   const payload = await requestJson(`${API_BASE_URL}/api/account/${encodeURIComponent(wallet)}`, { signal });
-  return parseAccountSnapshot(payload);
+  const snapshot = parseAccountSnapshot(payload);
+  if (!snapshot.hasMarginAccount || snapshot.address === null) return snapshot;
+  const now = BigInt(Math.floor(Date.now() / 1000));
+  const extra = await fetchAppOnlyBalances(connection, new PublicKey(snapshot.address), now);
+  // Most accounts hold no SKR; the prices are only read when there is something to value.
+  if (Object.keys(extra.collateral).length === 0 && Object.keys(extra.debt).length === 0) return snapshot;
+  return withAppOnlyBalances(snapshot, extra, await fetchOraclePrices(connection));
 }

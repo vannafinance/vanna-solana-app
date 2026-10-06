@@ -464,3 +464,57 @@ test("base58 decoding matches the reference implementation", () => {
   assert.deepEqual([...decodeBase58(bs58.encode(sample))], [...sample]);
   assert.equal(decodeBase58("0OIl"), null);
 });
+
+const { withAppOnlyBalances } = loadTs("src/lib/solana/app-only-account.ts", stubs);
+const USD6 = 1_000_000n;
+const hostedAccount = (over = {}) => ({
+  hasMarginAccount: true,
+  address: "GSPkK3pZG733J1ApZ38CdcNnGp2znuwu4y4yaWrLAXQS",
+  collateral: 1_000n * USD6,
+  borrowed: 0n,
+  netAvailable: 1_000n * USD6,
+  roomBeforeLiquidation: 1_000n * USD6,
+  health: null,
+  leverage: 1,
+  borrowRatePercent: 0,
+  collateralBalances: { USDC: 1_000n * USD6 },
+  borrowedBalances: {},
+  ...over,
+});
+// SKR at $0.02 in six-decimal USD units; SKR itself has six decimals.
+const SKR_PRICES = { SKR: 20_000n };
+
+test("an SKR long counts its SKR collateral, which the web app's figures leave out", () => {
+  // Borrowed $400 USDC and bought 20,000 SKR ($400): the web app sees the debt but not the SKR.
+  const hosted = hostedAccount({ borrowed: 400n * USD6, netAvailable: 600n * USD6, roomBeforeLiquidation: 560n * USD6, health: 2.5, leverage: 1000 / 600, borrowedBalances: { USDC: 400n * USD6 } });
+  const account = withAppOnlyBalances(hosted, { collateral: { SKR: 20_000n * USD6 }, debt: {} }, SKR_PRICES);
+  assert.equal(account.collateral, 1_400n * USD6);
+  assert.equal(account.borrowed, 400n * USD6);
+  assert.equal(account.netAvailable, 1_000n * USD6);
+  assert.equal(account.roomBeforeLiquidation, 960n * USD6);
+  assert.equal(account.health, 3.5);
+  assert.equal(account.leverage, 1.4);
+  assert.equal(account.collateralBalances.SKR, 20_000n * USD6);
+  assert.equal(account.collateralBalances.USDC, 1_000n * USD6);
+});
+
+test("an SKR short counts its SKR debt, so the account is not shown healthier than it is", () => {
+  // Borrowed 10,000 SKR ($200) and sold it for $200 USDC, which the web app already counts as collateral.
+  const hosted = hostedAccount({ collateral: 1_200n * USD6, netAvailable: 1_200n * USD6, roomBeforeLiquidation: 1_200n * USD6, collateralBalances: { USDC: 1_200n * USD6 } });
+  const account = withAppOnlyBalances(hosted, { collateral: {}, debt: { SKR: 10_000n * USD6 } }, SKR_PRICES);
+  assert.equal(account.borrowed, 200n * USD6);
+  assert.equal(account.health, 6);
+  assert.equal(account.netAvailable, 1_000n * USD6);
+  assert.equal(account.roomBeforeLiquidation, 980n * USD6);
+  assert.equal(account.borrowedBalances.SKR, 10_000n * USD6);
+});
+
+test("an account without SKR, or one whose SKR the web app already reports, is left as the web app gives it", () => {
+  const plain = hostedAccount();
+  assert.equal(withAppOnlyBalances(plain, { collateral: {}, debt: {} }, SKR_PRICES), plain);
+  const reported = hostedAccount({ collateralBalances: { USDC: 1_000n * USD6, SKR: 5n * USD6 } });
+  assert.equal(withAppOnlyBalances(reported, { collateral: { SKR: 5n * USD6 }, debt: {} }, SKR_PRICES), reported);
+  const none = { ...plain, hasMarginAccount: false };
+  assert.equal(withAppOnlyBalances(none, { collateral: { SKR: 1n }, debt: {} }, SKR_PRICES), none);
+  assert.throws(() => withAppOnlyBalances(plain, { collateral: { SKR: 1n }, debt: {} }, {}));
+});

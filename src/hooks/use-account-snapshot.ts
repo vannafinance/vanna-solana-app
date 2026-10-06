@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 
 import { fetchAccountSnapshot } from "@/lib/solana/account-api";
+import { rpcConnection } from "@/lib/solana/rpc";
 
 import { useLiveInterval } from "./use-live-interval";
 import { queryKeys } from "./query-keys";
@@ -12,7 +13,7 @@ export function useAccountSnapshot(wallet: string | null) {
   const refetchInterval = useLiveInterval(LIVE_MS);
   return useQuery({
     queryKey: queryKeys.accountSnapshot(wallet ?? "none"),
-    queryFn: ({ signal }) => fetchAccountSnapshot(wallet as string, signal),
+    queryFn: ({ signal }) => fetchAccountSnapshot(rpcConnection, wallet as string, signal),
     enabled: wallet !== null,
     staleTime: STALE_MS,
     refetchInterval,

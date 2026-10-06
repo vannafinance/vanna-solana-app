@@ -46,7 +46,7 @@ async function buildCloseLong(connection: Connection, owner: PublicKey, request:
   const { stock } = request;
   const usdc = usdcAsset();
   const percent = BigInt(request.exitPercent);
-  const [snapshot, state] = await Promise.all([fetchAccountSnapshot(owner.toBase58()), fetchMarginState(connection, marginAddress(owner))]);
+  const [snapshot, state] = await Promise.all([fetchAccountSnapshot(connection, owner.toBase58()), fetchMarginState(connection, marginAddress(owner))]);
   const held = snapshot.collateralBalances[stock.symbol] ?? 0n;
   if (held <= 0n) throw new NoPositionError("long");
 
@@ -88,7 +88,7 @@ async function buildCloseShort(connection: Connection, owner: PublicKey, request
   const usdc = usdcAsset();
   const percent = BigInt(request.exitPercent);
   if (stockPrice <= 0n) throw new NoPositionError("short");
-  const [snapshot, state] = await Promise.all([fetchAccountSnapshot(owner.toBase58()), fetchMarginState(connection, marginAddress(owner))]);
+  const [snapshot, state] = await Promise.all([fetchAccountSnapshot(connection, owner.toBase58()), fetchMarginState(connection, marginAddress(owner))]);
   const stockDebt = snapshot.borrowedBalances[stock.symbol] ?? 0n;
   if (stockDebt <= 0n) throw new NoPositionError("short");
 
