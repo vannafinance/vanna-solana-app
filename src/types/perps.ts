@@ -15,7 +15,10 @@ export type PerpsMarket = {
   markPrice: bigint;
   tokenBorrowBps: number;
   usdcBorrowBps: number;
+  // What the stock's pool can still lend, which a short borrows from.
   liquidityUsd: bigint;
+  // What the USDC pool can still lend, which a long borrows from.
+  usdcLiquidityUsd: bigint;
   maxLeverage: number;
 };
 
@@ -90,10 +93,13 @@ export type OrderQuote = {
   liquidationPrice: bigint;
   fee: bigint;
   healthAfter: number;
+  // The new loan, in USD units.
+  borrow: bigint;
 };
 
 // "opposite-open": the account already holds the other side of this market, which the web app also refuses until it is closed.
-export type OrderIssue = "opposite-open" | "empty" | "insufficient-margin" | "health-low" | null;
+// "pool-liquidity": the loan is more than the pool can lend right now, so the borrow would fail on chain.
+export type OrderIssue = "opposite-open" | "empty" | "insufficient-margin" | "pool-liquidity" | "health-low" | null;
 
 export type CloseQuote = {
   fractionBps: number;

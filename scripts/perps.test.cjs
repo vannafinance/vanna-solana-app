@@ -751,3 +751,14 @@ test("a failed margin transaction is listed and marked, with what it logged or w
   // Left out unless asked for: everything that counts money reads only what went through.
   assert.equal(marginActivityFrom([attempted, bare], holderMargin.toBase58()).length, 0);
 });
+
+test("an order whose loan is more than the pool can lend is refused before the wallet opens", () => {
+  const { quoteOrder: quote, orderIssue: issue } = load("src/lib/perps/order-quote.ts");
+  const m = { symbol: "TSLAx", markPrice: 400_000_000n, usdcBorrowBps: 500, tokenBorrowBps: 300 };
+  const q = quote({ market: m, margin: 0n, borrowed: 0n, side: "long", collateral: 100_000_000n, leverage: 3 }); // borrows $200
+  assert.equal(q.borrow, 200_000_000n);
+  assert.equal(issue(1_000_000_000n, 100_000_000n, q, false, 150_000_000n), "pool-liquidity");
+  assert.equal(issue(1_000_000_000n, 100_000_000n, q, false, 500_000_000n), null);
+  const oneX = quote({ market: m, margin: 0n, borrowed: 0n, side: "long", collateral: 100_000_000n, leverage: 1 });
+  assert.equal(issue(1_000_000_000n, 100_000_000n, oneX, false, 0n), null);
+});

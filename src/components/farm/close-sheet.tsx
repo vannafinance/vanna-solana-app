@@ -112,7 +112,8 @@ export function CloseSheet({ visible, view, onSelectFraction, onConfirm, onDismi
           </View>
         </View>
 
-        <Button brand label={all ? "Close all" : `Close ${quote.fractionBps / 100}%`} onPress={onConfirm} />
+        {/* As on the web app: a close that redeems nothing from Kamino cannot repay anything and would only fail on chain. */}
+        <Button brand label={quote.redeem.raw === 0n ? "Nothing to redeem yet" : all ? "Close all" : `Close ${quote.fractionBps / 100}%`} disabled={quote.redeem.raw === 0n} onPress={onConfirm} />
       </ScrollView>
     </BottomSheet>
   );

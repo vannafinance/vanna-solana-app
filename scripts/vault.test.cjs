@@ -161,3 +161,11 @@ test("Earn lists the pools you supplied first, then the rest by APY", () => {
   const two = orderVaults([vault("USDC", 677, 1_000_000n), vault("SKR", 80, 9_000_000n)]);
   assert.equal(two.map((v) => v.symbol).join(","), "SKR,USDC");
 });
+
+test("a withdrawal above what the pool holds unlent is refused", () => {
+  const { checkAmount } = load("src/lib/earn/amount-check.ts");
+  assert.equal(checkAmount(500n, 1_000n, 400n), "pool-liquidity");
+  assert.equal(checkAmount(300n, 1_000n, 400n), null);
+  assert.equal(checkAmount(1_500n, 1_000n, 400n), "insufficient");
+  assert.equal(checkAmount(500n, 1_000n), null);
+});

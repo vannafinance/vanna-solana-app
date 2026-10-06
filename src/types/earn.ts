@@ -144,9 +144,12 @@ export type EarnMarket = {
   shareExchangeRate: bigint;
   walletBalance: TokenAmount;
   supplied: TokenAmount;
+  // What the pool holds that is not lent out: the most any withdrawal can take right now.
+  poolAvailable: TokenAmount;
 };
 
-export type AmountProblem = "empty" | "insufficient";
+// "pool-liquidity": more than the pool holds unlent, so the withdrawal would fail on chain until borrowers repay.
+export type AmountProblem = "empty" | "insufficient" | "pool-liquidity";
 
 export type EarnPortfolio = {
   summary: EarnPortfolioSummary;

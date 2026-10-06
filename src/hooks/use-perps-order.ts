@@ -87,7 +87,7 @@ export function usePerpsOrder(symbol: string, initialSide: Side) {
     // the wallet's balance of the collateral asset, not the margin account's free balance.
     return {
       status: "ready",
-      data: { market: market.data, account: { ...account, available: funds.usd }, collateral, quote, issue: orderIssue(funds.usd, collateral, quote, oppositeOpen) },
+      data: { market: market.data, account: { ...account, available: funds.usd }, collateral, quote, issue: orderIssue(funds.usd, collateral, quote, oppositeOpen, side === "long" ? market.data.usdcLiquidityUsd : market.data.liquidityUsd) },
     };
   })();
 

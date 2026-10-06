@@ -37,13 +37,19 @@ export function quoteOrder({ market, margin, borrowed, side, collateral, leverag
     liquidationPrice: estimatedLiquidationPrice(side, market.markPrice, leverage, side === "long" ? market.usdcBorrowBps : market.tokenBorrowBps),
     fee: 0n,
     healthAfter: healthRatio(margin + size, borrowed + newDebt),
+    borrow: newDebt,
   };
 }
 
-export function orderIssue(available: bigint, collateral: bigint, quote: OrderQuote, oppositeOpen = false): OrderIssue {
+// Kept just under the pool's free liquidity, as Farm does, since the pool can move between the quote and the borrow.
+const LENDABLE_SHARE_PCT = 99n;
+
+// `lendable` is what the pool this order borrows from can still lend, in USD units: USDC for a long, the stock for a short.
+export function orderIssue(available: bigint, collateral: bigint, quote: OrderQuote, oppositeOpen = false, lendable?: bigint): OrderIssue {
   if (oppositeOpen) return "opposite-open";
   if (collateral === 0n) return "empty";
   if (collateral > available) return "insufficient-margin";
+  if (lendable !== undefined && quote.borrow > 0n && quote.borrow * 100n > lendable * LENDABLE_SHARE_PCT) return "pool-liquidity";
   if (quote.healthAfter <= MIN_OPEN_HEALTH) return "health-low";
   return null;
 }

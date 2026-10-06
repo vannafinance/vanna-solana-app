@@ -36,6 +36,7 @@ function ctaLabel(side: Side, issue: OrderIssue, hasMarginAccount: boolean, symb
   if (issue === "empty") return "Enter an amount";
   if (issue === "insufficient-margin") return "Not enough margin available";
   if (issue === "health-low") return "Position too risky";
+  if (issue === "pool-liquidity") return "Not enough in the pool to borrow";
   return hasMarginAccount ? `Open ${side} · approve in wallet` : `Open account and ${side} · 2 approvals`;
 }
 
