@@ -1,5 +1,6 @@
 import { useRef, useState } from "react";
 import { Pressable, TextInput, View } from "react-native";
+import Animated from "react-native-reanimated";
 
 import { AppText } from "@/components/ui/app-text";
 import { Card } from "@/components/ui/card";
@@ -78,32 +79,37 @@ export function DepositCard({ form, onChangeAmount, onMax, onSelectCollateral, o
             }}
           />
           <View ref={chip} collapsable={false}>
-            <SwipeSwitch onSwitch={onStepCollateral}>
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel={`Collateral token, ${form.collateral.symbol}`}
-                accessibilityHint={form.held.length > 1 ? "Swipe up or down to switch asset" : undefined}
-                accessibilityState={{ expanded: open }}
-                onPress={() => setOpen(!open)}
-                style={{
-                  height: 44,
-                  paddingLeft: 6,
-                  paddingRight: 12,
-                  borderRadius: 22,
-                  borderWidth: 1,
-                  borderColor: open ? colors.primary : colors.divider,
-                  backgroundColor: colors.surface,
-                  flexDirection: "row",
-                  alignItems: "center",
-                  gap: 8,
-                }}
-              >
-                <TokenIcon symbol={form.collateral.symbol} size={30} />
-                <AppText variant="bodyLg" strong style={{ fontSize: 15 }}>
-                  {form.collateral.symbol}
-                </AppText>
-                <MenuChevron open={open} size={14} color="text" />
-              </Pressable>
+            <SwipeSwitch onSwitch={onStepCollateral} onTap={() => setOpen(!open)}>
+              {(itemStyle) => (
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={`Collateral token, ${form.collateral.symbol}`}
+                  accessibilityHint={form.held.length > 1 ? "Swipe up or down to switch asset" : undefined}
+                  accessibilityState={{ expanded: open }}
+                  onPress={() => setOpen(!open)}
+                  style={{
+                    height: 44,
+                    paddingLeft: 6,
+                    paddingRight: 12,
+                    borderRadius: 22,
+                    borderWidth: 1,
+                    borderColor: open ? colors.primary : colors.divider,
+                    backgroundColor: colors.surface,
+                    flexDirection: "row",
+                    alignItems: "center",
+                    gap: 8,
+                    overflow: "hidden",
+                  }}
+                >
+                  <Animated.View style={[{ flexDirection: "row", alignItems: "center", gap: 8 }, itemStyle]}>
+                    <TokenIcon symbol={form.collateral.symbol} size={30} />
+                    <AppText variant="bodyLg" strong style={{ fontSize: 15 }}>
+                      {form.collateral.symbol}
+                    </AppText>
+                  </Animated.View>
+                  <MenuChevron open={open} size={14} color="text" />
+                </Pressable>
+              )}
             </SwipeSwitch>
           </View>
         </View>

@@ -4,7 +4,6 @@ import { type NativeScrollEvent, type NativeSyntheticEvent, ScrollView, View } f
 import Animated, { Easing, interpolate, useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { useScrollLocked } from "@/navigation/scroll-lock";
 import { useResetScrollBetweenSpaces } from "@/navigation/use-reset-scroll-between-spaces";
 
 import { type Space, spaceHeaders } from "@/theme/tokens";
@@ -34,7 +33,6 @@ export function Screen({ header, footer, gap, paddingTop, children }: ScreenProp
   const insets = useSafeAreaInsets();
   const scroll = useSharedValue(0);
   const listRef = useResetScrollBetweenSpaces();
-  const scrollLocked = useScrollLocked();
   const onScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
     scroll.value = event.nativeEvent.contentOffset.y;
   };
@@ -55,7 +53,6 @@ export function Screen({ header, footer, gap, paddingTop, children }: ScreenProp
     <View style={{ flex: 1, backgroundColor: colors.background }}>
       <ScrollView
         ref={listRef}
-        scrollEnabled={!scrollLocked}
         contentContainerStyle={{ paddingBottom: spacing.xl }}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
