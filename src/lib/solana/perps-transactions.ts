@@ -10,7 +10,7 @@ import { PriceImpactError } from "./perps-errors";
 import { fetchMarginState, type MarginState, positionAccounts } from "./margin-state";
 import { associatedTokenAddress, debtPositionAddress, marginAddress, reserveAddress, tokenProgramOf } from "./program-accounts";
 import { withStalePoolRetry } from "./retry-stale-pool";
-import { sendBatches } from "./send-batches";
+import { fitsOneTransaction, sendBatches } from "./send-batches";
 import type { SigningHooks } from "./send-transaction";
 import { createAssociatedTokenAccountIdempotent } from "./token-instructions";
 import { inputTransferFee } from "./transfer-fee";
@@ -21,6 +21,9 @@ export type Side = "long" | "short";
 export const MAX_LEVERAGE = 5;
 const SWAP_SLIPPAGE_BPS = 100;
 const MAX_ACCOUNTS_LADDER = [20, 32, 44] as const;
+// Simpler routes, tried only when the usual one makes the swap too large for one transaction on an account that holds
+// many positions (the swap lists every one of them), before a lookup table made on the fork that Solflare refuses.
+export const COMPACT_ROUTE_LADDER = [16, 12, 8] as const;
 const MAX_PRICE_IMPACT_BPS = 500;
 
 export type OpenPositionRequest = {
@@ -39,9 +42,9 @@ export function usdcAsset(): AssetInfo {
 
 // A smaller route keeps the whole deposit, borrow and swap transaction small, so the smallest account budget that gives
 // an acceptable price impact wins. Only "no route" and too-costly routes move on to the next budget.
-export async function fetchPerpsQuote(input: AssetInfo, output: AssetInfo, amount: bigint): Promise<RawJupiterQuote> {
+export async function fetchPerpsQuote(input: AssetInfo, output: AssetInfo, amount: bigint, ladder: readonly number[] = MAX_ACCOUNTS_LADDER): Promise<RawJupiterQuote> {
   let last: unknown = new NoRouteError();
-  for (const maxAccounts of MAX_ACCOUNTS_LADDER) {
+  for (const maxAccounts of ladder) {
     try {
       const quote = await fetchRawJupiterQuote(input.mint, output.mint, amount, SWAP_SLIPPAGE_BPS, undefined, maxAccounts);
       if (quote.quote.priceImpactBps <= MAX_PRICE_IMPACT_BPS) return quote;
@@ -110,18 +113,36 @@ export async function buildOpenPosition(connection: Connection, owner: PublicKey
   // The account read and the fee sizing do not depend on each other, and neither do the deposit and borrow instructions
   // and the route quote, so each pair waits together instead of one after the other.
   const [state, sizes] = await Promise.all([fetchMarginState(connection, marginAddress(owner)), vaultSizes(connection, base, collateral, borrow)]);
-  const [depositBorrow, { response }] = await Promise.all([depositAndBorrow(connection, owner, state, base, collateral, borrow), fetchPerpsQuote(base, target, sizes.swapAmount)]);
+  const [depositBorrow, { response }, kamino] = await Promise.all([
+    depositAndBorrow(connection, owner, state, base, collateral, borrow),
+    fetchPerpsQuote(base, target, sizes.swapAmount),
+    fetchLookupTables(connection, [KAMINO_LOOKUP_TABLE, ...KAMINO_EXTRA_LOOKUP_TABLES]),
+  ]);
   const { vaultAmount } = sizes;
-  const swap = await buildMarginSwap(connection, {
-    quote: response,
-    owner,
-    state,
-    injectDebt: borrow > 0n ? base.symbol : undefined,
-    grossAmountIn: vaultAmount,
-  });
+  const swapFor = async (quote: unknown) => {
+    const built = await buildMarginSwap(connection, { quote, owner, state, injectDebt: borrow > 0n ? base.symbol : undefined, grossAmountIn: vaultAmount });
+    const [, ...instructions] = built.instructions;
+    return { instructions, tables: [...built.tables, ...kamino] };
+  };
 
-  const [, ...swapInstructions] = swap.instructions;
-  const legs = [depositBorrow.deposit, ...(depositBorrow.borrow.length > 0 ? [depositBorrow.borrow] : []), swapInstructions];
+  let swap = await swapFor(response);
+  // Too large even without a compute budget: a simpler route lists fewer accounts. Each is tried in turn and the first that
+  // fits is used; if none does, the usual route goes ahead with the fork table as before.
+  if (!fitsOneTransaction(owner, swap.instructions, swap.tables)) {
+    for (const maxAccounts of COMPACT_ROUTE_LADDER) {
+      try {
+        const compact = await swapFor((await fetchPerpsQuote(base, target, sizes.swapAmount, [maxAccounts])).response);
+        if (fitsOneTransaction(owner, compact.instructions, compact.tables)) {
+          swap = compact;
+          break;
+        }
+      } catch {
+        // No route this small, or one that costs too much: try the next size, then keep the usual route.
+      }
+    }
+  }
+
+  const legs = [depositBorrow.deposit, ...(depositBorrow.borrow.length > 0 ? [depositBorrow.borrow] : []), swap.instructions];
   return { legs: legs.slice(progress.landed), tables: swap.tables };
 }
 
@@ -129,14 +150,12 @@ export async function buildOpenPosition(connection: Connection, owner: PublicKey
 export function openPosition(connection: Connection, owner: PublicKey, request: OpenPositionRequest, hooks: SigningHooks, progress: OpenProgress = freshOpenProgress()): Promise<string> {
   return withStalePoolRetry(hooks, async (tracked) => {
     const alreadyLanded = progress.landed;
-    const [{ legs, tables }, kamino] = await Promise.all([
-      buildOpenPosition(connection, owner, request, progress),
-      fetchLookupTables(connection, [KAMINO_LOOKUP_TABLE, ...KAMINO_EXTRA_LOOKUP_TABLES]),
-    ]);
+    const { legs, tables } = await buildOpenPosition(connection, owner, request, progress);
     return sendBatches(
       connection,
       owner,
-      { computeUnits: MARGIN_SWAP_COMPUTE_UNITS, batches: legs, retrySafe: false, allowForkTable: true, tables: [...tables, ...kamino], onLanded: (count) => (progress.landed = alreadyLanded + count) },
+      // The deposit and the borrow are light; the swap, always last, is not.
+      { computeUnits: MARGIN_SWAP_COMPUTE_UNITS, batches: legs, lightBatches: legs.map((_, index) => index < legs.length - 1), retrySafe: false, allowForkTable: true, tables, onLanded: (count) => (progress.landed = alreadyLanded + count) },
       tracked,
     );
   });

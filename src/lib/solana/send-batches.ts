@@ -42,6 +42,10 @@ export type BatchRequest = {
   computeUnits: number;
   // Instructions that must stay together in one transaction, in order. Neighbouring batches share a transaction when they fit.
   batches: readonly (readonly TransactionInstruction[])[];
+  // Per batch, whether it is light enough to run on Solana's default compute allowance (200,000 units per instruction), so it
+  // may go without the compute budget instruction when that is what keeps it in one transaction. A deposit, a borrow or a
+  // Kamino supply is; a margin swap is not (it uses 300,000 or more). Unset means none.
+  lightBatches?: readonly boolean[];
   // True when running the earlier batches again is harmless, so a failure after they landed is just the failure.
   retrySafe: boolean;
   // Lookup tables that exist on mainnet. A wallet reads them like any other account, unlike a table made on the fork, and
@@ -56,6 +60,11 @@ export type BatchRequest = {
 
 type Packed = { instructions: TransactionInstruction[]; batches: number };
 
+// Whether these instructions fit one transaction with these lookup tables, as they would be sent (without a compute budget).
+export function fitsOneTransaction(payer: PublicKey, instructions: TransactionInstruction[], tables: readonly AddressLookupTableAccount[]): boolean {
+  return fits(payer, instructions, tables);
+}
+
 function fits(payer: PublicKey, instructions: TransactionInstruction[], tables: readonly AddressLookupTableAccount[]): boolean {
   try {
     const message = new TransactionMessage({ payerKey: payer, recentBlockhash: SIZING_BLOCKHASH, instructions }).compileToV0Message([...tables]);
@@ -66,19 +75,18 @@ function fits(payer: PublicKey, instructions: TransactionInstruction[], tables: 
   }
 }
 
-function pack(payer: PublicKey, { computeUnits, batches }: BatchRequest, tables: readonly AddressLookupTableAccount[]): Packed[] {
+function pack(payer: PublicKey, { computeUnits, batches, lightBatches }: BatchRequest, tables: readonly AddressLookupTableAccount[]): Packed[] {
   const budget = ComputeBudgetProgram.setComputeUnitLimit({ units: computeUnits });
   const transactions: Packed[] = [];
-  for (const batch of batches) {
+  for (const [index, batch] of batches.entries()) {
     const last = transactions[transactions.length - 1];
     if (last !== undefined && fits(payer, [...last.instructions, ...batch], tables)) {
       last.instructions.push(...batch);
       last.batches += 1;
     } else if (fits(payer, [budget, ...batch], tables)) transactions.push({ instructions: [budget, ...batch], batches: 1 });
-    // The compute budget instruction costs about 40 bytes. A batch a few bytes over the limit with it (a borrow on an account
-    // with many positions lists every one of them) goes without it on Solana's default allowance of 200,000 units per
-    // instruction, which a borrow or a supply stays well under, rather than needing a lookup table made on the fork.
-    else if (fits(payer, [...batch], tables)) transactions.push({ instructions: [...batch], batches: 1 });
+    // The compute budget instruction costs about 40 bytes. A light batch a few bytes over the limit with it (a borrow on an
+    // account with many positions lists every one of them) goes without it, rather than needing a lookup table made on the fork.
+    else if (lightBatches?.[index] === true && fits(payer, [...batch], tables)) transactions.push({ instructions: [...batch], batches: 1 });
     else throw new RangeError("This action is too large to send in one transaction");
   }
   return transactions;
