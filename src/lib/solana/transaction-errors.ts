@@ -7,6 +7,9 @@ import { ForkTableSigningError, PartialSendError } from "./send-batches";
 import { BlockhashExpiredError, ConfirmationLostError, isNetworkFailure, isRateLimited, TransactionFailedError } from "./send-transaction";
 
 export const WALLET_MISMATCH = "wallet-mismatch";
+// The wallet that answered is on another account than the one connected, so it could not sign for it.
+export const WRONG_SIGNER = "signed-by-another-wallet";
+const SIGNATURE_INVALID = /signature verification fail|missing signature/i;
 
 const REJECTED = /cancel|declin|reject|denied|ERROR_NOT_SIGNED|ERROR_ASSOCIATION_CANCELLED|CancellationException/i;
 // A wallet that has never held SOL has no account at all, which the cluster reports as AccountNotFound for the fee payer.
@@ -107,6 +110,13 @@ export function toTransactionError(error: unknown): TransactionError {
     return new TransactionError("network", "Price impact too high", `${error.message} Nothing was sent.`);
   }
   const text = textOf(error);
+  if (text.includes(WRONG_SIGNER) || SIGNATURE_INVALID.test(text)) {
+    return new TransactionError(
+      "network",
+      "Signed by a different wallet",
+      "The wallet that opened is on another account than the one you connected to Vanna. Pick the wallet app and account you connected with (shown in Profile), or disconnect and connect again with this one. Nothing was sent.",
+    );
+  }
   if (text.includes(WALLET_MISMATCH)) {
     return new TransactionError("network", "Wrong wallet", "This build is showing another wallet's data. Disconnect the developer wallet override to send transactions.");
   }

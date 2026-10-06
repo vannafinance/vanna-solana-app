@@ -522,3 +522,18 @@ test("the wallet connection timing out is reported as the wallet being slow, not
   // A real connection failure to the RPC keeps its own message.
   assert.equal(toTransactionError(new Error("TypeError: Network request failed")).title, "Can't reach Solana");
 });
+
+test("a transaction signed by a wallet on another account is stopped and explained", () => {
+  const { Keypair, TransactionMessage, VersionedTransaction, SystemProgram } = require("@solana/web3.js");
+  const { assertSignedBy } = load("src/lib/solana/signed-by.ts");
+  const { toTransactionError: explain } = load("src/lib/solana/transaction-errors.ts");
+  const owner = Keypair.generate();
+  const other = Keypair.generate();
+  const message = new TransactionMessage({ payerKey: owner.publicKey, recentBlockhash: "11111111111111111111111111111111", instructions: [SystemProgram.transfer({ fromPubkey: owner.publicKey, toPubkey: other.publicKey, lamports: 1 })] }).compileToV0Message();
+  const unsigned = new VersionedTransaction(message);
+  assert.throws(() => assertSignedBy([unsigned], owner.publicKey.toBase58()), (error) => explain(error).title === "Signed by a different wallet");
+  const signed = new VersionedTransaction(message);
+  signed.sign([owner]);
+  assert.doesNotThrow(() => assertSignedBy([signed], owner.publicKey.toBase58()));
+  assert.equal(explain(new Error("Transaction signature verification failure")).title, "Signed by a different wallet");
+});
