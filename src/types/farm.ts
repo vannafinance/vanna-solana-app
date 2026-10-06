@@ -106,11 +106,8 @@ export type DeployIssue = "no-balance" | "over-balance" | "no-amount" | "too-ris
 export type DeployQuote = {
   collateralValueUsd: bigint;
   debtUsd: bigint;
-  // Borrowed from Vanna and supplied to Kamino in full. Zero at 1x.
+  // Borrowed from Vanna and supplied to Kamino in full, so it is also the amount supplied.
   borrow: TokenAmount;
-  // What goes into Kamino: the loan, or at 1x the deposit itself swapped into the pool asset.
-  supplied: TokenAmount;
-  suppliedUsd: bigint;
   projectedYearlyUsd: bigint;
   projectedMonthlyUsd: bigint;
   // The projected yearly return as a share of the deposit.

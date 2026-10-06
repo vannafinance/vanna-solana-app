@@ -27,19 +27,10 @@ const action = (kind: FarmHistoryAction["kind"], leg: HistoryLeg): FarmHistoryAc
 // transactions of their own just before the one that supplies to Kamino. They belong to it when they come right before it.
 const PAIRING_WINDOW_SECONDS = 600;
 
-// `swapped`: the deposited stock was then swapped into a pool asset in the margin account, which is how a 1x deploy funds
-// its Kamino supply.
-type Pending = { stockDeposit?: HistoryLeg; borrow?: HistoryLeg; swapped?: boolean; at: number };
-
-const swapsStockToPool = (chips: readonly HistoryChip[], stock: string) => chips.some((chip) => chip.type === "swap" && chip.from.asset === stock && isPool(chip.to.asset));
+type Pending = { stockDeposit?: HistoryLeg; borrow?: HistoryLeg; at: number };
 
 // A leg sent ahead holds only a stock deposit, only a pool borrow, or both together; anything else is not part of a deploy.
 function remember(pending: Pending | null, item: MarginActivity): Pending | null {
-  // A 1x deploy's swap leg: the stock deposited just before (or in this same transaction) becomes the pool asset.
-  const fresh = pending !== null && item.at - pending.at <= PAIRING_WINDOW_SECONDS ? pending : null;
-  const depositHere = legs(item.chips, "deposit").find((leg) => isStock(leg.asset));
-  const stock = depositHere ?? fresh?.stockDeposit;
-  if (stock && swapsStockToPool(item.chips, stock.asset) && legs(item.chips, "borrow").length === 0) return { stockDeposit: stock, swapped: true, at: item.at };
   const isLeg = (chip: HistoryChip) => (chip.type === "deposit" && isStock(chip.leg.asset)) || (chip.type === "borrow" && isPool(chip.leg.asset));
   if (item.chips.length === 0 || !item.chips.every(isLeg)) return pending;
   const stockDeposit = legs(item.chips, "deposit")[0];
@@ -99,8 +90,6 @@ function failedEntry(item: MarginActivity, reason: string | null): FarmHistoryEn
 export function deriveFarm(activity: readonly MarginActivity[], failed: ReadonlyMap<string, string | null> = new Map()): FarmDerived {
   const open = new Map<string, FarmAttribution>();
   const poolOf = new Map<CollateralSymbol, PoolSymbol>();
-  // The stock each pool's 1x deploy started from, so its exit, which repays nothing, can still be named.
-  const plainOf = new Map<PoolSymbol, CollateralSymbol>();
   const entries: FarmHistoryEntry[] = [];
   const yieldKept: FarmDerived["yieldKept"] = [];
   let closedCount = 0;
@@ -119,8 +108,7 @@ export function deriveFarm(activity: readonly MarginActivity[], failed: Readonly
     const before = pending !== null && item.at - pending.at <= PAIRING_WINDOW_SECONDS ? pending : null;
     pending = null;
     const deposits = legs(item.chips, "deposit");
-    const depositHere = deposits.find((leg) => isStock(leg.asset));
-    const stockDeposit = depositHere ?? before?.stockDeposit;
+    const stockDeposit = deposits.find((leg) => isStock(leg.asset)) ?? before?.stockDeposit;
     const poolDeposit = deposits.find((leg) => isPool(leg.asset));
     const borrow = legs(item.chips, "borrow").find((leg) => isPool(leg.asset)) ?? before?.borrow;
     const repay = legs(item.chips, "repay").find((leg) => isPool(leg.asset));
@@ -128,13 +116,7 @@ export function deriveFarm(activity: readonly MarginActivity[], failed: Readonly
     const poolWithdraw = legs(item.chips, "withdraw").find((leg) => isPool(leg.asset));
     const entry = (event: FarmHistoryEvent, stock: CollateralSymbol, pool: PoolSymbol, actions: FarmHistoryAction[]) => historyEntry(item, event, stock, pool, actions);
 
-    // A 1x deploy: the stock was swapped into the pool asset and supplied with no loan. The position holds no stock, so no
-    // stock is attributed to it (it shows as the pool part alone); the history still says what was deployed.
-    const plain = stockDeposit && isStock(stockDeposit.asset) && poolDeposit && isPool(poolDeposit.asset) && !borrow && ((depositHere ? swapsStockToPool(item.chips, depositHere.asset) : false) || before?.swapped === true);
-    if (plain && stockDeposit && isStock(stockDeposit.asset) && poolDeposit && isPool(poolDeposit.asset)) {
-      plainOf.set(poolDeposit.asset, stockDeposit.asset);
-      entries.push(entry("deploy", stockDeposit.asset, poolDeposit.asset, [action("deposit", stockDeposit), action("supply", poolDeposit)]));
-    } else if (stockDeposit && isStock(stockDeposit.asset) && (borrow || poolDeposit)) {
+    if (stockDeposit && isStock(stockDeposit.asset) && (borrow || poolDeposit)) {
       const funding = borrow ?? poolDeposit;
       if (!funding || !isPool(funding.asset)) continue;
       const key = `${stockDeposit.asset}-${funding.asset}`;
@@ -161,11 +143,6 @@ export function deriveFarm(activity: readonly MarginActivity[], failed: Readonly
       yieldKept.push({ pool: repay.asset, raw: kept });
       const redeemed = { asset: repay.asset, amount: { raw: repay.amount.raw + kept, decimals: repay.amount.decimals } };
       entries.push(entry("exit", stock, repay.asset, [action("redeem", redeemed), action("repay", repay)]));
-    } else if (poolWithdraw && isPool(poolWithdraw.asset) && plainOf.has(poolWithdraw.asset)) {
-      // Closing a 1x position repays nothing; what Kamino paid back goes straight to the wallet.
-      const stock = plainOf.get(poolWithdraw.asset) as CollateralSymbol;
-      closedCount += 1;
-      entries.push(entry("exit", stock, poolWithdraw.asset, [action("redeem", poolWithdraw)]));
     }
   }
 
