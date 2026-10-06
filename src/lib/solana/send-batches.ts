@@ -75,6 +75,10 @@ function pack(payer: PublicKey, { computeUnits, batches }: BatchRequest, tables:
       last.instructions.push(...batch);
       last.batches += 1;
     } else if (fits(payer, [budget, ...batch], tables)) transactions.push({ instructions: [budget, ...batch], batches: 1 });
+    // The compute budget instruction costs about 40 bytes. A batch a few bytes over the limit with it (a borrow on an account
+    // with many positions lists every one of them) goes without it on Solana's default allowance of 200,000 units per
+    // instruction, which a borrow or a supply stays well under, rather than needing a lookup table made on the fork.
+    else if (fits(payer, [...batch], tables)) transactions.push({ instructions: [...batch], batches: 1 });
     else throw new RangeError("This action is too large to send in one transaction");
   }
   return transactions;
