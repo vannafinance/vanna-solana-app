@@ -14,6 +14,7 @@ import { SpaceScope } from "@/components/ui/space-scope";
 import { restoreAppearance } from "@/hooks/use-appearance";
 import { useWalletSession } from "@/hooks/use-wallet-session";
 import { APP_IDENTITY, CHAIN, RPC_URL } from "@/lib/solana/config";
+import { detailMotion } from "@/navigation/stack-motion";
 import { walletCache } from "@/lib/solana/wallet-cache";
 
 SplashScreen.preventAutoHideAsync();
@@ -31,7 +32,7 @@ function Navigation() {
     <ResourceView resource={session} emptyLabel="No wallet session">
       {() => (
         <SpaceScope>
-          <Stack screenOptions={{ headerShown: false, animation: "slide_from_right" }}>
+          <Stack screenOptions={{ headerShown: false, ...detailMotion }}>
             <Stack.Screen name="faucet" options={{ presentation: "transparentModal", animation: "none" }} />
             <Stack.Screen name="margin" options={{ presentation: "transparentModal", animation: "none" }} />
             <Stack.Screen name="swap" options={{ animation: "slide_from_bottom" }} />

@@ -1,13 +1,14 @@
+import { LinearGradient } from "expo-linear-gradient";
 import { useEffect } from "react";
 import { Pressable, View } from "react-native";
 import Animated, { cancelAnimation, Easing, FadeIn, useAnimatedStyle, useSharedValue, withRepeat, withTiming } from "react-native-reanimated";
 
 import { AppText } from "@/components/ui/app-text";
 import { BottomSheet } from "@/components/ui/bottom-sheet";
-import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 import { ripple } from "@/components/ui/ripple";
 import { TokenIcon } from "@/components/ui/token-icon";
+import { brandGradient, horizontalGradient } from "@/theme/tokens";
 import { type ThemeColor, useTheme } from "@/theme/use-theme";
 import type { ClaimStatus, FaucetMessage, FaucetRow } from "@/types/faucet";
 
@@ -22,8 +23,8 @@ type FaucetSheetProps = {
   onDismiss: () => void;
 };
 
-const COLUMNS = 3;
-const TILE_HEIGHT = 92;
+const COLUMNS = 4;
+const TILE_HEIGHT = 88;
 const TILE_GAP = 8;
 const LOGO_SIZE = 34;
 const RING_SIZE = 44;
@@ -93,6 +94,29 @@ function Tile({ row, disabled, onClaim }: { row: FaucetRow; disabled: boolean; o
   );
 }
 
+// Claims every token at once. It is the last tile of the grid, in the brand gradient, so it reads as the one action that covers the rest.
+function AllTile({ disabled, onClaimAll }: { disabled: boolean; onClaimAll: () => void }) {
+  const { radius } = useTheme();
+
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel="Get all test tokens"
+      accessibilityState={{ disabled }}
+      disabled={disabled}
+      onPress={onClaimAll}
+      style={{ flex: 1, height: TILE_HEIGHT, borderRadius: radius.md, overflow: "hidden", opacity: disabled ? 0.5 : 1 }}
+    >
+      <LinearGradient colors={brandGradient} {...horizontalGradient} style={{ flex: 1, alignItems: "center", justifyContent: "center", gap: 2 }}>
+        <Icon name="add" size={26} color="onPrimary" bold />
+        <AppText variant="caption" strong color="onPrimary">
+          Get all
+        </AppText>
+      </LinearGradient>
+    </Pressable>
+  );
+}
+
 function chunk<T>(items: readonly T[], size: number): T[][] {
   return Array.from({ length: Math.ceil(items.length / size) }, (_, index) => items.slice(index * size, index * size + size));
 }
@@ -126,12 +150,19 @@ export function FaucetSheet({ visible, rows, message, connected, busy, onClaim, 
               <Tile key={row.symbol} row={row} disabled={busy || !connected} onClaim={() => onClaim(row.symbol)} />
             ))}
             {line === last && spare > 0 ? (
-              <View style={{ flex: spare, height: TILE_HEIGHT, justifyContent: "center" }}>
-                <Button size="md" variant="tonal" label="Get all" disabled={!connected || busy} onPress={onClaimAll} />
-              </View>
+              <>
+                <AllTile disabled={!connected || busy} onClaimAll={onClaimAll} />
+                {spare > 1 ? <View style={{ flex: spare - 1 }} /> : null}
+              </>
             ) : null}
           </View>
         ))}
+        {spare === 0 ? (
+          <View style={{ flexDirection: "row", gap: TILE_GAP }}>
+            <AllTile disabled={!connected || busy} onClaimAll={onClaimAll} />
+            <View style={{ flex: COLUMNS - 1 }} />
+          </View>
+        ) : null}
       </View>
       <View accessibilityLiveRegion="polite" style={{ marginTop: spacing.md, flexDirection: "row", alignItems: "center", gap: spacing.sm, minHeight: 28 }}>
         <Icon name="info" size={16} color={message?.tone === "negative" || !connected ? "negative" : "textMuted"} />

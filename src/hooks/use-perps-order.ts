@@ -20,6 +20,7 @@ import { TransactionError } from "@/types/transaction";
 
 import { useConnectedWallet } from "./use-connected-wallet";
 import { useMarginAccount } from "./use-margin-account";
+import { useMarketList } from "./use-market-list";
 import { useMarketBySymbol } from "./use-perps-markets";
 import { usePerpsPositions } from "./use-perps-positions";
 import { useReviewStep } from "./use-review-step";
@@ -42,20 +43,31 @@ export type OrderTicket = {
 export function usePerpsOrder(symbol: string, initialSide: Side) {
   const wallet = useWalletAddress();
   const market = useMarketBySymbol(symbol);
+  const list = useMarketList();
+  const markets = list.status === "ready" ? list.data : [];
   const portfolio = usePerpsPositions();
   const holdings = useWalletHoldings(wallet);
   const marginAccount = useMarginAccount();
   const signer = useWalletSigner();
   const connected = useConnectedWallet();
-  const [side, setSide] = useState(initialSide);
+  const [side, setSideState] = useState(initialSide);
   const [amountText, setAmountText] = useState("");
-  const [leverage, setLeverage] = useState(DEFAULT_LEVERAGE);
+  // Long is paid in USDC and short in the stock, with different balances, so an amount typed for one side is not carried to the other.
+  const setSide = (next: Side) => {
+    if (next === side) return;
+    setSideState(next);
+    setAmountText("");
+  };
+  const [chosenLeverage, setLeverage] = useState(DEFAULT_LEVERAGE);
   // A first trade opens the margin account as its step 1. This is decided when the order is submitted and kept until the
   // sheet closes, because the account appearing on chain after step 1 must not turn a retry of step 2 into a one-step flow.
   const [firstTrade, setFirstTrade] = useState(false);
   const [step, setStep] = useState(1);
   // How far the last attempt got, so trying again after a stop does not deposit or borrow a second time.
   const landed = useRef(freshOpenProgress());
+
+  // Switching to a market that allows less leverage brings the choice down to its limit.
+  const leverage = market.status === "ready" ? Math.min(chosenLeverage, market.data.maxLeverage) : chosenLeverage;
 
   const funds = market.status === "ready" && holdings.data ? orderFunds(side, market.data.symbol, market.data.markPrice, holdings.data.holdings) : null;
   const collateral = parseUnits(amountText, DECIMALS) ?? 0n;
@@ -78,11 +90,12 @@ export function usePerpsOrder(symbol: string, initialSide: Side) {
   })();
 
   const ready = ticket.status === "ready" ? ticket.data : null;
-  // A short is collateralised with the stock itself while the amount is typed in USD, so say how much stock that is.
+  // The amount is always typed in USD, so both sides say how much of the collateral asset it is (the stock for a short, USDC for a
+  // long). The line is there for a long as well, so switching sides does not move the card.
   const collateralNote =
-    side === "short" && ready !== null && funds !== null
+    ready !== null && funds !== null
       ? ready.collateral > 0n
-        ? `Amount in USD · ≈ ${formatToken({ raw: collateralBaseUnits(side, funds, ready.collateral, ready.market.markPrice), decimals: funds.decimals })} ${ready.market.symbol}`
+        ? `Amount in USD · ≈ ${formatToken({ raw: collateralBaseUnits(side, funds, ready.collateral, ready.market.markPrice), decimals: funds.decimals })} ${side === "long" ? "USDC" : ready.market.symbol}`
         : "Amount in USD"
       : null;
   const flow = useTransactionFlow({
@@ -165,6 +178,7 @@ export function usePerpsOrder(symbol: string, initialSide: Side) {
 
   return {
     ticket,
+    markets,
     side,
     setSide,
     amountText,

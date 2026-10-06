@@ -1,5 +1,6 @@
 import { useRef, useState } from "react";
 import { Pressable, TextInput, View } from "react-native";
+import Animated from "react-native-reanimated";
 
 import { AppText } from "@/components/ui/app-text";
 import { Card } from "@/components/ui/card";
@@ -60,6 +61,7 @@ export function DepositCard({ form, onChangeAmount, onMax, onSelectCollateral, o
         </View>
         <View style={{ marginTop: 6, flexDirection: "row", alignItems: "center", gap: 10 }}>
           <TextInput
+            scrollEnabled={false}
             accessibilityLabel={`${form.collateral.symbol} amount to deposit`}
             value={form.amountText}
             onChangeText={onChangeAmount}
@@ -69,7 +71,7 @@ export function DepositCard({ form, onChangeAmount, onMax, onSelectCollateral, o
             style={{
               flex: 1,
               minWidth: 0,
-              padding: 0,
+              padding: 0, includeFontPadding: false, textAlignVertical: "center",
               fontSize: 28,
               lineHeight: 36,
               fontFamily: fontFamily.semibold,
@@ -77,31 +79,37 @@ export function DepositCard({ form, onChangeAmount, onMax, onSelectCollateral, o
             }}
           />
           <View ref={chip} collapsable={false}>
-            <SwipeSwitch onSwitch={onStepCollateral}>
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel={`Collateral token, ${form.collateral.symbol}`}
-                accessibilityState={{ expanded: open }}
-                onPress={() => setOpen(!open)}
-                style={{
-                  height: 44,
-                  paddingLeft: 6,
-                  paddingRight: 12,
-                  borderRadius: 22,
-                  borderWidth: 1,
-                  borderColor: open ? colors.primary : colors.divider,
-                  backgroundColor: colors.surface,
-                  flexDirection: "row",
-                  alignItems: "center",
-                  gap: 8,
-                }}
-              >
-                <TokenIcon symbol={form.collateral.symbol} size={30} />
-                <AppText variant="bodyLg" strong style={{ fontSize: 15 }}>
-                  {form.collateral.symbol}
-                </AppText>
-                <MenuChevron open={open} size={14} color="text" />
-              </Pressable>
+            <SwipeSwitch onSwitch={onStepCollateral} onTap={() => setOpen(!open)}>
+              {(itemStyle) => (
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={`Collateral token, ${form.collateral.symbol}`}
+                  accessibilityHint={form.held.length > 1 ? "Swipe up or down to switch asset" : undefined}
+                  accessibilityState={{ expanded: open }}
+                  onPress={() => setOpen(!open)}
+                  style={{
+                    height: 44,
+                    paddingLeft: 6,
+                    paddingRight: 12,
+                    borderRadius: 22,
+                    borderWidth: 1,
+                    borderColor: open ? colors.primary : colors.divider,
+                    backgroundColor: colors.surface,
+                    flexDirection: "row",
+                    alignItems: "center",
+                    gap: 8,
+                    overflow: "hidden",
+                  }}
+                >
+                  <Animated.View style={[{ flexDirection: "row", alignItems: "center", gap: 8 }, itemStyle]}>
+                    <TokenIcon symbol={form.collateral.symbol} size={30} />
+                    <AppText variant="bodyLg" strong style={{ fontSize: 15 }}>
+                      {form.collateral.symbol}
+                    </AppText>
+                  </Animated.View>
+                  <MenuChevron open={open} size={14} color="text" />
+                </Pressable>
+              )}
             </SwipeSwitch>
           </View>
         </View>
@@ -109,24 +117,6 @@ export function DepositCard({ form, onChangeAmount, onMax, onSelectCollateral, o
           <AppText variant="caption" color="textMuted">
             {formatUsd(form.quote.collateralValueUsd)}
           </AppText>
-          {form.held.length > 1 ? (
-            <View
-              accessibilityLabel={`${form.held.length} assets in your wallet, swipe the token to switch`}
-              style={{ flexDirection: "row", gap: 4, marginTop: 6, marginRight: 14 }}
-            >
-              {form.held.map((collateral) => (
-                <View
-                  key={collateral.symbol}
-                  style={{
-                    width: 6,
-                    height: 6,
-                    borderRadius: radius.pill,
-                    backgroundColor: collateral.symbol === form.collateral.symbol ? colors.primary : colors.border,
-                  }}
-                />
-              ))}
-            </View>
-          ) : null}
         </View>
         {error ? (
           <AppText variant="caption" color="negative" style={{ marginTop: 6 }}>

@@ -4,7 +4,7 @@ import { TextInput, View } from "react-native";
 import { useTheme } from "@/theme/use-theme";
 
 import { AppText } from "./app-text";
-import { Chip } from "./chip";
+import { QuickFillButton } from "./quick-fill-button";
 import { Notice } from "./notice";
 
 type QuickFill = { label: string; fraction: number };
@@ -38,6 +38,7 @@ export function AmountField({ label, caption, value, onChangeText, tokenSlot, qu
       </View>
       <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: spacing.md }}>
         <TextInput
+          scrollEnabled={false}
           accessibilityLabel={label}
           value={value}
           onChangeText={onChangeText}
@@ -46,7 +47,7 @@ export function AmountField({ label, caption, value, onChangeText, tokenSlot, qu
           placeholderTextColor={colors.textMuted}
           style={{
             flex: 1,
-            padding: 0,
+            padding: 0, includeFontPadding: false, textAlignVertical: "center",
             fontSize: 32,
             lineHeight: 40,
             fontFamily: fontFamily.semibold,
@@ -63,7 +64,7 @@ export function AmountField({ label, caption, value, onChangeText, tokenSlot, qu
       {quickFills && onQuickFill ? (
         <View style={{ flexDirection: "row", gap: spacing.sm, marginTop: spacing.xs }}>
           {quickFills.map((fill) => (
-            <Chip key={fill.label} flex size="sm" label={fill.label} onPress={() => onQuickFill(fill.fraction)} />
+            <QuickFillButton key={fill.label} flex label={fill.label} onPress={() => onQuickFill(fill.fraction)} />
           ))}
         </View>
       ) : null}

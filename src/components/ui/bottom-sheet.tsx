@@ -1,7 +1,8 @@
-import { type ReactNode, useEffect } from "react";
+import { type ReactNode, useEffect, useState } from "react";
 import { Modal, Pressable, View } from "react-native";
-import Animated, { Easing, FadeIn, useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
+import Animated, { Easing, type SharedValue, useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { scheduleOnRN } from "react-native-worklets";
 
 import { useTheme } from "@/theme/use-theme";
 
@@ -17,27 +18,21 @@ type BottomSheetProps = {
 };
 
 const SLIDE_EASING = Easing.bezier(0.2, 0.9, 0.3, 1);
+const EXIT_EASING = Easing.bezier(0.4, 0, 1, 1);
+const EXIT_MS = 200;
 
-// The layout-animation entering="SlideInDown" leaves the sheet about one navigation bar above the bottom of the screen on
-// Android, so the tab bar shows below it. The sheet slides in with its own translation instead and always ends flush.
-function useSlideIn(duration: number) {
-  const height = useSharedValue(1000);
-  const progress = useSharedValue(1);
-  useEffect(() => {
-    progress.value = withTiming(0, { duration, easing: SLIDE_EASING });
-  }, [duration, progress]);
-  const style = useAnimatedStyle(() => ({ transform: [{ translateY: progress.value * height.value }] }));
-  return { style, onLayout: (event: { nativeEvent: { layout: { height: number } } }) => { height.value = event.nativeEvent.layout.height; } };
-}
-
-function SheetPanel({ children }: { children: ReactNode }) {
-  const { colors, layout, motion, radius } = useTheme();
+// The sheet slides in and out with its own translation (the layout-animation entering="SlideInDown" leaves it about one navigation bar
+// above the bottom of the screen on Android, so the tab bar shows below it). `progress` is 1 while it is closed and 0 while it is open;
+// the backdrop fades with it.
+function SheetPanel({ children, progress }: { children: ReactNode; progress: SharedValue<number> }) {
+  const { colors, layout, radius } = useTheme();
   const insets = useSafeAreaInsets();
-  const slide = useSlideIn(motion.duration.long);
+  const height = useSharedValue(1000);
+  const slide = useAnimatedStyle(() => ({ transform: [{ translateY: progress.get() * height.get() }] }));
 
   return (
     <Animated.View
-      onLayout={slide.onLayout}
+      onLayout={(event) => height.set(event.nativeEvent.layout.height)}
       style={[
         {
           alignSelf: "center",
@@ -50,7 +45,7 @@ function SheetPanel({ children }: { children: ReactNode }) {
           paddingTop: 10,
           paddingBottom: Math.max(insets.bottom + 12, 28),
         },
-        slide.style,
+        slide,
       ]}
     >
       {children}
@@ -60,14 +55,35 @@ function SheetPanel({ children }: { children: ReactNode }) {
 
 export function BottomSheet({ visible, onDismiss, dismissable = true, title, children }: BottomSheetProps) {
   const { colors, layout, motion } = useTheme();
+  const progress = useSharedValue(1);
+  // The modal stays up while the sheet slides out, then goes. `exiting` is set in the render that sees `visible` turn off, so the
+  // sheet is never unmounted before it has left.
+  const [wasVisible, setWasVisible] = useState(visible);
+  const [exiting, setExiting] = useState(false);
+  if (visible !== wasVisible) {
+    setWasVisible(visible);
+    setExiting(!visible);
+  }
+
+  useEffect(() => {
+    if (visible) {
+      progress.set(withTiming(0, { duration: motion.duration.long, easing: SLIDE_EASING }));
+    } else {
+      progress.set(withTiming(1, { duration: EXIT_MS, easing: EXIT_EASING }, (finished) => {
+        if (finished) scheduleOnRN(setExiting, false);
+      }));
+    }
+  }, [visible, progress, motion.duration.long]);
+
+  const scrim = useAnimatedStyle(() => ({ opacity: 1 - progress.get() }));
 
   return (
-    <Modal visible={visible} transparent animationType="none" statusBarTranslucent navigationBarTranslucent onRequestClose={dismissable ? onDismiss : undefined}>
+    <Modal visible={visible || exiting} transparent animationType="none" statusBarTranslucent navigationBarTranslucent onRequestClose={dismissable ? onDismiss : undefined}>
       <View style={{ flex: 1, justifyContent: "flex-end" }}>
-        <Animated.View entering={FadeIn.duration(motion.duration.short)} style={{ position: "absolute", top: 0, right: 0, bottom: 0, left: 0, backgroundColor: colors.scrim }}>
-          <Pressable accessibilityLabel="Dismiss" style={{ flex: 1 }} onPress={dismissable ? onDismiss : undefined} />
+        <Animated.View style={[{ position: "absolute", top: 0, right: 0, bottom: 0, left: 0, backgroundColor: colors.scrim }, scrim]}>
+          <Pressable accessibilityLabel="Dismiss" style={{ flex: 1 }} onPress={dismissable && visible ? onDismiss : undefined} />
         </Animated.View>
-        <SheetPanel>
+        <SheetPanel progress={progress}>
           <View style={{ alignSelf: "center", width: layout.handleWidth, height: layout.handleHeight, borderRadius: 2, backgroundColor: colors.border }} />
           {title ? (
             <View style={{ height: layout.headerHeight, flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>

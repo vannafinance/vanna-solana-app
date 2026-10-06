@@ -28,7 +28,7 @@ export function OfflineBanner({ staleMinutes, onRetry }: OfflineBannerProps) {
       }}
     >
       <View style={{ width: 36, height: 36, borderRadius: radius.pill, backgroundColor: colors.surface, alignItems: "center", justifyContent: "center" }}>
-        <Icon name="wifi_off" size={18} color="onPinkTint" />
+        <Icon name="wifi_off" size={18} color="onPinkTint" bold />
       </View>
       <View style={{ flex: 1, gap: 2 }}>
         <AppText variant="body" strong color="onPinkTint">

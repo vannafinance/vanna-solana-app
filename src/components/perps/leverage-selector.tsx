@@ -1,8 +1,4 @@
-import { View } from "react-native";
-
-import { AppText } from "@/components/ui/app-text";
-import { Card } from "@/components/ui/card";
-import { Chip } from "@/components/ui/chip";
+import { LeverageCard } from "@/components/farm/leverage-card";
 
 type LeverageSelectorProps = {
   options: readonly number[];
@@ -10,17 +6,7 @@ type LeverageSelectorProps = {
   onChange: (value: number) => void;
 };
 
+// The leverage of a Long or Short: the same slider as Farm, from the smallest to the largest the market allows.
 export function LeverageSelector({ options, value, onChange }: LeverageSelectorProps) {
-  return (
-    <Card>
-      <AppText variant="caption" color="textMuted">
-        Leverage
-      </AppText>
-      <View accessibilityRole="radiogroup" accessibilityLabel="Leverage" style={{ flexDirection: "row", gap: 8, marginTop: 12 }}>
-        {options.map((option) => (
-          <Chip key={option} flex shape="pill" label={`${option}x`} selected={option === value} onPress={() => onChange(option)} />
-        ))}
-      </View>
-    </Card>
-  );
+  return <LeverageCard leverage={value} minLeverage={options[0]} maxLeverage={options[options.length - 1]} onChangeLeverage={onChange} />;
 }

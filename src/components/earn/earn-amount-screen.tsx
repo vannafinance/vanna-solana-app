@@ -4,7 +4,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { AppText } from "@/components/ui/app-text";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Chip } from "@/components/ui/chip";
+import { QuickFillButton } from "@/components/ui/quick-fill-button";
 import { DetailRow } from "@/components/ui/detail-row";
 import { Icon } from "@/components/ui/icon";
 import { PlainHeader } from "@/components/ui/plain-header";
@@ -82,19 +82,20 @@ export function EarnAmountScreen({
             </View>
             <View style={{ marginTop: 8, flexDirection: "row", alignItems: "center", gap: 12 }}>
               <TextInput
+                scrollEnabled={false}
                 accessibilityLabel={view.label}
                 value={value}
                 onChangeText={onChangeText}
                 keyboardType="decimal-pad"
                 placeholder="0.00"
                 placeholderTextColor={colors.textMuted}
-                style={{ flex: 1, minWidth: 0, padding: 0, fontSize: 32, lineHeight: 40, fontFamily: fontFamily.semibold, color: view.over ? colors.negative : colors.text }}
+                style={{ flex: 1, minWidth: 0, padding: 0, includeFontPadding: false, textAlignVertical: "center", fontSize: 32, lineHeight: 40, fontFamily: fontFamily.semibold, color: view.over ? colors.negative : colors.text }}
               />
               <TokenPill symbol={symbol} />
             </View>
             <View style={{ marginTop: 12, flexDirection: "row", gap: 8 }}>
               {fills.map((fill) => (
-                <Chip key={fill.label} flex size="sm" label={fill.label} selected={fill.selected} onPress={() => onQuickFill(fill.fraction)} />
+                <QuickFillButton key={fill.label} flex label={fill.label} selected={fill.selected} onPress={() => onQuickFill(fill.fraction)} />
               ))}
             </View>
           </Card>

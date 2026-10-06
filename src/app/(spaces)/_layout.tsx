@@ -12,10 +12,9 @@ export default function SpacesLayout() {
         headerShown: false,
         lazy: false,
         sceneStyle: { backgroundColor: colors.background },
-        // Modules switch in place, with no scene animation. Every module's header has the same geometry, so only colours
-        // and figures change; the bottom bar's pill fades across and the page content fades in under the header (Screen).
-        // A crossfade of whole scenes is not used: the tab view puts the outgoing scene at zIndex -1, which on web paints it
-        // under the container's background, so the switch flashed the page colour.
+        // Modules switch in place with no scene animation: the arriving header blends from the previous module's colours (SpaceHeader)
+        // and its content fades in (Screen), while the bottom bar's pill fades across. A crossfade of whole scenes is not used: the tab
+        // view drops the outgoing scene at once, so the incoming one would fade in over a bare background.
         animation: "none",
       }}
       tabBar={({ state }) => <ModuleBar activeRoute={state.routes[state.index].name} />}

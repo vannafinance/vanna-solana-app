@@ -5,6 +5,8 @@ import Animated, { Easing, useAnimatedStyle, useSharedValue, withTiming } from "
 import { useTheme } from "@/theme/use-theme";
 
 const SIZE = 52;
+// How far the button reaches into each card. The cards end 16 px below their content, so this keeps it clear of the shortcut buttons.
+const REACH = 12;
 const SPIN_MS = 460;
 const SPIN_EASING = Easing.bezier(0.34, 1.56, 0.64, 1);
 
@@ -13,7 +15,7 @@ type SwapFlipButtonProps = {
 };
 
 export function SwapFlipButton({ onPress }: SwapFlipButtonProps) {
-  const { colors, radius, spacing } = useTheme();
+  const { colors, radius, scheme } = useTheme();
   const turn = useSharedValue(0);
   const spin = useAnimatedStyle(() => ({ transform: [{ rotate: `${turn.value}deg` }] }));
 
@@ -23,20 +25,21 @@ export function SwapFlipButton({ onPress }: SwapFlipButtonProps) {
   };
 
   return (
-    <View style={{ height: spacing.lg, alignItems: "center", zIndex: 1 }}>
+    <View style={{ height: SIZE - 2 * REACH, alignItems: "center", zIndex: 1 }}>
       <Pressable
         accessibilityRole="button"
         accessibilityLabel="Flip tokens"
         onPress={flip}
         style={{
           position: "absolute",
-          top: -(SIZE - spacing.lg) / 2,
+          top: -REACH,
           width: SIZE,
           height: SIZE,
           borderRadius: radius.pill,
-          borderWidth: 4,
-          borderColor: colors.background,
-          backgroundColor: colors.surface,
+          // The same face as the leverage slider's thumb: a near-black disc on a dark screen, white on a light one, ringed in purple.
+          borderWidth: 2,
+          borderColor: colors.primary,
+          backgroundColor: scheme === "dark" ? colors.background : "#FFFFFF",
           alignItems: "center",
           justifyContent: "center",
           elevation: 4,
@@ -47,7 +50,7 @@ export function SwapFlipButton({ onPress }: SwapFlipButtonProps) {
         }}
       >
         <Animated.View style={spin}>
-          <Image source={require("../../../assets/images/vanna-mark.png")} accessibilityLabel="Vanna" style={{ width: 26, height: 26 }} contentFit="contain" />
+          <Image source={require("../../../assets/images/vanna-mark.png")} accessibilityLabel="Vanna" style={{ width: 28, height: 28 }} contentFit="contain" />
         </Animated.View>
       </Pressable>
     </View>

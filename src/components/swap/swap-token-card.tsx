@@ -3,7 +3,7 @@ import { TextInput, View } from "react-native";
 
 import { AppText } from "@/components/ui/app-text";
 import { Card } from "@/components/ui/card";
-import { Chip } from "@/components/ui/chip";
+import { QuickFillButton } from "@/components/ui/quick-fill-button";
 import { useTheme } from "@/theme/use-theme";
 
 type QuickFill = { label: string; fraction: number };
@@ -38,13 +38,14 @@ export function SwapTokenCard({ label, balance, tokenMenu, usdValue, value, onCh
       <View style={{ marginTop: 8, flexDirection: "row", alignItems: "center", gap: 12 }}>
         {onChangeText ? (
           <TextInput
+            scrollEnabled={false}
             accessibilityLabel={label}
             value={value}
             onChangeText={onChangeText}
             keyboardType="decimal-pad"
             placeholder="0.00"
             placeholderTextColor={colors.textMuted}
-            style={{ flex: 1, minWidth: 0, padding: 0, ...AMOUNT, fontFamily: fontFamily.semibold, color: exceeds ? colors.negative : colors.text }}
+            style={{ flex: 1, minWidth: 0, padding: 0, includeFontPadding: false, textAlignVertical: "center", ...AMOUNT, fontFamily: fontFamily.semibold, color: exceeds ? colors.negative : colors.text }}
           />
         ) : (
           <AppText strong numberOfLines={1} style={{ flex: 1, minWidth: 0, ...AMOUNT }}>
@@ -60,7 +61,7 @@ export function SwapTokenCard({ label, balance, tokenMenu, usdValue, value, onCh
         {quickFills && onQuickFill ? (
           <View style={{ flexDirection: "row", gap: 6 }}>
             {quickFills.map((fill) => (
-              <Chip key={fill.label} size="sm" label={fill.label} onPress={() => onQuickFill(fill.fraction)} />
+              <QuickFillButton key={fill.label} label={fill.label} onPress={() => onQuickFill(fill.fraction)} />
             ))}
           </View>
         ) : null}

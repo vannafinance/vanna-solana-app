@@ -2,7 +2,7 @@ import { TextInput, View } from "react-native";
 
 import { AppText } from "@/components/ui/app-text";
 import { Card } from "@/components/ui/card";
-import { Chip } from "@/components/ui/chip";
+import { QuickFillButton } from "@/components/ui/quick-fill-button";
 import { TokenPill } from "@/components/ui/token-pill";
 import type { TokenSymbol } from "@/components/ui/token-icon";
 import { useTheme } from "@/theme/use-theme";
@@ -37,13 +37,14 @@ export function CollateralCard({ symbol, note, caption, value, onChangeText, exc
       </View>
       <View style={{ marginTop: 8, flexDirection: "row", alignItems: "center", gap: 12 }}>
         <TextInput
+          scrollEnabled={false}
           accessibilityLabel="Collateral amount"
           value={value}
           onChangeText={onChangeText}
           keyboardType="decimal-pad"
           placeholder="0.00"
           placeholderTextColor={colors.textMuted}
-          style={{ flex: 1, padding: 0, fontSize: 32, lineHeight: 40, fontFamily: fontFamily.semibold, color: exceeds ? colors.negative : colors.text }}
+          style={{ flex: 1, padding: 0, includeFontPadding: false, textAlignVertical: "center", fontSize: 32, lineHeight: 40, fontFamily: fontFamily.semibold, color: exceeds ? colors.negative : colors.text }}
         />
         <TokenPill symbol={symbol} />
       </View>
@@ -54,7 +55,7 @@ export function CollateralCard({ symbol, note, caption, value, onChangeText, exc
       ) : null}
       <View style={{ marginTop: 12, flexDirection: "row", gap: 8 }}>
         {quickFills.map((fill) => (
-          <Chip key={fill.label} flex size="sm" label={fill.label} onPress={() => onQuickFill(fill.fraction)} />
+          <QuickFillButton key={fill.label} flex label={fill.label} onPress={() => onQuickFill(fill.fraction)} />
         ))}
       </View>
     </Card>
