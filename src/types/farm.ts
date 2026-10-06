@@ -101,7 +101,7 @@ export type FarmPositionsView = {
   unplaced: readonly UnplacedFarmPosition[];
 };
 
-export type DeployIssue = "no-balance" | "over-balance" | "no-amount" | "too-risky" | "pool-liquidity";
+export type DeployIssue = "no-balance" | "over-balance" | "no-amount" | "low-leverage" | "too-risky" | "pool-liquidity";
 
 export type DeployQuote = {
   collateralValueUsd: bigint;

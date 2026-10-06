@@ -374,13 +374,6 @@ test("a deploy that borrows more than Vanna's pool can lend is refused before th
   assert.equal(fits.issue, null);
 });
 
-test("1x deposits the stock only, with nothing borrowed, as on the web app", () => {
-  const plain = buildDeployForm(deployInput({ borrowable: 0n, amountText: "5", leverage: 1 }));
-  assert.equal(plain.issue, null);
-  assert.equal(plain.quote.borrow.raw, 0n);
-  assert.equal(plain.quote.debtUsd, 0n);
-});
-
 test("a position whose stock is unknown closes its Kamino part only and never repays more than it redeems", () => {
   const { unplacedCloseQuote } = load("src/lib/farm/position-math.ts");
   const position = { pool: "USDC", supplied: amount(742_750_000n, 6), debt: amount(742_760_000n, 6) };

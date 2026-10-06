@@ -28,8 +28,7 @@ import { useWalletAddress } from "./use-wallet-address";
 import { useWalletHoldings } from "./use-wallet-holdings";
 import { useWalletSigner } from "./use-wallet-signer";
 
-// As on the web app: 1x deposits the stock only, with no borrow and nothing supplied to Kamino.
-const DEFAULT_LEVERAGE = 1;
+const DEFAULT_LEVERAGE = 2;
 const LOW_PRECISION_DECIMALS = 6;
 const STOCK_SYMBOLS: readonly CollateralSymbol[] = ["TSLAx", "GOOGLx", "AAPLx", "ANTHROPIC", "OPENAI"];
 const NO_ACCOUNT: MarginNow = { hasAccount: false, collateralUsd: 0n, debtUsd: 0n, netUsd: 0n, health: null, leverage: null };
