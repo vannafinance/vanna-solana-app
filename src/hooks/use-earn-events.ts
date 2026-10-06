@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 
 import { fetchEarnEvents } from "@/lib/solana/earn-history";
+import { rpcConnection } from "@/lib/solana/rpc";
 
 import { queryKeys } from "./query-keys";
 import { useLiveInterval } from "./use-live-interval";
@@ -12,7 +13,7 @@ export function useEarnEvents(wallet: string | null) {
   const refetchInterval = useLiveInterval(LIVE_MS);
   return useQuery({
     queryKey: queryKeys.earnEvents(wallet ?? "none"),
-    queryFn: ({ signal }) => fetchEarnEvents(wallet as string, signal),
+    queryFn: ({ signal }) => fetchEarnEvents(rpcConnection, wallet as string, signal),
     enabled: wallet !== null,
     staleTime: STALE_MS,
     refetchInterval,

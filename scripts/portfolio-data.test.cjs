@@ -371,3 +371,96 @@ test("the age of the data on screen is shown only when something was read before
   // The first refresh failed: nothing was ever read, so no age is claimed (it used to read as about 29 million minutes).
   assert.equal(staleMinutesOf(0, 1_790_000_000_000), undefined);
 });
+
+// SKR is not carried by the hosted web app, whose history routes drop rows they cannot name; the app adds those itself.
+const bs58 = require("bs58");
+const { PublicKey: Key } = require("@solana/web3.js");
+const { withAppOnlySwaps, decodeSpotSwap } = loadTs("src/lib/solana/spot-swaps.ts", stubs);
+const { withAppOnlyEarnEvents, decodeEarnEvents } = loadTs("src/lib/solana/earn-history.ts", stubs);
+const { decodeBase58 } = loadTs("src/lib/solana/base58.ts", stubs);
+
+const SWAP_WALLET = "9jTkWZ7eD1n2v4m5Qz8yHfC3aXbR6sLpUo1tKcGyoBHX";
+const MINTS = { USDC: "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v", SKR: "SKRbvo6Gf7GondiT3BbTfuRDPqLWei4j2Qy2NPGZhW3", TSLAx: "XsDoVfqeBukxuZHWhdvWHBhgEHjGNst4MLodqsJHzoB" };
+
+function walletSwap({ signature, from, to, spent, received, decimals = { USDC: 6, SKR: 6, TSLAx: 8 } }) {
+  const balance = (index, symbol, amount) => ({ accountIndex: index, mint: MINTS[symbol], owner: SWAP_WALLET, uiTokenAmount: { amount: String(amount), decimals: decimals[symbol] } });
+  return {
+    signature,
+    blockTime: 1_791_000_000,
+    status: "success",
+    tx: {
+      meta: {
+        err: null,
+        fee: 5000,
+        logMessages: ["Program JUP6LkbZbjS1jKKwapdHNy74zcZ3tLUZoi5QNyVTaV4 invoke [1]"],
+        preBalances: [1_000_000_000],
+        postBalances: [1_000_000_000 - 5000],
+        preTokenBalances: [balance(1, from, spent), balance(2, to, 0)],
+        postTokenBalances: [balance(1, from, 0), balance(2, to, received)],
+      },
+      transaction: { message: { accountKeys: [{ pubkey: { toBase58: () => SWAP_WALLET } }] } },
+    },
+  };
+}
+
+test("an SKR swap the web route leaves out is read from the wallet's own transactions", () => {
+  const skr = walletSwap({ signature: "sigSkr", from: "USDC", to: "SKR", spent: 10_000_000, received: 567_045_920 });
+  const decoded = decodeSpotSwap(skr, SWAP_WALLET);
+  assert.equal(decoded.from, "USDC");
+  assert.equal(decoded.to, "SKR");
+  assert.equal(decoded.amountIn, 10_000_000n);
+  assert.equal(decoded.amountOut, 567_045_920n);
+
+  const hosted = [{ signature: "sigTsla", timestamp: 1_790_000_000_000, from: "USDC", to: "TSLAx", amountIn: 1n, decimalsIn: 6, amountOut: 1n, decimalsOut: 8 }];
+  const tsla = walletSwap({ signature: "sigTsla", from: "USDC", to: "TSLAx", spent: 1, received: 1 });
+  const merged = withAppOnlySwaps(hosted, [skr, tsla], SWAP_WALLET);
+  assert.deepEqual(merged.map((swap) => swap.signature).join(","), "sigSkr,sigTsla");
+});
+
+test("swaps without SKR stay the web route's, and an SKR row it already lists is not repeated", () => {
+  const usdcToTsla = walletSwap({ signature: "sigOther", from: "USDC", to: "TSLAx", spent: 5, received: 5 });
+  assert.equal(withAppOnlySwaps([], [usdcToTsla], SWAP_WALLET).length, 0);
+  const skr = walletSwap({ signature: "sigSkr", from: "SKR", to: "USDC", spent: 1_000_000, received: 17_000 });
+  const hosted = [{ ...decodeSpotSwap(skr, SWAP_WALLET) }];
+  assert.equal(withAppOnlySwaps(hosted, [skr], SWAP_WALLET).length, 1);
+  assert.equal(withAppOnlySwaps([], [{ ...skr, status: "failed" }], SWAP_WALLET).length, 0);
+});
+
+const SUPPLY_DISC = [52, 247, 77, 250, 74, 122, 100, 33];
+
+function walletSupply(mint, amount, signature) {
+  const data = new Uint8Array(24);
+  data.set(SUPPLY_DISC, 0);
+  new DataView(data.buffer).setBigUint64(8, amount, true);
+  const accounts = Array.from({ length: 13 }, () => Key.unique());
+  accounts[4] = new Key(mint);
+  return {
+    signature,
+    blockTime: 1_791_000_100,
+    status: "success",
+    tx: {
+      meta: { err: null, preTokenBalances: [], postTokenBalances: [] },
+      transaction: { message: { accountKeys: [], instructions: [{ programId: new Key("BZ812nUv4Qhr2p1JVgmoJGjYTGk1brAXckyhFSCNH3Zg"), accounts, data: bs58.encode(data) }] } },
+    },
+  };
+}
+
+test("an SKR supply the web route leaves out joins Earn history; other assets stay the route's", () => {
+  const skr = walletSupply(MINTS.SKR, 2_063_330_423n, "sigSupplySkr");
+  const [event] = decodeEarnEvents(skr);
+  assert.equal(event.kind, "supply");
+  assert.equal(event.symbol, "SKR");
+  assert.equal(event.amount, 2_063_330_423n);
+  assert.equal(event.timestamp, 1_791_000_100_000);
+
+  const usdc = walletSupply(MINTS.USDC, 5_000_000n, "sigSupplyUsdc");
+  const merged = withAppOnlyEarnEvents([], [skr, usdc]);
+  assert.deepEqual(merged.map((entry) => entry.signature).join(","), "sigSupplySkr");
+  assert.equal(withAppOnlyEarnEvents([{ ...event }], [skr]).length, 1);
+});
+
+test("base58 decoding matches the reference implementation", () => {
+  const sample = Uint8Array.from([0, 0, 1, 2, 250, 255]);
+  assert.deepEqual([...decodeBase58(bs58.encode(sample))], [...sample]);
+  assert.equal(decodeBase58("0OIl"), null);
+});

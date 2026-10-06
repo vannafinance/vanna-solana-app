@@ -22,4 +22,8 @@ export const assets: readonly AssetInfo[] = [
   { symbol: "SKR", mint: "SKRbvo6Gf7GondiT3BbTfuRDPqLWei4j2Qy2NPGZhW3", decimals: 6, pythFeedId: "38846ec4d0dbe808091817f5c0d6ab8058e25422348ddf97db52b6c378a93bf9", token2022: false },
 ];
 
+// Assets the hosted web app does not carry. Its routes leave them out (its pool list, and history rows it cannot name), and
+// the website cannot change, so the app reads these from the chain itself.
+export const APP_ONLY_ASSETS: ReadonlySet<AssetSymbol> = new Set(["SKR"]);
+
 export const assetByMint = new Map(assets.map((asset) => [asset.mint, asset]));
