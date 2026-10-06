@@ -89,7 +89,8 @@ export type OrderQuote = {
   healthAfter: number;
 };
 
-export type OrderIssue = "empty" | "insufficient-margin" | "health-low" | null;
+// "opposite-open": the account already holds the other side of this market, which the web app also refuses until it is closed.
+export type OrderIssue = "opposite-open" | "empty" | "insufficient-margin" | "health-low" | null;
 
 export type CloseQuote = {
   fractionBps: number;

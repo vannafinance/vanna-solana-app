@@ -79,13 +79,14 @@ export function usePerpsOrder(symbol: string, initialSide: Side) {
     if (market.status !== "ready") return market;
     if (portfolio.status !== "ready") return portfolio.status === "empty" ? { status: "empty" } : portfolio;
     if (funds === null) return holdings.isError ? { status: "error", error: holdings.error, retry } : { status: "loading" };
-    const { account } = portfolio.data;
+    const { account, positions } = portfolio.data;
+    const oppositeOpen = positions.some((position) => position.symbol === market.data.symbol && position.side !== side);
     const quote = quoteOrder({ market: market.data, margin: account.margin, borrowed: account.borrowed, side, collateral, leverage });
     // Collateral is deposited from the wallet in the same transaction, as on the web app, so what can be committed is
     // the wallet's balance of the collateral asset, not the margin account's free balance.
     return {
       status: "ready",
-      data: { market: market.data, account: { ...account, available: funds.usd }, collateral, quote, issue: orderIssue(funds.usd, collateral, quote) },
+      data: { market: market.data, account: { ...account, available: funds.usd }, collateral, quote, issue: orderIssue(funds.usd, collateral, quote, oppositeOpen) },
     };
   })();
 

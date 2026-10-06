@@ -40,7 +40,8 @@ export function quoteOrder({ market, margin, borrowed, side, collateral, leverag
   };
 }
 
-export function orderIssue(available: bigint, collateral: bigint, quote: OrderQuote): OrderIssue {
+export function orderIssue(available: bigint, collateral: bigint, quote: OrderQuote, oppositeOpen = false): OrderIssue {
+  if (oppositeOpen) return "opposite-open";
   if (collateral === 0n) return "empty";
   if (collateral > available) return "insufficient-margin";
   if (quote.healthAfter <= MIN_OPEN_HEALTH) return "health-low";

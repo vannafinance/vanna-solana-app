@@ -54,6 +54,13 @@ test("an order is blocked when empty, over the wallet balance, or at or below he
   assert.equal(orderIssue(500n * USD, 1n * USD, risky), "health-low");
 });
 
+test("an order is blocked while the other side of the same market is open, as on the web app", () => {
+  const ok = quoteOrder({ market, margin: 0n, borrowed: 0n, side: "short", collateral: 100n * USD, leverage: 2 });
+  assert.equal(orderIssue(500n * USD, 100n * USD, ok, true), "opposite-open");
+  assert.equal(orderIssue(500n * USD, 0n, ok, true), "opposite-open");
+  assert.equal(orderIssue(500n * USD, 100n * USD, ok, false), null);
+});
+
 test("collateral is limited by the wallet: USDC for a long, the stock for a short", () => {
   const holdings = [
     { symbol: "USDC", raw: 2_000_000_000n, decimals: 6 },

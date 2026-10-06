@@ -7,7 +7,9 @@ import { OrderMarketCard } from "@/components/perps/order-market-card";
 import { MarginEnvelope } from "@/components/margin/margin-envelope";
 import { OrderSummary } from "@/components/perps/order-summary";
 import { SideToggle } from "@/components/perps/side-toggle";
+import { AppText } from "@/components/ui/app-text";
 import { Button } from "@/components/ui/button";
+import { Icon } from "@/components/ui/icon";
 import { PlainHeader } from "@/components/ui/plain-header";
 import { ResourceView } from "@/components/ui/resource-view";
 import { Screen } from "@/components/ui/screen";
@@ -26,7 +28,11 @@ const QUICK_FILLS = [
   { label: "Max", fraction: 1 },
 ] as const;
 
-function ctaLabel(side: Side, issue: OrderIssue, hasMarginAccount: boolean) {
+const sideName = (side: Side) => (side === "long" ? "Long" : "Short");
+const otherSide = (side: Side): Side => (side === "long" ? "short" : "long");
+
+function ctaLabel(side: Side, issue: OrderIssue, hasMarginAccount: boolean, symbol: string) {
+  if (issue === "opposite-open") return `Close ${symbol} ${sideName(otherSide(side))} first`;
   if (issue === "empty") return "Enter an amount";
   if (issue === "insufficient-margin") return "Not enough margin available";
   return hasMarginAccount ? `Open ${side} · approve in wallet` : `Open account and ${side} · 2 approvals`;
@@ -45,12 +51,20 @@ export default function PerpsOrderScreen() {
             paddingTop={8}
             header={<PlainHeader title="Open position" onBack={router.back} />}
             footer={
-              <View style={{ paddingTop: 4, paddingBottom: 8 }}>
+              <View style={{ paddingTop: 4, paddingBottom: 8, gap: 10 }}>
+                {issue === "opposite-open" ? (
+                  <View accessibilityRole="alert" style={{ flexDirection: "row", gap: 8 }}>
+                    <Icon name="info" size={16} color="warning" />
+                    <AppText variant="caption" color="warning" style={{ flex: 1 }}>
+                      {`Close your existing ${market.symbol} ${sideName(otherSide(order.side))} before opening a ${sideName(order.side)} on ${market.symbol}.`}
+                    </AppText>
+                  </View>
+                ) : null}
                 <Button
                   icon="account_balance_wallet"
                   variant={order.side === "long" ? "primary" : "danger"}
                   disabled={order.blocked}
-                  label={ctaLabel(order.side, issue, order.hasMarginAccount)}
+                  label={ctaLabel(order.side, issue, order.hasMarginAccount, market.symbol)}
                   onPress={order.submit}
                 />
               </View>
