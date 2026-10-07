@@ -9,6 +9,7 @@ import { collateralBaseUnits, orderFunds } from "@/lib/perps/order-funds";
 import { orderIssue, quoteOrder } from "@/lib/perps/order-quote";
 import { assets } from "@/lib/solana/assets";
 import { NETWORK_FEE_ESTIMATE, NETWORK_LABEL } from "@/lib/solana/config";
+import { withdrawStock } from "@/lib/solana/farm-transactions";
 import { createMarginAccount } from "@/lib/solana/margin-transactions";
 import { freshOpenProgress, openPosition } from "@/lib/solana/perps-transactions";
 import { marginAddress } from "@/lib/solana/program-accounts";
@@ -66,6 +67,10 @@ export function usePerpsOrder(symbol: string, initialSide: Side) {
   const [step, setStep] = useState(1);
   // How far the last attempt got, so trying again after a stop does not deposit or borrow a second time.
   const landed = useRef(freshOpenProgress());
+  // Set when the button moves stock left over from an earlier attempt back to the wallet instead of opening an order.
+  // The flow runs with the callbacks of the render it started from, so the run reads a ref; the state drives what is shown.
+  const [moving, setMoving] = useState(false);
+  const movingRef = useRef(false);
 
   // Switching to a market that allows less leverage brings the choice down to its limit.
   const leverage = market.status === "ready" ? Math.min(chosenLeverage, market.data.maxLeverage) : chosenLeverage;
@@ -88,6 +93,11 @@ export function usePerpsOrder(symbol: string, initialSide: Side) {
       positions.some((position) => position.symbol === symbol && position.side !== side) ||
       (side === "long" ? (portfolio.data.owedStocks ?? []).includes(symbol) : (portfolio.data.heldStocks ?? []).includes(symbol));
     const quote = quoteOrder({ market: market.data, margin: account.margin, borrowed: account.borrowed, side, collateral, leverage });
+    // Stock with no position behind it, left by a short that stopped after its deposit: there is no long to close, so the
+    // way forward is moving it back to the wallet, after which the short can be opened.
+    if (side === "short" && (portfolio.data.strandedStocks?.[symbol] ?? 0n) > 0n) {
+      return { status: "ready", data: { market: market.data, account: { ...account, available: funds.usd }, collateral, quote, issue: "stranded-collateral" } };
+    }
     // Collateral is deposited from the wallet in the same transaction, as on the web app, so what can be committed is
     // the wallet's balance of the collateral asset, not the margin account's free balance.
     return {
@@ -105,13 +115,18 @@ export function usePerpsOrder(symbol: string, initialSide: Side) {
         ? `Amount in USD · ≈ ${formatToken({ raw: collateralBaseUnits(side, funds, ready.collateral, ready.market.markPrice), decimals: funds.decimals })} ${side === "long" ? "USDC" : ready.market.symbol}`
         : "Amount in USD"
       : null;
+  const stranded = ready !== null && portfolio.status === "ready" ? (portfolio.data.strandedStocks?.[ready.market.symbol] ?? 0n) : 0n;
+  const stock = assets.find((asset) => asset.symbol === symbol);
   const flow = useTransactionFlow({
-    steps: firstTrade ? 2 : 1,
+    steps: firstTrade && !moving ? 2 : 1,
     run: (stepNumber, runProgress) => {
       setStep(stepNumber);
       return signer.execute(({ connection, owner, hooks }) => {
+        if (movingRef.current) {
+          if (stock === undefined || stranded === 0n) throw new TransactionError("network", "Something went wrong", "There is nothing to move back. Nothing left your margin account.");
+          return withdrawStock(connection, owner, stock, stranded, hooks);
+        }
         if (firstTrade && stepNumber === 1) return createMarginAccount(connection, owner, hooks);
-        const stock = assets.find((asset) => asset.symbol === symbol);
         if (ready === null || funds === null || stock === undefined || ready.collateral === 0n) {
           throw new TransactionError("network", "Something went wrong", "The order could not be prepared. Nothing left your wallet.");
         }
@@ -119,7 +134,9 @@ export function usePerpsOrder(symbol: string, initialSide: Side) {
         return openPosition(connection, owner, { side, stock, collateral: base, leverage }, hooks, landed.current);
       }, runProgress);
     },
-    success: {
+    success: moving
+      ? { title: `${symbol} is back in your wallet`, message: "You can open the short now." }
+      : {
       title: `Your ${side} is open`,
       message: ready
         ? `${formatToken({ raw: ready.quote.tokens, decimals: DECIMALS })} ${ready.market.symbol} ${side} at ${formatPrice(ready.market.markPrice)} · ${leverage}x · liq. ${formatPrice(ready.quote.liquidationPrice)}`
@@ -150,7 +167,7 @@ export function usePerpsOrder(symbol: string, initialSide: Side) {
     };
   }, flow.start);
 
-  const blocked = ready === null || ready.issue !== null;
+  const blocked = ready === null || (ready.issue !== null && ready.issue !== "stranded-collateral");
 
   const quickFill = (fraction: number) => {
     if (!ready) return;
@@ -160,6 +177,15 @@ export function usePerpsOrder(symbol: string, initialSide: Side) {
 
   const submit = () => {
     if (blocked) return;
+    if (ready?.issue === "stranded-collateral") {
+      movingRef.current = true;
+      setMoving(true);
+      setStep(1);
+      flow.start();
+      return;
+    }
+    movingRef.current = false;
+    setMoving(false);
     setFirstTrade(!marginAccount.exists);
     setStep(1);
     landed.current = freshOpenProgress();
@@ -176,6 +202,8 @@ export function usePerpsOrder(symbol: string, initialSide: Side) {
     landed.current = freshOpenProgress();
     flow.close();
     setFirstTrade(false);
+    movingRef.current = false;
+    setMoving(false);
   };
 
   const viewPosition = () => {
@@ -204,7 +232,9 @@ export function usePerpsOrder(symbol: string, initialSide: Side) {
     flow,
     envelope,
     closeFlow,
-    onSheetPrimary: flow.done ? viewPosition : flow.primary,
+    strandedText: stranded > 0n && stock !== undefined ? `${formatToken({ raw: stranded, decimals: stock.decimals })} ${stock.symbol}` : null,
+    // Moving stock back ends with nothing to view; the sheet just closes and the short can be opened.
+    onSheetPrimary: flow.done ? (moving ? closeFlow : viewPosition) : flow.primary,
   };
 }
 

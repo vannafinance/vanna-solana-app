@@ -32,6 +32,7 @@ const sideName = (side: Side) => (side === "long" ? "Long" : "Short");
 const otherSide = (side: Side): Side => (side === "long" ? "short" : "long");
 
 function ctaLabel(side: Side, issue: OrderIssue, hasMarginAccount: boolean, symbol: string) {
+  if (issue === "stranded-collateral") return `Move ${symbol} back to wallet`;
   if (issue === "opposite-open") return `Close ${symbol} ${sideName(otherSide(side))} first`;
   if (issue === "low-leverage") return "Pick leverage above 1x";
   if (issue === "empty") return "Enter an amount";
@@ -60,6 +61,14 @@ export default function PerpsOrderScreen() {
                     <Icon name="info" size={16} color="warning" />
                     <AppText variant="caption" color="warning" style={{ flex: 1 }}>
                       {`Close your existing ${market.symbol} ${sideName(otherSide(order.side))} before opening a ${sideName(order.side)} on ${market.symbol}.`}
+                    </AppText>
+                  </View>
+                ) : null}
+                {issue === "stranded-collateral" && order.strandedText !== null ? (
+                  <View accessibilityRole="alert" style={{ flexDirection: "row", gap: 8 }}>
+                    <Icon name="info" size={16} color="warning" />
+                    <AppText variant="caption" color="warning" style={{ flex: 1 }}>
+                      {`${order.strandedText} from an earlier try is in your margin account with no position. Move it back to your wallet, then open the short.`}
                     </AppText>
                   </View>
                 ) : null}

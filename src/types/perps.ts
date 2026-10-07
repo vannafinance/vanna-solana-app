@@ -83,6 +83,9 @@ export type PerpsPortfolio = {
   // reads these too, to refuse the opposite side of a position the list cannot show.
   heldStocks?: readonly string[];
   owedStocks?: readonly string[];
+  // Stock sitting in the margin account as collateral with no position behind it, in base units: what an order that stopped
+  // after its deposit leaves.
+  strandedStocks?: Readonly<Record<string, bigint>>;
   historyAvailable: boolean;
   positions: PositionSummary[];
   openPnl: bigint;
@@ -106,7 +109,7 @@ export type OrderQuote = {
 // "pool-liquidity": the loan is more than the pool can lend right now, so the borrow would fail on chain.
 // "low-leverage": 1x is only where the slider starts; an order needs 2x or more (a 1x short is a plain sale, a 1x long a
 // plain buy, neither a leveraged position).
-export type OrderIssue = "opposite-open" | "low-leverage" | "empty" | "insufficient-margin" | "pool-liquidity" | "health-low" | null;
+export type OrderIssue = "stranded-collateral" | "opposite-open" | "low-leverage" | "empty" | "insufficient-margin" | "pool-liquidity" | "health-low" | null;
 
 export type CloseQuote = {
   fractionBps: number;
