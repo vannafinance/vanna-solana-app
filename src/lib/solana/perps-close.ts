@@ -14,7 +14,7 @@ import { withStalePoolRetry } from "./retry-stale-pool";
 import { sendBatches } from "./send-batches";
 import type { SigningHooks } from "./send-transaction";
 import { createAssociatedTokenAccountIdempotent } from "./token-instructions";
-import { inputTransferFee } from "./transfer-fee";
+import { grossForNet, inputTransferFee } from "./transfer-fee";
 
 // The swap and repay, then the withdraw of what is left. They share one transaction when it fits.
 type CloseBuild = MarginSwapBuild & { withdraw: TransactionInstruction[] };
@@ -98,8 +98,8 @@ async function buildCloseShort(connection: Connection, owner: PublicKey, request
 
   const toRepay = (stockDebt * percent) / 100n;
   const usdcAvailable = snapshot.collateralBalances.USDC ?? 0n;
-  const repayFee = await inputTransferFee(connection, stock, toRepay);
-  const vaultNeeded = toRepay + repayFee + (repayFee > 0n ? 1n : 0n);
+  // The loan goes down only by what reaches the reserve, so a stock that charges a transfer fee must send the debt plus it.
+  const vaultNeeded = await grossForNet(connection, stock, toRepay);
   const scale = 10n ** BigInt(stock.decimals);
   // Value of what must be bought, with the same 1% headroom as the web app for slippage and price impact.
   let usdcToSwap = min((stockPrice * vaultNeeded * 101n) / (100n * scale), usdcAvailable);
@@ -117,10 +117,11 @@ async function buildCloseShort(connection: Connection, owner: PublicKey, request
 
   const instructions = [...swap.instructions];
   const repaidAll = percent === 100n && vaultReceives >= vaultNeeded;
-  const repaid = repaidAll ? stockDebt : vaultReceives;
+  // Sending only the debt would leave the fee's worth still owed (10 sent pays 9.9 at 1%).
+  const repaid = repaidAll ? vaultNeeded : vaultReceives;
   instructions.push(repayFromMarginInstruction({ authority: owner, asset: stock, maxAssets: repaid, repayAll: repaidAll }));
 
-  // A full repay also pulls the repay-leg fee out of the vault, so only what is guaranteed beyond that is safe to send.
+  // A full repay sends the debt plus its fee, so only what is guaranteed beyond that is safe to send.
   const leftover = repaidAll ? vaultReceives - vaultNeeded : vaultReceives - repaid;
   const withdraw: TransactionInstruction[] = [];
   if (leftover > 5n * 10n ** BigInt(Math.max(stock.decimals - 6, 0))) {

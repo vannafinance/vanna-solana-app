@@ -48,3 +48,12 @@ export async function inputTransferFee(connection: Connection, asset: AssetInfo,
   const schedule = readTransferFeeSchedule(info.data);
   return schedule === null ? 0n : transferFeeAt(schedule, BigInt(epochInfo.epoch), gross);
 }
+
+// What to send so that, after a Token-2022 transfer fee, at least `net` arrives: a loan goes down only by what reaches the
+// reserve, so repaying 10 of a 1% fee token takes about 10.1 sent. The fee is on the amount sent, so it is found in a few steps.
+export async function grossForNet(connection: Connection, asset: AssetInfo, net: bigint): Promise<bigint> {
+  if (!asset.token2022) return net;
+  let gross = net;
+  for (let step = 0; step < 3; step++) gross = net + (await inputTransferFee(connection, asset, gross)) + 1n;
+  return gross;
+}

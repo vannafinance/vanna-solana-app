@@ -5,7 +5,7 @@ import type { AssetInfo } from "./assets";
 import { repayFromMarginInstruction } from "./margin-instructions";
 import { NoPositionError } from "./perps-errors";
 import { sendInstructions, type SigningHooks } from "./send-transaction";
-import { inputTransferFee } from "./transfer-fee";
+import { grossForNet } from "./transfer-fee";
 
 const SETTLE_COMPUTE_UNITS = 200_000;
 
@@ -17,12 +17,13 @@ export async function buildSettle(connection: Connection, owner: PublicKey, stoc
   const owed = snapshot.borrowedBalances[stock.symbol] ?? 0n;
   const held = snapshot.collateralBalances[stock.symbol] ?? 0n;
   if (owed <= 0n || held <= 0n) throw new NoPositionError("short");
-  // A token that charges a transfer fee loses it on the way from the vault to the reserve, so the vault must cover both.
-  const fee = await inputTransferFee(connection, stock, owed);
-  const repayAll = held >= owed + fee + 1n;
-  const repaid = repayAll ? owed : held - (await inputTransferFee(connection, stock, held)) - 1n;
-  if (repaid <= 0n) throw new NoPositionError("short");
-  return [repayFromMarginInstruction({ authority: owner, asset: stock, maxAssets: repaid, repayAll })];
+  // A token that charges a transfer fee loses it on the way from the vault to the reserve, and the loan goes down only by
+  // what arrives, so the vault sends enough that what arrives covers the whole loan (10 sent pays only 9.9 at 1%).
+  const gross = await grossForNet(connection, stock, owed);
+  const repayAll = held >= gross;
+  const sent = repayAll ? gross : held;
+  if (sent <= 0n) throw new NoPositionError("short");
+  return [repayFromMarginInstruction({ authority: owner, asset: stock, maxAssets: sent, repayAll })];
 }
 
 export async function settleStock(connection: Connection, owner: PublicKey, stock: AssetInfo, hooks: SigningHooks): Promise<string> {
