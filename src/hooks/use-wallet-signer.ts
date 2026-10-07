@@ -14,7 +14,11 @@ import { type RunProgress, TransactionError } from "@/types/transaction";
 // A wallet's identity check fails now and then for reasons outside the app (a slow fetch of the site's assetlinks.json), and
 // each try is an independent chance, so a refusal before anything was signed is tried up to three more times.
 const WALLET_ATTEMPTS = 4;
-const RETRY_PAUSE_MS = 1500;
+// Long enough for a wallet to close the error screen it shows after refusing; opened sooner, the next request lands on that
+// closing screen and comes straight back as a cancel the user never made.
+const RETRY_PAUSE_MS = 3000;
+// A cancel this soon after the wallet was opened, right after a refusal, is that closing screen rather than the user.
+const BOUNCE_MS = 2000;
 
 type SigningContext = { connection: Connection; owner: PublicKey; hooks: SigningHooks };
 
@@ -85,18 +89,25 @@ export function useWalletSigner() {
         onSent: progress.sent,
         onProcessed: progress.processed,
       };
+      let refusal: unknown = null;
       for (let attempt = 1; ; attempt++) {
+        const startedAt = Date.now();
         try {
           await task({ connection: rpcConnection, owner: new PublicKey(owner), hooks });
           refreshAfterTransaction();
           return;
         } catch (error) {
-          if (attempt < WALLET_ATTEMPTS && !signed && isWalletRefusal(error)) {
-            await forgetStaleToken();
-            await new Promise((resolve) => setTimeout(resolve, RETRY_PAUSE_MS));
-            continue;
+          const bounced = refusal !== null && Date.now() - startedAt < BOUNCE_MS && toTransactionError(error).title.includes("ancel");
+          if (!signed && (isWalletRefusal(error) || bounced)) {
+            if (isWalletRefusal(error)) refusal = error;
+            if (attempt < WALLET_ATTEMPTS) {
+              await forgetStaleToken();
+              await new Promise((resolve) => setTimeout(resolve, RETRY_PAUSE_MS));
+              continue;
+            }
           }
-          throw toTransactionError(error);
+          // Out of tries after a refusal: say so, not "cancelled", which the user never did.
+          throw toTransactionError(bounced ? refusal : error);
         }
       }
     },
