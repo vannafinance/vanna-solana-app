@@ -51,7 +51,8 @@ export function toPositionView(position: FarmPosition): FarmPositionView {
     netValueUsd: collateralValueUsd + suppliedValueUsd - debtValueUsd,
     supplyApyBps: position.supplyApyBps,
     borrowApyBps: position.borrowApyBps,
-    netAprBps: netAprBps(position.supplyApyBps, position.borrowApyBps),
+    // As on the web app: the supply rate on what Kamino holds, less the borrow rate on the debt's share of it.
+    netAprBps: suppliedValueUsd > 0n ? position.supplyApyBps - Math.round((position.borrowApyBps * Number(debtValueUsd)) / Number(suppliedValueUsd)) : netAprBps(position.supplyApyBps, position.borrowApyBps),
     collateralPriceUsd: price,
     liquidationPriceUsd,
     liquidationAwayBps: price > 0n && liquidationPriceUsd < price ? Number(((price - liquidationPriceUsd) * BPS) / price) : 0,

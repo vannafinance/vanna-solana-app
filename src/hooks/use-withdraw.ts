@@ -15,7 +15,7 @@ import { useWalletSigner } from "./use-wallet-signer";
 export function useWithdraw(id: string) {
   const market = useEarnMarket(id);
   const found = market.status === "ready" ? market.data : undefined;
-  const input = useEarnAmount(found?.decimals ?? 0, found?.supplied.raw ?? 0n);
+  const input = useEarnAmount(found?.decimals ?? 0, found?.supplied.raw ?? 0n, found?.poolAvailable.raw);
   const quote = found ? quoteWithdraw(found, input.amount) : null;
   const signer = useWalletSigner();
   const wallet = useConnectedWallet();

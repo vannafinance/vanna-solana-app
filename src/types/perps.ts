@@ -15,7 +15,10 @@ export type PerpsMarket = {
   markPrice: bigint;
   tokenBorrowBps: number;
   usdcBorrowBps: number;
+  // What the stock's pool can still lend, which a short borrows from.
   liquidityUsd: bigint;
+  // What the USDC pool can still lend, which a long borrows from.
+  usdcLiquidityUsd: bigint;
   maxLeverage: number;
 };
 
@@ -30,7 +33,10 @@ export type PerpsPosition = {
   id: string;
   symbol: PerpsSymbol;
   side: Side;
+  // Rounded to 0.1x for display.
   leverage: number;
+  // Unrounded, for the liquidation estimate, as the web app computes it.
+  exactLeverage: number;
   openedOn: string;
   entryPrice: bigint;
   tokens: bigint;
@@ -73,6 +79,10 @@ export type PerpsAccount = {
 export type PerpsPortfolio = {
   account: PerpsAccount;
   positionsAvailable: boolean;
+  // Stocks the account holds or owes outside Farm, raw. A stock both held and owed shows as no position, so the order ticket
+  // reads these too, to refuse the opposite side of a position the list cannot show.
+  heldStocks?: readonly string[];
+  owedStocks?: readonly string[];
   historyAvailable: boolean;
   positions: PositionSummary[];
   openPnl: bigint;
@@ -87,9 +97,16 @@ export type OrderQuote = {
   liquidationPrice: bigint;
   fee: bigint;
   healthAfter: number;
+  // The new loan, in USD units.
+  borrow: bigint;
+  leverage: number;
 };
 
-export type OrderIssue = "empty" | "insufficient-margin" | "health-low" | null;
+// "opposite-open": the account already holds the other side of this market, which the web app also refuses until it is closed.
+// "pool-liquidity": the loan is more than the pool can lend right now, so the borrow would fail on chain.
+// "low-leverage": 1x is only where the slider starts; an order needs 2x or more (a 1x short is a plain sale, a 1x long a
+// plain buy, neither a leveraged position).
+export type OrderIssue = "opposite-open" | "low-leverage" | "empty" | "insufficient-margin" | "pool-liquidity" | "health-low" | null;
 
 export type CloseQuote = {
   fractionBps: number;
@@ -98,6 +115,9 @@ export type CloseQuote = {
   pnl: bigint;
   fee: bigint;
   toWallet: bigint;
+  // A long sells the stock and sends what is left to the wallet. A short only buys back the stock it owes, so its USDC
+  // stays in the margin account, as on the web app.
+  returnsTo: "wallet" | "margin";
   liquidationPrice: bigint;
 };
 

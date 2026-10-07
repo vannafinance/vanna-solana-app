@@ -37,7 +37,7 @@ export function ClosePositionForm({ position, quote, fractionsBps, onSelectFract
             { label: "Closing", value: formatUsd(quote.size), sub: formatTokenSize(quote.tokens, position.symbol) },
             { label: "Realized PnL", value: formatSignedUsd(quote.pnl), valueColor: quote.pnl >= 0n ? "positive" : "negative" },
             { label: "Trading fee", value: quote.fee > 0n ? `-${formatUsd(quote.fee)}` : formatUsd(0n) },
-            { label: "Back to your wallet", value: formatUsd(quote.toWallet) },
+            { label: quote.returnsTo === "wallet" ? "Back to your wallet" : "Stays in margin account", value: formatUsd(quote.toWallet) },
           ]}
         />
         {closingAll ? null : (

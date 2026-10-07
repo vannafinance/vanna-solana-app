@@ -15,14 +15,17 @@ type OrderSummaryProps = {
   quote: OrderQuote;
   issue: OrderIssue;
   liquidationHealth: number;
+  // At or below this the order still goes through, with a warning to lower the leverage.
+  cautionHealth: number;
 };
 
 // What the order opens, as two strips: the position itself, then what it costs and what it leaves the account at.
-export function OrderSummary({ market, side, quote, issue, liquidationHealth }: OrderSummaryProps) {
+export function OrderSummary({ market, side, quote, issue, liquidationHealth, cautionHealth }: OrderSummaryProps) {
   const borrowBps = side === "long" ? market.usdcBorrowBps : market.tokenBorrowBps;
   const borrowAsset = side === "long" ? "USDC" : market.symbol;
   const health = Number.isFinite(quote.healthAfter) ? quote.healthAfter.toFixed(2) : "∞";
   const risky = issue === "health-low";
+  const caution = !risky && Number.isFinite(quote.healthAfter) && quote.healthAfter <= cautionHealth;
 
   return (
     <Card style={{ gap: 12 }}>
@@ -48,6 +51,14 @@ export function OrderSummary({ market, side, quote, issue, liquidationHealth }: 
           <Icon name="info" size={16} color="negative" />
           <AppText variant="caption" color="negative" style={{ flex: 1 }}>
             {`Account health would drop to ${health}, close to liquidation at ${liquidationHealth.toFixed(2)}. Lower the leverage or the amount.`}
+          </AppText>
+        </View>
+      ) : null}
+      {caution ? (
+        <View accessibilityRole="alert" style={{ flexDirection: "row", gap: 8 }}>
+          <Icon name="info" size={16} color="warning" />
+          <AppText variant="caption" color="warning" style={{ flex: 1 }}>
+            {`Account health would be ${health}. Consider lowering the leverage.`}
           </AppText>
         </View>
       ) : null}

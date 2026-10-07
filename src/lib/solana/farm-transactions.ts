@@ -95,7 +95,7 @@ const kaminoTables = (connection: Connection) => fetchLookupTables(connection, [
 export async function deployFarm(connection: Connection, owner: PublicKey, request: FarmDeployRequest, hooks: SigningHooks, progress: FarmDeployProgress = freshDeployProgress()): Promise<string> {
   const [batches, tables] = await Promise.all([buildFarmDeploy(connection, owner, request, progress), kaminoTables(connection)]);
   const alreadyLanded = progress.landed;
-  return sendBatches(connection, owner, { computeUnits: DEPLOY_COMPUTE_UNITS, batches, retrySafe: false, allowForkTable: true, tables, onLanded: (count) => (progress.landed = alreadyLanded + count) }, hooks);
+  return sendBatches(connection, owner, { computeUnits: DEPLOY_COMPUTE_UNITS, batches, lightBatches: batches.map(() => true), retrySafe: false, allowForkTable: true, tables, onLanded: (count) => (progress.landed = alreadyLanded + count) }, hooks);
 }
 
 export type FarmExitRequest = {

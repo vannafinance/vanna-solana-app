@@ -14,6 +14,8 @@ export const MAX_LEVERAGE = 5;
 export const DEFAULT_MARKET: PerpsSymbol = "TSLAx";
 
 const STOCKS: readonly PerpsSymbol[] = ["TSLAx", "GOOGLx", "AAPLx", "ANTHROPIC", "OPENAI", "SKR"];
+// A dollar, in USD units, for the USDC pool when its oracle price is missing.
+const USDC_PRICE = 1_000_000n;
 const decimalsOf = new Map(assets.map((asset) => [asset.symbol, asset.decimals]));
 
 const toUsd = (tokens: number, symbol: AssetSymbol, price: bigint): bigint => {
@@ -45,6 +47,7 @@ export function buildMarkets(pools: Partial<Record<AssetSymbol, PoolStats>>, pri
         tokenBorrowBps: Math.round(pool.borrowApyPercent * 100),
         usdcBorrowBps: Math.round(usdc.borrowApyPercent * 100),
         liquidityUsd: toUsd(pool.totalSupply - pool.totalBorrowed, symbol, price),
+        usdcLiquidityUsd: toUsd(usdc.totalSupply - usdc.totalBorrowed, "USDC", prices.USDC ?? USDC_PRICE),
         maxLeverage: MAX_LEVERAGE,
       },
     ];

@@ -95,6 +95,12 @@ export async function buildMarginSwap(connection: Connection, { quote, owner, st
     }
   }
 
+  // Jupiter always adds the step that creates the swap's token accounts. One that already exists (any earlier swap into the
+  // same asset made it) is left out: that step and the program it calls cost about 40 bytes, enough to push a swap on an
+  // account holding many positions over the size limit and onto a lookup table that Solflare refuses.
+  const created = setup.length > 0 ? await connection.getMultipleAccountsInfo(setup.map((instruction) => instruction.keys[1].pubkey), "confirmed") : [];
+  const neededSetup = setup.filter((_, index) => created[index] === null);
+
   const swap = marginSwapInstruction({
     authority: owner,
     input,
@@ -114,7 +120,7 @@ export async function buildMarginSwap(connection: Connection, { quote, owner, st
   );
 
   return {
-    instructions: [ComputeBudgetProgram.setComputeUnitLimit({ units: MARGIN_SWAP_COMPUTE_UNITS }), ...setup, swap],
+    instructions: [ComputeBudgetProgram.setComputeUnitLimit({ units: MARGIN_SWAP_COMPUTE_UNITS }), ...neededSetup, swap],
     tables: tables.filter((table): table is AddressLookupTableAccount => table !== null),
   };
 }

@@ -1,7 +1,7 @@
-import { Image } from "expo-image";
 import { Pressable, View } from "react-native";
 import Animated, { Easing, useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
 
+import { VannaMark } from "@/components/ui/vanna-mark";
 import { useTheme } from "@/theme/use-theme";
 
 const SIZE = 52;
@@ -50,7 +50,7 @@ export function SwapFlipButton({ onPress }: SwapFlipButtonProps) {
         }}
       >
         <Animated.View style={spin}>
-          <Image source={require("../../../assets/images/vanna-mark.png")} accessibilityLabel="Vanna" style={{ width: 28, height: 28 }} contentFit="contain" />
+          <VannaMark size={28} tone="logo" />
         </Animated.View>
       </Pressable>
     </View>

@@ -54,6 +54,13 @@ test("an order is blocked when empty, over the wallet balance, or at or below he
   assert.equal(orderIssue(500n * USD, 1n * USD, risky), "health-low");
 });
 
+test("an order is blocked while the other side of the same market is open, as on the web app", () => {
+  const ok = quoteOrder({ market, margin: 0n, borrowed: 0n, side: "short", collateral: 100n * USD, leverage: 2 });
+  assert.equal(orderIssue(500n * USD, 100n * USD, ok, true), "opposite-open");
+  assert.equal(orderIssue(500n * USD, 0n, ok, true), "opposite-open");
+  assert.equal(orderIssue(500n * USD, 100n * USD, ok, false), null);
+});
+
 test("collateral is limited by the wallet: USDC for a long, the stock for a short", () => {
   const holdings = [
     { symbol: "USDC", raw: 2_000_000_000n, decimals: 6 },
@@ -342,6 +349,28 @@ test("a held position with no opening swap in history is reported unresolved, no
   assert.equal(unresolved.join(","), "TSLAx");
 });
 
+test("a 1x long, bought by a swap with nothing borrowed, is a position at 1x", () => {
+  const { positions } = derivePositions({
+    collateral: { TSLAx: 421_198_486n },
+    debt: {},
+    prices: { TSLAx: 356_930_000n },
+    swaps: [swap({ borrowed: null })],
+  });
+  assert.equal(positions.length, 1);
+  assert.equal(positions[0].side, "long");
+  assert.equal(positions[0].leverage, 1);
+});
+
+test("stock left over from a short's buy-back is not a 1x long", () => {
+  const { positions } = derivePositions({
+    collateral: { GOOGLx: 809n },
+    debt: {},
+    prices: { GOOGLx: 346_000_000n },
+    swaps: [swap({ output: "GOOGLx", amountIn: 35_000_000n, amountOut: 100_809n, borrowed: null })],
+  });
+  assert.equal(positions.length, 0);
+});
+
 test("collateral with no debt is not a position", () => {
   const { positions, unresolved } = derivePositions({ collateral: { USDC: 3_000_000_000n, TSLAx: 70_000_000n }, debt: {}, prices: { TSLAx: 356_930_000n }, swaps: [] });
   assert.equal(positions.length, 0);
@@ -364,6 +393,12 @@ test("closing returns the equity share to the wallet with no fee, and does not c
   const half = quoteClose(position, 5_000);
   assert.equal(half.toWallet, 251_690_000n);
   assert.equal(half.tokens, 2_105_992n);
+});
+
+test("a long's close goes to the wallet, a short's USDC stays in the margin account", () => {
+  const base = { tokens: 1n, markPrice: 1n, pnl: 0n, collateral: 10n };
+  assert.equal(quoteClose({ ...base, side: "long" }, 10_000).returnsTo, "wallet");
+  assert.equal(quoteClose({ ...base, side: "short" }, 10_000).returnsTo, "margin");
 });
 
 const holder = Keypair.generate().publicKey;
@@ -715,4 +750,26 @@ test("a failed margin transaction is listed and marked, with what it logged or w
   assert.equal(listed[1].chips[0].type, "deposit");
   // Left out unless asked for: everything that counts money reads only what went through.
   assert.equal(marginActivityFrom([attempted, bare], holderMargin.toBase58()).length, 0);
+});
+
+test("an order whose loan is more than the pool can lend is refused before the wallet opens", () => {
+  const { quoteOrder: quote, orderIssue: issue } = load("src/lib/perps/order-quote.ts");
+  const m = { symbol: "TSLAx", markPrice: 400_000_000n, usdcBorrowBps: 500, tokenBorrowBps: 300 };
+  const q = quote({ market: m, margin: 0n, borrowed: 0n, side: "long", collateral: 100_000_000n, leverage: 3 }); // borrows $200
+  assert.equal(q.borrow, 200_000_000n);
+  assert.equal(issue(1_000_000_000n, 100_000_000n, q, false, 150_000_000n), "pool-liquidity");
+  assert.equal(issue(1_000_000_000n, 100_000_000n, q, false, 500_000_000n), null);
+  const oneX = quote({ market: m, margin: 0n, borrowed: 0n, side: "long", collateral: 100_000_000n, leverage: 1 });
+  assert.equal(issue(1_000_000_000n, 100_000_000n, oneX, false, 0n), "low-leverage");
+});
+
+test("1x is only where the slider starts: an order needs 2x or more", () => {
+  const m = { symbol: "TSLAx", markPrice: 400_000_000n, usdcBorrowBps: 500, tokenBorrowBps: 300 };
+  for (const side of ["long", "short"]) {
+    const oneX = quoteOrder({ market: m, margin: 0n, borrowed: 0n, side, collateral: 100_000_000n, leverage: 1 });
+    assert.equal(orderIssue(1_000_000_000n, 100_000_000n, oneX), "low-leverage");
+    assert.equal(orderIssue(1_000_000_000n, 0n, oneX), "low-leverage");
+    const twoX = quoteOrder({ market: m, margin: 0n, borrowed: 0n, side, collateral: 100_000_000n, leverage: 2 });
+    assert.equal(orderIssue(1_000_000_000n, 100_000_000n, twoX), null);
+  }
 });

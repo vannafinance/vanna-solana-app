@@ -6,6 +6,7 @@ import { useCallback, useEffect, useRef } from "react";
 import { DEV_WALLET_ADDRESS } from "@/lib/solana/config";
 import { signWithFreshBlockhash } from "@/lib/solana/fresh-blockhash";
 import { rpcConnection } from "@/lib/solana/rpc";
+import { assertSignedBy } from "@/lib/solana/signed-by";
 import type { SigningHooks } from "@/lib/solana/send-transaction";
 import { isWalletRefusal, toTransactionError, WALLET_MISMATCH } from "@/lib/solana/transaction-errors";
 import { type RunProgress, TransactionError } from "@/types/transaction";
@@ -44,8 +45,18 @@ export function useWalletSigner() {
     await authorizationStore.persist({ accounts: all ?? [selected], authToken: undefined as unknown as string, selectedAccount: selected });
   }, []);
 
-  const sign = useCallback((transaction: VersionedTransaction) => signWithFreshBlockhash(rpcConnection, [transaction], () => latest.current(transaction)), []);
-  const signAll = useCallback((transactions: VersionedTransaction[]) => signWithFreshBlockhash(rpcConnection, transactions, () => latest.current(transactions)), []);
+  // Android can open a different wallet app, or the wallet can be on another account, than the one connected; what it
+  // signs is checked before anything is sent.
+  const ownerRef = useRef(owner);
+  useEffect(() => {
+    ownerRef.current = owner;
+  }, [owner]);
+  const checked = useCallback(<T extends VersionedTransaction | VersionedTransaction[]>(signed: T): T => {
+    if (ownerRef.current !== null) assertSignedBy(Array.isArray(signed) ? signed : [signed], ownerRef.current);
+    return signed;
+  }, []);
+  const sign = useCallback((transaction: VersionedTransaction) => signWithFreshBlockhash(rpcConnection, [transaction], () => latest.current(transaction)).then(checked), [checked]);
+  const signAll = useCallback((transactions: VersionedTransaction[]) => signWithFreshBlockhash(rpcConnection, transactions, () => latest.current(transactions)).then(checked), [checked]);
 
   // After a confirmed transaction every live figure is stale; refetch them now instead of waiting for the next poll.
   const refreshAfterTransaction = useCallback(() => {

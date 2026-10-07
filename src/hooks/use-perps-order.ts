@@ -30,7 +30,8 @@ import { useWalletHoldings } from "./use-wallet-holdings";
 import { useWalletSigner } from "./use-wallet-signer";
 
 const DECIMALS = 6;
-const DEFAULT_LEVERAGE = 3;
+// The slider starts at 1x and an order needs 2x or more, as the team decided for Farm too.
+const DEFAULT_LEVERAGE = 1;
 
 export type OrderTicket = {
   market: PerpsMarket;
@@ -79,13 +80,19 @@ export function usePerpsOrder(symbol: string, initialSide: Side) {
     if (market.status !== "ready") return market;
     if (portfolio.status !== "ready") return portfolio.status === "empty" ? { status: "empty" } : portfolio;
     if (funds === null) return holdings.isError ? { status: "error", error: holdings.error, retry } : { status: "loading" };
-    const { account } = portfolio.data;
+    const { account, positions } = portfolio.data;
+    // From the positions shown and from the balances: a short owes the stock, a long holds it, and a stock both held and owed
+    // shows as no position at all, so the list alone would let the other side be opened on top.
+    const symbol = market.data.symbol;
+    const oppositeOpen =
+      positions.some((position) => position.symbol === symbol && position.side !== side) ||
+      (side === "long" ? (portfolio.data.owedStocks ?? []).includes(symbol) : (portfolio.data.heldStocks ?? []).includes(symbol));
     const quote = quoteOrder({ market: market.data, margin: account.margin, borrowed: account.borrowed, side, collateral, leverage });
     // Collateral is deposited from the wallet in the same transaction, as on the web app, so what can be committed is
     // the wallet's balance of the collateral asset, not the margin account's free balance.
     return {
       status: "ready",
-      data: { market: market.data, account: { ...account, available: funds.usd }, collateral, quote, issue: orderIssue(funds.usd, collateral, quote) },
+      data: { market: market.data, account: { ...account, available: funds.usd }, collateral, quote, issue: orderIssue(funds.usd, collateral, quote, oppositeOpen, side === "long" ? market.data.usdcLiquidityUsd : market.data.liquidityUsd) },
     };
   })();
 
@@ -162,7 +169,10 @@ export function usePerpsOrder(symbol: string, initialSide: Side) {
   const closeFlow = () => {
     // An order that went through is done; leaving its amount in the form invites a second, identical order with one tap. A
     // cancelled or failed order keeps the amount so it can be tried again.
-    if (flow.done) setAmountText("");
+    if (flow.done) {
+      setAmountText("");
+      setLeverage(DEFAULT_LEVERAGE);
+    }
     landed.current = freshOpenProgress();
     flow.close();
     setFirstTrade(false);

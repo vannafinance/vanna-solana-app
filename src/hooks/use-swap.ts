@@ -2,6 +2,7 @@ import { useCallback, useState } from "react";
 
 import { formatPriceImpact, formatSlippage, formatSwapAmount } from "@/format/format-swap-amount";
 import { formatUsd, parseUnits } from "@/format/format-amount";
+import { spendableBalance } from "@/lib/earn/spendable-balance";
 import { fractionOfBalance } from "@/lib/swap/fraction-of-balance";
 import { defaultSwapSettings, swapRoutes } from "@/lib/swap/routes";
 import { AUTO_SLIPPAGE_BPS, effectiveSlippageBps } from "@/lib/swap/slippage";
@@ -53,7 +54,7 @@ export function useSwap(onViewHistory: () => void) {
   const quote = live.quote;
   const issue: SwapIssue | null = (() => {
     if (amountIn === null || amountIn === 0n) return "no-amount";
-    if (from && amountIn > from.balance) return "insufficient-balance";
+    if (from && amountIn > spendableBalance(from.symbol, from.balance)) return "insufficient-balance";
     if (live.noRoute) return "no-route";
     if (live.failed) return "quote-failed";
     return quote === null || live.loading ? "quoting" : null;
@@ -127,7 +128,8 @@ export function useSwap(onViewHistory: () => void) {
     setAmountText(quote && to ? fractionOfBalance(quote.amountOut, to.decimals, 1) : "");
   }, [fromSymbol, toSymbol, quote, to]);
 
-  const fill = useCallback((fraction: number) => from && setAmountText(fractionOfBalance(from.balance, from.decimals, fraction)), [from]);
+  // SOL keeps the network fee reserve back, as on the web app and in Earn, so Max never leaves the wallet unable to pay.
+  const fill = useCallback((fraction: number) => from && setAmountText(fractionOfBalance(spendableBalance(from.symbol, from.balance), from.decimals, fraction)), [from]);
 
   const selectRoute = useCallback((id: SwapRouteId) => {
     if (swapRoutes.some((route) => route.id === id && route.available)) setRouteId(id);

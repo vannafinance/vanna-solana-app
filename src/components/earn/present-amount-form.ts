@@ -29,7 +29,7 @@ export function presentAmountForm(mode: AmountFormMode, market: EarnMarket, quot
     title: `${market.symbol} vault`,
     label: copy.label,
     caption: `${copy.caption} ${formatFullAmount(limit, market.symbol)}`,
-    over: problem === "insufficient",
+    over: problem === "insufficient" || problem === "pool-liquidity",
     rows: [
       { label: "Supply APY", value: formatPercent(market.supplyApyBps) },
       { label: copy.sharesRow, value: `${formatToken({ raw: quote.shares, decimals: market.decimals }, 2)} ${market.shareSymbol}` },
@@ -42,6 +42,8 @@ export function presentAmountForm(mode: AmountFormMode, market: EarnMarket, quot
         ? { label: "Enter an amount", disabled: true }
         : problem === "insufficient"
           ? { label: copy.over(market.symbol), disabled: true }
+          : problem === "pool-liquidity"
+            ? { label: `Pool has ${formatFullAmount(market.poolAvailable, market.symbol)} free right now`, disabled: true }
           : { label: `${copy.idle} ${market.symbol}`, disabled: false },
   };
 }

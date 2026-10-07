@@ -27,7 +27,7 @@ export type DerivedPositions = {
 };
 
 const decimalsOf = (symbol: AssetSymbol) => assets.find((asset) => asset.symbol === symbol)?.decimals ?? 0;
-const dustOf = (symbol: AssetSymbol) => 10n ** BigInt(Math.max(decimalsOf(symbol) - 6, 0));
+export const dustOf = (symbol: AssetSymbol) => 10n ** BigInt(Math.max(decimalsOf(symbol) - 6, 0));
 const scaleOf = (symbol: AssetSymbol) => 10n ** BigInt(decimalsOf(symbol));
 
 // A long is stock collateral with USDC debt and no stock debt; a short is stock debt with USDC collateral and no stock
@@ -55,6 +55,12 @@ function opening(swap: MarginSwapRecord, symbol: PerpsSymbol, side: Side): { usd
   if (side === "long" && swap.input === "USDC" && swap.output === symbol) return { usdc: swap.amountIn, tokens: swap.amountOut };
   if (side === "short" && swap.input === symbol && swap.output === "USDC") return { usdc: swap.amountOut, tokens: swap.amountIn };
   return null;
+}
+
+// Whether the most recent swap into this stock was paid without a loan, as a 1x long's is.
+function openedUnborrowed(swaps: readonly MarginSwapRecord[], symbol: PerpsSymbol): boolean {
+  const latest = swaps.filter((swap) => opening(swap, symbol, "long") !== null).reduce<MarginSwapRecord | null>((last, swap) => (last === null || swap.blockTime >= last.blockTime ? swap : last), null);
+  return latest !== null && (latest.borrowed === null || latest.borrowed.amount === 0n);
 }
 
 // Volume weighted average over every swap in the opening direction, so a position that was opened, partly closed and
@@ -105,10 +111,14 @@ export function derivePositions({ collateral, debt, prices, swaps }: Input): Der
     let equity: bigint;
     let notional: bigint;
     if (side === "long") {
-      if (usdcDebt <= USD_DUST) continue;
+      // With no USDC owed the stock is only a long if its latest opening swap borrowed nothing: a 1x long. Stock that was
+      // just deposited (a 1x Farm deploy), or left behind a Farm position, is not a position, as on the web app.
+      if (usdcDebt <= USD_DUST && !openedUnborrowed(swaps, symbol)) continue;
       tokensRaw = collateral[symbol] ?? 0n;
       const size = (tokensRaw * price) / scale;
-      equity = size - share(usdcDebt);
+      // The few cents of stock a short's close buys back beyond its debt are not a 1x long.
+      if (usdcDebt <= USD_DUST && size <= USD_DUST) continue;
+      equity = usdcDebt <= USD_DUST ? size : size - share(usdcDebt);
       notional = size;
     } else {
       if (usdcCollateral <= USD_DUST) continue;
@@ -123,12 +133,14 @@ export function derivePositions({ collateral, debt, prices, swaps }: Input): Der
       unresolved.push(symbol);
       continue;
     }
-    const leverage = equity > 0n ? Math.max(1, Math.round((Number(notional) / Number(equity)) * 10) / 10) : 1;
+    const exactLeverage = equity > 0n ? Number(notional) / Number(equity) : 1;
+    const leverage = Math.max(1, Math.round(exactLeverage * 10) / 10);
     positions.push({
       id: `${symbol}-${side}`,
       symbol,
       side,
       leverage,
+      exactLeverage,
       openedOn: formatShortDate(entry.openedAt),
       entryPrice: entry.price,
       tokens: (tokensRaw * UNIT) / scale,

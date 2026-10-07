@@ -17,6 +17,8 @@ const decimalsOf = new Map(assets.map((asset) => [asset.symbol, asset.decimals])
 
 const toRaw = (tokens: number, decimals: number): bigint => parseUnits(Math.max(tokens, 0).toFixed(decimals), decimals) ?? 0n;
 
+const max0 = (value: bigint): bigint => (value > 0n ? value : 0n);
+
 const toUsd = (raw: bigint, decimals: number, price: bigint): bigint => (raw * price) / 10n ** BigInt(decimals);
 
 // A vault is listed only when its pool and price are both known; one missing value never shows as zero.
@@ -64,5 +66,17 @@ export function buildMarket(id: string, pools: Pools, prices: OraclePrices, wall
     shareExchangeRate: pool.exchangeRate / POOL_RATE_TO_UI_RATE,
     walletBalance: { raw: spendableBalance(asset.symbol, walletRaw), decimals: asset.decimals },
     supplied: { raw: deposit?.supplied ?? 0n, decimals: asset.decimals },
+    poolAvailable: { raw: max0(toRaw(pool.totalSupply, asset.decimals) - toRaw(pool.totalBorrowed, asset.decimals)), decimals: asset.decimals },
   };
+}
+
+// Pools the wallet has supplied come first, largest first, so a new supply is not buried under higher-APY pools it has left;
+// the rest follow by supply APY.
+export function orderVaults(vaults: readonly VaultSummary[]): VaultSummary[] {
+  return [...vaults].sort((a, b) => {
+    const mine = (b.yourSupply ? 1 : 0) - (a.yourSupply ? 1 : 0);
+    if (mine !== 0) return mine;
+    if (a.yourSupply && b.yourSupply && a.yourSupply.usd !== b.yourSupply.usd) return a.yourSupply.usd > b.yourSupply.usd ? -1 : 1;
+    return b.supplyApyBps - a.supplyApyBps;
+  });
 }
