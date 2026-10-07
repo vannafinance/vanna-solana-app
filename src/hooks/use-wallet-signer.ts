@@ -11,7 +11,9 @@ import type { SigningHooks } from "@/lib/solana/send-transaction";
 import { isWalletRefusal, toTransactionError, WALLET_MISMATCH } from "@/lib/solana/transaction-errors";
 import { type RunProgress, TransactionError } from "@/types/transaction";
 
-const WALLET_ATTEMPTS = 2;
+// A wallet's identity check fails now and then for reasons outside the app (a slow fetch of the site's assetlinks.json), and
+// each try is an independent chance, so a refusal before anything was signed is tried up to three more times.
+const WALLET_ATTEMPTS = 4;
 const RETRY_PAUSE_MS = 1500;
 
 type SigningContext = { connection: Connection; owner: PublicKey; hooks: SigningHooks };

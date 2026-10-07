@@ -441,6 +441,7 @@ const { isWalletRefusal } = load("src/lib/solana/transaction-errors.ts");
 
 test("only a wallet that refused to authorize the app counts as a refusal worth trying again", () => {
   assert.equal(isWalletRefusal(new Error("SolanaMobileWalletAdapterProtocolError -1/authorization request failed -1")), true);
+  assert.equal(isWalletRefusal(new Error("SolanaMobileWalletAdapterProtocolError -1/auth_token not valid for signing -1")), true);
   assert.equal(isWalletRefusal(new Error("CancellationException: user declined")), false);
   assert.equal(isWalletRefusal(new TransactionFailedError('{"InstructionError":[0,{"Custom":6018}]}')), false);
 });
