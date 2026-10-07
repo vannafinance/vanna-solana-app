@@ -2,6 +2,7 @@ import { type AddressLookupTableAccount, type Connection, type PublicKey, SendTr
 
 import { lastValidHeightOf } from "./fresh-blockhash";
 import { freshenForkOracles } from "./fork-oracles";
+import { alignForkWithMainnet } from "./fork-state";
 import { healStaleDexPools } from "./heal-pools";
 
 const POLL_MS = 700;
@@ -142,6 +143,8 @@ export async function simulateSignAndSend(connection: Connection, transaction: V
   // A pool the fork cloned earlier can fail a fresh quote in several ways, so any failed simulation tries the re-clone
   // once; it only does anything when a stale-prone pool is part of the transaction.
   if (simulation.value.err && (await healStaleDexPools(connection, transaction)) > 0) {
+    // The re-copied pools bring their tokens' mainnet mints back, so the fork is brought in line again before trying.
+    await alignForkWithMainnet(connection);
     simulation = await simulate(connection, transaction);
   }
   if (simulation.value.err) throw new TransactionFailedError(`${JSON.stringify(simulation.value.err)} ${simulation.value.logs?.join(" ") ?? ""}`);
@@ -159,7 +162,7 @@ export async function sendInstructions(
   hooks: SigningHooks,
   tables: AddressLookupTableAccount[] = [],
 ): Promise<string> {
-  await freshenForkOracles(connection);
+  await Promise.all([freshenForkOracles(connection), alignForkWithMainnet(connection)]);
   const latest = await connection.getLatestBlockhash("confirmed");
   const message = new TransactionMessage({ payerKey: payer, recentBlockhash: latest.blockhash, instructions }).compileToV0Message(tables);
   return simulateSignAndSend(connection, new VersionedTransaction(message), latest.lastValidBlockHeight, hooks);

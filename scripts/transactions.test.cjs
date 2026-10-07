@@ -441,6 +441,7 @@ const { isWalletRefusal } = load("src/lib/solana/transaction-errors.ts");
 
 test("only a wallet that refused to authorize the app counts as a refusal worth trying again", () => {
   assert.equal(isWalletRefusal(new Error("SolanaMobileWalletAdapterProtocolError -1/authorization request failed -1")), true);
+  assert.equal(isWalletRefusal(new Error("SolanaMobileWalletAdapterProtocolError -1/auth_token not valid for signing -1")), true);
   assert.equal(isWalletRefusal(new Error("CancellationException: user declined")), false);
   assert.equal(isWalletRefusal(new TransactionFailedError('{"InstructionError":[0,{"Custom":6018}]}')), false);
 });
@@ -536,4 +537,93 @@ test("a transaction signed by a wallet on another account is stopped and explain
   signed.sign([owner]);
   assert.doesNotThrow(() => assertSignedBy([signed], owner.publicKey.toBase58()));
   assert.equal(explain(new Error("Transaction signature verification failure")).title, "Signed by a different wallet");
+});
+
+const { retryingFetch, isReadOnlyRpcBody } = load("src/lib/solana/rpc-retry.ts");
+const rpcBody = (method) => JSON.stringify({ jsonrpc: "2.0", id: 1, method, params: [] });
+const fakeFetch = (replies) => {
+  const calls = [];
+  const fn = async (input, init) => {
+    calls.push(JSON.parse(init.body).method);
+    const next = replies.shift();
+    if (next instanceof Error) throw next;
+    return new Response(JSON.stringify(next.body), { status: next.status ?? 200 });
+  };
+  return { fn, calls };
+};
+
+test("rpc retry: only plain reads count as safe to repeat", () => {
+  assert.equal(isReadOnlyRpcBody(rpcBody("getMultipleAccounts")), true);
+  assert.equal(isReadOnlyRpcBody(rpcBody("sendTransaction")), false);
+  assert.equal(isReadOnlyRpcBody(rpcBody("simulateTransaction")), false);
+  assert.equal(isReadOnlyRpcBody(JSON.stringify([{ method: "getSlot" }, { method: "sendTransaction" }])), false);
+  assert.equal(isReadOnlyRpcBody(undefined), false);
+  assert.equal(isReadOnlyRpcBody("not json"), false);
+});
+
+test("rpc retry: a failed read is tried once more and the second answer is used", async () => {
+  const { fn, calls } = fakeFetch([{ body: { jsonrpc: "2.0", id: 1, error: { code: -32603, message: "failed to get info for accounts" } } }, { body: { jsonrpc: "2.0", id: 1, result: { value: [] } } }]);
+  const response = await retryingFetch(fn, 0)("https://rpc.test", { method: "POST", body: rpcBody("getMultipleAccounts") });
+  assert.equal(calls.length, 2);
+  assert.ok("result" in (await response.json()));
+});
+
+test("rpc retry: a busy server and a dropped connection are retried too", async () => {
+  const busy = fakeFetch([{ status: 503, body: {} }, { body: { result: 1 } }]);
+  await retryingFetch(busy.fn, 0)("https://rpc.test", { method: "POST", body: rpcBody("getSlot") });
+  assert.equal(busy.calls.length, 2);
+  const dropped = fakeFetch([new Error("network"), { body: { result: 1 } }]);
+  const response = await retryingFetch(dropped.fn, 0)("https://rpc.test", { method: "POST", body: rpcBody("getSlot") });
+  assert.equal(dropped.calls.length, 2);
+  assert.equal((await response.json()).result, 1);
+});
+
+test("rpc retry: a good read goes once, a send is never repeated even when it fails", async () => {
+  const good = fakeFetch([{ body: { result: 7 } }]);
+  assert.equal((await (await retryingFetch(good.fn, 0)("https://rpc.test", { method: "POST", body: rpcBody("getSlot") })).json()).result, 7);
+  assert.equal(good.calls.length, 1);
+  const send = fakeFetch([{ body: { error: { code: -32002, message: "failed" } } }, { body: { result: "sig" } }]);
+  const response = await retryingFetch(send.fn, 0)("https://rpc.test", { method: "POST", body: rpcBody("sendTransaction") });
+  assert.equal(send.calls.length, 1);
+  assert.ok("error" in (await response.json()));
+});
+
+const { activatedTable, currentTransferFee } = load("src/lib/solana/fork-state.ts");
+
+test("fork alignment: a table extended in the fork's future becomes fully active, an active one is left alone", () => {
+  const table = new Uint8Array(56 + 32 * 3);
+  const view = new DataView(table.buffer);
+  view.setBigUint64(12, 500n, true);
+  table[20] = 2;
+  const next = activatedTable(table, 400);
+  assert.equal(new DataView(next.buffer).getBigUint64(12, true), 0n);
+  assert.equal(next[20], 0);
+  assert.equal(activatedTable(table, 501), undefined);
+  assert.equal(activatedTable(next, 400), undefined);
+});
+
+test("fork alignment: a transfer fee scheduled for a later epoch is applied now, a current one is left alone", () => {
+  const fee = (epoch, bps) => {
+    const bytes = new Uint8Array(18);
+    const view = new DataView(bytes.buffer);
+    view.setBigUint64(0, BigInt(epoch), true);
+    view.setBigUint64(8, 2n ** 64n - 1n, true);
+    view.setUint16(16, bps, true);
+    return bytes;
+  };
+  const mint = new Uint8Array(166 + 4 + 108 + 4 + 8);
+  const view = new DataView(mint.buffer);
+  view.setUint16(166, 1, true);
+  view.setUint16(168, 108, true);
+  mint.set(fee(1048, 500), 170 + 72);
+  mint.set(fee(1050, 100), 170 + 90);
+  view.setUint16(278, 25, true);
+  view.setUint16(280, 4, true);
+  const next = currentTransferFee(mint, 1049);
+  assert.equal(new DataView(next.buffer).getUint16(170 + 72 + 16, true), 100);
+  assert.equal(new DataView(next.buffer).getBigUint64(170 + 72, true), 1050n);
+  assert.deepEqual([...next.subarray(278)], [...mint.subarray(278)]);
+  assert.equal(currentTransferFee(mint, 1050), undefined);
+  assert.equal(currentTransferFee(next, 1049), undefined);
+  assert.equal(currentTransferFee(new Uint8Array(82), 1049), undefined);
 });

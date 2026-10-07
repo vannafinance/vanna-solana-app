@@ -17,7 +17,10 @@ const NO_FEE = /AccountNotFound|InsufficientFundsFor(Fee|Rent)|insufficient (lam
 const PRICE_MOVED = /0x1771|6001|SlippageToleranceExceeded|0xbbd|3005|AccountNotEnoughKeys|bin_array/i;
 const BLOCKHASH_STALE = /blockhash not found/i;
 const TOO_LARGE = /too large to send in one transaction|encoding overruns/i;
-const CONNECTION_REFUSED = /authorization request failed/i;
+// Backpack checks the app's identity again before each signature by fetching the website's assetlinks.json and gives up after
+// about a second; about one fetch in four from India takes longer (the site is served from the US), and the signature is then
+// refused with "auth_token not valid for signing" before the user is shown anything.
+const CONNECTION_REFUSED = /authorization request failed|auth_token not valid/i;
 const WALLET_UNREACHABLE = /ConnectionFailedException|unable to connect to websocket|ERROR_SESSION_TIMEOUT|ERROR_WALLET_NOT_FOUND/i;
 // The wallet connection's own timer ran out while the wallet still held the request. It has nothing to do with Solana, but its
 // wording ("timed out") looks like a network failure.

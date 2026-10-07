@@ -2,7 +2,7 @@ import { type AddressLookupTableAccount, type Connection, PublicKey, type Transa
 
 import { type AssetInfo, assets } from "./assets";
 import { fetchRawJupiterQuote, NoRouteError, type RawJupiterQuote } from "./jupiter-quote";
-import { KAMINO_EXTRA_LOOKUP_TABLES, KAMINO_LOOKUP_TABLE } from "./kamino";
+import { KAMINO_EXTRA_LOOKUP_TABLES, KAMINO_LOOKUP_TABLE, VANNA_LOOKUP_TABLE } from "./kamino";
 import { fetchLookupTables } from "./lookup-tables";
 import { borrowInstruction, depositCollateralInstruction, openDebtPositionInstruction } from "./margin-instructions";
 import { buildMarginSwap, MARGIN_SWAP_COMPUTE_UNITS } from "./margin-swap";
@@ -116,7 +116,7 @@ export async function buildOpenPosition(connection: Connection, owner: PublicKey
   const [depositBorrow, { response }, kamino] = await Promise.all([
     depositAndBorrow(connection, owner, state, base, collateral, borrow),
     fetchPerpsQuote(base, target, sizes.swapAmount),
-    fetchLookupTables(connection, [KAMINO_LOOKUP_TABLE, ...KAMINO_EXTRA_LOOKUP_TABLES]),
+    fetchLookupTables(connection, [VANNA_LOOKUP_TABLE, KAMINO_LOOKUP_TABLE, ...KAMINO_EXTRA_LOOKUP_TABLES]),
   ]);
   const { vaultAmount } = sizes;
   const swapFor = async (quote: unknown) => {

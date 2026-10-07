@@ -62,5 +62,8 @@ export async function healStaleDexPools(connection: Connection, transaction: Ver
 
   const stale = [...new Set([...pools, ...reserves.map((key) => key.toBase58()), ...staleTables])];
   await Promise.all(stale.map(resetAccount));
+  // The fork copies the reset accounts from mainnet again when a transaction next runs, and their tokens' mints with them,
+  // which undoes what alignForkWithMainnet set. One run now does that copying, so the alignment after it holds.
+  if (stale.length > 0) await connection.simulateTransaction(transaction, { sigVerify: false, replaceRecentBlockhash: true }).catch(() => undefined);
   return stale.length;
 }
