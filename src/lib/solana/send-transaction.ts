@@ -2,6 +2,7 @@ import { type AddressLookupTableAccount, type Connection, type PublicKey, SendTr
 
 import { lastValidHeightOf } from "./fresh-blockhash";
 import { freshenForkOracles } from "./fork-oracles";
+import { alignForkWithMainnet } from "./fork-state";
 import { healStaleDexPools } from "./heal-pools";
 
 const POLL_MS = 700;
@@ -159,7 +160,7 @@ export async function sendInstructions(
   hooks: SigningHooks,
   tables: AddressLookupTableAccount[] = [],
 ): Promise<string> {
-  await freshenForkOracles(connection);
+  await Promise.all([freshenForkOracles(connection), alignForkWithMainnet(connection)]);
   const latest = await connection.getLatestBlockhash("confirmed");
   const message = new TransactionMessage({ payerKey: payer, recentBlockhash: latest.blockhash, instructions }).compileToV0Message(tables);
   return simulateSignAndSend(connection, new VersionedTransaction(message), latest.lastValidBlockHeight, hooks);
