@@ -11,6 +11,8 @@ import type { SigningHooks } from "@/lib/solana/send-transaction";
 import { isWalletRefusal, toTransactionError, WALLET_MISMATCH } from "@/lib/solana/transaction-errors";
 import { type RunProgress, TransactionError } from "@/types/transaction";
 
+import { waitForForeground } from "./wait-for-foreground";
+
 // A wallet's identity check fails now and then for reasons outside the app (a slow fetch of the site's assetlinks.json), and
 // each try is an independent chance, so a refusal before anything was signed is tried up to three more times.
 const WALLET_ATTEMPTS = 4;
@@ -102,7 +104,7 @@ export function useWalletSigner() {
             if (isWalletRefusal(error)) refusal = error;
             if (attempt < WALLET_ATTEMPTS) {
               await forgetStaleToken();
-              await new Promise((resolve) => setTimeout(resolve, RETRY_PAUSE_MS));
+              await waitForForeground(RETRY_PAUSE_MS);
               continue;
             }
           }
