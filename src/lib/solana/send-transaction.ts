@@ -143,6 +143,8 @@ export async function simulateSignAndSend(connection: Connection, transaction: V
   // A pool the fork cloned earlier can fail a fresh quote in several ways, so any failed simulation tries the re-clone
   // once; it only does anything when a stale-prone pool is part of the transaction.
   if (simulation.value.err && (await healStaleDexPools(connection, transaction)) > 0) {
+    // The re-copied pools bring their tokens' mainnet mints back, so the fork is brought in line again before trying.
+    await alignForkWithMainnet(connection);
     simulation = await simulate(connection, transaction);
   }
   if (simulation.value.err) throw new TransactionFailedError(`${JSON.stringify(simulation.value.err)} ${simulation.value.logs?.join(" ") ?? ""}`);

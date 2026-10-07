@@ -124,7 +124,9 @@ export async function sendBatches(connection: Connection, payer: PublicKey, requ
   // Only the first can be checked now; the others read what the first leaves behind. So every pool the order swaps
   // through is re-cloned up front, as a single transaction does after a failed simulation, every stale price rewritten and
   // the fork brought in line with mainnet where its clock lags.
-  await Promise.all([freshenForkOracles(connection), alignForkWithMainnet(connection), ...unsigned.map((transaction) => healStaleDexPools(connection, transaction))]);
+  // The pools first: re-copying them brings their tokens' mainnet mints back, which the alignment then corrects.
+  await Promise.all(unsigned.map((transaction) => healStaleDexPools(connection, transaction)));
+  await Promise.all([freshenForkOracles(connection), alignForkWithMainnet(connection)]);
   const simulation = await connection.simulateTransaction(unsigned[0], { sigVerify: false, commitment: "confirmed" });
   if (simulation.value.err) throw new TransactionFailedError(`${JSON.stringify(simulation.value.err)} ${simulation.value.logs?.join(" ") ?? ""}`);
 
