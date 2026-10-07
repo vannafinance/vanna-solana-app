@@ -28,14 +28,16 @@ export function Pill({ label, tone = "purple", shape = "pill" }: PillProps) {
     <View
       style={{
         alignSelf: "flex-start",
-        height: tag ? 20 : 22,
+        // A minimum, not a fixed height: when the label is taller (a larger font setting) the pill grows around it.
+        minHeight: tag ? 22 : 24,
+        paddingVertical: 2,
         paddingHorizontal: 8,
         borderRadius: tag ? radius.tag : 11,
         backgroundColor: palette.bg,
         justifyContent: "center",
       }}
     >
-      <AppText variant="caption" strong style={{ color: palette.fg, lineHeight: tag ? 20 : 16 }}>
+      <AppText variant="caption" strong numberOfLines={1} style={{ color: palette.fg }}>
         {label}
       </AppText>
     </View>

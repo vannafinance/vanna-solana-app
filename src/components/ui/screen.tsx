@@ -115,7 +115,11 @@ export function Screen({ header, footer, gap, paddingTop, children }: ScreenProp
         <PageMotionContext.Provider value={motion}>{header}</PageMotionContext.Provider>
         <Animated.View style={[{ padding: spacing.lg, paddingTop: paddingTop ?? spacing.lg, gap: gap ?? spacing.lg }, contentStyle, slideIn]}>{children}</Animated.View>
       </ScrollView>
-      {space === null ? null : (
+      {space === null ? (
+        // A page without a coloured header has plain content that scrolls up under the status bar; this keeps the clock and the icons
+        // on a clean background instead of over the page's own text.
+        <View pointerEvents="none" style={{ position: "absolute", top: 0, left: 0, right: 0, height: insets.top, backgroundColor: colors.background }} />
+      ) : (
         // The gradient header scrolls away but the status bar keeps its light icons, so once content slides under it, it is
         // backed by the header's own colour.
         <Animated.View pointerEvents="none" style={[{ position: "absolute", top: 0, left: 0, right: 0, height: insets.top, backgroundColor: spaceHeaders[space].scrim }, scrim]} />

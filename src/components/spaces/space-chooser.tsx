@@ -100,31 +100,35 @@ export function SpaceChooser({ onChoose }: SpaceChooserProps) {
   const insets = useSafeAreaInsets();
 
   return (
-    <ScrollView
-      style={{ flex: 1, backgroundColor: colors.background }}
-      contentContainerStyle={{ paddingTop: insets.top + 44, paddingHorizontal: 20, paddingBottom: Math.max(insets.bottom, 12) + 32, gap: 14 }}
-      showsVerticalScrollIndicator={false}
-    >
-      <VannaMark size={34} />
-      <View style={{ marginTop: 14, marginBottom: 6 }}>
-        <AppText variant="heading" style={{ fontSize: 28, lineHeight: 36, letterSpacing: -0.28 }}>
-          What do you want to do?
-        </AppText>
-        <AppText variant="bodyLg" color="textMuted" style={{ marginTop: 8, lineHeight: 24 }}>
-          Pick one to start. Everything stays one tap away in the bottom bar.
-        </AppText>
-      </View>
-      {choices.map((choice) => (
-        <ChoiceTile key={choice.space} choice={choice} onChoose={onChoose} />
-      ))}
-      <View style={{ flexDirection: "row", gap: 10, marginTop: 4, paddingHorizontal: 4 }}>
-        <View style={{ paddingTop: 2 }}>
-          <Icon name="info" size={18} color="textMuted" />
+    <View style={{ flex: 1, backgroundColor: colors.background }}>
+      <ScrollView
+        style={{ flex: 1, backgroundColor: colors.background }}
+        contentContainerStyle={{ paddingTop: insets.top + 44, paddingHorizontal: 20, paddingBottom: Math.max(insets.bottom, 12) + 32, gap: 14 }}
+        showsVerticalScrollIndicator={false}
+      >
+        <VannaMark size={34} />
+        <View style={{ marginTop: 14, marginBottom: 6 }}>
+          <AppText variant="heading" style={{ fontSize: 28, lineHeight: 36, letterSpacing: -0.28 }}>
+            What do you want to do?
+          </AppText>
+          <AppText variant="bodyLg" color="textMuted" style={{ marginTop: 8, lineHeight: 24 }}>
+            Pick one to start. Everything stays one tap away in the bottom bar.
+          </AppText>
         </View>
-        <AppText variant="body" color="textMuted" style={{ flex: 1, lineHeight: 20 }}>
-          New to leverage? Start with Earn. Nothing is ever liquidated there.
-        </AppText>
-      </View>
-    </ScrollView>
+        {choices.map((choice) => (
+          <ChoiceTile key={choice.space} choice={choice} onChoose={onChoose} />
+        ))}
+        <View style={{ flexDirection: "row", gap: 10, marginTop: 4, paddingHorizontal: 4 }}>
+          <View style={{ paddingTop: 2 }}>
+            <Icon name="info" size={18} color="textMuted" />
+          </View>
+          <AppText variant="body" color="textMuted" style={{ flex: 1, lineHeight: 20 }}>
+            New to leverage? Start with Earn. Nothing is ever liquidated there.
+          </AppText>
+        </View>
+      </ScrollView>
+      {/* The cards scroll under the phone's navigation bar; this keeps its buttons on a clean background rather than over the text. */}
+      <View pointerEvents="none" style={{ position: "absolute", left: 0, right: 0, bottom: 0, height: insets.bottom, backgroundColor: colors.background }} />
+    </View>
   );
 }

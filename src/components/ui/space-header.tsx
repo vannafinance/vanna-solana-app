@@ -14,7 +14,7 @@ import { useTheme } from "@/theme/use-theme";
 
 import { AppText } from "./app-text";
 import { Icon } from "./icon";
-import { MODULE_HERO_HEIGHT } from "./module-hero";
+import { useModuleHeroHeight } from "./module-hero";
 import { ripple } from "./ripple";
 import { TokenIcon } from "./token-icon";
 import { VannaMark } from "./vanna-mark";
@@ -146,6 +146,7 @@ export function SpaceHeader({ space, notificationCount = 0, onNotifications, onA
   const { surface, glow } = header;
   // Arriving from another module, the header starts in that module's colours and blends into its own while its figures fade in.
   const motion = useContext(PageMotionContext);
+  const heroHeight = useModuleHeroHeight();
   const previous: typeof header | null = motion.from !== null && motion.from !== space ? spaceHeaders[motion.from] : null;
   const arrive = useAnimatedStyle(() => ({ opacity: previous !== null && motion.reveal !== null ? motion.reveal.get() : 1 }));
   const figures = useAnimatedStyle(() => ({ opacity: motion.reveal !== null ? motion.reveal.get() : 1 }));
@@ -211,7 +212,7 @@ export function SpaceHeader({ space, notificationCount = 0, onNotifications, onA
           </View>
         </View>
         {/* Every module's header body is the same height (see ModuleHero), so the page bar sits at the same place in each. */}
-        <Animated.View style={[{ height: MODULE_HERO_HEIGHT + 6 + 20 + OVERLAP, paddingHorizontal: spacing.lg, paddingTop: 6, paddingBottom: 20 + OVERLAP }, figures]}>{children}</Animated.View>
+        <Animated.View style={[{ height: heroHeight + 6 + 20 + OVERLAP, paddingHorizontal: spacing.lg, paddingTop: 6, paddingBottom: 20 + OVERLAP }, figures]}>{children}</Animated.View>
       </View>
       <PageIsland space={space} />
     </View>

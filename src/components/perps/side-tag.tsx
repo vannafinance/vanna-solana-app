@@ -11,8 +11,8 @@ export function SideTag({ side, leverage }: SideTagProps) {
   const { colors, radius } = useTheme();
 
   return (
-    <View style={{ height: 20, paddingHorizontal: 6, borderRadius: radius.tag, backgroundColor: side === "long" ? colors.primary : colors.badgeNegative, justifyContent: "center" }}>
-      <AppText variant="caption" strong color="onPrimary" numberOfLines={1} style={{ lineHeight: 20 }}>
+    <View style={{ minHeight: 22, paddingVertical: 2, paddingHorizontal: 7, borderRadius: radius.tag, backgroundColor: side === "long" ? colors.primary : colors.badgeNegative, justifyContent: "center" }}>
+      <AppText variant="caption" strong color="onPrimary" numberOfLines={1}>
         {`${side === "long" ? "Long" : "Short"} ${leverage}x`}
       </AppText>
     </View>

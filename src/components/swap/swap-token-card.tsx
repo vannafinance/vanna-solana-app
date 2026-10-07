@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { TextInput, View } from "react-native";
 
 import { AppText } from "@/components/ui/app-text";
+import { amountFontSize } from "@/components/ui/amount-size";
 import { Card } from "@/components/ui/card";
 import { QuickFillButton } from "@/components/ui/quick-fill-button";
 import { useTheme } from "@/theme/use-theme";
@@ -39,13 +40,14 @@ export function SwapTokenCard({ label, balance, tokenMenu, usdValue, value, onCh
         {onChangeText ? (
           <TextInput
             scrollEnabled={false}
+maxFontSizeMultiplier={1}
             accessibilityLabel={label}
             value={value}
             onChangeText={onChangeText}
             keyboardType="decimal-pad"
             placeholder="0.00"
             placeholderTextColor={colors.textMuted}
-            style={{ flex: 1, minWidth: 0, padding: 0, includeFontPadding: false, textAlignVertical: "center", ...AMOUNT, fontFamily: fontFamily.semibold, color: exceeds ? colors.negative : colors.text }}
+            style={{ flex: 1, minWidth: 0, padding: 0, includeFontPadding: false, textAlignVertical: "center", ...amountFontSize(value, 32), fontFamily: fontFamily.semibold, color: exceeds ? colors.negative : colors.text }}
           />
         ) : (
           <AppText strong numberOfLines={1} style={{ flex: 1, minWidth: 0, ...AMOUNT }}>

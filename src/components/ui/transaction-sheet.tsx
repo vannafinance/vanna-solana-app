@@ -171,7 +171,7 @@ function StatusRow({ ring, title, detail, chip }: StatusRowProps) {
         ) : null}
       </View>
       {chip ? (
-        <View style={{ height: 24, paddingHorizontal: 8, borderRadius: 12, backgroundColor: colors.background, justifyContent: "center" }}>
+        <View style={{ minHeight: 24, paddingVertical: 1, paddingHorizontal: 8, borderRadius: 12, backgroundColor: colors.background, justifyContent: "center" }}>
           <AppText variant="caption" strong color="textMuted">
             {chip}
           </AppText>
