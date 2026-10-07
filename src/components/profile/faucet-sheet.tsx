@@ -70,7 +70,7 @@ function Tile({ row, disabled, onClaim }: { row: FaucetRow; disabled: boolean; o
       disabled={disabled}
       onPress={onClaim}
       android_ripple={ripple(colors.text)}
-      style={{ flex: 1, height: TILE_HEIGHT, borderRadius: radius.md, overflow: "hidden", alignItems: "center", justifyContent: "center", gap: 2, backgroundColor: colors.background, opacity: disabled && row.status !== "pending" ? 0.5 : 1 }}
+      style={{ flex: 1, minHeight: TILE_HEIGHT, paddingVertical: 6, paddingHorizontal: 4, borderRadius: radius.md, overflow: "hidden", alignItems: "center", justifyContent: "center", gap: 2, backgroundColor: colors.background, opacity: disabled && row.status !== "pending" ? 0.5 : 1 }}
     >
       <View style={{ width: RING_SIZE, height: RING_SIZE, alignItems: "center", justifyContent: "center" }}>
         <TokenIcon symbol={row.symbol} size={LOGO_SIZE} />
@@ -84,19 +84,22 @@ function Tile({ row, disabled, onClaim }: { row: FaucetRow; disabled: boolean; o
           </Animated.View>
         ) : null}
       </View>
-      <AppText variant="caption" strong>
+      {/* One line, shrunk to fit the tile: a long name such as ANTHROPIC used to wrap and push the label out of the tile. */}
+      <AppText variant="caption" strong numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
         {row.symbol}
       </AppText>
-      <AppText variant="caption" strong color={label.color}>
+      <AppText variant="caption" strong color={label.color} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}>
         {label.text}
       </AppText>
     </Pressable>
   );
 }
 
-// Claims every token at once. It is the last tile of the grid, in the brand gradient, so it reads as the one action that covers the rest.
-function AllTile({ disabled, onClaimAll }: { disabled: boolean; onClaimAll: () => void }) {
+// Claims every token at once, in the brand gradient. It fills the spare slots at the end of the grid; when the grid ends on a full row
+// it is a bar of its own under the tiles, never a lone tile with empty space beside it.
+function AllTile({ disabled, onClaimAll, span }: { disabled: boolean; onClaimAll: () => void; span: number }) {
   const { radius } = useTheme();
+  const bar = span === 0;
 
   return (
     <Pressable
@@ -105,10 +108,14 @@ function AllTile({ disabled, onClaimAll }: { disabled: boolean; onClaimAll: () =
       accessibilityState={{ disabled }}
       disabled={disabled}
       onPress={onClaimAll}
-      style={{ flex: 1, height: TILE_HEIGHT, borderRadius: radius.md, overflow: "hidden", opacity: disabled ? 0.5 : 1 }}
+      style={{ flex: bar ? undefined : span, alignSelf: "stretch", minHeight: bar ? 52 : TILE_HEIGHT, borderRadius: radius.md, overflow: "hidden", opacity: disabled ? 0.5 : 1 }}
     >
-      <LinearGradient colors={brandGradient} {...horizontalGradient} style={{ flex: 1, alignItems: "center", justifyContent: "center", gap: 2 }}>
-        <Icon name="add" size={26} color="onPrimary" bold />
+      <LinearGradient
+        colors={brandGradient}
+        {...horizontalGradient}
+        style={{ flex: 1, minHeight: bar ? 52 : TILE_HEIGHT, alignItems: "center", justifyContent: "center", gap: 2, flexDirection: bar ? "row" : "column" }}
+      >
+        <Icon name="add" size={bar ? 22 : 26} color="onPrimary" bold />
         <AppText variant="caption" strong color="onPrimary">
           Get all
         </AppText>
@@ -134,7 +141,7 @@ export function FaucetSheet({ visible, rows, message, connected, busy, onClaim, 
         <AppText variant="title" style={{ fontSize: 20, lineHeight: 28 }}>
           Test faucet
         </AppText>
-        <View style={{ height: 24, paddingHorizontal: 10, borderRadius: radius.pill, justifyContent: "center", backgroundColor: colors.pinkTint }}>
+        <View style={{ minHeight: 24, paddingVertical: 1, paddingHorizontal: 10, borderRadius: radius.pill, justifyContent: "center", backgroundColor: colors.pinkTint }}>
           <AppText variant="caption" strong color="onPinkTint">
             Fork only
           </AppText>
@@ -149,20 +156,10 @@ export function FaucetSheet({ visible, rows, message, connected, busy, onClaim, 
             {line.map((row) => (
               <Tile key={row.symbol} row={row} disabled={busy || !connected} onClaim={() => onClaim(row.symbol)} />
             ))}
-            {line === last && spare > 0 ? (
-              <>
-                <AllTile disabled={!connected || busy} onClaimAll={onClaimAll} />
-                {spare > 1 ? <View style={{ flex: spare - 1 }} /> : null}
-              </>
-            ) : null}
+            {line === last && spare > 0 ? <AllTile disabled={!connected || busy} onClaimAll={onClaimAll} span={spare} /> : null}
           </View>
         ))}
-        {spare === 0 ? (
-          <View style={{ flexDirection: "row", gap: TILE_GAP }}>
-            <AllTile disabled={!connected || busy} onClaimAll={onClaimAll} />
-            <View style={{ flex: COLUMNS - 1 }} />
-          </View>
-        ) : null}
+        {spare === 0 ? <AllTile disabled={!connected || busy} onClaimAll={onClaimAll} span={0} /> : null}
       </View>
       <View accessibilityLiveRegion="polite" style={{ marginTop: spacing.md, flexDirection: "row", alignItems: "center", gap: spacing.sm, minHeight: 28 }}>
         <Icon name="info" size={16} color={message?.tone === "negative" || !connected ? "negative" : "textMuted"} />

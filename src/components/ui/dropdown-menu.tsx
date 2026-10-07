@@ -222,7 +222,7 @@ function MenuItem<T extends string>({ option, index, open, selected, onPress }: 
         </View>
         {selected ? <Icon name="check" size={18} color="link" /> : null}
         {option.badge ? (
-          <View style={{ height: 22, paddingHorizontal: 8, borderRadius: 11, backgroundColor: colors.background, justifyContent: "center" }}>
+          <View style={{ minHeight: 22, paddingVertical: 1, paddingHorizontal: 8, borderRadius: 11, backgroundColor: colors.background, justifyContent: "center" }}>
             <AppText variant="caption" strong>
               {option.badge}
             </AppText>

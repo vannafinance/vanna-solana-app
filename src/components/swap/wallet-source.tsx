@@ -38,7 +38,7 @@ export function WalletSource({ address }: WalletSourceProps) {
           From your wallet
         </AppText>
         {short === null ? null : (
-          <View style={{ height: 20, marginLeft: 2, paddingHorizontal: 6, justifyContent: "center", borderRadius: radius.pill, backgroundColor: colors.surface }}>
+          <View style={{ minHeight: 20, paddingVertical: 1, marginLeft: 2, paddingHorizontal: 6, justifyContent: "center", borderRadius: radius.pill, backgroundColor: colors.surface }}>
             <AppText variant="caption" strong color="onPurpleTint" numberOfLines={1}>
               {short}
             </AppText>

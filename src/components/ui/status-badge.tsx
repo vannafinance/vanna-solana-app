@@ -23,7 +23,7 @@ export function StatusBadge({ tone, label }: { tone: StatusTone; label: string }
   return (
     <View
       accessibilityLabel={label}
-      style={{ flexDirection: "row", alignItems: "center", alignSelf: "flex-start", gap: 4, height: 24, paddingHorizontal: 8, borderRadius: radius.pill, backgroundColor: colors[style.background] }}
+      style={{ flexDirection: "row", alignItems: "center", alignSelf: "flex-start", gap: 4, minHeight: 24, paddingVertical: 1, paddingHorizontal: 8, borderRadius: radius.pill, backgroundColor: colors[style.background] }}
     >
       <Icon name={style.icon} size={14} filled color={colors[style.ink]} />
       <AppText variant="caption" strong numberOfLines={1} style={{ color: colors[style.ink] }}>

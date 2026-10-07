@@ -65,7 +65,9 @@ export function Button({
         styles.base,
         flex && styles.flex,
         {
-          height,
+          // A label that does not fit on one line wraps and the button grows; a fixed height would cut the second line off.
+          minHeight: height,
+          paddingVertical: 8,
           paddingHorizontal: 24,
           borderRadius: height / 2,
           backgroundColor: background,
@@ -79,7 +81,7 @@ export function Button({
         <ActivityIndicator color={foreground} />
       ) : (
         <>
-          <AppText variant={size === "lg" ? "bodyLg" : "body"} strong style={{ color: foreground }}>
+          <AppText variant={size === "lg" ? "bodyLg" : "body"} strong numberOfLines={2} style={{ color: foreground, flexShrink: 1, textAlign: "center" }}>
             {label}
           </AppText>
           {icon ? <Glyph source={icon} size={size === "lg" ? 20 : 18} color={foreground} /> : null}

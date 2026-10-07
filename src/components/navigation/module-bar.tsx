@@ -44,7 +44,7 @@ function ModuleItem({ module, active }: { module: Module; active: boolean }) {
           <Icon name={module.icon} size={22} filled={active} color={active ? colors.onHero : colors.textMuted} />
         </View>
       </View>
-      <AppText variant="caption" strong={active} numberOfLines={1} style={{ color: active ? accent : colors.textMuted }}>
+      <AppText variant="caption" strong={active} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8} style={{ color: active ? accent : colors.textMuted }}>
         {module.label}
       </AppText>
     </Pressable>

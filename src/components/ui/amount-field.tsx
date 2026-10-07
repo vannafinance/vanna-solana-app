@@ -3,6 +3,7 @@ import { TextInput, View } from "react-native";
 
 import { useTheme } from "@/theme/use-theme";
 
+import { amountFontSize } from "./amount-size";
 import { AppText } from "./app-text";
 import { QuickFillButton } from "./quick-fill-button";
 import { Notice } from "./notice";
@@ -39,6 +40,7 @@ export function AmountField({ label, caption, value, onChangeText, tokenSlot, qu
       <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: spacing.md }}>
         <TextInput
           scrollEnabled={false}
+maxFontSizeMultiplier={1}
           accessibilityLabel={label}
           value={value}
           onChangeText={onChangeText}
@@ -48,8 +50,7 @@ export function AmountField({ label, caption, value, onChangeText, tokenSlot, qu
           style={{
             flex: 1,
             padding: 0, includeFontPadding: false, textAlignVertical: "center",
-            fontSize: 32,
-            lineHeight: 40,
+            ...amountFontSize(value, 32),
             fontFamily: fontFamily.semibold,
             color: error ? colors.negative : colors.text,
           }}
