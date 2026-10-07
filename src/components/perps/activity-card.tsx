@@ -38,7 +38,7 @@ function LegRow({ chip, first }: { chip: HistoryChip; first: boolean }) {
       style={{ minHeight: 44, paddingVertical: 8, flexDirection: "row", alignItems: "center", gap: 12, borderTopWidth: first ? 0 : 1, borderTopColor: colors.divider }}
     >
       <View style={{ width: PILL_WIDTH }}>
-        <View style={{ alignSelf: "flex-start", height: 24, paddingHorizontal: 8, justifyContent: "center", borderRadius: radius.pill, backgroundColor: colors[look.background] }}>
+        <View style={{ alignSelf: "flex-start", minHeight: 24, paddingVertical: 1, paddingHorizontal: 8, justifyContent: "center", borderRadius: radius.pill, backgroundColor: colors[look.background] }}>
           <AppText variant="caption" strong numberOfLines={1} style={{ color: colors[look.ink] }}>
             {look.label}
           </AppText>

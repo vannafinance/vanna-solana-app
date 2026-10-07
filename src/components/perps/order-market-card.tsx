@@ -44,7 +44,7 @@ export function OrderMarketCard({ symbol, pair, price, markets, onSelect }: Orde
           >
             <TokenIcon symbol={symbol} size={32} />
             <View style={{ flex: 1, flexDirection: "row", alignItems: "center", gap: 4 }}>
-              <AppText variant="bodyLg" strong numberOfLines={1} style={{ flexShrink: 1 }}>
+              <AppText variant="bodyLg" strong numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.75} style={{ flexShrink: 1 }}>
                 {pair}
               </AppText>
               {markets.length > 1 ? <Icon name="keyboard_arrow_down" size={20} color="textMuted" /> : null}

@@ -3,6 +3,7 @@ import { Pressable, TextInput, View } from "react-native";
 import Animated from "react-native-reanimated";
 
 import { AppText } from "@/components/ui/app-text";
+import { amountFontSize } from "@/components/ui/amount-size";
 import { Card } from "@/components/ui/card";
 import { TokenIcon } from "@/components/ui/token-icon";
 import { formatToken, formatUsd } from "@/format/format-amount";
@@ -51,7 +52,7 @@ export function DepositCard({ form, onChangeAmount, onMax, onSelectCollateral, o
               accessibilityLabel="Use full wallet balance"
               onPress={onMax}
               hitSlop={{ top: 11, bottom: 11, left: 8, right: 8 }}
-              style={{ height: 22, paddingHorizontal: 8, borderRadius: radius.tag, backgroundColor: colors.purpleTint, justifyContent: "center" }}
+              style={{ minHeight: 22, paddingVertical: 1, paddingHorizontal: 8, borderRadius: radius.tag, backgroundColor: colors.purpleTint, justifyContent: "center" }}
             >
               <AppText variant="caption" strong color="link">
                 MAX
@@ -62,6 +63,7 @@ export function DepositCard({ form, onChangeAmount, onMax, onSelectCollateral, o
         <View style={{ marginTop: 6, flexDirection: "row", alignItems: "center", gap: 10 }}>
           <TextInput
             scrollEnabled={false}
+maxFontSizeMultiplier={1}
             accessibilityLabel={`${form.collateral.symbol} amount to deposit`}
             value={form.amountText}
             onChangeText={onChangeAmount}
@@ -72,8 +74,7 @@ export function DepositCard({ form, onChangeAmount, onMax, onSelectCollateral, o
               flex: 1,
               minWidth: 0,
               padding: 0, includeFontPadding: false, textAlignVertical: "center",
-              fontSize: 28,
-              lineHeight: 36,
+              ...amountFontSize(form.amountText, 28),
               fontFamily: fontFamily.semibold,
               color: form.issue === "over-balance" ? colors.negative : colors.text,
             }}

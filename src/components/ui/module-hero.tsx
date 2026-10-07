@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { View } from "react-native";
 import Svg, { Circle } from "react-native-svg";
 
+import { useTextScale } from "@/theme/use-text-scale";
 import { type ThemeColor, useTheme } from "@/theme/use-theme";
 
 import { AppText } from "./app-text";
@@ -58,6 +59,12 @@ type ModuleHeroProps = {
 // Every module's header holds exactly this block, so switching module never moves the page pills or the content below.
 export const MODULE_HERO_HEIGHT = 180;
 
+// The block grows a little when the phone's font setting makes its text taller, so the figures are never cramped or pushed onto the
+// rule above them; every module's header is still the same height as the others.
+export function useModuleHeroHeight() {
+  return MODULE_HERO_HEIGHT + Math.round(100 * (useTextScale() - 1));
+}
+
 const VALUE_STYLE = {
   fontSize: 34,
   lineHeight: 42,
@@ -84,7 +91,8 @@ function Chip({ chip }: { chip: HeroChip }) {
         flexDirection: "row",
         alignItems: "center",
         gap: 4,
-        height: 24,
+        minHeight: 24,
+        paddingVertical: 2,
         paddingHorizontal: 10,
         borderRadius: radius.pill,
         // A dark glass, not a light one: the teal and pink figures read on it in both themes, where on the header's own colour they fade.
@@ -114,7 +122,7 @@ function Stat({ stat, first }: { stat: HeroStat; first: boolean }) {
         borderLeftColor: colors.heroRuleSoft,
       }}
     >
-      <AppText variant="caption" color="onHeroMuted" numberOfLines={1}>
+      <AppText variant="caption" color="onHeroMuted" numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.75}>
         {stat.label}
       </AppText>
       <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
@@ -132,7 +140,7 @@ function Stat({ stat, first }: { stat: HeroStat; first: boolean }) {
         {stat.badge ? (
           <View
             style={{
-              height: 20,
+              minHeight: 20,
               paddingHorizontal: 8,
               borderRadius: radius.pill,
               backgroundColor: colors.heroGlass,
@@ -244,12 +252,15 @@ function Ring({ ring }: { ring: HeroRing }) {
           strokeLinecap="butt"
         />
       </Svg>
-      <AppText variant="bodyLg" strong color="onHero" numberOfLines={1}>
-        {ring.center}
-      </AppText>
-      <AppText variant="caption" color="onHeroMuted" numberOfLines={1} style={{ fontSize: 11, lineHeight: 14 }}>
-        {ring.caption}
-      </AppText>
+      {/* The text inside the ring is part of the drawing: it keeps its size whatever the font setting, and shrinks to stay inside. */}
+      <View style={{ width: RING_SIZE - RING_STROKE * 2 - 8, alignItems: "center" }}>
+        <AppText variant="bodyLg" strong color="onHero" numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7} maxFontSizeMultiplier={1}>
+          {ring.center}
+        </AppText>
+        <AppText variant="caption" color="onHeroMuted" numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7} maxFontSizeMultiplier={1} style={{ fontSize: 11, lineHeight: 14 }}>
+          {ring.caption}
+        </AppText>
+      </View>
     </View>
   );
 }
@@ -257,9 +268,11 @@ function Ring({ ring }: { ring: HeroRing }) {
 export function ModuleHero({ label, value, valueTone, money = true, chips, ring, caption, accessory, stats }: ModuleHeroProps) {
   const { colors, spacing } = useTheme();
   const color = toneColor(valueTone);
+  const height = useModuleHeroHeight();
+  const detailRow = DETAIL_ROW + Math.round(30 * (useTextScale() - 1));
 
   return (
-    <View style={{ height: MODULE_HERO_HEIGHT, justifyContent: "space-between" }}>
+    <View style={{ height, justifyContent: "space-between" }}>
       <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.md }}>
         <View style={{ flex: 1 }}>
           <View
@@ -285,7 +298,7 @@ export function ModuleHero({ label, value, valueTone, money = true, chips, ring,
           )}
           <View
             style={{
-              height: DETAIL_ROW,
+              height: detailRow,
               flexDirection: "row",
               alignItems: "center",
               gap: spacing.sm,

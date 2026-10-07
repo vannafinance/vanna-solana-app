@@ -89,7 +89,7 @@ export function RouteMenu({ routes, selected, onSelect }: RouteMenuProps) {
               </View>
               {active ? <Icon name="check" size={18} color="link" bold /> : null}
               {route.available ? null : (
-                <View style={{ height: 22, paddingHorizontal: 8, borderRadius: 11, backgroundColor: colors.background, justifyContent: "center" }}>
+                <View style={{ minHeight: 22, paddingVertical: 1, paddingHorizontal: 8, borderRadius: 11, backgroundColor: colors.background, justifyContent: "center" }}>
                   <AppText variant="caption" strong>
                     Soon
                   </AppText>

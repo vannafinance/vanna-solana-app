@@ -24,7 +24,7 @@ export function StatStrip({ stats }: { stats: readonly StripStat[] }) {
               accessibilityLabel={`${stat.label}, ${stat.value}${stat.sub ? `, ${stat.sub}` : ""}`}
               style={{ flex: 1, gap: 2, paddingLeft: index === 0 ? 0 : spacing.md, marginLeft: index === 0 ? 0 : spacing.md - 1, borderLeftWidth: index === 0 ? 0 : 1, borderLeftColor: colors.divider }}
             >
-              <AppText variant="caption" color="textMuted" numberOfLines={1}>
+              <AppText variant="caption" color="textMuted" numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.75}>
                 {stat.label}
               </AppText>
               <AppText variant="body" strong color={stat.valueColor ?? "text"} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}>

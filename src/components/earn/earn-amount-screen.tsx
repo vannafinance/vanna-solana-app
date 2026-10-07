@@ -2,6 +2,7 @@ import { ScrollView, TextInput, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { AppText } from "@/components/ui/app-text";
+import { amountFontSize } from "@/components/ui/amount-size";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { QuickFillButton } from "@/components/ui/quick-fill-button";
@@ -83,13 +84,14 @@ export function EarnAmountScreen({
             <View style={{ marginTop: 8, flexDirection: "row", alignItems: "center", gap: 12 }}>
               <TextInput
                 scrollEnabled={false}
+maxFontSizeMultiplier={1}
                 accessibilityLabel={view.label}
                 value={value}
                 onChangeText={onChangeText}
                 keyboardType="decimal-pad"
                 placeholder="0.00"
                 placeholderTextColor={colors.textMuted}
-                style={{ flex: 1, minWidth: 0, padding: 0, includeFontPadding: false, textAlignVertical: "center", fontSize: 32, lineHeight: 40, fontFamily: fontFamily.semibold, color: view.over ? colors.negative : colors.text }}
+                style={{ flex: 1, minWidth: 0, padding: 0, includeFontPadding: false, textAlignVertical: "center", ...amountFontSize(value, 32), fontFamily: fontFamily.semibold, color: view.over ? colors.negative : colors.text }}
               />
               <TokenPill symbol={symbol} />
             </View>

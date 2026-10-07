@@ -7,7 +7,7 @@ import { formatPrice } from "@/format/format-earn";
 import { useTheme } from "@/theme/use-theme";
 import type { MarketListItem, PerpsMarket } from "@/types/perps";
 
-import { MARKET_COLUMNS, MarketRow } from "./market-row";
+import { MarketRow, TABLE_SCALE, useMarketColumns } from "./market-row";
 
 type MarketListProps = {
   markets: readonly MarketListItem[];
@@ -17,7 +17,7 @@ type MarketListProps = {
 // A column label, right-aligned over its figures. `overhang` lets a label wider than its column reach left into the gap.
 function HeaderCell({ label, width, overhang = 0 }: { label: string; width: number; overhang?: number }) {
   return (
-    <AppText variant="caption" color="textMuted" numberOfLines={1} style={{ width: width + overhang, marginLeft: -overhang, textAlign: "right" }}>
+    <AppText variant="caption" color="textMuted" numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8} maxFontSizeMultiplier={TABLE_SCALE} style={{ width: width + overhang, marginLeft: -overhang, textAlign: "right" }}>
       {label}
     </AppText>
   );
@@ -26,16 +26,17 @@ function HeaderCell({ label, width, overhang = 0 }: { label: string; width: numb
 // The markets as a table: one header row of column labels, then one row per market with its figures in aligned columns.
 export function MarketList({ markets, onSelect }: MarketListProps) {
   const { colors } = useTheme();
+  const columns = useMarketColumns();
 
   return (
     <Card padded={false} style={{ paddingHorizontal: 16 }}>
-      <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants" style={{ height: 40, flexDirection: "row", alignItems: "center", gap: MARKET_COLUMNS.gap }}>
+      <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants" style={{ minHeight: 40, flexDirection: "row", alignItems: "center", gap: columns.gap }}>
         <AppText variant="caption" color="textMuted" style={{ flex: 1 }}>
           Market
         </AppText>
-        <HeaderCell label="Borrow APY" width={MARKET_COLUMNS.apy} overhang={24} />
-        <HeaderCell label="Liquidity" width={MARKET_COLUMNS.liquidity} />
-        <HeaderCell label="Price" width={MARKET_COLUMNS.price} />
+        <HeaderCell label="Borrow" width={columns.apy} overhang={12} />
+        <HeaderCell label="Liquidity" width={columns.liquidity} />
+        <HeaderCell label="Price" width={columns.price} />
       </View>
       {markets.map((market) => (
         <View key={market.symbol} style={{ borderTopWidth: 1, borderTopColor: colors.divider }}>

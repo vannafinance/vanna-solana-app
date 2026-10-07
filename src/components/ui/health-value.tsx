@@ -35,7 +35,7 @@ export function HealthValue({ value }: { value: number | null }) {
       <AppText variant="body" strong>
         {value.toFixed(2)}
       </AppText>
-      <View style={{ height: 20, paddingHorizontal: 8, borderRadius: radius.pill, backgroundColor: colors[state.background], justifyContent: "center" }}>
+      <View style={{ minHeight: 20, paddingVertical: 1, paddingHorizontal: 8, borderRadius: radius.pill, backgroundColor: colors[state.background], justifyContent: "center" }}>
         <AppText variant="caption" strong numberOfLines={1} style={{ fontSize: 11, lineHeight: 14, color: colors[state.ink] }}>
           {state.label}
         </AppText>

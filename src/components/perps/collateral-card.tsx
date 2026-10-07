@@ -1,6 +1,7 @@
 import { TextInput, View } from "react-native";
 
 import { AppText } from "@/components/ui/app-text";
+import { amountFontSize } from "@/components/ui/amount-size";
 import { Card } from "@/components/ui/card";
 import { QuickFillButton } from "@/components/ui/quick-fill-button";
 import { TokenPill } from "@/components/ui/token-pill";
@@ -38,13 +39,14 @@ export function CollateralCard({ symbol, note, caption, value, onChangeText, exc
       <View style={{ marginTop: 8, flexDirection: "row", alignItems: "center", gap: 12 }}>
         <TextInput
           scrollEnabled={false}
+maxFontSizeMultiplier={1}
           accessibilityLabel="Collateral amount"
           value={value}
           onChangeText={onChangeText}
           keyboardType="decimal-pad"
           placeholder="0.00"
           placeholderTextColor={colors.textMuted}
-          style={{ flex: 1, padding: 0, includeFontPadding: false, textAlignVertical: "center", fontSize: 32, lineHeight: 40, fontFamily: fontFamily.semibold, color: exceeds ? colors.negative : colors.text }}
+          style={{ flex: 1, padding: 0, includeFontPadding: false, textAlignVertical: "center", ...amountFontSize(value, 32), fontFamily: fontFamily.semibold, color: exceeds ? colors.negative : colors.text }}
         />
         <TokenPill symbol={symbol} />
       </View>
