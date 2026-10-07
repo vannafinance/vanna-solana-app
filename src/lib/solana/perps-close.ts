@@ -2,7 +2,7 @@ import { type Connection, PublicKey, type TransactionInstruction } from "@solana
 
 import { fetchAccountSnapshot } from "./account-api";
 import type { AssetInfo } from "./assets";
-import { KAMINO_EXTRA_LOOKUP_TABLES, KAMINO_LOOKUP_TABLE } from "./kamino";
+import { KAMINO_EXTRA_LOOKUP_TABLES, KAMINO_LOOKUP_TABLE, VANNA_LOOKUP_TABLE } from "./kamino";
 import { fetchLookupTables } from "./lookup-tables";
 import { repayFromMarginInstruction, withdrawCollateralInstruction } from "./margin-instructions";
 import { buildMarginSwap, MARGIN_SWAP_COMPUTE_UNITS, type MarginSwapBuild } from "./margin-swap";
@@ -144,7 +144,7 @@ export function closePosition(connection: Connection, owner: PublicKey, request:
   return withStalePoolRetry(hooks, async (tracked) => {
     const [{ instructions, withdraw, tables }, kamino] = await Promise.all([
       buildClosePosition(connection, owner, request),
-      fetchLookupTables(connection, [KAMINO_LOOKUP_TABLE, ...KAMINO_EXTRA_LOOKUP_TABLES]),
+      fetchLookupTables(connection, [VANNA_LOOKUP_TABLE, KAMINO_LOOKUP_TABLE, ...KAMINO_EXTRA_LOOKUP_TABLES]),
     ]);
     const [, ...body] = instructions;
     return sendBatches(connection, owner, { computeUnits: MARGIN_SWAP_COMPUTE_UNITS, batches: withdraw.length > 0 ? [body, withdraw] : [body], retrySafe: true, allowForkTable: true, tables: [...tables, ...kamino] }, tracked);

@@ -16,6 +16,11 @@ export const KAMINO_MARKET_AUTHORITY = new PublicKey("9DrvZvyWh1HuAoZxvYWMvkf2XC
 // A lookup table that exists on mainnet and holds the accounts every Kamino transaction names (its program, the main market and its
 // authority, the token program, the instructions sysvar). Wallets read mainnet, so unlike a table made on the fork they can read it.
 export const KAMINO_LOOKUP_TABLE = new PublicKey("3hi1c3L11vL446LJotFZNXHp1YZSLQ867SeQJUc9b5t1");
+// Vanna's own mainnet table (scripts/create-vanna-lookup-table.cjs): the program and, for every asset, its mint, asset
+// config, reserve and price feed. Every margin transaction lists those for its health check, so naming them by a one-byte
+// index keeps a heavy account's orders inside one transaction without a table made on the fork, which strict wallets
+// (Solflare) refuse. The fork copies it from mainnet.
+export const VANNA_LOOKUP_TABLE = new PublicKey("Cf1aqtYwBr8A9BfL5Hi2WyeWYrBCU4nkbEH5uhpK2SdA");
 // More mainnet tables that Kamino and Jupiter transactions use often. A Perps order on an account with Farm positions needs
 // every byte they save, and a wallet reads them like any other account.
 export const KAMINO_EXTRA_LOOKUP_TABLES = [
