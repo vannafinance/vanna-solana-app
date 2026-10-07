@@ -10,6 +10,7 @@ import { orderIssue, quoteOrder } from "@/lib/perps/order-quote";
 import { assets } from "@/lib/solana/assets";
 import { NETWORK_FEE_ESTIMATE, NETWORK_LABEL } from "@/lib/solana/config";
 import { withdrawStock } from "@/lib/solana/farm-transactions";
+import { settleStock } from "@/lib/solana/perps-settle";
 import { createMarginAccount } from "@/lib/solana/margin-transactions";
 import { freshOpenProgress, openPosition } from "@/lib/solana/perps-transactions";
 import { marginAddress } from "@/lib/solana/program-accounts";
@@ -67,10 +68,13 @@ export function usePerpsOrder(symbol: string, initialSide: Side) {
   const [step, setStep] = useState(1);
   // How far the last attempt got, so trying again after a stop does not deposit or borrow a second time.
   const landed = useRef(freshOpenProgress());
-  // Set when the button moves stock left over from an earlier attempt back to the wallet instead of opening an order.
-  // The flow runs with the callbacks of the render it started from, so the run reads a ref; the state drives what is shown.
-  const [moving, setMoving] = useState(false);
-  const movingRef = useRef(false);
+  // Set when the button tidies up after an earlier attempt instead of opening an order: settling a stock both held and owed,
+  // or moving stock with no position back to the wallet. The flow runs with the callbacks of the render it started from,
+  // so the run reads a ref; the state drives what is shown.
+  type Tidy = "settle" | "move" | null;
+  const [tidying, setTidying] = useState<Tidy>(null);
+  const tidyRef = useRef<Tidy>(null);
+  const moving = tidying !== null;
 
   // Switching to a market that allows less leverage brings the choice down to its limit.
   const leverage = market.status === "ready" ? Math.min(chosenLeverage, market.data.maxLeverage) : chosenLeverage;
@@ -93,6 +97,10 @@ export function usePerpsOrder(symbol: string, initialSide: Side) {
       positions.some((position) => position.symbol === symbol && position.side !== side) ||
       (side === "long" ? (portfolio.data.owedStocks ?? []).includes(symbol) : (portfolio.data.heldStocks ?? []).includes(symbol));
     const quote = quoteOrder({ market: market.data, margin: account.margin, borrowed: account.borrowed, side, collateral, leverage });
+    // A stock both held and owed shows as no position and blocks both sides: settling it comes first.
+    if ((portfolio.data.settleableStocks ?? []).includes(symbol)) {
+      return { status: "ready", data: { market: market.data, account: { ...account, available: funds.usd }, collateral, quote, issue: "settle" } };
+    }
     // Stock with no position behind it, left by a short that stopped after its deposit: there is no long to close, so the
     // way forward is moving it back to the wallet, after which the short can be opened.
     if (side === "short" && (portfolio.data.strandedStocks?.[symbol] ?? 0n) > 0n) {
@@ -122,7 +130,11 @@ export function usePerpsOrder(symbol: string, initialSide: Side) {
     run: (stepNumber, runProgress) => {
       setStep(stepNumber);
       return signer.execute(({ connection, owner, hooks }) => {
-        if (movingRef.current) {
+        if (tidyRef.current === "settle") {
+          if (stock === undefined) throw new TransactionError("network", "Something went wrong", "There is nothing to settle. Nothing left your margin account.");
+          return settleStock(connection, owner, stock, hooks);
+        }
+        if (tidyRef.current === "move") {
           if (stock === undefined || stranded === 0n) throw new TransactionError("network", "Something went wrong", "There is nothing to move back. Nothing left your margin account.");
           return withdrawStock(connection, owner, stock, stranded, hooks);
         }
@@ -135,7 +147,9 @@ export function usePerpsOrder(symbol: string, initialSide: Side) {
       }, runProgress);
     },
     success: moving
-      ? { title: `${symbol} is back in your wallet`, message: "You can open the short now." }
+      ? tidying === "settle"
+        ? { title: `${symbol} is settled`, message: "The loan was repaid from your margin account. What is left stays there as collateral." }
+        : { title: `${symbol} is back in your wallet`, message: "You can open the short now." }
       : {
       title: `Your ${side} is open`,
       message: ready
@@ -167,7 +181,7 @@ export function usePerpsOrder(symbol: string, initialSide: Side) {
     };
   }, flow.start);
 
-  const blocked = ready === null || (ready.issue !== null && ready.issue !== "stranded-collateral");
+  const blocked = ready === null || (ready.issue !== null && ready.issue !== "stranded-collateral" && ready.issue !== "settle");
 
   const quickFill = (fraction: number) => {
     if (!ready) return;
@@ -177,15 +191,16 @@ export function usePerpsOrder(symbol: string, initialSide: Side) {
 
   const submit = () => {
     if (blocked) return;
-    if (ready?.issue === "stranded-collateral") {
-      movingRef.current = true;
-      setMoving(true);
+    if (ready?.issue === "stranded-collateral" || ready?.issue === "settle") {
+      const tidy = ready.issue === "settle" ? "settle" : "move";
+      tidyRef.current = tidy;
+      setTidying(tidy);
       setStep(1);
       flow.start();
       return;
     }
-    movingRef.current = false;
-    setMoving(false);
+    tidyRef.current = null;
+    setTidying(null);
     setFirstTrade(!marginAccount.exists);
     setStep(1);
     landed.current = freshOpenProgress();
@@ -202,8 +217,8 @@ export function usePerpsOrder(symbol: string, initialSide: Side) {
     landed.current = freshOpenProgress();
     flow.close();
     setFirstTrade(false);
-    movingRef.current = false;
-    setMoving(false);
+    tidyRef.current = null;
+    setTidying(null);
   };
 
   const viewPosition = () => {

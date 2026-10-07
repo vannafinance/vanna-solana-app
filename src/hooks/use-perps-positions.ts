@@ -86,6 +86,7 @@ export function usePerpsPositions(): Resource<PerpsPortfolio> {
       heldStocks: balances ? above(balances.collateral) : [],
       owedStocks: balances ? above(balances.debt) : [],
       strandedStocks: balances && derived ? stranded(balances, derived.positions) : {},
+      settleableStocks: balances ? above(balances.collateral).filter((symbol) => above(balances.debt).includes(symbol)) : [],
     },
   };
 }
