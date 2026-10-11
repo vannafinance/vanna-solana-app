@@ -65,4 +65,3 @@ npm run test:appearance
 | `src/lib` | Solana, wallet and protocol logic (earn, farm, perps, swap, portfolio) |
 | `src/theme` | Colours, type and spacing for light and dark mode |
 | `scripts` | Tests and maintenance scripts |
-| `docs/backend-integration.md` | Which API route or on-chain account backs each screen |
