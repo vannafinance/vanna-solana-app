@@ -5,7 +5,16 @@ import { useRef, useState } from "react";
 
 import type { ConnectPhase } from "@/types/connection";
 
+import { waitForForeground } from "./wait-for-foreground";
+
 const AUTHORIZATION_FAILED = -1;
+// Backpack checks the app's identity by fetching the website's assetlinks.json and gives up after about a second; from India
+// about one fetch in four is slower than that. Each try is a fresh chance, so a refusal is tried twice more by itself.
+const CONNECT_ATTEMPTS = 3;
+const RETRY_PAUSE_MS = 2500;
+// A cancel this soon after a retry started is the wallet's refusal screen closing, not the user.
+const BOUNCE_MS = 2000;
+const REFUSED = /authorization request failed|auth_token not valid|identity verification failed/i;
 
 const ELLIPSIS_FALLBACK = "..";
 // Backpack on Android rejects the app's identity during authorize, which no app setting can fix.
@@ -33,7 +42,24 @@ export function useWalletConnection() {
     setErrorMessage(undefined);
     setDeclinedByWallet(false);
     try {
-      await connect();
+      for (let attempt = 1, refused = false; ; attempt++) {
+        const startedAt = Date.now();
+        try {
+          await connect();
+          break;
+        } catch (error) {
+          const code = error !== null && typeof error === "object" && "code" in error ? error.code : undefined;
+          const message = error instanceof Error ? error.message : "";
+          const refusal = code === AUTHORIZATION_FAILED || REFUSED.test(message);
+          const bounced = refused && Date.now() - startedAt < BOUNCE_MS;
+          if ((refusal || bounced) && attempt < CONNECT_ATTEMPTS) {
+            refused = true;
+            await waitForForeground(RETRY_PAUSE_MS);
+            continue;
+          }
+          throw refused && bounced ? Object.assign(new Error("authorization request failed"), { code: AUTHORIZATION_FAILED }) : error;
+        }
+      }
       setWalletMissing(false);
       setPhase("connected");
     } catch (error) {
@@ -47,9 +73,9 @@ export function useWalletConnection() {
       } else {
         setDeclinedByWallet(code === AUTHORIZATION_FAILED);
         setErrorMessage(IDENTITY_REJECTED.test(message)
-          ? "This wallet could not verify Vanna. Backpack on Android has a known problem with this. Connect with Phantom or Solflare instead."
+          ? "Your wallet could not verify Vanna just now. This is usually a slow network check. Try again."
           : code === AUTHORIZATION_FAILED
-            ? "The wallet declined the connection. You can try again."
+            ? "Your wallet could not verify Vanna just now, or declined the connection. Try again."
             : code === "ERROR_SESSION_TIMEOUT"
               ? "The wallet did not respond in time. Unlock it and try again."
               : "Could not connect to your wallet. Unlock it and try again.");

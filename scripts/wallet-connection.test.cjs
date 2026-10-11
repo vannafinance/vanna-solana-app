@@ -31,6 +31,7 @@ function renderWallet(mobileWallet, queryClient = { cancelQueries: async () => {
       if (name === "@tanstack/react-query") return { useQueryClient: () => queryClient };
       if (name === "@wallet-ui/react-native-web3js") return { useMobileWallet: () => mobileWallet };
       if (name === "expo-web-browser") return { openBrowserAsync: async () => {} };
+      if (name === "./wait-for-foreground") return { waitForForeground: async () => {} };
       throw new Error(`Unexpected import: ${name}`);
     },
   });
@@ -82,6 +83,37 @@ test("authorization rejection and timeout provide retryable messages", async () 
     assert.match(render().errorMessage, message);
     assert.equal(render().checking, false);
   }
+});
+
+test("a wallet refusal is tried again by itself, and reported only when every try is refused", async () => {
+  let launches = 0;
+  const flaky = { account: undefined, connect: async () => { launches++; if (launches < 3) throw { code: -1 }; return {}; } };
+  const render = renderWallet(flaky);
+  await render().connect();
+  assert.equal(launches, 3);
+  assert.equal(render().phase, "connected");
+
+  let refusals = 0;
+  const refusing = renderWallet({ connect: async () => { refusals++; throw { code: -1 }; } });
+  await refusing().connect();
+  assert.equal(refusals, 3);
+  assert.equal(refusing().phase, "declined");
+  assert.match(refusing().errorMessage, /could not verify Vanna/);
+});
+
+test("a cancel right after a refusal is the wallet's screen closing and is tried again; a first cancel is the user's", async () => {
+  let launches = 0;
+  const bouncing = { connect: async () => { launches++; if (launches === 1) throw { code: -1 }; if (launches === 2) throw { code: "ERROR_ASSOCIATION_CANCELLED" }; return {}; } };
+  const render = renderWallet(bouncing);
+  await render().connect();
+  assert.equal(launches, 3);
+  assert.equal(render().phase, "connected");
+
+  let cancels = 0;
+  const cancelled = renderWallet({ connect: async () => { cancels++; throw { code: "ERROR_ASSOCIATION_CANCELLED" }; } });
+  await cancelled().connect();
+  assert.equal(cancels, 1);
+  assert.equal(cancelled().phase, "pick");
 });
 
 test("disconnect does not claim success when persistent storage fails", async () => {
