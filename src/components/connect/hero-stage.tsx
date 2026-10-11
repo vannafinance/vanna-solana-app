@@ -21,15 +21,20 @@ const QUICK_COPY_AT = 350;
 
 type HeroStageProps = {
   intro?: boolean;
+  // Buttons stacked at the bottom; they are measured so the tagline above never runs into them.
   children?: ReactNode;
+  // A sheet that covers the stage and fills its slot itself. It goes in the bottom slot without the measuring wrapper: that
+  // wrapper takes its height from what is inside, an absolutely placed sheet gives it none, and the sheet was drawn below
+  // the screen.
+  sheet?: ReactNode;
 };
 
-export function HeroStage({ intro = false, children }: HeroStageProps) {
+export function HeroStage({ intro = false, children, sheet }: HeroStageProps) {
   const { height } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const bottomPadding = Math.max(insets.bottom, 12) + 16;
   const [taglineHeight, setTaglineHeight] = useState(TAGLINE_HEIGHT);
-  const [actionsHeight, setActionsHeight] = useState(children ? ACTIONS_HEIGHT : 0);
+  const [actionsHeight, setActionsHeight] = useState(children || sheet ? ACTIONS_HEIGHT : 0);
   const taglineTop = Math.min(DESIGN_TAGLINE_TOP, height - (taglineHeight + GAP + actionsHeight + bottomPadding));
   const artTop = insets.top + 8;
   const artHeight = Math.max(taglineTop - 16 - artTop, 0);
@@ -51,6 +56,7 @@ export function HeroStage({ intro = false, children }: HeroStageProps) {
           </View>
         </View>
       ) : null}
+      {sheet ? <View style={{ flex: 1, justifyContent: "flex-end", paddingHorizontal: 16, paddingBottom: bottomPadding, gap: 8 }}>{sheet}</View> : null}
     </View>
   );
 }
