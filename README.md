@@ -53,7 +53,7 @@ This app runs on **Vanna's test network**, a fork of Solana mainnet at `rpc-devn
 **Known limits on the test network**
 
 - An account with many open positions can need a temporary lookup table. Backpack signs it; Solflare may refuse. Close a position or use Backpack.
-- Backpack sometimes fails its first identity check on a slow connection. Vanna retries automatically; if it still fails, tap Try again.
+- Backpack sometimes fails its identity check on a slow connection ("Identity verification failed"). Go back to Vanna, wait a few seconds and tap Connect or Try again.
 
 ## Links
 
