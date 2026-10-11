@@ -19,7 +19,7 @@
   <a href="https://vanna.finance">Website</a> ·
   <a href="https://devnet.solana.vanna.finance">Web app</a> ·
   <a href="https://docs.solana.vanna.finance/home">Docs</a> ·
-  <a href="https://x.com/vannafinance">X</a> ·
+  <a href="https://x.com/vannaprotocol">X</a> ·
   <a href="https://t.me/vannaprotocol">Telegram</a>
 </p>
 
@@ -62,7 +62,7 @@ This app runs on **Vanna's test network**, a fork of Solana mainnet at `rpc-devn
 | Website | [vanna.finance](https://vanna.finance) |
 | Web app | [devnet.solana.vanna.finance](https://devnet.solana.vanna.finance) |
 | Docs | [docs.solana.vanna.finance](https://docs.solana.vanna.finance/home) |
-| X | [@vannafinance](https://x.com/vannafinance) |
+| X | [@vannaprotocol](https://x.com/vannaprotocol) |
 | Telegram | [t.me/vannaprotocol](https://t.me/vannaprotocol) |
 | GitHub | [github.com/vannafinance](https://github.com/vannafinance) |
 
