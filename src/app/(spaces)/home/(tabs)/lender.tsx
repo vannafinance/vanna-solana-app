@@ -1,0 +1,77 @@
+import { router } from "expo-router";
+import { useState } from "react";
+
+import { EmptyCard } from "@/components/home/empty-card";
+import { LenderHistoryList } from "@/components/home/lender-history-list";
+import { LenderVaultCard } from "@/components/home/lender-vault-card";
+import { NotificationDropdown } from "@/components/home/notification-dropdown";
+import { PortfolioHero } from "@/components/home/portfolio-hero";
+import { ResourceView } from "@/components/ui/resource-view";
+import { Screen } from "@/components/ui/screen";
+import { SegmentedControl } from "@/components/ui/segmented-control";
+import { SpaceHeader } from "@/components/ui/space-header";
+import { useExplorer } from "@/hooks/use-explorer";
+import { useHeaderProps } from "@/hooks/use-header-props";
+import { useLenderSummary } from "@/hooks/use-lender-summary";
+import { useNotificationMenu } from "@/hooks/use-notification-menu";
+import { usePortfolio } from "@/hooks/use-portfolio";
+
+type Tab = "current" | "history";
+
+// Lending only: the Earn vaults supplied to now, and the lending history. The totals are on Overview's Earn card.
+export default function Lender() {
+  const header = useHeaderProps();
+  const menu = useNotificationMenu();
+  const explorer = useExplorer();
+  const lender = useLenderSummary();
+  const portfolio = usePortfolio();
+  const [tab, setTab] = useState<Tab>("current");
+
+  return (
+    <>
+      <Screen
+        gap={12}
+        header={
+          <SpaceHeader space="portfolio" {...header} onNotifications={menu.toggle}>
+            <PortfolioHero portfolio={portfolio} />
+          </SpaceHeader>
+        }
+      >
+        <ResourceView resource={lender} emptyLabel="Nothing supplied yet">
+          {(data) => (
+            <>
+              <SegmentedControl
+                segments={[
+                  { value: "current", label: "Current", badge: String(data.vaults.length) },
+                  { value: "history", label: "History", badge: data.history === null ? undefined : String(data.history.reduce((count, group) => count + group.items.length, 0)) },
+                ]}
+                value={tab}
+                onChange={setTab}
+              />
+              {tab === "history" ? (
+                data.history === null ? (
+                  <EmptyCard title="History unavailable" message="We can't load your activity right now. Try again later." />
+                ) : (
+                  <LenderHistoryList groups={data.history} onOpenTransaction={explorer.openTransaction} />
+                )
+              ) : data.vaults.length === 0 ? (
+                <EmptyCard title="Nothing supplied yet" message="Supply to a vault in Earn and your deposits show up here." actionLabel="Browse vaults" onAction={() => router.push("/earn")} />
+              ) : (
+                data.vaults.map((vault) => (
+                  <LenderVaultCard key={vault.id} vault={vault} onWithdraw={() => router.push(`/earn/withdraw/${vault.id}`)} onSupplyMore={() => router.push(`/earn/supply/${vault.id}`)} />
+                ))
+              )}
+            </>
+          )}
+        </ResourceView>
+      </Screen>
+      <NotificationDropdown
+        visible={menu.open}
+        notifications={menu.items}
+        onClose={menu.close}
+        onMarkAllRead={menu.markAllRead}
+        onSeeAll={menu.seeAll}
+      />
+    </>
+  );
+}

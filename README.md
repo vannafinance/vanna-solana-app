@@ -1,29 +1,67 @@
-# Vanna Mobile — screen designs
+# Vanna Solana App
 
-Design screens for the Vanna Solana mobile app (Android-first, Expo later).
+Android app for Vanna on Solana: connect a wallet, trade stocks and tokens with leverage (Perps), swap, supply to lending pools (Earn) and run leveraged yield positions (Farm).
 
-- `design/screens/*.dc.html` — one HTML file per screen (Claude Design format, 390×844 artboards).
-- `design/canvas.json` — board order, titles and positions.
+Built with Expo SDK 57 and React Native. Package name `finance.vanna.solana`.
 
-Live, clickable version: the "Vanna Mobile" design canvas on claude.ai (images and the runtime are served there).
+## Requirements
 
-## Screens
-| # | File | Screen |
-|---|------|--------|
-| 01 | Main | Welcome |
-| 02 / 02b | Connect / ConnectMWA | Connect wallet (Backpack · Mobile Wallet Adapter) |
-| 03 / 03b | Home / HomeB | Portfolio (03b = current direction) |
-| 04 | Settings | Profile, watchlist & settings |
-| 05 | Earn | Vaults list |
-| 06 | Vault | Vault detail |
-| 07 / 07b | Amount / SupplySheet | Deposit / Supply sheets |
-| 08 | Farm | Leveraged yield |
-| 09 | Perps | Market + chart |
-| 10 | Order | Order ticket |
-| 11 | Markets | Market picker |
-| 12 | Swap | Swap with in-screen review |
-| 13 | Review | Perps review & sign |
+- Node.js 20 or later
+- Android Studio with an Android SDK, and a phone or emulator (release builds are arm64)
+- A Solana wallet that supports Mobile Wallet Adapter (Backpack, Solflare, Phantom)
 
-## Build notes for Expo
-- Amount fields are plain text inputs (`keyboardType="decimal-pad"`): tapping the number opens the system numeric keyboard, no custom keypad.
-- Tokens: Long `#32EEE2` (dark text), Short `#FC5457`, yield teal, brand gradient only on primary CTAs and the logo.
+## Setup
+
+```sh
+npm ci
+cp .env.example .env
+```
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `EXPO_PUBLIC_SOLANA_RPC_URL` | `https://rpc-devnet.solana.vanna.finance` | Solana RPC (Vanna's mainnet fork) |
+| `EXPO_PUBLIC_API_BASE_URL` | `https://devnet.solana.vanna.finance` | Vanna API (pools, quotes, history) |
+| `EXPO_PUBLIC_DEV_WALLET_ADDRESS` | empty | Read-only wallet for development builds only |
+| `EXPO_PUBLIC_FORK_FAUCET` | on | Set to `off` to hide the fork faucet |
+
+## Run
+
+```sh
+npm run android     # build and install a development build
+npm start           # start Metro for an installed development build
+```
+
+## Build an APK
+
+```sh
+npx expo prebuild --platform android
+cd android && ./gradlew assembleRelease
+```
+
+The APK is written to `android/app/build/outputs/apk/release/`. EAS profiles (`development`, `preview`, `production`) are in `eas.json`.
+
+## Checks
+
+```sh
+npm run typecheck
+npm run lint
+npm run test:wallet
+npm run test:portfolio
+npm run test:transactions
+npm run test:perps
+npm run test:farm
+npm run test:review
+npm run test:vault
+npm run test:appearance
+```
+
+## Project layout
+
+| Path | Contents |
+| --- | --- |
+| `src/app` | Screens and routes (Expo Router) |
+| `src/components` | UI components, grouped by feature |
+| `src/hooks` | Data hooks used by screens |
+| `src/lib` | Solana, wallet and protocol logic (earn, farm, perps, swap, portfolio) |
+| `src/theme` | Colours, type and spacing for light and dark mode |
+| `scripts` | Tests and maintenance scripts |

@@ -1,0 +1,33 @@
+import { Image } from "expo-image";
+
+import { useTheme } from "@/theme/use-theme";
+
+const sources = {
+  TSLAx: require("../../../assets/images/tokens/tslax.png"),
+  GOOGLx: require("../../../assets/images/tokens/googlx.png"),
+  AAPLx: require("../../../assets/images/tokens/aaplx.png"),
+  ANTHROPIC: require("../../../assets/images/tokens/anthropic.png"),
+  OPENAI: require("../../../assets/images/tokens/openai.png"),
+  SKR: require("../../../assets/images/tokens/skr.png"),
+  SOL: require("../../../assets/images/tokens/sol.png"),
+  USDC: require("../../../assets/images/tokens/usdc.png"),
+} as const;
+
+export type TokenSymbol = keyof typeof sources;
+
+export function isTokenSymbol(value: string): value is TokenSymbol {
+  return value in sources;
+}
+
+type TokenIconProps = {
+  symbol: TokenSymbol;
+  size?: number;
+};
+
+export function TokenIcon({ symbol, size = 40 }: TokenIconProps) {
+  const { radius } = useTheme();
+
+  // Memory only: on Android the disk cache keys a bundled image by its resource id, and those ids shift whenever an image
+  // is added (SKR moved every later token up by one), so a phone updated from an older build showed the wrong logos.
+  return <Image accessibilityLabel={symbol} source={sources[symbol]} cachePolicy="memory" style={{ width: size, height: size, borderRadius: radius.pill }} />;
+}

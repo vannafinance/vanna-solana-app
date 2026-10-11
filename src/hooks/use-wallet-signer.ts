@@ -1,0 +1,118 @@
+import { useMobileWallet } from "@wallet-ui/react-native-web3js";
+import { useQueryClient } from "@tanstack/react-query";
+import { type Connection, PublicKey, type VersionedTransaction } from "@solana/web3.js";
+import { useCallback, useEffect, useRef } from "react";
+
+import { DEV_WALLET_ADDRESS } from "@/lib/solana/config";
+import { signWithFreshBlockhash } from "@/lib/solana/fresh-blockhash";
+import { rpcConnection } from "@/lib/solana/rpc";
+import { assertSignedBy } from "@/lib/solana/signed-by";
+import type { SigningHooks } from "@/lib/solana/send-transaction";
+import { isWalletRefusal, toTransactionError, WALLET_MISMATCH } from "@/lib/solana/transaction-errors";
+import { type RunProgress, TransactionError } from "@/types/transaction";
+
+// A wallet's identity check fails now and then for reasons outside the app (a slow fetch of the site's assetlinks.json), and
+// each try is an independent chance, so a refusal before anything was signed is tried up to three more times.
+const WALLET_ATTEMPTS = 4;
+// Long enough for a wallet to close the error screen it shows after refusing; opened sooner, the next request lands on that
+// closing screen and comes straight back as a cancel the user never made.
+const RETRY_PAUSE_MS = 3000;
+// A cancel this soon after the wallet was opened, right after a refusal, is that closing screen rather than the user.
+const BOUNCE_MS = 2000;
+
+type SigningContext = { connection: Connection; owner: PublicKey; hooks: SigningHooks };
+
+// The wallet signs only. In development builds a developer wallet override can show another address's data, in
+// which case that address cannot be the signer and transactions are refused instead of sent from the wrong account.
+export function useWalletSigner() {
+  const { account, accounts, signTransactions, store } = useMobileWallet();
+  const queryClient = useQueryClient();
+  const owner = account?.address.toBase58() ?? null;
+  const mismatch = DEV_WALLET_ADDRESS !== undefined && owner !== DEV_WALLET_ADDRESS;
+
+  // The wallet hands out a new authorization token after every approval, and a signing call that outlives a render keeps the
+  // token it was created with. A flow that asks twice (a lookup table, then the transaction) would present the first token
+  // again and be refused, so every call goes through the latest function.
+  const latest = useRef(signTransactions);
+  useEffect(() => {
+    latest.current = signTransactions;
+  }, [signTransactions]);
+
+  // A wallet that no longer knows our authorization token answers every request with "authorization request failed", and the
+  // library repeats that same token, so a plain retry can never succeed. Forgetting only the token (not the account, so the
+  // user stays connected) makes the next request ask the wallet to authorize the app again.
+  const wallet = useRef({ account, accounts, store });
+  useEffect(() => {
+    wallet.current = { account, accounts, store };
+  }, [account, accounts, store]);
+  const forgetStaleToken = useCallback(async () => {
+    const { account: selected, accounts: all, store: authorizationStore } = wallet.current;
+    if (!selected) return;
+    await authorizationStore.persist({ accounts: all ?? [selected], authToken: undefined as unknown as string, selectedAccount: selected });
+  }, []);
+
+  // Android can open a different wallet app, or the wallet can be on another account, than the one connected; what it
+  // signs is checked before anything is sent.
+  const ownerRef = useRef(owner);
+  useEffect(() => {
+    ownerRef.current = owner;
+  }, [owner]);
+  const checked = useCallback(<T extends VersionedTransaction | VersionedTransaction[]>(signed: T): T => {
+    if (ownerRef.current !== null) assertSignedBy(Array.isArray(signed) ? signed : [signed], ownerRef.current);
+    return signed;
+  }, []);
+  const sign = useCallback((transaction: VersionedTransaction) => signWithFreshBlockhash(rpcConnection, [transaction], () => latest.current(transaction)).then(checked), [checked]);
+  const signAll = useCallback((transactions: VersionedTransaction[]) => signWithFreshBlockhash(rpcConnection, transactions, () => latest.current(transactions)).then(checked), [checked]);
+
+  // After a confirmed transaction every live figure is stale; refetch them now instead of waiting for the next poll.
+  const refreshAfterTransaction = useCallback(() => {
+    for (const key of ["account-snapshot", "wallet-holdings", "earn-deposits", "earn-events", "spot-swaps", "wallet-transactions", "kamino-positions", "pools"]) {
+      void queryClient.invalidateQueries({ queryKey: [key] });
+    }
+  }, [queryClient]);
+
+  // Runs one signed transaction flow and turns every failure into the error the approval sheet renders. A wallet that
+  // refuses to authorize the app has not been shown anything and nothing was signed, so that one failure is tried again once.
+  const execute = useCallback(
+    async (task: (context: SigningContext) => Promise<unknown>, progress: RunProgress) => {
+      if (owner === null) throw new TransactionError("network", "Wallet not connected", "Connect your wallet and try again. Nothing was sent.");
+      if (mismatch) throw toTransactionError(new Error(WALLET_MISMATCH));
+      let signed = false;
+      const hooks = {
+        sign,
+        signAll,
+        onPrepared: progress.prepared,
+        onSigned: () => {
+          signed = true;
+          progress.signed();
+        },
+        onSent: progress.sent,
+        onProcessed: progress.processed,
+      };
+      let refusal: unknown = null;
+      for (let attempt = 1; ; attempt++) {
+        const startedAt = Date.now();
+        try {
+          await task({ connection: rpcConnection, owner: new PublicKey(owner), hooks });
+          refreshAfterTransaction();
+          return;
+        } catch (error) {
+          const bounced = refusal !== null && Date.now() - startedAt < BOUNCE_MS && toTransactionError(error).title.includes("ancel");
+          if (!signed && (isWalletRefusal(error) || bounced)) {
+            if (isWalletRefusal(error)) refusal = error;
+            if (attempt < WALLET_ATTEMPTS) {
+              await forgetStaleToken();
+              await new Promise((resolve) => setTimeout(resolve, RETRY_PAUSE_MS));
+              continue;
+            }
+          }
+          // Out of tries after a refusal: say so, not "cancelled", which the user never did.
+          throw toTransactionError(bounced ? refusal : error);
+        }
+      }
+    },
+    [owner, mismatch, sign, signAll, refreshAfterTransaction, forgetStaleToken],
+  );
+
+  return { owner, mismatch, sign, signAll, refreshAfterTransaction, execute };
+}
