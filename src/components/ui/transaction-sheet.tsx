@@ -8,6 +8,7 @@ import type { ConfirmStage, TransactionState } from "@/types/transaction";
 
 import { AppText } from "./app-text";
 import { Button } from "./button";
+import { SheetBody, useSheetRoom } from "./sheet-room";
 import { TransactionRing, type RingKind } from "./transaction-ring";
 
 type TransactionSheetProps = {
@@ -42,6 +43,7 @@ function useRetained<T>(value: T | null, ms: number): T | null {
 export function TransactionSheet({ state: current, onPrimary, onClose, primaryLabel, onExplorer, hero }: TransactionSheetProps) {
   const { colors, layout, motion, radius, shadow } = useTheme();
   const insets = useSafeAreaInsets();
+  const room = useSheetRoom();
   const state = useRetained(current, EXIT_MS);
   if (!state) return null;
 
@@ -52,7 +54,7 @@ export function TransactionSheet({ state: current, onPrimary, onClose, primaryLa
 
   return (
     <Modal visible transparent animationType="none" statusBarTranslucent navigationBarTranslucent onRequestClose={confirming || !open ? undefined : onClose}>
-      <View style={{ flex: 1, justifyContent: "flex-end" }}>
+      <View onLayout={room.onLayout} style={{ flex: 1, justifyContent: "flex-end" }}>
         {open ? (
           <Animated.View
             key="scrim"
@@ -72,6 +74,7 @@ export function TransactionSheet({ state: current, onPrimary, onClose, primaryLa
                 alignSelf: "center",
                 width: "100%",
                 maxWidth: layout.sheetMaxWidth,
+                maxHeight: room.maxHeight,
                 paddingHorizontal: 20,
                 paddingTop: 24,
                 paddingBottom: Math.max(insets.bottom + 12, 28),
@@ -82,22 +85,24 @@ export function TransactionSheet({ state: current, onPrimary, onClose, primaryLa
               shadow.floating,
             ]}
           >
-            {hero ? <View style={{ alignItems: "center", marginBottom: 20 }}>{hero}</View> : null}
-            {state.phase === "signing" ? <SigningRow key={state.prepared ? "approve" : "prepare"} state={state} /> : null}
-            {state.phase === "confirming" ? <StatusRow ring="arc" title={state.title} detail={state.message} /> : null}
-            {state.phase === "success" ? <StatusRow ring="seal" title={state.title} detail={state.message} /> : null}
-            {state.phase === "failure" ? (
-              <StatusRow ring={rejected ? "off" : "fail"} title={state.title} detail={state.message} />
-            ) : null}
-            {state.phase === "failure" && state.detail ? <FailureDetail text={state.detail} /> : null}
-            {state.phase === "confirming" || state.phase === "success" ? <Progress stage={state.phase === "success" ? "success" : state.stage} /> : null}
-            <Actions
-              state={state}
-              primaryLabel={primaryLabel}
-              onPrimary={onPrimary}
-              onClose={onClose}
-              onExplorer={onExplorer}
-            />
+            <SheetBody>
+              {hero ? <View style={{ alignItems: "center", marginBottom: 20 }}>{hero}</View> : null}
+              {state.phase === "signing" ? <SigningRow key={state.prepared ? "approve" : "prepare"} state={state} /> : null}
+              {state.phase === "confirming" ? <StatusRow ring="arc" title={state.title} detail={state.message} /> : null}
+              {state.phase === "success" ? <StatusRow ring="seal" title={state.title} detail={state.message} /> : null}
+              {state.phase === "failure" ? (
+                <StatusRow ring={rejected ? "off" : "fail"} title={state.title} detail={state.message} />
+              ) : null}
+              {state.phase === "failure" && state.detail ? <FailureDetail text={state.detail} /> : null}
+              {state.phase === "confirming" || state.phase === "success" ? <Progress stage={state.phase === "success" ? "success" : state.stage} /> : null}
+              <Actions
+                state={state}
+                primaryLabel={primaryLabel}
+                onPrimary={onPrimary}
+                onClose={onClose}
+                onExplorer={onExplorer}
+              />
+            </SheetBody>
           </Animated.View>
         ) : null}
       </View>

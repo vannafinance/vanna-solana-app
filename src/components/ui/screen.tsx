@@ -11,6 +11,7 @@ import { useResetScrollBetweenSpaces } from "@/navigation/use-reset-scroll-betwe
 import { type Space, spaceHeaders } from "@/theme/tokens";
 import { useTheme } from "@/theme/use-theme";
 
+import { Page } from "./page";
 import { SpaceHeader } from "./space-header";
 
 type ScreenProps = {
@@ -103,7 +104,7 @@ export function Screen({ header, footer, gap, paddingTop, children }: ScreenProp
   }, [focused, space, navigation, page, reveal, slide]);
 
   return (
-    <View style={{ flex: 1, backgroundColor: colors.background }}>
+    <Page>
       <ScrollView
         ref={listRef}
         contentContainerStyle={{ paddingBottom: spacing.xl }}
@@ -125,10 +126,8 @@ export function Screen({ header, footer, gap, paddingTop, children }: ScreenProp
         <Animated.View pointerEvents="none" style={[{ position: "absolute", top: 0, left: 0, right: 0, height: insets.top, backgroundColor: spaceHeaders[space].scrim }, scrim]} />
       )}
       {footer ? (
-        <View style={{ paddingHorizontal: spacing.lg, paddingTop: spacing.sm, paddingBottom: Math.max(insets.bottom, spacing.lg) }}>
-          {footer}
-        </View>
+        <View style={{ paddingHorizontal: spacing.lg, paddingTop: spacing.sm, paddingBottom: spacing.md }}>{footer}</View>
       ) : null}
-    </View>
+    </Page>
   );
 }

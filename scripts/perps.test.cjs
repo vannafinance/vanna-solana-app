@@ -773,3 +773,91 @@ test("1x is only where the slider starts: an order needs 2x or more", () => {
     assert.equal(orderIssue(1_000_000_000n, 100_000_000n, twoX), null);
   }
 });
+
+// A borrow sent ahead of its swap: an order on an account with several positions borrows in one transaction and swaps in
+// the next. The shared USDC debt must still be split by what each long borrowed (a 1x long's collateral went negative
+// when both were charged half).
+const { marginSwapsFrom } = load("src/lib/solana/margin-activity.ts");
+
+const LAST_ORDER_MARGIN = Keypair.generate().publicKey;
+const BORROWED_EVENT = [225, 182, 241, 78, 34, 145, 253, 230];
+const SWAPPED_EVENT = [25, 110, 111, 203, 233, 54, 199, 222];
+const LITE_OPENED_EVENT = [183, 79, 102, 12, 14, 22, 68, 6];
+
+const borrowLog = (name, amount) => eventLine(BORROWED_EVENT, [LAST_ORDER_MARGIN.toBuffer(), reserveAddress(mint(name)).toBuffer(), u64(amount), Buffer.alloc(56)]);
+const swapLog = (from, to, amountIn, amountOut) => eventLine(SWAPPED_EVENT, [LAST_ORDER_MARGIN.toBuffer(), mint(from).toBuffer(), mint(to).toBuffer(), u64(amountIn), u64(amountOut), u64(0n)]);
+const liteLog = () => eventLine(LITE_OPENED_EVENT, [LAST_ORDER_MARGIN.toBuffer(), Keypair.generate().publicKey.toBuffer(), u64(1n), Buffer.alloc(8)]);
+const transaction = (signature, blockTime, logs) => ({ signature, blockTime, status: "success", tx: { meta: { logMessages: logs } } });
+
+// Newest first, as the transactions are fetched.
+const ordersNewestFirst = (...oldestFirst) => [...oldestFirst].reverse();
+
+test("a borrow sent in the transaction before a swap is the swap's borrow", () => {
+  const swaps = marginSwapsFrom(
+    ordersNewestFirst(transaction("borrow", 1000, [borrowLog("USDC", 2_000_000_000n)]), transaction("swap", 1010, [swapLog("USDC", "TSLAx", 3_000_000_000n, 7_951_442n)])),
+    LAST_ORDER_MARGIN.toBase58(),
+  );
+  assert.equal(swaps.length, 1);
+  assert.equal(swaps[0].borrowed.asset, "USDC");
+  assert.equal(swaps[0].borrowed.amount, 2_000_000_000n);
+});
+
+test("a borrow is spent by one swap and not carried to the next", () => {
+  const swaps = marginSwapsFrom(
+    ordersNewestFirst(
+      transaction("borrow", 1000, [borrowLog("USDC", 200_000_000n)]),
+      transaction("first", 1010, [swapLog("USDC", "SKR", 300_000_000n, 18_404_165_312n)]),
+      transaction("second", 1020, [swapLog("USDC", "TSLAx", 50_000_000n, 132_000n)]),
+    ),
+    LAST_ORDER_MARGIN.toBase58(),
+  );
+  assert.equal(swaps.length, 2);
+  assert.equal(swaps[0].borrowed.amount, 200_000_000n);
+  assert.equal(swaps[1].borrowed, null);
+});
+
+test("a borrow too old, for another asset, or from a Farm deploy is not a swap's borrow", () => {
+  const margin = LAST_ORDER_MARGIN.toBase58();
+  const tooOld = marginSwapsFrom(ordersNewestFirst(transaction("borrow", 1000, [borrowLog("USDC", 1n)]), transaction("swap", 1000 + 301, [swapLog("USDC", "TSLAx", 5n, 5n)])), margin);
+  const otherAsset = marginSwapsFrom(ordersNewestFirst(transaction("borrow", 1000, [borrowLog("SOL", 1n)]), transaction("swap", 1010, [swapLog("USDC", "TSLAx", 5n, 5n)])), margin);
+  const farmDeploy = marginSwapsFrom(ordersNewestFirst(transaction("deploy", 1000, [borrowLog("USDC", 7_539_400_000n), liteLog()]), transaction("swap", 1010, [swapLog("USDC", "TSLAx", 5n, 5n)])), margin);
+  assert.equal(tooOld[0].borrowed, null);
+  assert.equal(otherAsset[0].borrowed, null);
+  assert.equal(farmDeploy[0].borrowed, null);
+});
+
+test("a borrow in the swap's own transaction still wins", () => {
+  const swaps = marginSwapsFrom(
+    ordersNewestFirst(transaction("borrow", 1000, [borrowLog("USDC", 9n)]), transaction("both", 1010, [borrowLog("USDC", 1_000_000_000n), swapLog("USDC", "TSLAx", 1_500_000_000n, 421_198_486n)])),
+    LAST_ORDER_MARGIN.toBase58(),
+  );
+  assert.equal(swaps[0].borrowed.amount, 1_000_000_000n);
+});
+
+test("the live account: a 1x SKR long beside a borrowed TSLAx long keeps its collateral, and the TSLAx long owes its own loan", () => {
+  // 200 and 2,000 USDC borrowed in their own transactions, then 300 USDC into SKR and 3,000 USDC into TSLAx.
+  const swaps = marginSwapsFrom(
+    ordersNewestFirst(
+      transaction("b1", 1000, [borrowLog("USDC", 200_000_000n)]),
+      transaction("s1", 1010, [swapLog("USDC", "SKR", 300_000_000n, 18_404_165_312n)]),
+      transaction("b2", 2000, [borrowLog("USDC", 2_000_000_000n)]),
+      transaction("s2", 2010, [swapLog("USDC", "TSLAx", 3_000_000_000n, 795_144_279n)]),
+    ),
+    LAST_ORDER_MARGIN.toBase58(),
+  );
+  const { positions } = derivePositions({
+    collateral: { SKR: 18_404_165_312n, TSLAx: 795_144_279n },
+    debt: { USDC: 2_201_500_000n },
+    prices: { SKR: 16_300n, TSLAx: 377_440_000n },
+    swaps,
+  });
+  const skr = positions.find((position) => position.symbol === "SKR");
+  const tsla = positions.find((position) => position.symbol === "TSLAx");
+  assert.ok(skr.collateral > 0n, "collateral never goes negative");
+  assert.ok(tsla.collateral > 0n);
+  // Debt is split 200 : 2,000, so the two debts add back up to what the account owes.
+  const skrDebt = (18_404_165_312n * 16_300n) / 1_000_000n - skr.collateral;
+  const tslaDebt = (795_144_279n * 377_440_000n) / 100_000_000n - tsla.collateral;
+  assert.ok(Math.abs(Number(skrDebt + tslaDebt - 2_201_500_000n)) <= 2);
+  assert.ok(skrDebt < tslaDebt / 5n);
+});
