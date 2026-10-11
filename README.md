@@ -9,10 +9,10 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/vannafinance/vanna-solana-app/releases/latest"><img src="https://img.shields.io/github/v/release/vannafinance/vanna-solana-app?label=Download%20APK&logo=android&color=7c3aed" alt="Download APK" /></a>
-  <img src="https://img.shields.io/badge/platform-Android-3ddc84?logo=android&logoColor=white" alt="Android" />
-  <img src="https://img.shields.io/badge/Solana-Mobile%20Wallet%20Adapter-9945ff?logo=solana&logoColor=white" alt="Solana Mobile Wallet Adapter" />
-  <img src="https://img.shields.io/badge/built%20with-Expo%20%2B%20React%20Native-000020?logo=expo" alt="Expo and React Native" />
+  <a href="https://github.com/vannafinance/vanna-solana-app/releases/latest"><img src="assets/readme/download-apk.svg" alt="Download APK" /></a>
+  <img src="assets/readme/android.svg" alt="Android" />
+  <img src="assets/readme/solana-mwa.svg" alt="Solana Mobile Wallet Adapter" />
+  <img src="assets/readme/expo.svg" alt="Expo and React Native" />
 </p>
 
 <p align="center">
