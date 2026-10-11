@@ -20,21 +20,23 @@ export default function Connect() {
   }, [connected, entryRoute]);
 
   return (
-    <HeroStage>
-      <ConnectSheet
-        phase={wallet.phase}
-        walletMissing={wallet.walletMissing}
-        declinedByWallet={wallet.declinedByWallet}
-        walletName={wallet.walletName}
-        address={wallet.address}
-        errorMessage={wallet.errorMessage}
-        onConnect={wallet.connect}
-        onInstallPhantom={wallet.installPhantom}
-        onInstallSolflare={wallet.installSolflare}
-        onRetry={wallet.retryAuthorize}
-        onContinue={() => router.replace(entryRoute)}
-        onDismiss={() => router.back()}
-      />
-    </HeroStage>
+    <HeroStage
+      sheet={
+        <ConnectSheet
+          phase={wallet.phase}
+          walletMissing={wallet.walletMissing}
+          declinedByWallet={wallet.declinedByWallet}
+          walletName={wallet.walletName}
+          address={wallet.address}
+          errorMessage={wallet.errorMessage}
+          onConnect={wallet.connect}
+          onInstallPhantom={wallet.installPhantom}
+          onInstallSolflare={wallet.installSolflare}
+          onRetry={wallet.retryAuthorize}
+          onContinue={() => router.replace(entryRoute)}
+          onDismiss={() => router.back()}
+        />
+      }
+    />
   );
 }
