@@ -7,7 +7,7 @@ const boundary = (message, patterns) => ({
 
 module.exports = defineConfig([
   expoConfig,
-  { ignores: ["dist/*", ".expo/*"] },
+  { ignores: ["dist/*", ".expo/*", "protocol/*"] },
   {
     files: ["src/components/**/*.{ts,tsx}", "src/theme/**/*.{ts,tsx}"],
     rules: boundary(

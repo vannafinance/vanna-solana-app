@@ -133,3 +133,4 @@ npm run test:appearance
 | `src/lib` | Solana, wallet and protocol logic (earn, farm, perps, swap, portfolio) |
 | `src/theme` | Colours, type and spacing for light and dark mode |
 | `scripts` | Tests and maintenance scripts |
+| `protocol` | Vanna's Solana programs ([Protocol_V1_Solana](https://github.com/vannafinance/Protocol_V1_Solana)), a git submodule for reference only; the app does not build from it. Fetch it with `git submodule update --init` |
