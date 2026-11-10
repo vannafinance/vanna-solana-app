@@ -3,7 +3,7 @@ import * as Clipboard from "expo-clipboard";
 import { useEffect, useState } from "react";
 import Animated, { cancelAnimation, Easing, useAnimatedStyle, useSharedValue, withRepeat, withTiming } from "react-native-reanimated";
 import Svg, { Circle, Defs, LinearGradient as SvgGradient, Stop } from "react-native-svg";
-import { Platform, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { Platform, Pressable, StyleSheet, Text, TextInput, View, Share } from "react-native";
 import QRCode from "react-native-qrcode-svg";
 
 import { TokenLogo } from "@/components/brand";
@@ -11,7 +11,7 @@ import { cleanAmt, Seg2, TokenPill } from "@/components/form";
 import { Swap } from "@/components/motion";
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
-import { IconAction } from "@/components/ui/kit";
+import { IconAction, shareIcon } from "@/components/ui/kit";
 import { nf, tokFmt, usd } from "@/format";
 import { LOGO_PNG } from "@/generated/logos";
 import { ACCOUNT, ACTIVITY, DATA, PX, TOK } from "@/sample/data";
@@ -21,7 +21,7 @@ import { type Chain, CHAIN_LABEL } from "@/state/chain";
 import { mutate, useDataVersion } from "@/state/store";
 import { useTheme } from "@/theme/use-theme";
 import { BRAND_GRADIENT, families, font } from "@/theme/tokens";
-import { openSheet, toast } from "@/ui/overlay";
+import { openSheet, toast , closeSheet } from "@/ui/overlay";
 import { runTx } from "@/ui/tx";
 import { personalReady } from "@/state/personal";
 import { inUseWallet } from "@/state/wallets";
@@ -29,6 +29,8 @@ import { refreshAccount } from "@/chain/account-live";
 import { stellarFaucet, stellarTransfer } from "@/chain/stellar/actions";
 import { solanaFundFaucet, solanaWalletTransfer } from "@/chain/solana/actions";
 import { fundCash } from "@/chain/solana/predict";
+import * as dynamic from "@/chain/dynamic";
+import { openAddWallet } from "@/screens/wallets/wallets";
 
 /* Move (design screens/move.js): Deposit (Test funds, Receive), Withdraw (send to an address) and Transfer (wallet ↔ margin account),
    each a sheet over the screen it came from, sized to its content. Testnet: Buy, Bridge and From an exchange are mainnet tabs. */
@@ -52,7 +54,7 @@ const FAUCET: Record<Chain, [string, number][]> = {
     ["XLM", 10000],
     ["AqUSDC", 1000],
     ["BLUSDC", 1000],
-    ["SoUSDC", 1000],
+    ["SoUSDC", 25000], // what Soroswap's faucet actually sends
   ],
 };
 const RESERVE: Record<Chain, Record<string, number>> = {
@@ -180,6 +182,12 @@ function Faucet({ chain }: { chain: Chain }) {
   const list = FAUCET[chain];
   const claim = async (items: [string, number][]) => {
     if (!items.length) return;
+    if (dynamic.available && !personalReady(chain)) {
+      toast(`Add a ${CHAIN_LABEL[chain]} wallet first`, "err");
+      closeSheet();
+      openAddWallet(chain);
+      return;
+    }
     setSt((p) => ({
       ...p,
       ...Object.fromEntries(items.map(([s]) => [s, "pending" as const])),
@@ -187,17 +195,8 @@ function Faucet({ chain }: { chain: Chain }) {
     try {
       if (personalReady(chain)) {
         if (chain === "stellar") {
-          const mapStellarSym = (s: string): "XLM" | "USDC" | "blend-usdc" | "soroswap-usdc" | "aquarius-usdc" | "all" => {
-            const lower = s.toLowerCase();
-            if (lower === "xlm") return "XLM";
-            if (lower === "blusdc" || lower === "usdc-b" || lower === "blend-usdc") return "blend-usdc";
-            if (lower === "sousdc" || lower === "usdc-s" || lower === "soroswap-usdc") return "soroswap-usdc";
-            if (lower === "aqusdc" || lower === "usdc-a" || lower === "aquarius-usdc") return "aquarius-usdc";
-            if (lower === "usdc") return "USDC";
-            return "all";
-          };
-          const symArg = items.length > 1 ? "all" : mapStellarSym(items[0][0]);
-          await stellarFaucet(symArg);
+          // One at a time and XLM first: a brand-new account has to exist before it can hold anything else.
+          for (const [sym] of items) await stellarFaucet(sym);
           await refreshAccount("stellar");
         } else {
           const addr = inUseWallet("solana")?.full ?? inUseWallet("solana")?.addr;
@@ -343,7 +342,17 @@ function Faucet({ chain }: { chain: Chain }) {
 // Receive (design receiveCard): QR with the chain mark, the address in groups of four (ends bold), copy and share, network and tokens.
 function Receive({ chain }: { chain: Chain }) {
   const { colors } = useTheme();
-  const addr = FULL[chain];
+  // Never show a sample address here: someone could send real funds to it.
+  const addr = inUseWallet(chain)?.full ?? (dynamic.available ? "" : FULL[chain]);
+  const [copied, setCopied] = useState(false);
+  if (!addr) {
+    return (
+      <View style={[styles.card, { backgroundColor: colors.bg, alignItems: "center", gap: 14 }]}>
+        <Text style={{ fontFamily: font.regular, fontSize: 15, lineHeight: 21, color: colors.muted, textAlign: "center" }}>Add a {CHAIN_LABEL[chain]} wallet to see your address.</Text>
+        <Button label={`Add a ${CHAIN_LABEL[chain]} wallet`} fam={fam} onPress={() => (closeSheet(), openAddWallet(chain))} style={{ alignSelf: "stretch" }} />
+      </View>
+    );
+  }
   const groups = addr.match(/.{1,4}/g) ?? [addr];
   return (
     <View style={[styles.card, { backgroundColor: colors.bg, alignItems: "center", gap: 14 }]}>
@@ -374,9 +383,19 @@ function Receive({ chain }: { chain: Chain }) {
           </Text>
         ))}
       </Text>
-      <View style={{ flexDirection: "row", gap: 12 }}>
-        <IconAction icon="content_copy" label="Copy address" onPress={() => toast("Address copied")} />
-        <IconAction icon="share" label="Share address" onPress={() => toast("Opens the share sheet")} />
+      <View style={{ alignSelf: "stretch", gap: 8 }}>
+        <Button label="Share address" icon={shareIcon} fam={fam} onPress={() => void Share.share({ message: addr }).catch(() => {})} />
+        <Button
+          label={copied ? "Copied" : "Copy address"}
+          icon={copied ? "check" : "content_copy"}
+          v="outline"
+          size="md"
+          onPress={() => {
+            Clipboard.setStringAsync(addr).catch(() => {});
+            setCopied(true);
+            setTimeout(() => setCopied(false), 1500);
+          }}
+        />
       </View>
       <View style={[styles.rows, { backgroundColor: colors.surface, alignSelf: "stretch" }]}>
         {(
@@ -452,7 +471,7 @@ function Withdraw({ chain }: { chain: Chain }) {
       ? chain === "stellar"
         ? "Enter a Stellar address that starts with G"
         : "Enter a valid Solana address"
-      : t === FULL[chain]
+      : t === (inUseWallet(chain)?.full ?? FULL[chain])
         ? "That is this wallet"
         : "";
   const issue = !x ? "Enter an amount" : x > max ? `Not enough ${sym}` : !t ? "Enter an address" : addrErr ? "Check the address" : null;

@@ -72,7 +72,8 @@ export default function SignIn() {
     if (mode === "new") return setStep("name");
     // Returning here without ever picking a name: start from the email rather than the sample name.
     const mail = walletState().email;
-    if (me.name === "Maya" && mail) setRewards({ name: mail.split("@")[0] });
+    const who = mail?.split("@")[0] ?? walletState().wallets[chain][0]?.addr;
+    if (me.name === "Maya" && who) setRewards({ name: who });
     finish();
   };
 

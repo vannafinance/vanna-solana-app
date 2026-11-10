@@ -9,6 +9,8 @@ import { PERP_MKTS } from "@/screens/trade/perps";
 import { PERP_MARK } from "./perp-mark";
 import { fetchFundingNow, fetchKamino, fetchPerena } from "./solana/farm";
 import { fetchPhoenixMarkets, HOURS_PER_YEAR } from "./solana/phoenix";
+import { readAllAssetConfigs, TOKENS } from "./solana/actions";
+import { ensureFreshForkPrices } from "./solana/fork-prices";
 import { fetchSolanaPools } from "./solana/pools";
 import { fetchSolanaPrices } from "./solana/prices";
 import { usd } from "@/format";
@@ -140,7 +142,22 @@ async function refreshSolanaFarm() {
   });
 }
 
+// Fork prices expire after an hour unless someone rewrites them. Without this the app showed the design's sample prices.
+let keeperAt = 0;
+function keepForkPricesFresh(): Promise<unknown> {
+  if (Date.now() - keeperAt < 20 * 60_000) return Promise.resolve();
+  keeperAt = Date.now();
+  const work = readAllAssetConfigs()
+    .then((assets) => ensureFreshForkPrices(TOKENS, assets))
+    .catch((e: unknown) => {
+      keeperAt = 0;
+      console.warn("[live] price refresh failed", String(e));
+    });
+  return Promise.race([work, new Promise((r) => setTimeout(r, 8000))]);
+}
+
 async function refresh() {
+  await keepForkPricesFresh();
   refreshSolanaFarm();
   const [sp, xp, spx, xpx] = await Promise.allSettled([fetchSolanaPools(), fetchStellarPools(), fetchSolanaPrices(), fetchStellarPrices()]);
   [sp, xp, spx, xpx].forEach((r, i) => r.status === "rejected" && console.warn("[live] read failed", ["solanaPools", "stellarPools", "solanaPrices", "stellarPrices"][i], String(r.reason)));

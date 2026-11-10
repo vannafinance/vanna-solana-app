@@ -12,6 +12,7 @@ import { useTheme } from "@/theme/use-theme";
 import { brand, font } from "@/theme/tokens";
 
 import { usePfColors, type TraderSub } from "./shared";
+import { openShare } from "@/screens/share/share";
 
 // Compact Overview (portfolio.js overview, mode 'full'): Net earnings, Margin account, Lending, Positions.
 export function Overview({ openLender, openTrader }: { openLender: () => void; openTrader: (sub?: TraderSub) => void }) {
@@ -75,7 +76,7 @@ function MarginCard({ openTrader }: { openTrader: (sub?: TraderSub) => void }) {
         title="Margin account"
         right={
           <View style={{ flexDirection: "row", gap: 4, marginRight: -10 }}>
-            <IconAction icon={shareIcon} label="Share health factor" />
+            <IconAction icon={shareIcon} label="Share health factor" onPress={() => openShare({ kind: "health" })} />
             <IconAction icon="chevron_right" label="Open Margin" tone="plain" onPress={() => router.navigate("/margin")} />
           </View>
         }

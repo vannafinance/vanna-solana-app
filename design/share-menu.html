@@ -1,0 +1,326 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Vanna Share Menu</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600&display=swap">
+<style>
+/* Tokens are the app's own: src/theme/tokens.ts */
+:root{--page:#ECECEF;--pageInk:#1F1F1F;--pageMuted:#595959;--pageLine:#D9D9DE;--pageCtl:#FFFFFF}
+html[data-theme="dark"]{--page:#0B0B0D;--pageInk:#FFFFFF;--pageMuted:#B5B5B5;--pageLine:#2C2C2C;--pageCtl:#1E1E1E}
+.phone{--bg:#F7F7F7;--surface:#FFFFFF;--text:#1F1F1F;--muted:#595959;--divider:#EDEDEF;--border:#E5E7EB;--ctl:#8F94A0;--link:#703AE6;--tint:#F1EBFD;--onTint:#5029A3;--segment:#F0F0F2;--segOn:#FFFFFF;--scrim:rgba(17,17,17,.42);--pos:#1C7C83}
+html[data-theme="dark"] .phone{--bg:#111111;--surface:#1E1E1E;--text:#FFFFFF;--muted:#D2D2D2;--divider:#2C2C2C;--border:#2C2C2C;--ctl:#6A6A6A;--link:#CBB6FA;--tint:#2F1B61;--onTint:#E1D5FA;--segment:#111111;--segOn:#2C2C2C;--scrim:rgba(0,0,0,.62);--pos:#32EEE2}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--page);color:var(--pageInk);font:400 14px/20px 'Plus Jakarta Sans',system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+button{font:inherit;color:inherit;border:0;background:none;padding:0;cursor:pointer;-webkit-tap-highlight-color:transparent}
+.top{display:flex;flex-wrap:wrap;gap:12px 20px;align-items:center;padding:16px 24px;border-bottom:1px solid var(--pageLine)}
+.top h1{font:600 17px/24px 'Plus Jakarta Sans',system-ui,sans-serif;margin:0 auto 0 0;letter-spacing:-.1px}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chips button{height:34px;padding:0 13px;border-radius:17px;background:var(--pageCtl);border:1px solid var(--pageLine);font-weight:600;font-size:13px;color:var(--pageMuted);white-space:nowrap}
+.chips button.on{background:#703AE6;border-color:#703AE6;color:#fff}
+.stage{display:flex;justify-content:center;align-items:flex-end;gap:28px;padding:24px 24px 8px;flex-wrap:wrap}
+.dev{display:flex;flex-direction:column;align-items:center;gap:12px;min-width:0}
+.devT{text-align:center}
+.devT b{display:block;font-weight:600;font-size:15px;line-height:20px}
+.devT span{color:var(--pageMuted);font-size:12px;line-height:16px}
+.step{color:var(--pageMuted);font-size:13px;line-height:18px;text-align:center;min-height:36px;max-width:340px}
+.step b{color:var(--pageInk);font-weight:600}
+
+/* Phones */
+.bezel{background:#08080A;padding:7px;box-shadow:0 18px 44px rgba(10,10,20,.26)}
+.bezel.redmi{border-radius:40px}.bezel.samsung{border-radius:26px;padding:6px}.bezel.iphone{border-radius:66px;padding:10px;background:linear-gradient(135deg,#55514B,#2B2926 40%,#4B4843)}
+.phone{position:relative;overflow:hidden;background:var(--bg);color:var(--text);isolation:isolate}
+.redmi .phone{width:393px;height:873px;border-radius:33px}
+.samsung .phone{width:384px;height:832px;border-radius:20px}
+.iphone .phone{width:440px;height:956px;border-radius:56px}
+.status{position:absolute;inset:0 0 auto;height:40px;display:flex;align-items:center;justify-content:space-between;padding:0 24px;font-weight:600;font-size:13px;color:#fff;z-index:1}
+.iphone .status{height:62px;padding:8px 42px 0 58px;font-size:17px}
+.dots{display:flex;gap:4px;align-items:center}
+.dots i{display:block;width:16px;height:9px;border-radius:2.5px;background:currentColor;opacity:.92}
+.dots i:first-child{width:14px;opacity:.7}
+.hole{position:absolute;top:11px;left:50%;width:15px;height:15px;margin-left:-7.5px;border-radius:50%;background:#000;z-index:9}
+.samsung .hole{top:9px;width:13px;height:13px;margin-left:-6.5px}
+.island{position:absolute;top:13px;left:50%;width:100px;height:36px;margin-left:-50px;border-radius:18px;background:#000;z-index:9}
+.nav{position:absolute;left:50%;bottom:8px;width:108px;height:4px;margin-left:-54px;border-radius:2px;background:var(--text);opacity:.5;z-index:8}
+.iphone .nav{width:150px;height:5px;margin-left:-75px;opacity:.85}
+/* the screen you came from */
+.under{position:absolute;inset:0}
+html[data-theme="dark"] .bezel{box-shadow:0 0 0 1px #34343A}
+.ic.line{box-shadow:inset 0 0 0 1px rgba(255,255,255,.22)}
+.uHero{height:100%;background:linear-gradient(127deg,#FC5457,#703AE6 42%,#2F1B61);color:#fff;padding:70px 20px 0}
+.iphone .uHero{padding-top:88px}
+.uHero small{font-size:13px;opacity:.85}
+.uHero p{margin:2px 0 0;font:600 34px/42px 'Plus Jakarta Sans',system-ui,sans-serif;letter-spacing:-.5px}
+.scrim{position:absolute;inset:0;background:var(--scrim);z-index:2}
+
+/* Vanna sheet */
+.sheet{position:absolute;left:0;right:0;bottom:0;background:var(--surface);z-index:3;padding:0 16px 30px;display:flex;flex-direction:column;gap:14px;transition:transform .38s cubic-bezier(.2,.9,.25,1.05)}
+.android .sheet{border-radius:28px 28px 0 0}
+.ios .sheet{left:8px;right:8px;bottom:8px;border-radius:44px;padding:0 20px 28px}
+.sys-open .sheet{transform:scale(.96) translateY(10px)}
+.handle{align-self:center;width:32px;height:4px;border-radius:2px;background:var(--ctl);margin-top:12px;opacity:.7}
+.ios .handle{width:36px;height:5px;margin-top:7px;opacity:.45}
+.head{display:flex;align-items:center;min-height:32px;margin-top:-2px}
+.head h2{margin:0;font:600 19px/26px 'Plus Jakarta Sans',system-ui,sans-serif;letter-spacing:-.2px}
+.ios .head{position:relative;justify-content:center;min-height:44px;margin-top:-6px}
+.ios .head h2{font-size:17px}
+.xBtn{position:absolute;right:-6px;top:0;width:44px;height:44px;border-radius:22px;display:grid;place-items:center;background:var(--segment);color:var(--text)}
+.xBtn svg{width:20px;height:20px;fill:currentColor}
+
+/* The share card: module colour ground, one number, three figures, face, scannable code */
+.cardWrap{display:flex;justify-content:center}
+.card{position:relative;width:100%;border-radius:18px;overflow:hidden;color:#fff;display:flex;flex-direction:column;padding:14px 15px;box-shadow:0 10px 26px rgba(30,15,60,.22);transition:transform .32s cubic-bezier(.2,.9,.25,1.2)}
+.card.lift{transform:scale(.965)}
+.card.wide{aspect-ratio:16/9.4}
+.card.sq{aspect-ratio:1;max-width:292px;padding:18px}
+.card.portfolio{background:linear-gradient(127deg,#FC5457,#703AE6 46%,#2F1B61)}
+.card.loss{background:linear-gradient(127deg,#B33C3E,#5C1D26 52%,#23121A)}
+.card.earn{background:linear-gradient(160deg,#1C7C83,#155F64 50%,#0E4A4E)}
+.card.margin{background:linear-gradient(160deg,#B6479E,#8E3784 50%,#6B2766)}
+.cTop{display:flex;align-items:center;gap:6px;height:18px}
+.cTop svg.m{width:16px;height:16px}.cTop svg.w{height:12px;width:auto}
+.net{margin-left:auto;font-size:11px;font-weight:600;line-height:16px;padding:0 7px;border-radius:8px;background:rgba(255,255,255,.2)}
+.cMid{flex:1;display:flex;align-items:stretch;gap:10px;min-height:0;padding-top:8px}
+.cTxt{flex:1;min-width:0;display:flex;flex-direction:column;justify-content:center}
+.cT{font-weight:600;font-size:14px;line-height:19px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cBig{font:600 44px/50px 'Plus Jakarta Sans',system-ui,sans-serif;letter-spacing:-1.4px;font-variant-numeric:tabular-nums;white-space:nowrap}
+.cBig small{font-size:15px;letter-spacing:0;font-weight:600;margin-left:5px;opacity:.9}
+.cFig{display:flex;gap:14px;margin-top:5px}
+.cFig div{min-width:0}
+.cFig span{display:block;font-size:11px;line-height:14px;opacity:.82;white-space:nowrap}
+.cFig b{display:block;font-weight:600;font-size:13px;line-height:17px;white-space:nowrap;font-variant-numeric:tabular-nums}
+.cSide{flex:none;width:68px;display:flex;flex-direction:column;align-items:center;justify-content:space-between}
+.face{width:58px;height:58px;border-radius:50%;background:rgba(255,255,255,.16);overflow:hidden}
+.qr{width:56px;height:56px;background:#fff;border-radius:7px;padding:4px}
+.qr svg{display:block;width:100%;height:100%}
+.sq .cMid{flex-direction:column;padding-top:14px}
+.sq .cBig{font-size:60px;line-height:68px;letter-spacing:-2px}
+.sq .cT{font-size:16px;line-height:22px}
+.sq .cFig{gap:20px;margin-top:10px}
+.sq .cFig span{font-size:12px;line-height:16px}.sq .cFig b{font-size:14px;line-height:19px}
+.sq .cSide{flex-direction:row;width:100%;align-items:flex-end}
+.sq .face{width:72px;height:72px}
+.sq .qr{width:72px;height:72px;padding:5px}
+.link{position:absolute}
+.cLink{font-size:11px;line-height:14px;font-weight:600;opacity:.88;margin-top:7px}
+
+.seg{display:flex;height:40px;padding:3px;border-radius:20px;background:var(--segment)}
+.seg button{flex:1;border-radius:17px;font-weight:600;font-size:14px;color:var(--muted)}
+.seg button.on{background:var(--segOn);color:var(--text);box-shadow:0 1px 3px rgba(0,0,0,.12)}
+
+.post{display:flex;flex-direction:column;gap:4px}
+.post span{font-weight:600;font-size:13px;line-height:18px;color:var(--muted)}
+.post p{margin:0;font-size:15px;line-height:21px}
+
+/* Actions: one main button, two plain ones. No app icons. */
+.acts{display:flex;flex-direction:column;gap:8px;margin-top:2px}
+.main{height:56px;border-radius:28px;background:linear-gradient(180deg,#8B4DF7,#5A26C9);color:#fff;font-weight:600;font-size:17px;display:flex;align-items:center;justify-content:center;gap:9px}
+.ios .main{height:58px;border-radius:29px}
+.main svg{width:21px;height:21px;fill:#fff}
+.main:active{transform:scale(.985)}
+.sec{display:flex;gap:8px}
+.alt{flex:1;height:50px;border-radius:25px;display:flex;align-items:center;justify-content:center;gap:7px;font-weight:600;font-size:15px;color:var(--text);white-space:nowrap}
+.android .alt{border:1px solid var(--ctl)}
+.ios .alt{background:var(--segment);height:52px;border-radius:26px}
+.alt svg{width:19px;height:19px;fill:currentColor}
+.alt.done{color:var(--pos);border-color:var(--pos)}
+
+/* Receive address */
+.addr{display:flex;flex-direction:column;align-items:center;gap:14px;padding:6px 0 2px}
+.addr .qrL{width:196px;height:196px;padding:12px;background:#fff;border-radius:18px;border:1px solid var(--border)}
+.addr .qrL svg{display:block;width:100%;height:100%}
+.addr h3{margin:0;font-weight:600;font-size:14px;line-height:20px;color:var(--muted)}
+.addr code{font:400 16px/24px 'Plus Jakarta Sans',system-ui,sans-serif;font-variant-numeric:tabular-nums;text-align:center;word-spacing:3px;max-width:320px}
+.addr code b{font-weight:600}
+.warn{margin:0;color:var(--muted);font-size:13px;line-height:18px;text-align:center}
+
+/* The phone's own menu (illustrative) */
+.sys{position:absolute;left:0;right:0;bottom:0;z-index:5;background:var(--surface);padding:0 18px 30px;transform:translateY(105%);transition:transform .34s cubic-bezier(.2,.85,.25,1);box-shadow:0 -6px 30px rgba(0,0,0,.2)}
+.sys-open .sys{transform:none}
+.sys.hy{border-radius:26px 26px 0 0;padding-top:18px}
+.sys.oneui{border-radius:26px 26px 0 0;padding-top:18px;background:var(--bg)}
+.sys.ios{left:8px;right:8px;bottom:8px;border-radius:40px;padding:18px 18px 22px}
+.sThumb{display:flex;align-items:center;gap:12px}
+.sThumb i{flex:none;width:70px;height:42px;border-radius:9px;background:linear-gradient(127deg,#FC5457,#703AE6 46%,#2F1B61)}
+.sThumb b{display:block;font-weight:600;font-size:15px;line-height:20px}
+.sThumb span{font-size:13px;line-height:18px;color:var(--muted)}
+.sLbl{margin:16px 0 8px;font-weight:600;font-size:13px;line-height:18px;color:var(--muted)}
+.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px 4px;margin-top:16px}
+.ios .grid{grid-template-columns:repeat(5,1fr);gap:0 4px}
+.app{display:flex;flex-direction:column;align-items:center;gap:6px;font-size:12px;line-height:16px;color:var(--text);min-width:0}
+.ic{width:52px;height:52px;border-radius:50%;display:grid;place-items:center;color:#fff}
+.hy .ic{border-radius:16px}.ios .ic{border-radius:14px;width:60px;height:60px}.oneui .ic{border-radius:18px}
+.ic svg{width:27px;height:27px;fill:currentColor}
+.people{display:flex;gap:14px;margin-top:16px}
+.person{width:62px;display:flex;flex-direction:column;align-items:center;gap:5px;font-size:12px;line-height:16px;color:var(--text)}
+.av{width:56px;height:56px;border-radius:50%;display:grid;place-items:center;font-weight:600;font-size:17px;color:#fff}
+.list{margin-top:18px;background:var(--segment);border-radius:14px}
+.list div{display:flex;justify-content:space-between;align-items:center;padding:13px 16px;font-size:16px;line-height:22px}
+.list div+div{border-top:1px solid var(--divider)}
+.list svg{width:20px;height:20px;fill:currentColor}
+.cancel{display:block;width:100%;height:48px;margin-top:18px;border-radius:24px;background:var(--segment);font-weight:600;font-size:15px}
+.note{position:absolute;left:0;right:0;top:66px;display:flex;justify-content:center;z-index:7;pointer-events:none}
+.iphone .note{top:80px}
+.note span{background:#2C2C2C;color:#fff;font-weight:600;font-size:13px;line-height:18px;padding:9px 14px;border-radius:18px;opacity:0;transition:opacity .2s}
+.note.show span{opacity:1}
+
+.why{max-width:860px;margin:0 auto;padding:12px 24px 40px;display:grid;grid-template-columns:auto 1fr;gap:10px 16px}
+.why b{font-weight:600}
+.why span{color:var(--pageMuted)}
+.why .win{color:var(--pageInk)}
+@media (max-width:520px){.top{padding:14px 16px}.stage{padding:16px}.why{padding:12px 16px 32px;grid-template-columns:1fr;gap:2px}.why b{margin-top:10px}}
+@media (prefers-reduced-motion:reduce){.sheet,.sys,.card,.note span{transition:none}}
+</style>
+</head>
+<body>
+<header class="top">
+  <h1>Vanna share menu</h1>
+  <div class="chips" id="kinds"></div>
+  <div class="chips" id="themes"></div>
+</header>
+<main class="stage" id="stage"></main>
+<section class="why">
+  <b>Today</b><span>Share icon, then tap X, then X opens with text only. You go back, save the image and attach it yourself.</span>
+  <b>New</b><span class="win">Share icon, then Share, then pick any app on your phone's own menu. Image and post are already in.</span>
+</section>
+
+<script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"></script>
+<script src="share-menu-assets.js"></script>
+<script>
+const P = {
+  share:"M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92 1.61 0 2.92-1.31 2.92-2.92s-1.31-2.92-2.92-2.92z",
+  ios:"M16 5l-1.42 1.42-1.59-1.59V16h-1.98V4.83L9.42 6.42 8 5l4-4 4 4zm4 5v11c0 1.1-.9 2-2 2H6c-1.11 0-2-.9-2-2V10c0-1.11.89-2 2-2h3v2H6v11h12V10h-3V8h3c1.1 0 2 .89 2 2z",
+  link:"M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1zM8 13h8v-2H8v2zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4c2.76 0 5-2.24 5-5s-2.24-5-5-5z",
+  save:"M5 20h14v-2H5v2zM19 9h-4V3H9v6H5l7 7 7-7z",
+  copy:"M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z",
+  check:"M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z",
+  close:"M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z",
+};
+const ic = (k) => `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="${P[k]}"/></svg>`;
+const REF = "vanna.finance/r/ARJUN7";
+
+const KINDS = {
+  gain:{ tab:"Perps gain", head:"Share position", fam:"portfolio", title:"SOL-PERP Long 5x", big:"+18.41%", fig:[["Entry","$142.30"],["Mark","$147.54"],["PnL","+$36.82"]], face:"faceHappy", post:"Up 18.41% on a 5x SOL long, opened with credit from my Vanna account. On testnet now: "+REF },
+  loss:{ tab:"Perps loss", head:"Share position", fam:"loss", title:"XLM-PERP Short 3x", big:"−10.95%", fig:[["Entry","$0.2110"],["Mark","$0.2187"],["PnL","−$13.14"]], face:"faceWorried", post:"Down 10.95% on a 3x XLM short on Vanna testnet. Same account, one health factor. "+REF },
+  health:{ tab:"Health factor", head:"Share health factor", fam:"margin", title:"Health factor", big:"1.84", unit:"Safe", fig:[["Liquidation at","1.10"],["Borrowed","$1,250.00"],["Leverage","2.19x"]], face:"faceOk", post:"Spot, perps and farm on one account, one health factor: 1.84. On testnet now: "+REF },
+  earn:{ tab:"Earn", head:"Share position", fam:"earn", title:"USDC Earn", big:"+$48.20", unit:"earned", fig:[["APY","6.84%"],["Supplied","3,200 USDC"],["Since","Aug 14"]], face:"faceHappy", post:"Earning 6.84% on USDC by lending to traders on Vanna testnet. "+REF },
+  invite:{ tab:"Invite", head:"Invite a friend", fam:"portfolio", title:"Join me on Vanna", big:"ARJUN7", unit:"my code", fig:[["Lend","Earn"],["Borrow","Trade"],["One","Account"]], face:"faceHappy", post:"I'm testing Vanna: lend, borrow and trade from one account. Skip the waitlist with my code ARJUN7. "+REF },
+  address:{ tab:"Receive address", head:"Share address" },
+};
+const ADDR = "GD4XK2QF7MVNTL9RPEWZ3HYBCJ6SAUG5KQ8NDTXFM2VLWCPYR7HZEJ3B".replace(/[019]/g,"7");
+
+const state = { kind:"gain", fmt:"wide", theme: matchMedia("(prefers-color-scheme: dark)").matches ? "dark":"light" };
+const DEV = [
+  { id:"redmi", os:"android", name:"Redmi K50i", spec:"6.6 in, 1080 × 2460, HyperOS", saveL:"Save to gallery", sys:"hy" },
+  { id:"samsung", os:"android", name:"Samsung Galaxy S26 Ultra", spec:"6.9 in, One UI", saveL:"Save to gallery", sys:"oneui" },
+  { id:"iphone", os:"ios", name:"iPhone 18 Pro Max", spec:"6.9 in, 1320 × 2868, iOS", saveL:"Save to Photos", sys:"ios" },
+];
+
+function qr(text){
+  const q = qrcode(0,"M"); q.addData(text); q.make();
+  const n = q.getModuleCount(); let d = "";
+  for(let r=0;r<n;r++)for(let c=0;c<n;c++) if(q.isDark(r,c)) d += `M${c} ${r}h1v1h-1z`;
+  return `<svg viewBox="0 0 ${n} ${n}" shape-rendering="crispEdges"><path d="${d}" fill="#111"/></svg>`;
+}
+const lockup = () => `<svg class="m" viewBox="11 12 232 232"><path fill="#fff" fill-rule="evenodd" d="${A.mark}"/></svg><svg class="w" viewBox="0 0 206 48">${A.word.map(d=>`<path fill="#fff" fill-rule="evenodd" d="${d}"/>`).join("")}</svg>`;
+const cardHtml = (k) => {
+  const c = KINDS[k];
+  const figs = c.fig.map(([l,v])=>`<div><span>${l}</span><b>${v}</b></div>`).join("");
+  return `<div class="card ${state.fmt==="sq"?"sq":"wide"} ${c.fam}">
+    <div class="cTop">${lockup()}<span class="net">Testnet</span></div>
+    <div class="cMid">
+      <div class="cTxt"><div class="cT">${c.title}</div><div class="cBig">${c.big}${c.unit?`<small>${c.unit}</small>`:""}</div><div class="cFig">${figs}</div></div>
+      <div class="cSide"><div class="face">${A[c.face]}</div><div class="qr">${qr("https://"+REF)}</div></div>
+    </div>
+  </div>`;
+};
+const addrHtml = () => {
+  const g = ADDR.match(/.{1,4}/g);
+  const txt = g.map((x,i)=> i===0||i===g.length-1 ? `<b>${x}</b>` : x).join(" ");
+  return `<div class="addr"><h3>Your Stellar address</h3><div class="qrL">${qr(ADDR)}</div><code>${txt}</code><p class="warn">Only send Stellar testnet assets here.</p></div>`;
+};
+
+const APPS = [["whatsapp","WhatsApp","#25D366"],["telegram","Telegram","#26A5E4"],["x","X","#111"],["instagram","Instagram","#E4405F"],["linkedin","LinkedIn","#0A66C2"],["reddit","Reddit","#FF4500"],["facebook","Facebook","#1877F2"]];
+const appBtn = ([k,l,c]) => `<button class="app" data-app="${l}"><span class="ic${k==="x"?" line":""}" style="background:${c}"><svg viewBox="0 0 24 24"><path d="${A.social[k]}"/></svg></span>${l}</button>`;
+const person = (n,c) => `<button class="person" data-app="${n}"><span class="av" style="background:${c}">${n[0]}</span>${n}</button>`;
+
+function sysHtml(d){
+  const isAddr = state.kind==="address", c = KINDS[state.kind];
+  const thumb = `<div class="sThumb"><i style="${isAddr?"background:var(--segment)":""}"></i><div><b>${isAddr?"Stellar address":c.title}</b><span>${isAddr?"Text only":"Image and post attached"}</span></div></div>`;
+  if(d.sys==="hy") return `<div class="sys hy">${thumb}<div class="grid">${APPS.slice(0,4).concat(APPS.slice(4)).map(appBtn).join("")}<button class="app" data-app="Gmail"><span class="ic" style="background:#D93025;font-weight:600;font-size:20px">M</span>Gmail</button></div><button class="cancel" data-back>Cancel</button></div>`;
+  if(d.sys==="oneui") return `<div class="sys oneui">${thumb}<div class="sLbl">Quick Share</div><div class="people" style="margin-top:0">${person("Priya","#703AE6")}${person("Rohan","#1C7C83")}${person("Sana","#B6479E")}</div><div class="grid">${APPS.slice(0,4).map(appBtn).join("")}${APPS.slice(4).map(appBtn).join("")}</div></div>`;
+  return `<div class="sys ios">${thumb}<div class="people">${person("AirDrop","#2E8BFF")}${person("Priya","#703AE6")}${person("Rohan","#1C7C83")}${person("Sana","#B6479E")}</div><div class="grid" style="margin-top:18px">${APPS.slice(0,5).map(appBtn).join("")}</div><div class="list"><div>Copy${ic("copy")}</div><div>Save Image${ic("save")}</div></div></div>`;
+}
+
+function phoneHtml(d){
+  const isAddr = state.kind==="address", c = KINDS[state.kind];
+  const glyph = d.os==="ios" ? "ios" : "share";
+  const body = isAddr ? addrHtml() : `<div class="cardWrap">${cardHtml(state.kind)}</div>
+    <div class="seg" role="tablist" aria-label="Card shape"><button data-fmt="wide" class="${state.fmt==="wide"?"on":""}">Wide</button><button data-fmt="sq" class="${state.fmt==="sq"?"on":""}">Square</button></div>
+    <div class="post"><span>Goes with the image</span><p>${c.post}</p></div>`;
+  const secondary = isAddr
+    ? `<button class="alt" data-copy="Copy address">${ic("copy")}<span>Copy address</span></button>`
+    : `<button class="alt" data-copy="Copy link">${ic("link")}<span>Copy link</span></button><button class="alt" data-save="${d.saveL}">${ic("save")}<span>${d.saveL}</span></button>`;
+  const head = d.os==="ios"
+    ? `<div class="head"><h2>${c.head}</h2><button class="xBtn" aria-label="Close">${ic("close")}</button></div>`
+    : `<div class="head"><h2>${c.head}</h2></div>`;
+  return `<div class="under"><div class="uHero"><small>Portfolio value</small><p>$2,300.00</p></div></div>
+    <div class="status"><span>9:41</span><span class="dots"><i></i><i></i></span></div>
+    ${d.os==="ios"?'<div class="island"></div>':'<div class="hole"></div>'}
+    <div class="scrim" data-back></div>
+    <div class="sheet"><div class="handle"></div>${head}${body}
+      <div class="acts"><button class="main" data-share>${ic(glyph)}<span>${isAddr?"Share address":"Share"}</span></button><div class="sec">${secondary}</div></div>
+    </div>
+    ${sysHtml(d)}
+    <div class="note"><span></span></div>
+    <div class="nav"></div>`;
+}
+
+const stage = document.getElementById("stage");
+function render(){
+  document.documentElement.dataset.theme = state.theme;
+  const W = innerWidth;
+  // The phones scale; the gaps between them and the page gutters do not.
+  const zFit = (W - 48 - 56 - 20) / (407 + 396 + 460);
+  const stacked = zFit < .5;
+  const z = stacked ? Math.min(1,(W-32-20)/440) : Math.max(.5, Math.min(1, zFit, (innerHeight - 170) / 976));
+  const BW = { redmi:407, samsung:396, iphone:460 };
+  stage.innerHTML = DEV.map(d=>`<div class="dev" data-id="${d.id}" style="width:${Math.ceil(BW[d.id]*z)}px">
+      <div class="devT"><b>${d.name}</b><span>${d.spec}</span></div>
+      <div class="bezel ${d.id} ${d.os}" style="zoom:${z}"><div class="phone" data-os="${d.os}">${phoneHtml(d)}</div></div>
+      <div class="step"><b>Step 1.</b> Vanna's menu. Tap Share to see what comes next.</div>
+    </div>`).join("");
+  document.getElementById("kinds").innerHTML = Object.entries(KINDS).map(([k,v])=>`<button data-kind="${k}" class="${state.kind===k?"on":""}">${v.tab}</button>`).join("");
+  document.getElementById("themes").innerHTML = [["light","Light"],["dark","Dark"]].map(([k,l])=>`<button data-t="${k}" class="${state.theme===k?"on":""}">${l}</button>`).join("");
+}
+function flash(btn,label){
+  const was = btn.innerHTML; btn.classList.add("done");
+  btn.innerHTML = ic("check")+`<span>${label}</span>`;
+  setTimeout(()=>{btn.classList.remove("done");btn.innerHTML=was},1500);
+}
+function setStep(dev,open){
+  dev.querySelector(".bezel").classList.toggle("sys-open",open);
+  dev.querySelector(".step").innerHTML = open
+    ? "<b>Step 2.</b> Your phone's own menu. Everything is attached. The phone draws this, so its look varies."
+    : "<b>Step 1.</b> Vanna's menu. Tap Share to see what comes next.";
+}
+document.addEventListener("click",e=>{
+  const t = e.target.closest("button,[data-back]"); if(!t) return;
+  const dev = t.closest(".dev");
+  if(t.dataset.kind){state.kind=t.dataset.kind;render();return}
+  if(t.dataset.t){state.theme=t.dataset.t;render();return}
+  if(t.dataset.fmt){state.fmt=t.dataset.fmt;render();return}
+  if(t.dataset.copy){flash(t,"Copied");return}
+  if(t.dataset.save){flash(t,"Saved");return}
+  if("share" in t.dataset){const c=dev.querySelector(".card"); if(c){c.classList.add("lift");setTimeout(()=>c.classList.remove("lift"),320)} setStep(dev,true);return}
+  if("back" in t.dataset){setStep(dev,false);return}
+  if(t.dataset.app){setStep(dev,false);const n=dev.querySelector(".note");n.querySelector("span").textContent=`Opens ${t.dataset.app}, image and post attached`;n.classList.add("show");setTimeout(()=>n.classList.remove("show"),2000)}
+});
+let rz; addEventListener("resize",()=>{clearTimeout(rz);rz=setTimeout(render,120)});
+render();
+</script>
+</body>
+</html>

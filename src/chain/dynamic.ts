@@ -78,6 +78,14 @@ export async function appInstalled(packageName: string): Promise<boolean> {
 }
 
 /** Brings an installed app to the front. */
+export async function shareImage(uri: string, text: string, name: string): Promise<boolean> {
+  return native?.shareImage ? native.shareImage(uri, text, name) : false;
+}
+
+export async function saveImage(uri: string, name: string): Promise<boolean> {
+  return native?.saveImage ? native.saveImage(uri, name) : false;
+}
+
 export async function launchApp(packageName: string): Promise<boolean> {
   return native?.launchApp ? native.launchApp(packageName) : false;
 }
