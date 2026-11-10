@@ -25,14 +25,21 @@ const PACKAGE: Partial<Record<WalletApp, string>> = {
   OneKey: "so.onekey.app.wallet",
   LOBSTR: "com.lobstr.client",
 };
-// Each wallet's own WalletConnect link, from WalletConnect's wallet directory.
-const WC_LINK: Partial<Record<WalletApp, string>> = { OneKey: "onekey-wallet://wc", LOBSTR: "lobstr://wc" };
+// Each wallet's own WalletConnect links. Freighter's is from its source (docs/best-practices/navigation.md, build.gradle),
+// the others from WalletConnect's wallet directory.
+const WC_LINKS: Partial<Record<WalletApp, string[]>> = {
+  Freighter: ["freighterwallet://wc"],
+  OneKey: ["onekey-wallet://wc", "https://app.onekey.so/wc/connect"],
+  LOBSTR: ["lobstr://wc", "https://lobstr.co/uni/wc"],
+};
 
-const notInstalled = (app: WalletApp) => {
+// The Play Store only opens when the wallet really is missing.
+async function cantOpen(app: WalletApp): Promise<Error> {
   const id = PACKAGE[app];
+  if (id && (await dynamic.appInstalled(id))) return new Error(`${app} couldn't take the connection. Update ${app} and try again.`);
   if (id) Linking.openURL(`https://play.google.com/store/apps/details?id=${id}`).catch(() => {});
   return new Error(`${app} isn't installed. Install it, then try again.`);
-};
+}
 
 async function withWallet<T>(app: WalletApp, work: Parameters<Awaited<ReturnType<typeof mwa>>["transact"]>[0] extends (w: infer W) => unknown ? (wallet: W) => Promise<T> : never): Promise<T> {
   const { transact } = await mwa();
@@ -40,7 +47,7 @@ async function withWallet<T>(app: WalletApp, work: Parameters<Awaited<ReturnType
     return await transact(work as never, { packageName: PACKAGE[app] } as never);
   } catch (e) {
     const err = e as { code?: string; message?: string };
-    if (err.code === "ERROR_WALLET_NOT_FOUND" || /no.*wallet|not found/i.test(err.message ?? "")) throw notInstalled(app);
+    if (err.code === "ERROR_WALLET_NOT_FOUND" || /no.*wallet|not found/i.test(err.message ?? "")) throw await cantOpen(app);
     throw e;
   }
 }
@@ -88,8 +95,10 @@ async function openInWallet(app: WalletApp, uri: string): Promise<boolean> {
   const id = PACKAGE[app];
   if (!id) return false;
   if (await dynamic.openInApp(uri, id)) return true;
-  const own = WC_LINK[app];
-  return own ? dynamic.openInApp(`${own}?uri=${encodeURIComponent(uri)}`, id) : false;
+  for (const base of WC_LINKS[app] ?? []) {
+    if (await dynamic.openInApp(`${base}?uri=${encodeURIComponent(uri)}`, id)) return true;
+  }
+  return false;
 }
 
 export async function connectStellarWallet(app: WalletApp): Promise<ExternalConnection> {
@@ -98,10 +107,10 @@ export async function connectStellarWallet(app: WalletApp): Promise<ExternalConn
     optionalNamespaces: { stellar: { chains: [STELLAR_CHAIN], methods: ["stellar_signXDR"], events: [] } },
   });
   if (!uri) throw new Error("Couldn't start the wallet connection");
-  if (!(await openInWallet(app, uri))) throw notInstalled(app);
+  if (!(await openInWallet(app, uri))) throw await cantOpen(app);
   const session = await approval();
   const address = session.namespaces.stellar?.accounts[0]?.split(":")[2];
-  if (!address) throw new Error(`${app} didn't approve Stellar testnet`);
+  if (!address) throw new Error(`${app} didn't approve Stellar testnet. Switch it to Testnet and try again.`);
   return { address, session: session.topic };
 }
 
@@ -113,6 +122,8 @@ registerExternalStellarSigner(async (xdr, entry) => {
     chainId: STELLAR_CHAIN,
     request: { method: "stellar_signXDR", params: { xdr } },
   });
-  void openInWallet(entry.app, `wc:${entry.session}@2`);
+  // The request reaches the wallet through WalletConnect; this only brings the app forward to approve it.
+  const id = PACKAGE[entry.app];
+  if (id) void dynamic.launchApp(id);
   return (await pending).signedXDR;
 });

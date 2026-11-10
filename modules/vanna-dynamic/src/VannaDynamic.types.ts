@@ -22,6 +22,8 @@ export interface VannaDynamicNativeModule {
   /** Google or X in the browser, then the same wallets as email. Android only so far. */
   signInSocial?(provider: "google" | "x"): Promise<VannaDynamicSession>;
   openInApp?(uri: string, packageName: string): Promise<boolean>;
+  appInstalled?(packageName: string): Promise<boolean>;
+  launchApp?(packageName: string): Promise<boolean>;
   getSession(): Promise<VannaDynamicSession | null>;
   /** Base64 transaction envelope XDR in, signed envelope XDR out. */
   signStellarXdr(xdr: string): Promise<string>;

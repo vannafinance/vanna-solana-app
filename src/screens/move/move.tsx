@@ -28,20 +28,25 @@ import { inUseWallet } from "@/state/wallets";
 import { refreshAccount } from "@/chain/account-live";
 import { stellarFaucet, stellarTransfer } from "@/chain/stellar/actions";
 import { solanaFundFaucet, solanaWalletTransfer } from "@/chain/solana/actions";
+import { fundCash } from "@/chain/solana/predict";
 
 /* Move (design screens/move.js): Deposit (Test funds, Receive), Withdraw (send to an address) and Transfer (wallet ↔ margin account),
    each a sheet over the screen it came from, sized to its content. Testnet: Buy, Bridge and From an exchange are mainnet tabs. */
 const fam = families.portfolio;
 const FAUCET: Record<Chain, [string, number][]> = {
   solana: [
-    ["SOL", 100],
+    // Same tokens, order and amounts as the website's faucet (lib/solana/tokens.ts faucetAmount, plus CASH for Predict).
+    ["SOL", 1000],
     ["USDC", 1000],
-    ["TSLAx", 100],
-    ["GOOGLx", 100],
-    ["AAPLx", 100],
-    ["ANTHROPIC", 100],
-    ["OPENAI", 100],
-    ["SKR", 100],
+    ["USDT", 1000],
+    ["JitoSOL", 1000],
+    ["JupSOL", 1000],
+    ["JupUSD", 1000],
+    ["NVDAx", 10],
+    ["GOOGLx", 10],
+    ["AAPLx", 10],
+    ["TSLAx", 10],
+    ["CASH", 1000],
   ],
   stellar: [
     ["XLM", 10000],
@@ -197,17 +202,17 @@ function Faucet({ chain }: { chain: Chain }) {
         } else {
           const addr = inUseWallet("solana")?.full ?? inUseWallet("solana")?.addr;
           if (addr) {
-            if (items.length > 1) {
-              await solanaFundFaucet(addr);
-            } else {
-              await solanaFundFaucet(addr, items[0][0]);
+            for (const [sym, amount] of items) {
+              if (sym === "CASH") await fundCash(addr, amount);
+              else await solanaFundFaucet(addr, sym);
             }
             await refreshAccount("solana");
           }
         }
       }
       mutate(() => {
-        items.forEach(([s, v]) => (DATA[chain].wallet[s] = (DATA[chain].wallet[s] ?? 0) + v));
+        // A real wallet's balance already came back from the chain above.
+        if (!personalReady(chain)) items.forEach(([s, v]) => (DATA[chain].wallet[s] = (DATA[chain].wallet[s] ?? 0) + v));
         ACTIVITY[chain].unshift({
           t: nowT(),
           area: "Wallet",
@@ -223,7 +228,7 @@ function Faucet({ chain }: { chain: Chain }) {
         ...p,
         ...Object.fromEntries(items.map(([s]) => [s, "done" as const])),
       }));
-      setMsg(items.length > 1 ? "Sent to your wallet. Come back tomorrow for more." : `Sent ${nf(items[0][1])} ${items[0][0]} to your wallet.`);
+      setMsg(items.length > 1 ? (chain === "solana" ? "Sent to your wallet. Unlimited on the fork." : "Sent to your wallet. Come back tomorrow for more.") : `Sent ${nf(items[0][1])} ${items[0][0]} to your wallet.`);
     } catch (e: any) {
       toast(e?.message ?? "Faucet failed", "err");
       setSt((p) => ({
@@ -232,7 +237,8 @@ function Faucet({ chain }: { chain: Chain }) {
       }));
     }
   };
-  const open = list.filter(([s]) => !st[s]);
+  const available = (s: string) => (chain === "solana" ? st[s] !== "pending" : !st[s]); // the Solana fork has no limit
+  const open = list.filter(([s]) => available(s));
   return (
     <View style={[styles.card, { backgroundColor: colors.bg }]}>
       <View style={styles.fh}>
@@ -264,7 +270,7 @@ function Faucet({ chain }: { chain: Chain }) {
             {row.map(([s, v]) => (
               <Pressable
                 key={s}
-                onPress={() => !st[s] && claim([[s, v]])}
+                onPress={() => available(s) && claim([[s, v]])}
                 style={[styles.tile, { backgroundColor: colors.surface }]}
                 accessibilityRole="button"
                 accessibilityLabel={st[s] === "done" ? `${s} sent` : `Get ${nf(v)} test ${s}`}
@@ -300,7 +306,7 @@ function Faucet({ chain }: { chain: Chain }) {
                       fontVariant: ["tabular-nums"],
                     }}
                   >
-                    {st[s] === "done" ? "Sent" : st[s] === "pending" ? "Sending" : `+${kShort(v)}`}
+                    {st[s] === "done" ? "Sent" : st[s] === "pending" ? "Sending" : `+${nf(v)}`}
                   </Text>
                 </View>
               </Pressable>

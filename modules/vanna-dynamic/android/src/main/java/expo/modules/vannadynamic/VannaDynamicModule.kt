@@ -87,6 +87,17 @@ class VannaDynamicModule : Module() {
       }
     }
 
+    AsyncFunction("appInstalled") { packageName: String ->
+      appContext.reactContext?.packageManager?.getLaunchIntentForPackage(packageName) != null
+    }
+
+    AsyncFunction("launchApp") { packageName: String ->
+      val context = appContext.reactContext ?: return@AsyncFunction false
+      val intent = context.packageManager.getLaunchIntentForPackage(packageName) ?: return@AsyncFunction false
+      context.startActivity(intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
+      true
+    }
+
     AsyncFunction("getSession") Coroutine { ->
       guarded {
         val sdk = awaitSdk()
