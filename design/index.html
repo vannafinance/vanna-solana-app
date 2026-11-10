@@ -1,0 +1,28 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Vanna Mobile App (Copy)</title>
+<style>
+  :root{ --bg:#ffffff; --text:#111111; --muted:#777777; --violet:#703ae6; }
+  @media (prefers-color-scheme:dark){ :root:not([data-theme="light"]){ --bg:#111111; --text:#ffffff; --muted:#a7a7a7; --violet:#b69bf5; } }
+  :root[data-theme="dark"]{ --bg:#111111; --text:#ffffff; --muted:#a7a7a7; --violet:#b69bf5; }
+  html,body{ margin:0; height:100%; background:var(--bg); color:var(--text); font:15px/1.5 "Plus Jakarta Sans",system-ui,-apple-system,"Segoe UI",sans-serif; }
+  main{ min-height:100%; display:flex; align-items:center; justify-content:center; padding:16px; box-sizing:border-box; text-align:center; }
+  a{ color:var(--violet); font-weight:600; } p{ margin:6px 0; color:var(--muted); }
+</style>
+<script>
+  /* Launcher: phones and tablets (touch) open the app itself; desktops open the device lab. Each round is its own file. */
+  var APP = "app.html", LAB = "lab.html";
+  var touch = matchMedia("(pointer: coarse)").matches;
+  try { location.replace((touch ? APP : LAB) + location.search + location.hash); } catch (e) {}
+</script>
+</head>
+<body>
+<main><div><b>Vanna Mobile V7</b><p>Opening...</p><p><a href="lab.html">Device lab</a> &nbsp; <a href="app.html">App</a> &nbsp; <a href="mobile-v6.html">Mobile V6</a> &nbsp; <a href="mobile-v5.html">Mobile V5</a> &nbsp; <a href="mobile-v4.html">Mobile V4</a> &nbsp; <a href="mobile-v3.html">Mobile V3</a> &nbsp; <a href="mobile-v2.html">Mobile V2</a> &nbsp; <a href="mobile-v1.html">Mobile V1</a></p></div></main>
+</body>
+</html>
+
+</body></html>
