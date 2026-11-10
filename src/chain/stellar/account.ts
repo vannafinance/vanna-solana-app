@@ -91,6 +91,15 @@ export async function findMarginAccount(owner: string): Promise<string | null> {
   return null;
 }
 
+/** The pool's live XLM and USDC reserves, in whole tokens (web pool-action.tsx:useLpReserves). */
+export async function lpReserves(row: "SS_XLM_USDC" | "AQ_XLM_USDC"): Promise<{ xlm: number; usdc: number }> {
+  const p = LP_POOLS[row];
+  const [reserves, tokens] = await Promise.all([readContract(p.pool, p.reserves), readContract(p.pool, p.tokens)]);
+  const r = (reserves as bigint[]).map((x) => num(x) / 1e7);
+  const first = Array.isArray(tokens) ? (tokens as string[])[0] : (tokens as string);
+  return first === TOKENS.XLM ? { xlm: r[0], usdc: r[1] } : { xlm: r[1], usdc: r[0] };
+}
+
 async function lpUsd(row: string, shares: number, px: Record<string, number>): Promise<number> {
   const p = LP_POOLS[row];
   if (!p || !(shares > 0)) return 0;
