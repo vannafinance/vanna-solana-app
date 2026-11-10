@@ -24,6 +24,10 @@ export interface VannaDynamicNativeModule {
   openInApp?(uri: string, packageName: string): Promise<boolean>;
   appInstalled?(packageName: string): Promise<boolean>;
   launchApp?(packageName: string): Promise<boolean>;
+  /** The phone's own share menu with the image and the text attached. Android. */
+  shareImage?(uri: string, text: string, name: string): Promise<boolean>;
+  /** Saves a PNG to the gallery. Android 10 and later. */
+  saveImage?(uri: string, name: string): Promise<boolean>;
   getSession(): Promise<VannaDynamicSession | null>;
   /** Base64 transaction envelope XDR in, signed envelope XDR out. */
   signStellarXdr(xdr: string): Promise<string>;

@@ -46,9 +46,16 @@ export async function hydrateWallets() {
   try {
     state = { ...state, ...(JSON.parse(raw) as Partial<State>) };
     subs.forEach((f) => f());
+    changed.forEach((f) => f());
   } catch {}
 }
 export const walletState = () => state;
+// At most this many wallets are kept per chain, the Vanna email wallet included. Each wallet has its own margin account,
+// so more than two makes it hard to tell where your funds are.
+export const MAX_WALLETS = 2;
+export const canAddWallet = (c: Chain) => state.wallets[c].length < MAX_WALLETS;
+// The screens stop you adding past the limit. This keeps the list within it on any path that gets here anyway: the oldest entries and the newest stay.
+const capped = (list: WalletEntry[]) => (list.length <= MAX_WALLETS ? list : [...list.slice(0, MAX_WALLETS - 1), list[list.length - 1]]);
 export const useWallets = () =>
   useSyncExternalStore(
     (f) => (subs.add(f), () => void subs.delete(f)),
@@ -75,7 +82,7 @@ export function signInWithEmail(method: Exclude<SignIn, "wallet">, email: string
     signedIn: true,
     method,
     email,
-    wallets: { solana: [sol, ...state.wallets.solana.filter((w) => w.kind !== "embedded")], stellar: [xlm, ...state.wallets.stellar.filter((w) => w.kind !== "embedded")] },
+    wallets: { solana: capped([sol, ...state.wallets.solana.filter((w) => w.kind !== "embedded")]), stellar: capped([xlm, ...state.wallets.stellar.filter((w) => w.kind !== "embedded")]) },
     inUse: { solana: sol.id, stellar: xlm.id },
     askedOther: true, // email covers both chains
   });
@@ -89,14 +96,14 @@ export function connectWallet(c: Chain, app: WalletApp, logo: string): WalletEnt
   }
   const full = sampleAddr(c);
   const w: WalletEntry = { id: `${app}-${full.slice(0, 6)}`, app, logo, addr: short(full), full, kind: "external", sample: true };
-  set({ wallets: { ...state.wallets, [c]: [...state.wallets[c], w] }, inUse: { ...state.inUse, [c]: w.id }, signedIn: true, method: state.method ?? "wallet" });
+  set({ wallets: { ...state.wallets, [c]: capped([...state.wallets[c], w]) }, inUse: { ...state.inUse, [c]: w.id }, signedIn: true, method: state.method ?? "wallet" });
   return w;
 }
 
 // A real external wallet the user just approved in its app. `session` is what signs later without a new connection.
 export function addExternalWallet(c: Chain, app: WalletApp, logo: string, full: string, session: string): WalletEntry {
   const w: WalletEntry = { id: `${app}-${full.slice(0, 6)}`, app, logo, addr: short(full), full, kind: "external", session };
-  set({ wallets: { ...state.wallets, [c]: [...state.wallets[c].filter((x) => x.full !== full), w] }, inUse: { ...state.inUse, [c]: w.id }, signedIn: true, method: state.method ?? "wallet" });
+  set({ wallets: { ...state.wallets, [c]: capped([...state.wallets[c].filter((x) => x.full !== full), w]) }, inUse: { ...state.inUse, [c]: w.id }, signedIn: true, method: state.method ?? "wallet" });
   return w;
 }
 
@@ -125,5 +132,5 @@ export const signOut = () => (dynamic.available && dynamic.signOut().catch(() =>
 export function addEmbedded(c: Chain, email: string, real?: string) {
   const full = real ?? sampleAddr(c);
   const w: WalletEntry = { id: `vanna-${c}`, app: "Vanna wallet", logo: "VANNA", addr: short(full), full, kind: "embedded", sample: !real };
-  set({ email, wallets: { ...state.wallets, [c]: [w, ...state.wallets[c].filter((x) => x.kind !== "embedded")] }, inUse: { ...state.inUse, [c]: w.id } });
+  set({ email, wallets: { ...state.wallets, [c]: capped([w, ...state.wallets[c].filter((x) => x.kind !== "embedded")]) }, inUse: { ...state.inUse, [c]: w.id } });
 }

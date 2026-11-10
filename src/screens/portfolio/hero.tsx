@@ -139,8 +139,8 @@ function WalletList() {
       {rows.map((r) => (
         <View key={r.sym} style={sheetStyles.row}>
           <TokenLogo sym={r.sym} size={36} />
-          <View style={{ flex: 1 }}>
-            <Text style={[sheetStyles.title, { color: colors.text }]}>{r.sym}</Text>
+          <View style={{ flex: 1, minWidth: 0, justifyContent: "center" }}>
+            <Text style={[sheetStyles.title, { color: colors.text, flex: 0 }]} numberOfLines={1}>{r.sym}</Text>
             <Text style={[sheetStyles.sub, { color: colors.muted }]}>{nf(r.amt, 2)}</Text>
           </View>
           <Text style={[sheetStyles.title, { color: colors.text, flex: 0 }]}>{usd(r.value)}</Text>

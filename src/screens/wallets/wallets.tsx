@@ -6,7 +6,7 @@ import { Icon } from "@/components/ui/icon";
 import { Card } from "@/components/ui/kit";
 import { WalletLogo } from "@/components/wallet-logo";
 import { CHAIN_LABEL, type Chain } from "@/state/chain";
-import { removeWallet, setWalletInUse, useWallets, walletState, WALLET_APPS } from "@/state/wallets";
+import { canAddWallet, MAX_WALLETS, removeWallet, setWalletInUse, useWallets, walletState, WALLET_APPS } from "@/state/wallets";
 import { useTheme } from "@/theme/use-theme";
 import { font } from "@/theme/tokens";
 import { haptic } from "@/ui/haptics";
@@ -14,6 +14,10 @@ import { closeSheet, openSheet, toast } from "@/ui/overlay";
 
 // Open sign-in for one chain's wallets (Account > Wallets > Add, or the no-wallet prompt).
 export const openAddWallet = (c: Chain) => {
+  if (!canAddWallet(c)) {
+    toast(`You can keep ${MAX_WALLETS} ${CHAIN_LABEL[c]} wallets. Remove one first`, "err");
+    return;
+  }
   closeSheet();
   setTimeout(() => router.push({ pathname: "/sign-in", params: { add: c } } as unknown as Href), 200);
 };
@@ -137,10 +141,14 @@ export function WalletsCard() {
             );
           })}
           {st.wallets[c].length === 0 && <Text style={[styles.t12, { color: colors.muted, paddingVertical: 8 }]}>No {CHAIN_LABEL[c]} wallet yet.</Text>}
-          <Pressable onPress={() => openAddWallet(c)} style={styles.add} accessibilityRole="button">
-            <Icon name="add" size={18} color={colors.link} />
-            <Text style={[styles.t14, { color: colors.link }]}>Add a {CHAIN_LABEL[c]} wallet</Text>
-          </Pressable>
+          {st.wallets[c].length < MAX_WALLETS ? (
+            <Pressable onPress={() => openAddWallet(c)} style={styles.add} accessibilityRole="button">
+              <Icon name="add" size={18} color={colors.link} />
+              <Text style={[styles.t14, { color: colors.link }]}>Add a {CHAIN_LABEL[c]} wallet</Text>
+            </Pressable>
+          ) : (
+            <Text style={[styles.t12, { color: colors.muted, paddingVertical: 8 }]}>You can keep {MAX_WALLETS} {CHAIN_LABEL[c]} wallets. To add another, press and hold one to remove it.</Text>
+          )}
         </View>
       ))}
       <Text style={[styles.t12, { color: colors.muted, marginTop: 4 }]}>One wallet per chain is in use. Switching doesn&apos;t ask again; every transaction is approved in the wallet in use.</Text>

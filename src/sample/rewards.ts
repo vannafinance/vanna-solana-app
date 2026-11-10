@@ -1,3 +1,4 @@
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useSyncExternalStore } from "react";
 
 import { ACCOUNT, POINTS } from "./data";
@@ -97,6 +98,7 @@ type St = { cpView: "locked" | "unlocked"; unlockSeen: boolean; name: string; sh
 let st: St = { cpView: "locked", unlockSeen: false, name: ACCOUNT.name, show: true, renamed: null, code: REFERRAL.code, codeEdited: false };
 const subs = new Set<() => void>();
 export function setRewards(p: Partial<St>) {
+  if (p.name && p.name !== "Maya") AsyncStorage.setItem("vanna.name", p.name).catch(() => {});
   st = { ...st, ...p };
   subs.forEach((f) => f());
 }

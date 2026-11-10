@@ -1,7 +1,9 @@
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { nativeToScVal } from "@stellar/stellar-base";
 import { AppState } from "react-native";
 
 import { ACCOUNT, ACTIVITY, DATA, NOTES, PERP_HIST, PREDICT, type ChainData, type FarmPos } from "@/sample/data";
+import { rewardsNow, setRewards } from "@/sample/rewards";
 import type { Chain } from "@/state/chain";
 import { mutate } from "@/state/store";
 import { inUseWallet, onWalletsChanged, walletState } from "@/state/wallets";
@@ -132,6 +134,13 @@ export function clearSampleData() {
       const w = inUseWallet(c);
       ACCOUNT.wallets[c] = { ...ACCOUNT.wallets[c], addr: w?.addr ?? "" };
     }
+    // The name you picked, else your email or wallet. Never the design's sample name.
+    AsyncStorage.getItem("vanna.name")
+      .catch(() => null)
+      .then((saved) => {
+        const who = saved ?? walletState().email?.split("@")[0] ?? inUseWallet("solana")?.addr ?? inUseWallet("stellar")?.addr;
+        if (who && rewardsNow().name === "Maya") setRewards({ name: who });
+      });
   };
   syncProfile();
   onWalletsChanged(syncProfile);
