@@ -73,6 +73,20 @@ class VannaDynamicModule : Module() {
       }
     }
 
+    // Opens a link in one named app, so Android doesn't show its "Open with" list. False when that app can't take it.
+    AsyncFunction("openInApp") { uri: String, packageName: String ->
+      val context = appContext.reactContext ?: return@AsyncFunction false
+      val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(uri))
+        .setPackage(packageName)
+        .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+      try {
+        context.startActivity(intent)
+        true
+      } catch (_: android.content.ActivityNotFoundException) {
+        false
+      }
+    }
+
     AsyncFunction("getSession") Coroutine { ->
       guarded {
         val sdk = awaitSdk()

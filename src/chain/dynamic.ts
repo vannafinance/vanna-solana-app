@@ -68,6 +68,11 @@ export async function signInSocial(provider: "google" | "x"): Promise<VannaDynam
   return module.signInSocial(provider);
 }
 
+/** Opens a link in one named Android app. False when that app is missing or can't take the link. */
+export async function openInApp(uri: string, packageName: string): Promise<boolean> {
+  return native?.openInApp ? native.openInApp(uri, packageName) : false;
+}
+
 /** The signed-in user and wallet addresses, or null when signed out. */
 export async function getSession(): Promise<VannaDynamicSession | null> {
   if (!available) return null; // Expo Go: simply no session, so startup never errors
