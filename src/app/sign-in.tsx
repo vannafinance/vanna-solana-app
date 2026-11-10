@@ -1,13 +1,15 @@
 import { LinearGradient } from "expo-linear-gradient";
 import { type Href, router, useLocalSearchParams } from "expo-router";
 import { StatusBar } from "expo-status-bar";
-import { type ComponentRef, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { CHAIN_LOGO, TokenLogo, VannaMark } from "@/components/brand";
+import { CHAIN_LOGO, TokenLogo, VannaMark, Wordmark } from "@/components/brand";
+import { CodeInput } from "@/components/code-input";
 import { Icon } from "@/components/ui/icon";
 import { WalletLogo } from "@/components/wallet-logo";
+import { TailLoader } from "@/mascot/tail-loader";
 import { setRewards, useRewards } from "@/sample/rewards";
 import { CHAIN_LABEL, type Chain, useChain } from "@/state/chain";
 import { markWelcomeSeen } from "@/state/session";
@@ -25,6 +27,7 @@ import { openSheet, toast } from "@/ui/overlay";
 type Step = "main" | "code" | "other" | "name";
 const other = (c: Chain): Chain => (c === "solana" ? "stellar" : "solana");
 const BG = "#000000", SF = "#161618", BC = "#3A3944", MU = "#A9A9B2", LK = "#CBB6FA";
+const RESEND_MS = 30_000;
 
 export default function SignIn() {
   const insets = useSafeAreaInsets();
@@ -40,7 +43,19 @@ export default function SignIn() {
   const [connected, setConnected] = useState<{ app: WalletApp; logo: string; chain: Chain; addr: string } | null>(null);
   const me = useRewards();
   const [name, setName] = useState(me.name);
-  const codeRef = useRef<ComponentRef<typeof TextInput>>(null);
+  const [verifying, setVerifying] = useState(false);
+  const checking = useRef(false); // the last digit can fire twice before verifying is set
+  const [codeErr, setCodeErr] = useState<string | null>(null);
+  const [errorKey, setErrorKey] = useState(0);
+  const [resendAt, setResendAt] = useState(0);
+  const [wait, setWait] = useState(0);
+  useEffect(() => {
+    if (step !== "code") return;
+    const tick = () => setWait(Math.max(0, Math.ceil((resendAt - Date.now()) / 1000)));
+    tick();
+    const t = setInterval(tick, 1000);
+    return () => clearInterval(t);
+  }, [step, resendAt]);
 
   const finish = () => {
     markWelcomeSeen();
@@ -68,7 +83,7 @@ export default function SignIn() {
           </View>
           <View style={s.note}>
             <Icon name="info" size={18} color={LK} />
-            <Text style={[s.sheetS, { flex: 1 }]}>Preview: in the development build {app} opens here and you approve the connection once. After that, switching to it needs no approval.</Text>
+            <Text style={[s.sheetS, { flex: 1 }]}>You approve the connection once. After that, switching to it needs no approval.</Text>
           </View>
           <Pressable
             onPress={() => {
@@ -95,12 +110,14 @@ export default function SignIn() {
 
   const social = (method: "google" | "x") => {
     const label = method === "google" ? "Google" : "X";
+    // The real build has no Google or X connection yet, and must never sign someone in with a made-up account.
+    if (dynamic.available) return toast(`${label} sign-in is coming soon. Use email for now.`);
     openSheet({
       title: "",
       content: (close) => (
         <View style={{ gap: 14, paddingBottom: 8 }}>
           <Text style={s.sheetT}>Continue with {label}</Text>
-          <Text style={s.sheetS}>Preview: in the development build {label} opens to sign in. Vanna gets your name and email only, and creates a Solana and a Stellar wallet for you.</Text>
+          <Text style={s.sheetS}>Vanna gets your name and email only, and creates a Solana and a Stellar wallet for you.</Text>
           <Pressable
             onPress={() => {
               signInWithEmail(method, method === "google" ? "maya@gmail.com" : "maya@x.com");
@@ -128,22 +145,37 @@ export default function SignIn() {
     // Development build: Dynamic emails the real code. Expo Go has no native module, so the preview code step stands in.
     if (dynamic.available) dynamic.sendEmailCode(email.trim()).catch((e: Error) => toast(e.message || "Couldn't send the code", "err"));
     setCode("");
+    setCodeErr(null);
+    setResendAt(Date.now() + RESEND_MS);
     setStep("code");
-    setTimeout(() => codeRef.current?.focus(), 300);
+  };
+  const resend = () => {
+    sendCode();
+    toast("New code sent");
   };
   const codeDone = async (v: string) => {
-    if (v.length < 6) return;
+    if (v.length < 6 || checking.current) return;
+    checking.current = true;
+    setVerifying(true);
     // Dynamic verifies the code and returns this email's Solana and Stellar wallets; Expo Go accepts any 6 digits.
     let real: { solana?: string; stellar?: string } = {};
-    if (dynamic.available) {
-      try {
+    try {
+      if (dynamic.available) {
         const ses = await dynamic.verifyEmailCode(v);
         real = { solana: ses.solanaAddress, stellar: ses.stellarAddress };
-      } catch (e) {
-        haptic.error();
-        setCode("");
-        return toast((e as Error).message || "That code didn't work", "err");
+        // Never carry on with a made-up address in a build that has real wallets.
+        const needed: Chain[] = add ? [add] : emailFor ? [emailFor] : ["solana", "stellar"];
+        if (needed.some((c) => !real[c])) throw new Error("Your wallets are still being set up. Send a new code in a moment.");
       }
+    } catch (e) {
+      haptic.error();
+      setCode("");
+      setCodeErr((e as Error).message || "That code didn't work");
+      setErrorKey((k) => k + 1);
+      return;
+    } finally {
+      checking.current = false;
+      setVerifying(false);
     }
     haptic.success();
     if (add) {
@@ -161,6 +193,7 @@ export default function SignIn() {
   };
 
   const back = () => {
+    if (verifying) return;
     if (step === "main") return router.back();
     if (step === "code") return setStep(emailFor ? "other" : "main");
     if (step === "other" || step === "name") return finish();
@@ -168,24 +201,28 @@ export default function SignIn() {
 
   const wallets = (c: Chain) => (
     <View style={s.grid}>
-      {WALLET_APPS[c].map((w) => (
-        <Pressable
-          key={w.app}
-          disabled={w.soon}
-          onPress={() => approveWallet(c, w.app, w.logo)}
-          style={[s.tile, w.soon && { opacity: 0.5 }]}
-          accessibilityRole="button"
-          accessibilityLabel={w.soon ? `${w.app}, coming soon` : `Connect ${w.app}`}
-        >
-          {w.soon && (
-            <View style={s.soon}>
-              <Text style={s.soonT}>SOON</Text>
-            </View>
-          )}
-          <WalletLogo logo={w.logo} size={40} />
-          <Text style={s.tileT}>{w.app}</Text>
-        </Pressable>
-      ))}
+      {WALLET_APPS[c].map((w) => {
+        // Wallet apps aren't connected in the real build yet, so they can't hand out a made-up address there.
+        const soon = w.soon || dynamic.available;
+        return (
+          <Pressable
+            key={w.app}
+            disabled={soon}
+            onPress={() => approveWallet(c, w.app, w.logo)}
+            style={[s.tile, soon && { opacity: 0.5 }]}
+            accessibilityRole="button"
+            accessibilityLabel={soon ? `${w.app}, coming soon` : `Connect ${w.app}`}
+          >
+            {soon && (
+              <View style={s.soon}>
+                <Text style={s.soonT}>SOON</Text>
+              </View>
+            )}
+            <WalletLogo logo={w.logo} size={40} />
+            <Text style={s.tileT}>{w.app}</Text>
+          </Pressable>
+        );
+      })}
     </View>
   );
 
@@ -224,7 +261,7 @@ export default function SignIn() {
                   />
                   <Pressable onPress={sendCode} style={s.go} accessibilityRole="button" accessibilityLabel="Continue with email">
                     <LinearGradient colors={BRAND_GRADIENT} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={StyleSheet.absoluteFill} />
-                    <Icon name="arrow_forward" size={20} color="#FFFFFF" />
+                    <View><Icon name="arrow_forward" size={20} color="#FFFFFF" /></View>
                   </Pressable>
                 </View>
                 <View style={{ flexDirection: "row", gap: 8 }}>
@@ -264,45 +301,70 @@ export default function SignIn() {
                   <TextInput value={email} onChangeText={setEmail} placeholder="Email address" placeholderTextColor={MU} keyboardType="email-address" autoCapitalize="none" returnKeyType="go" onSubmitEditing={sendCode} style={s.input} accessibilityLabel="Email address" />
                   <Pressable onPress={sendCode} style={s.go} accessibilityRole="button" accessibilityLabel="Continue with email">
                     <LinearGradient colors={BRAND_GRADIENT} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={StyleSheet.absoluteFill} />
-                    <Icon name="arrow_forward" size={20} color="#FFFFFF" />
+                    <View><Icon name="arrow_forward" size={20} color="#FFFFFF" /></View>
                   </Pressable>
                 </View>
               </>
             )}
             <View style={{ flex: 1, minHeight: 24 }} />
-            <Text style={s.fine}>Email, Google and X give you a Solana and a Stellar wallet, secured by Dynamic. Vanna never holds your keys.</Text>
+            <Text style={s.fine}>Your email gives you a Solana and a Stellar wallet, secured by Dynamic. Vanna never holds your keys.</Text>
           </>
         )}
 
         {step === "code" && (
           <>
-            <Text style={[s.h, { marginTop: 12 }]}>Enter the code</Text>
-            <Text style={s.sub}>We sent 6 digits to {email.trim()}.{dynamic.available ? "" : " Preview: any 6 digits work."}</Text>
-            <Pressable onPress={() => codeRef.current?.focus()} style={s.codeRow} accessibilityRole="button" accessibilityLabel="Enter code">
-              {[0, 1, 2, 3, 4, 5].map((i) => (
-                <View key={i} style={[s.codeBox, code.length === i && { borderColor: LK }]}>
-                  <Text style={s.codeT}>{code[i] ?? ""}</Text>
-                </View>
-              ))}
-            </Pressable>
-            <TextInput
-              ref={codeRef}
+            <View style={s.lockup} accessibilityLabel="Vanna">
+              <VannaMark size={40} />
+              <Wordmark height={20} />
+            </View>
+            <View style={{ gap: 6 }}>
+              <Text style={s.h}>Enter the code</Text>
+              <Text style={s.sub}>We sent a 6-digit code to</Text>
+              <View style={s.emailRow}>
+                <Text style={s.emailT} numberOfLines={1}>{email.trim()}</Text>
+                <Pressable onPress={back} disabled={verifying} hitSlop={10} accessibilityRole="button" accessibilityLabel="Change email">
+                  <Text style={s.linkT}>Change</Text>
+                </Pressable>
+              </View>
+            </View>
+            <CodeInput
               value={code}
-              onChangeText={(v) => {
-                const d = v.replace(/\D/g, "").slice(0, 6);
+              busy={verifying}
+              error={!!codeErr}
+              errorKey={errorKey}
+              onChange={(d) => {
+                setCodeErr(null);
                 setCode(d);
-                codeDone(d);
+                void codeDone(d);
               }}
-              keyboardType="number-pad"
-              textContentType="oneTimeCode"
-              autoComplete="one-time-code"
-              maxLength={6}
-              style={s.hidden}
-              accessibilityLabel="Six digit code"
             />
-            <Pressable onPress={sendCode} hitSlop={8} accessibilityRole="button" style={{ alignSelf: "flex-start" }}>
-              <Text style={[s.pillT, { color: LK }]}>Send a new code</Text>
-            </Pressable>
+            {(verifying || codeErr) && <View style={s.codeFoot}>
+              {verifying ? (
+                <>
+                  <TailLoader size={22} />
+                  <Text style={s.footT}>Checking your code and getting your wallets ready…</Text>
+                </>
+              ) : codeErr ? (
+                <Text style={[s.footT, { color: "#FF6B72" }]}>{codeErr}</Text>
+              ) : null}
+            </View>}
+            {!verifying && (
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                <Text style={s.footT}>{"Didn't get it?"}</Text>
+                {wait > 0 ? (
+                  <Text style={s.footT}>Send again in {wait}s</Text>
+                ) : (
+                  <Pressable onPress={resend} hitSlop={10} accessibilityRole="button">
+                    <Text style={s.linkT}>Send a new code</Text>
+                  </Pressable>
+                )}
+              </View>
+            )}
+            <View style={{ flex: 1, minHeight: 16 }} />
+            <View style={s.secured}>
+              <Icon name="lock" size={14} color="#85858F" />
+              <Text style={s.fine}>Secured by Dynamic. Vanna never holds your keys.</Text>
+            </View>
           </>
         )}
 
@@ -339,7 +401,7 @@ export default function SignIn() {
                 accessibilityLabel="Use email"
               >
                 <LinearGradient colors={BRAND_GRADIENT} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={StyleSheet.absoluteFill} />
-                <Icon name="arrow_forward" size={20} color="#FFFFFF" />
+                <View><Icon name="arrow_forward" size={20} color="#FFFFFF" /></View>
               </Pressable>
             </View>
             <View style={s.or}>
@@ -411,10 +473,13 @@ const s = StyleSheet.create({
   soon: { position: "absolute", top: 6, right: 6, backgroundColor: "#2F1B61", paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 },
   soonT: { color: "#E1D5FA", fontFamily: font.semibold, fontSize: 9, letterSpacing: 0.4 },
   fine: { color: "#85858F", fontFamily: font.regular, fontSize: 12, lineHeight: 17, textAlign: "center" },
-  codeRow: { flexDirection: "row", gap: 8, marginTop: 6 },
-  codeBox: { flex: 1, height: 58, borderRadius: 14, borderWidth: 1.5, borderColor: BC, backgroundColor: SF, alignItems: "center", justifyContent: "center" },
-  codeT: { color: "#FFFFFF", fontFamily: font.semibold, fontSize: 22 },
-  hidden: { position: "absolute", opacity: 0, width: 1, height: 1 },
+  lockup: { flexDirection: "row", alignItems: "center", gap: 10, marginTop: 14 },
+  emailRow: { flexDirection: "row", alignItems: "center", gap: 10 },
+  emailT: { flexShrink: 1, color: "#FFFFFF", fontFamily: font.semibold, fontSize: 15, lineHeight: 21 },
+  linkT: { color: LK, fontFamily: font.semibold, fontSize: 14, lineHeight: 20 },
+  codeFoot: { flexDirection: "row", alignItems: "center", gap: 10, minHeight: 22, marginTop: -8 },
+  footT: { flexShrink: 1, color: MU, fontFamily: font.regular, fontSize: 14, lineHeight: 20 },
+  secured: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6 },
   done: { flexDirection: "row", alignItems: "center", gap: 12, padding: 12, borderRadius: 14, backgroundColor: "#0F2A2B", marginTop: 8 },
   cta: { height: 54, borderRadius: 27, overflow: "hidden", alignItems: "center", justifyContent: "center" },
   ctaT: { color: "#FFFFFF", fontFamily: font.semibold, fontSize: 16 },

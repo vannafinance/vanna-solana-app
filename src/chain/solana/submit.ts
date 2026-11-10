@@ -3,6 +3,7 @@
 // Ported from C:\Users\akgam\Documents\Company Work\Vanna App\_ref\vanna-web-backend\apps\solana\lib\solana\confirmation.ts
 // Ported from C:\Users\akgam\Documents\Company Work\Vanna App\_ref\vanna-web-backend\apps\solana\lib\solana\errors.ts
 
+import { sha256 } from "@noble/hashes/sha256";
 import { Buffer } from "buffer";
 
 import { signSolana, requireActiveRealWallet } from "@/chain/sign";
@@ -185,6 +186,79 @@ export async function fetchLookupTables(addresses: string[]): Promise<AddressLoo
     out.push({ address: addr, addresses: keys });
   });
   return out;
+}
+
+const STALE_PRONE_DEX_PROGRAMS = new Set([
+  "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK", // Raydium CLMM
+  "LBUZKhRxPF3XUpBCjp4YzTKgLccjZhTSDM9YuVaPwxo", // Meteora DLMM
+  "whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc", // Orca Whirlpool
+]);
+const TOKEN_PROGRAMS = new Set(["TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA", "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb"]);
+
+/**
+ * Ported from apps/solana/lib/solana/fork-heal.ts:healStaleDexPools. The fork clones a DEX pool once and freezes it,
+ * while Jupiter builds against live mainnet. Re-cloning the pools, their token vaults and the route's lookup tables
+ * brings them back in line. Returns how many accounts were reset, so a genuinely different failure is not retried.
+ */
+async function healStaleDexPools(ixs: RawInstruction[], tableAddresses: string[]): Promise<number> {
+  try {
+    const keys = [...new Set(ixs.flatMap((ix) => ix.keys.map((k) => k.pubkey)))];
+    const infos: ({ owner: string; data: [string, string] } | null)[] = [];
+    for (let i = 0; i < keys.length; i += 100) {
+      // Only bytes 32..64 are needed: some accounts in these transactions are very large.
+      const res = await rpc<{ value: ({ owner: string; data: [string, string] } | null)[] }>("getMultipleAccounts", [
+        keys.slice(i, i + 100),
+        { encoding: "base64", dataSlice: { offset: 32, length: 32 } },
+      ]);
+      infos.push(...res.value);
+    }
+    const dexOwned = new Set(keys.filter((_, i) => infos[i] && STALE_PRONE_DEX_PROGRAMS.has(infos[i]!.owner)));
+    if (dexOwned.size === 0) return 0;
+    const poolVaults = keys.filter((_, i) => {
+      const info = infos[i];
+      if (!info || !TOKEN_PROGRAMS.has(info.owner)) return false;
+      const authority = Buffer.from(info.data[0], "base64");
+      return authority.length === 32 && dexOwned.has(base58(authority));
+    });
+    const stale = [...new Set([...dexOwned, ...poolVaults, ...tableAddresses])];
+    const resets = await Promise.all(stale.map((address) => rpc("surfnet_resetAccount", [address]).then(() => true, () => false)));
+    return resets.filter(Boolean).length;
+  } catch {
+    return 0;
+  }
+}
+
+const MAX_TX_BYTES = 1232;
+const LOOKUP_TABLE_PROGRAM = "AddressLookupTab1e1111111111111111111111111";
+
+/**
+ * Writes this wallet's lookup table straight onto the fork (as the perps flow does), so no extra wallet approvals are
+ * needed. The website reaches the same result with a temporary on-chain table (tx.ts:createPersonalLookupTable).
+ */
+async function writeForkLookupTable(payer: string, ixs: RawInstruction[], existing: AddressLookupTableAccount[]): Promise<string> {
+  const seen = new Set(existing.flatMap((t) => t.addresses));
+  const programs = new Set(ixs.map((ix) => ix.programId));
+  const keys: string[] = [];
+  for (const ix of ixs) {
+    for (const k of ix.keys) {
+      if (k.isSigner || k.pubkey === payer || programs.has(k.pubkey) || seen.has(k.pubkey)) continue;
+      seen.add(k.pubkey);
+      keys.push(k.pubkey);
+    }
+  }
+  if (keys.length > 256) throw new Error("Transaction needs too many accounts");
+  const address = base58(
+    sha256(Buffer.concat([Buffer.from(decode58(payer)), Buffer.from("vanna-tx-lookup"), Buffer.from(decode58(LOOKUP_TABLE_PROGRAM))])),
+  );
+  const data = Buffer.alloc(56 + 32 * keys.length);
+  data.writeUInt32LE(1, 0); // state: table
+  data.fill(0xff, 4, 12); // never deactivated
+  keys.forEach((key, i) => Buffer.from(decode58(key)).copy(data, 56 + 32 * i));
+  await rpc("surfnet_setAccount", [
+    address,
+    { lamports: 10_000_000, data: data.toString("hex"), owner: LOOKUP_TABLE_PROGRAM, executable: false, rentEpoch: 0 },
+  ]);
+  return address;
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -682,22 +756,34 @@ export async function sendSolanaInstructions(
     lookupTables = await fetchLookupTables(opts.lookupTableAddresses);
   }
 
+  // A margin call lists the account pair of every protocol token, which can overflow one transaction.
+  const size = () =>
+    serializeTransaction(compileV0Message(payer, ixs, "11111111111111111111111111111111", lookupTables).serialized, [new Uint8Array(64)]).length;
+  if (size() > MAX_TX_BYTES) {
+    lookupTables = [...lookupTables, ...(await fetchLookupTables([await writeForkLookupTable(payer, ixs, lookupTables)]))];
+    if (size() > MAX_TX_BYTES) throw new Error(`${opts.label ?? "Transaction"} is too large to send`);
+  }
+
   // 1. Simulation Phase (placeholder blockhash)
   const placeholderHash = "11111111111111111111111111111111";
-  const { serialized: simMsgBytes } = compileV0Message(payer, ixs, placeholderHash, lookupTables);
-  const simTxBytes = serializeTransaction(simMsgBytes, [new Uint8Array(64)]);
-  const simBase64 = Buffer.from(simTxBytes).toString("base64");
+  const simulate = () => {
+    const { serialized: simMsgBytes } = compileV0Message(payer, ixs, placeholderHash, lookupTables);
+    const simBase64 = Buffer.from(serializeTransaction(simMsgBytes, [new Uint8Array(64)])).toString("base64");
+    return rpc<{ value: { err: unknown; logs: string[] | null } }>("simulateTransaction", [
+      simBase64,
+      { encoding: "base64", sigVerify: false, replaceRecentBlockhash: true, commitment: "confirmed" },
+    ]);
+  };
 
   opts.onStatus?.("simulating");
-  const simRes = await rpc<{
-    value: {
-      err: unknown;
-      logs: string[] | null;
-    };
-  }>("simulateTransaction", [
-    simBase64,
-    { encoding: "base64", sigVerify: false, replaceRecentBlockhash: true, commitment: "confirmed" },
-  ]);
+  let simRes = await simulate();
+  if (simRes.value.err) {
+    const routeTables = opts.lookupTableAddresses ?? [];
+    if ((await healStaleDexPools(ixs, routeTables)) > 0) {
+      lookupTables = [...(await fetchLookupTables(routeTables)), ...lookupTables.filter((t) => !routeTables.includes(t.address))];
+      simRes = await simulate();
+    }
+  }
 
   if (simRes.value.err) {
     const logs = simRes.value.logs ?? [];

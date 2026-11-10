@@ -54,6 +54,14 @@ function project(r: Reserve, now: bigint): Reserve {
   return { ...r, borrows: r.borrows + interest, fees: r.fees + (interest * r.reserveFactorBps) / 10_000n, last: now };
 }
 
+/** What lenders collectively own, projected to the fork clock (web math.ts:lenderTotalAssets), in raw units. */
+export async function readLenderTotal(sym: string): Promise<bigint> {
+  const [now, acct] = await Promise.all([forkNow(), rpc<{ value: { data: [string, string] } | null }>("getAccountInfo", [RESERVES[sym].reserve, { encoding: "base64" }])]);
+  if (!acct.value) throw new Error(`${sym} lending pool is not available`);
+  const r = project(decodeReserve(Buffer.from(acct.value.data[0], "base64")), now);
+  return r.liquidity + r.borrows - r.fees;
+}
+
 export async function fetchSolanaPools(): Promise<Pool[]> {
   const syms = Object.keys(RESERVES);
   const [now, accts] = await Promise.all([forkNow(), rpc<{ value: ({ data: [string, string] } | null)[] }>("getMultipleAccounts", [syms.map((s) => RESERVES[s].reserve), { encoding: "base64" }])]);

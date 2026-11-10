@@ -21,6 +21,7 @@ import { closeSheet, openSheet, toast } from "@/ui/overlay";
 import { runTx } from "@/ui/tx";
 import { openShare } from "@/screens/share/share";
 import { stellarFarmAction } from "@/chain/stellar/actions";
+import { LP_X } from "@/screens/farm/vault-model";
 import { solanaFarmDeposit, solanaFarmWithdraw } from "@/chain/solana/actions";
 import * as solanaActions from "@/chain/solana/actions";
 const solanaPerenaAction: (vaultId: string, call: "deposit" | "withdraw", amountUi: number | string) => Promise<string> = (solanaActions as any).solanaPerenaAction;
@@ -318,7 +319,12 @@ function FarmForm({ chain, v, initial }: { chain: Chain; v: Vault; initial: "dep
       () =>
         runTx({
           chain, fam: f, title: dep ? "Review deposit" : "Review withdrawal", cta: dep ? "Deposit" : "Withdraw",
-          legs: [{ l: dep ? "You deposit" : "You withdraw", v: tokFmt(x, v.sym), s: dep ? "From your margin account" : "Back to your margin account" }],
+          legs: [{
+            l: dep ? "You deposit" : "You withdraw",
+            v: tokFmt(x, v.sym),
+            // An LP deposit pairs the USDC with XLM at the pool's live ratio, and both leave the margin account.
+            s: dep && LP_X[v.id] ? `Plus about ${tokFmt((x * LP_X[v.id].ra) / LP_X[v.id].rb, "XLM")}, from your margin account` : dep ? "From your margin account" : "Back to your margin account",
+          }],
           rows: [[v.apyLabel, pct(v.apy), "pos"], ["Venue", v.venue], ["Health factor", `${hfFmt(before.hf)} → ${hfFmt(after!.hf)}`]],
           done: { title: dep ? `Deposited ${tokFmt(x, v.sym)}` : `Withdrew ${tokFmt(x, v.sym)}`, line: dep ? `Earning ${pct(v.apy)} on ${v.venue}` : "Back in your margin account" },
           send: async () => {

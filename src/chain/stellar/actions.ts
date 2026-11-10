@@ -10,7 +10,7 @@ import {
 
 import { requireActiveRealWallet, signStellar } from "@/chain/sign";
 
-import { findMarginAccount } from "./account";
+import { fetchStellarAccount, findMarginAccount, lpReserves } from "./account";
 import { CONTRACTS, EARN_POOLS, NETWORK_PASSPHRASE } from "./config";
 import { readContract } from "./read";
 import { rpc, sourceAccount, submitContract } from "./submit";
@@ -416,7 +416,7 @@ export async function stellarSpotSwap(input: {
     const callBytes = buildExternalProtocolCallBytes(
       routerAddress,
       "Swap",
-      [input.fromSym, input.toSym],
+      [normalizeContractTokenSymbol(input.fromSym), normalizeContractTokenSymbol(input.toSym)], // on-chain symbols, e.g. SOUSDC not SoUSDC
       [amountStroops * 100_000_000_000n, 0n],
       marginAddr,
       venue,
@@ -492,11 +492,27 @@ export async function stellarSpotSwap(input: {
  * i) Farm action: Blend lending or Soroswap / Aquarius LP via margin account.
  * Ported from: apps/stellar/lib/blend-utils.ts:BlendService.depositToBlendPool / withdrawFromBlendPool, apps/stellar/lib/soroswap-utils.ts:SoroswapService.addLiquidity / removeLiquidity, and apps/stellar/lib/aquarius-utils.ts:AquariusService.addLiquidity / removeLiquidity
  */
+// The amount typed for an LP farm is the USDC side; the XLM side comes from the pool's live ratio (web pool-action.tsx).
+async function lpDepositAmounts(row: "SS_XLM_USDC" | "AQ_XLM_USDC", owner: string, usdc: number): Promise<{ xlm: number; usdc: number }> {
+  const [r, account] = await Promise.all([lpReserves(row), fetchStellarAccount(owner)]);
+  if (!(r.xlm > 0) || !(r.usdc > 0)) throw new Error("This pool has no liquidity yet");
+  const xlm = Math.ceil((usdc * r.xlm * 1e7) / r.usdc) / 1e7;
+  const held = account.margin?.collateral.XLM?.amount ?? 0;
+  if (held < xlm) throw new Error(`This deposit also needs ${xlm.toFixed(2)} XLM in your margin account (you have ${held.toFixed(2)})`);
+  return { xlm, usdc };
+}
+
+// The amount typed to withdraw is a dollar value (that is how the position is shown), so convert it to LP shares.
+async function lpSharesForUsd(row: "SS_XLM_USDC" | "AQ_XLM_USDC", owner: string, usd: number): Promise<number> {
+  const position = (await fetchStellarAccount(owner)).margin?.collateral[row];
+  if (!position || !(position.amount > 0)) throw new Error("No position in this pool");
+  return usd >= position.usd * 0.9999 ? position.amount : (position.amount * usd) / position.usd;
+}
+
 export async function stellarFarmAction(input: {
   id: string;
   mode: "supply" | "withdraw";
   amount: number;
-  amountB?: number;
 }): Promise<string> {
   const wallet = requireActiveRealWallet("stellar");
   const marginAddr = await findMarginAccount(wallet.full);
@@ -530,8 +546,7 @@ export async function stellarFarmAction(input: {
 
   if (input.id.includes("soroswap")) {
     if (input.mode === "supply") {
-      const amtA = input.amount;
-      const amtB = input.amountB ?? input.amount;
+      const { xlm: amtA, usdc: amtB } = await lpDepositAmounts("SS_XLM_USDC", wallet.full, input.amount);
       const callBytes = buildExternalProtocolCallBytes(
         SOROSWAP_ROUTER,
         "AddLiquidity",
@@ -551,7 +566,7 @@ export async function stellarFarmAction(input: {
         { feeMultiplier: 100 },
       );
     } else {
-      const lpUnits = BigInt(Math.floor(input.amount * 1e7));
+      const lpUnits = BigInt(Math.round((await lpSharesForUsd("SS_XLM_USDC", wallet.full, input.amount)) * 1e7));
       const callBytes = buildExternalProtocolCallBytes(
         SOROSWAP_ROUTER,
         "RemoveLiquidity",
@@ -575,8 +590,7 @@ export async function stellarFarmAction(input: {
 
   if (input.id.includes("aquarius")) {
     if (input.mode === "supply") {
-      const amtA = input.amount;
-      const amtB = input.amountB ?? input.amount;
+      const { xlm: amtA, usdc: amtB } = await lpDepositAmounts("AQ_XLM_USDC", wallet.full, input.amount);
       const callBytes = buildExternalProtocolCallBytes(
         AQUARIUS_ROUTER,
         "AddLiquidity",
@@ -600,7 +614,7 @@ export async function stellarFarmAction(input: {
         AQUARIUS_ROUTER,
         "RemoveLiquidity",
         ["XLM", "AQUSDC"],
-        [numberAmountToWad(input.amount)],
+        [numberAmountToWad(await lpSharesForUsd("AQ_XLM_USDC", wallet.full, input.amount))],
         marginAddr,
         "Aquarius",
         true,

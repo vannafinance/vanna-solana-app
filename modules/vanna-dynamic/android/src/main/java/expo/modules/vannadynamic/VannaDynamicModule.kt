@@ -27,6 +27,7 @@ class ConfigureOptions : Record {
 private const val CODE = "ERR_VANNA_DYNAMIC"
 private const val READY_TIMEOUT_MS = 15_000L
 private const val WALLETS_TIMEOUT_MS = 25_000L
+private const val RESTORE_TIMEOUT_MS = 10_000L
 
 class VannaDynamicModule : Module() {
   private var configuredEnvId: String? = null
@@ -39,14 +40,15 @@ class VannaDynamicModule : Module() {
     }
 
     AsyncFunction("sendEmailCode") Coroutine { email: String ->
-      guarded { sdk().auth.email.sendOTP(email.trim()) }
+      guarded { awaitSdk().auth.email.sendOTP(email.trim()) }
     }
 
     AsyncFunction("verifyEmailCode") Coroutine { code: String ->
       guarded {
-        val sdk = sdk()
+        val sdk = awaitSdk()
         sdk.auth.email.verifyOTP(code.trim())
         // Dynamic creates the embedded wallets after authentication; wait for both chains.
+        // A first-time user's two wallets take a while, so a short wait here would return only one of them.
         withTimeoutOrNull(WALLETS_TIMEOUT_MS) {
           sdk.wallets.userWalletsChanges.first { w -> solana(w) != null && stellar(w) != null }
         }
@@ -56,17 +58,15 @@ class VannaDynamicModule : Module() {
 
     AsyncFunction("getSession") Coroutine { ->
       guarded {
-        val sdk = sdk()
-        // Wait for the SDK to restore any stored session (sdk.sdk.readyChanges, as in Dynamic's sample app).
-        withTimeoutOrNull(READY_TIMEOUT_MS) { sdk.sdk.readyChanges.first { it == true } }
+        val sdk = awaitSdk()
         if (sdk.auth.authenticatedUser == null) null else sessionMap(sdk)
       }
     }
 
     AsyncFunction("signStellarXdr") Coroutine { xdr: String ->
       guarded {
-        val sdk = sdk()
-        val wallet = stellar(sdk.wallets.userWallets) ?: throw CodedException(CODE, "No Stellar wallet for this user. Is Stellar enabled in the Dynamic dashboard?", null)
+        val sdk = awaitSdk()
+        val wallet = restored(sdk, ::stellar) ?: throw CodedException(CODE, "No Stellar wallet for this user. Is Stellar enabled in the Dynamic dashboard?", null)
         val id = wallet.id ?: throw CodedException(CODE, "Stellar wallet has no id", null)
         sdk.stellar.signTransaction(walletId = id, transactionXdr = xdr.trim())
       }
@@ -74,15 +74,15 @@ class VannaDynamicModule : Module() {
 
     AsyncFunction("signSolanaTransaction") Coroutine { base64: String ->
       guarded {
-        val sdk = sdk()
-        val wallet = solana(sdk.wallets.userWallets) ?: throw CodedException(CODE, "No Solana wallet for this user. Is Solana enabled in the Dynamic dashboard?", null)
+        val sdk = awaitSdk()
+        val wallet = restored(sdk, ::solana) ?: throw CodedException(CODE, "No Solana wallet for this user. Is Solana enabled in the Dynamic dashboard?", null)
         sdk.solana.signTransaction(base64.trim(), wallet)
       }
     }
 
     AsyncFunction("getStellarNetwork") Coroutine { ->
       guarded {
-        val sdk = sdk()
+        val sdk = awaitSdk()
         val wallet = stellar(sdk.wallets.userWallets) ?: throw CodedException(CODE, "No Stellar wallet for this user", null)
         val id = wallet.id ?: throw CodedException(CODE, "Stellar wallet has no id", null)
         sdk.stellar.getNetwork(walletId = id)
@@ -90,7 +90,7 @@ class VannaDynamicModule : Module() {
     }
 
     AsyncFunction("signOut") Coroutine { ->
-      guarded { sdk().auth.logout() }
+      guarded { awaitSdk().auth.logout() }
     }
   }
 
@@ -124,11 +124,25 @@ class VannaDynamicModule : Module() {
     return DynamicSDK.getInstance()
   }
 
+  // The SDK runs in a headless WebView; calling it before that WebView is ready hangs or fails.
+  private suspend fun awaitSdk(): DynamicSDK {
+    val sdk = sdk()
+    if (!sdk.sdk.ready && withTimeoutOrNull(READY_TIMEOUT_MS) { sdk.sdk.readyChanges.first { it } } == null) {
+      throw CodedException(CODE, "Sign-in service didn't start. Check your connection and try again.", null)
+    }
+    return sdk
+  }
+
   private fun solana(wallets: List<BaseWallet>): BaseWallet? =
     wallets.firstOrNull { it.chain.uppercase() == "SOL" || it.chain.uppercase() == "SOLANA" }
 
   private fun stellar(wallets: List<BaseWallet>): BaseWallet? =
     wallets.firstOrNull { it.chain.uppercase() == "STELLAR" }
+
+  // After an app relaunch the wallet list fills in shortly after the SDK reports ready.
+  private suspend fun restored(sdk: DynamicSDK, pick: (List<BaseWallet>) -> BaseWallet?): BaseWallet? =
+    pick(sdk.wallets.userWallets)
+      ?: withTimeoutOrNull(RESTORE_TIMEOUT_MS) { sdk.wallets.userWalletsChanges.first { pick(it) != null } }?.let(pick)
 
   private fun sessionMap(sdk: DynamicSDK): Map<String, Any?> {
     val wallets = sdk.wallets.userWallets

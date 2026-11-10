@@ -40,7 +40,7 @@ function ready(): Promise<VannaDynamicNativeModule> {
   if (!environmentId) {
     return Promise.reject(new Error('EXPO_PUBLIC_DYNAMIC_ENV_ID is not set. Add it to .env and restart Expo.'));
   }
-  configuring ??= native.configure(environmentId).catch((e: unknown) => {
+  configuring ??= native.configure(environmentId, {}).catch((e: unknown) => {
     configuring = null; // allow a retry
     throw e;
   });

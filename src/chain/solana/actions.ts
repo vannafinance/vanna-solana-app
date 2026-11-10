@@ -22,8 +22,10 @@ import {
 } from "./config";
 import { decode58, findPda } from "./pda";
 import { base58 } from "./prices";
-import { fetchSolanaPools } from "./pools";
+import { fetchSolanaAccount } from "./account";
+import { fetchSolanaPools, readLenderTotal } from "./pools";
 import { rpc } from "./rpc";
+import { ensureFreshForkPrices } from "./fork-prices";
 import {
   COMPUTE_BUDGET_PROGRAM_ID,
   type AccountMeta,
@@ -643,10 +645,14 @@ export function decodeAssetConfig(
 }
 
 // Ported from apps/solana/lib/solana/protocol-state.ts:readAllAssetConfigs
+// Not offered as new farms, but the program still requires them in every health check (web kamino.ts KAMINO_RECEIPTS).
+const DELISTED_KAMINO_RECEIPT_MINTS = ["9ucQp7thL38MDDTSER5ou24QnVSTZFLevDsZC1cAFkKy", "8euYpQt56z9hA2ZcFCQuWK6gAptrLcJuMZ5PtMpUwbuY"];
+
 export async function readAllAssetConfigs(): Promise<Map<number, AssetConfigState>> {
   const mints: string[] = [
     ...TOKENS.map((t) => t.mint),
     ...Object.values(KAMINO_RECEIPTS).map((r) => r.collateralMint),
+    ...DELISTED_KAMINO_RECEIPT_MINTS,
     PHUSD_MINT,
     ...ALL_VAULT_MINTS,
     PHOENIX_EXCHANGE,
@@ -695,7 +701,8 @@ export async function buildHealthRemainingAccounts(
   margin: string,
   exclude: { collateral?: number[]; debt?: number } = {},
   pricedMints: string[] = [],
-  opts: { extraAssetIds?: number[]; venueScan?: boolean } = {}
+  // pendingCollateral / pendingDebt: assets an earlier instruction in this same transaction activates (web MarginIndexModel)
+  opts: { extraAssetIds?: number[]; venueScan?: boolean; pendingCollateral?: number[]; pendingDebt?: number[]; pendingVenue?: number; closedVenue?: number } = {}
 ): Promise<AccountMeta[]> {
   const protocolPda = protocolConfigPda();
   const [protocolInfo, marginInfo, assetMap] = await Promise.all([
@@ -705,6 +712,7 @@ export async function buildHealthRemainingAccounts(
   ]);
 
   if (!protocolInfo?.value) throw new Error("ProtocolConfig missing");
+  await ensureFreshForkPrices(TOKENS, assetMap);
   const pBuf = Buffer.from(protocolInfo.value.data[0], "base64");
   const allowed: number[] = [];
   for (let i = 0; i < 24; i++) {
@@ -712,20 +720,39 @@ export async function buildHealthRemainingAccounts(
     if (idx !== EMPTY_ASSET_INDEX) allowed.push(idx);
   }
 
-  const marginCollateral: number[] = [];
-  const debts: number[] = [];
+  // The program scans the protocol's token list, then this account's venue slots (web fetchMarginAccount).
+  const collateralSlots: number[] = [...allowed];
+  const debtSlots: number[] = new Array(24).fill(EMPTY_ASSET_INDEX);
   if (marginInfo?.value) {
     const mBuf = Buffer.from(marginInfo.value.data[0], "base64");
     for (let i = 0; i < 24; i++) {
-      const v = mBuf.readUInt16LE(43 + 2 * i);
-      if (v !== EMPTY_ASSET_INDEX) marginCollateral.push(v);
-      const d = mBuf.readUInt16LE(91 + 2 * i);
-      if (d !== EMPTY_ASSET_INDEX) debts.push(d);
+      collateralSlots.push(mBuf.readUInt16LE(43 + 2 * i));
+      debtSlots[i] = mBuf.readUInt16LE(91 + 2 * i);
     }
   }
+  // A deposit into Phoenix earlier in this transaction puts the venue on the list; emptying it takes it off.
+  if (opts.pendingVenue !== undefined && !collateralSlots.includes(opts.pendingVenue)) {
+    const free = collateralSlots.indexOf(EMPTY_ASSET_INDEX);
+    if (free !== -1) collateralSlots[free] = opts.pendingVenue;
+  }
+  if (opts.closedVenue !== undefined && collateralSlots.includes(opts.closedVenue)) collateralSlots[collateralSlots.indexOf(opts.closedVenue)] = EMPTY_ASSET_INDEX;
+  for (const idx of opts.pendingDebt ?? []) {
+    const free = debtSlots.indexOf(EMPTY_ASSET_INDEX);
+    if (!debtSlots.includes(idx) && free !== -1) debtSlots[free] = idx;
+  }
 
-  const collateralSlots = [...allowed, ...marginCollateral];
-  const debtSlots = debts;
+  // Only tokens the account actually holds need their oracle accounts; loading them all overflows the transaction.
+  const held = new Set<number>(opts.pendingCollateral ?? []);
+  const tokenIdx = collateralSlots.filter((i) => i !== EMPTY_ASSET_INDEX && assetMap.get(i) && assetMap.get(i)!.kind !== "venue");
+  if (marginInfo?.value && tokenIdx.length) {
+    const vaults = tokenIdx.map((i) => marginVault(margin, assetMap.get(i)!.mint, assetMap.get(i)!.tokenProgram));
+    const res = await rpc<{ value: ({ data: [string, string] } | null)[] }>("getMultipleAccounts", [vaults, { encoding: "base64" }]);
+    res.value.forEach((acc, k) => {
+      if (!acc) return;
+      const b = Buffer.from(acc.data[0], "base64"); // SPL token account: amount is the u64 at byte 64
+      if (b.length >= 72 && b.subarray(64, 72).some((x) => x !== 0)) held.add(tokenIdx[k]);
+    });
+  }
 
   const metas: AccountMeta[] = [];
   const oracles: string[] = [];
@@ -747,7 +774,7 @@ export async function buildHealthRemainingAccounts(
       continue;
     }
 
-    oracles.push(...asset.oracleAccounts);
+    if (held.has(idx)) oracles.push(...asset.oracleAccounts);
     if (skipCol.has(idx)) continue;
     const vaultPda = marginVault(margin, asset.mint, asset.tokenProgram);
     metas.push({ pubkey: asset.address, isSigner: false, isWritable: false });
@@ -803,6 +830,14 @@ export async function buildHealthRemainingAccounts(
 // ---------------------------------------------------------------------------------------------
 
 // Ported from C:\Users\akgam\Documents\Company Work\Vanna App\_ref\vanna-web-backend\apps\solana\lib\solana\lend.ts:supply
+async function lendState(token: TokenInfo): Promise<{ lenderTotal: bigint; shareSupply: bigint }> {
+  const [lenderTotal, supply] = await Promise.all([
+    readLenderTotal(token.symbol),
+    rpc<{ value: { amount: string } }>("getTokenSupply", [shareMintPda(token.mint)]),
+  ]);
+  return { lenderTotal, shareSupply: BigInt(supply.value.amount) };
+}
+
 export async function solanaEarnSupply(sym: string, amountUi: number | string): Promise<string> {
   const wallet = requireActiveRealWallet("solana");
   const owner = wallet.full;
@@ -834,7 +869,11 @@ export async function solanaEarnSupply(sym: string, amountUi: number | string): 
   const shareAccount = lenderShareAccount(owner, token.mint);
   prefix.push(createAssociatedTokenAccountIdempotentIx(owner, shareAccount, owner, shareMintPda(token.mint), TOKEN_PROGRAM_ID));
 
-  const minShares = 1n; // Minimum shares slippage floor
+  // Ported from apps/solana/lib/solana/lend.ts:supply (0.5% slippage bound on the shares received)
+  const { lenderTotal, shareSupply } = await lendState(token);
+  const expectedShares = shareSupply === 0n || lenderTotal === 0n ? assets : mulDivFloor(assets, shareSupply, lenderTotal);
+  const bounded = (expectedShares * 9_950n) / 10_000n;
+  const minShares = bounded > 0n ? bounded : 1n;
 
   // Instruction data: discriminator (8) + assets (u64 LE) + min_shares_out (u64 LE)
   const data = Buffer.alloc(8 + 8 + 8);
@@ -882,13 +921,14 @@ export async function solanaEarnWithdraw(sym: string, amountUi?: number | string
   const heldShares = BigInt(shareBalanceInfo?.value?.amount ?? "0");
   if (heldShares <= 0n) throw new Error(`You hold no v${token.symbol} shares to withdraw`);
 
+  const { lenderTotal, shareSupply } = await lendState(token);
   let sharesToRedeem = heldShares;
   if (!all && amountUi !== undefined) {
-    const wantedAssets = toRaw(amountUi, token.decimals);
-    // Approximate shares: 1 share ~= 1 asset (slippage bounded)
-    sharesToRedeem = wantedAssets;
+    // Ported from apps/solana/lib/solana/lend.ts:redeem: shares worth exactly the typed amount, rounded up.
+    sharesToRedeem = lenderTotal === 0n ? 0n : mulDivCeil(toRaw(amountUi, token.decimals), shareSupply, lenderTotal);
     if (sharesToRedeem > heldShares) sharesToRedeem = heldShares;
   }
+  if (sharesToRedeem <= 0n) throw new Error(`No ${token.symbol} supply position to withdraw`);
 
   const prefix: RawInstruction[] = [];
   const suffix: RawInstruction[] = [];
@@ -903,7 +943,7 @@ export async function solanaEarnWithdraw(sym: string, amountUi?: number | string
     prefix.push(createAssociatedTokenAccountIdempotentIx(owner, destination, owner, token.mint, token.tokenProgram));
   }
 
-  const minAssets = 1n; // Slippage bound floor
+  const minAssets = (mulDivFloor(sharesToRedeem, lenderTotal, shareSupply) * 9_950n) / 10_000n;
 
   const data = Buffer.alloc(8 + 8 + 8);
   anchorDiscriminator("lender_redeem").copy(data, 0);
@@ -1063,6 +1103,13 @@ export async function solanaDepositAndBorrow(params: {
   }
 
   // Handle Borrows
+  const configs = await readAllAssetConfigs();
+  const pendingDebt: number[] = [];
+  const pendingCollateral: number[] = (params.deposits ?? []).flatMap((d) => {
+    const mint = getToken(d.sym).mint;
+    const a = [...configs.values()].find((c) => c.mint === mint);
+    return a ? [a.assetIndex] : [];
+  });
   for (const bor of params.borrows ?? []) {
     const token = getToken(bor.sym);
     const amountRaw = toRaw(bor.amount, token.decimals);
@@ -1075,9 +1122,14 @@ export async function solanaDepositAndBorrow(params: {
     const remaining = await buildHealthRemainingAccounts(
       margin,
       asset ? { collateral: [asset.assetIndex], debt: asset.assetIndex } : {},
-      [token.mint]
+      [token.mint],
+      { pendingCollateral: [...pendingCollateral], pendingDebt: [...pendingDebt] }
     );
     instructions.push(borrowIx(owner, token, amountRaw, maxDebtShares, remaining));
+    if (asset) {
+      pendingDebt.push(asset.assetIndex);
+      pendingCollateral.push(asset.assetIndex);
+    }
   }
 
   return sendSolanaInstructions([...instructions, ...suffix], {
@@ -1123,7 +1175,7 @@ export function reclaimRentIx(owner: string, token: TokenInfo): RawInstruction {
       { pubkey: margin, isSigner: false, isWritable: false },
       { pubkey: assetConfigPda(token.mint), isSigner: false, isWritable: false },
       { pubkey: token.mint, isSigner: false, isWritable: false },
-      { pubkey: marginVault(margin, token.mint, token.tokenProgram), isSigner: false, isWritable: true },
+      { pubkey: VANNA_PROGRAM_ID, isSigner: false, isWritable: false }, // vault stays open: it may still hold collateral (web reclaimRentIx { debt: true })
       { pubkey: debtPositionPda(margin, reserve), isSigner: false, isWritable: true },
       { pubkey: token.tokenProgram, isSigner: false, isWritable: false },
     ],
@@ -1145,27 +1197,33 @@ export async function solanaRepay(params: {
   const instructions: RawInstruction[] = [];
   const suffix: RawInstruction[] = [];
 
-  const repayAll = Boolean(params.all);
-  const rawAmount = params.amount !== undefined ? toRaw(params.amount, token.decimals) : 0n;
+  // Ported from apps/solana/lib/solana/margin.ts:repay. Paying off the whole debt sends 0.2% extra because interest
+  // keeps accruing until the transaction lands; what isn't used stays in the margin account as collateral.
+  const account = await fetchSolanaAccount(owner);
+  const debtRaw = BigInt(Math.ceil((account.margin?.debt[token.symbol]?.amount ?? 0) * 10 ** token.decimals));
+  if (debtRaw <= 0n) throw new Error(`No ${token.symbol} debt to repay`);
+  const requested = params.all ? debtRaw : toRaw(params.amount ?? 0, token.decimals);
+  if (requested <= 0n) throw new Error("Enter an amount greater than zero");
+  const target = requested > debtRaw ? debtRaw : requested;
+  const repayAll = Boolean(params.all) || target >= debtRaw;
+  const needed = repayAll ? target + (target * 20n) / 10_000n + 1n : target;
 
-  if (params.source === "wallet" && rawAmount > 0n) {
+  if (params.source === "wallet") {
     let walletSource = tokenAta(owner, token.mint, token.tokenProgram);
     if (token.isNative) {
-      const wrap = await wrapSol(owner, rawAmount);
+      const wrap = await wrapSol(owner, needed);
       instructions.push(...wrap.instructions);
       walletSource = wrap.ata;
       if (!wrap.existed) suffix.push(splTokenCloseAccountIx(wrap.ata, owner, owner, TOKEN_PROGRAM_ID));
     }
-    instructions.push(depositCollateralIx(owner, token, rawAmount, walletSource));
+    instructions.push(depositCollateralIx(owner, token, needed, walletSource));
+  } else {
+    const inVault = BigInt(Math.floor((account.margin?.collateral[token.symbol]?.amount ?? 0) * 10 ** token.decimals));
+    if (inVault < needed) throw new Error(`Your margin account holds ${fromRaw(inVault, token.decimals)} ${token.symbol}, less than the ${fromRaw(needed, token.decimals)} needed. Repay from wallet or deposit more first.`);
   }
 
-  // Bound: max assets to pull from vault
-  const maxAssets = repayAll ? (1n << 64n) - 1n : rawAmount;
-  instructions.push(repayFromMarginIx(owner, token, maxAssets, repayAll));
-
-  if (repayAll) {
-    instructions.push(reclaimRentIx(owner, token));
-  }
+  instructions.push(repayFromMarginIx(owner, token, target, repayAll));
+  if (repayAll) instructions.push(reclaimRentIx(owner, token));
 
   return sendSolanaInstructions([...instructions, ...suffix], {
     label: `Repay ${token.symbol}`,
@@ -1244,11 +1302,13 @@ export async function solanaWithdrawCollateral(params: {
   const minHfWad = 1_100_000_000_000_000_000n; // 1.10 WAD
   const assetMap = await readAllAssetConfigs();
   const asset = [...assetMap.values()].find((a) => a.mint === token.mint);
-  const remaining = await buildHealthRemainingAccounts(
-    margin,
-    asset ? { collateral: [asset.assetIndex] } : { collateral: [] },
-    [token.mint]
-  );
+  // No debt means no health check, so no remaining accounts (web margin.ts withdraw).
+  const marginInfo = await rpc<{ value: { data: [string, string] } | null }>("getAccountInfo", [margin, { encoding: "base64" }]);
+  const mBuf = marginInfo?.value ? Buffer.from(marginInfo.value.data[0], "base64") : null;
+  const hasDebt = !!mBuf && Array.from({ length: 24 }, (_, i) => mBuf.readUInt16LE(91 + 2 * i)).some((d) => d !== EMPTY_ASSET_INDEX);
+  const remaining = hasDebt
+    ? await buildHealthRemainingAccounts(margin, asset ? { collateral: [asset.assetIndex] } : { collateral: [] }, [token.mint])
+    : [];
 
   const ix = withdrawCollateralIx(owner, token, amount, minHfWad, destination, remaining);
 
@@ -1271,7 +1331,7 @@ export async function marginExecuteIx(
   venueAsset: string | null = null,
   validatorAccounts: AccountMeta[] = [],
   pricedMints: string[] = [],
-  healthOpts: { extraAssetIds?: number[]; venueScan?: boolean } = {}
+  healthOpts: { extraAssetIds?: number[]; venueScan?: boolean; pendingDebt?: number[]; pendingCollateral?: number[]; pendingVenue?: number; closedVenue?: number } = {}
 ): Promise<RawInstruction> {
   const margin = marginPda(owner);
   const remaining = await buildHealthRemainingAccounts(margin, {}, pricedMints, {
@@ -1304,7 +1364,7 @@ export async function marginExecuteIx(
       { pubkey: integrationPda(targetProgram), isSigner: false, isWritable: false },
       { pubkey: targetProgram, isSigner: false, isWritable: false },
       { pubkey: VALIDATOR_PROGRAM_ID, isSigner: false, isWritable: false },
-      { pubkey: venueAsset ?? SYSTEM_PROGRAM_ID, isSigner: false, isWritable: false },
+      { pubkey: venueAsset ?? VANNA_PROGRAM_ID, isSigner: false, isWritable: false }, // Anchor's "none": the program's own id
       { pubkey: eventAuthority, isSigner: false, isWritable: false },
       { pubkey: VANNA_PROGRAM_ID, isSigner: false, isWritable: false },
       // Remaining accounts: CPI accounts (non-signers) + health accounts + validator accounts
@@ -1321,6 +1381,9 @@ export async function marginExecuteIx(
 // ---------------------------------------------------------------------------------------------
 
 // Ported from C:\Users\akgam\Documents\Company Work\Vanna App\_ref\vanna-web-backend\apps\solana\lib\solana\swap.ts:executeWalletSwap
+// Ported from apps/solana/app/api/solana/jupiter/quote/route.ts:FORK_DEXES: pool AMMs that behave on a fork.
+const JUPITER_FORK_DEXES = encodeURIComponent("Raydium,Raydium CLMM,Raydium CP,Orca V2,Meteora DLMM,Whirlpool");
+
 export async function solanaWalletSwap(params: {
   fromSym: string;
   toSym: string;
@@ -1334,7 +1397,7 @@ export async function solanaWalletSwap(params: {
   const rawIn = toRaw(params.amount, fromToken.decimals);
   const slippage = params.slippageBps ?? 50;
 
-  const quoteUrl = `https://lite-api.jup.ag/swap/v1/quote?inputMint=${fromToken.mint}&outputMint=${toToken.mint}&amount=${rawIn}&slippageBps=${slippage}`;
+  const quoteUrl = `https://lite-api.jup.ag/swap/v1/quote?inputMint=${fromToken.mint}&outputMint=${toToken.mint}&amount=${rawIn}&slippageBps=${slippage}&dexes=${JUPITER_FORK_DEXES}`;
   const quoteRes = await fetch(quoteUrl);
   if (!quoteRes.ok) throw new Error(`Jupiter quote failed: ${quoteRes.statusText}`);
   const quoteData = await quoteRes.json();
@@ -1385,8 +1448,10 @@ export async function solanaMarginSwap(params: {
   const rawIn = toRaw(params.amount, fromToken.decimals);
   const slippage = params.slippageBps ?? 50;
 
-  const quoteUrl = `https://lite-api.jup.ag/swap/v1/quote?inputMint=${fromToken.mint}&outputMint=${toToken.mint}&amount=${rawIn}&slippageBps=${slippage}`;
-  const quoteRes = await fetch(quoteUrl);
+  const quoteUrl = `https://lite-api.jup.ag/swap/v1/quote?inputMint=${fromToken.mint}&outputMint=${toToken.mint}&amount=${rawIn}&slippageBps=${slippage}&dexes=${JUPITER_FORK_DEXES}&maxAccounts=20`;
+  // Shorter routes first; a wider search only if none fits (web exec.ts:quoteMarginSwap).
+  let quoteRes = await fetch(quoteUrl);
+  if (!quoteRes.ok) quoteRes = await fetch(quoteUrl.replace("maxAccounts=20", "maxAccounts=32"));
   if (!quoteRes.ok) throw new Error(`Jupiter quote failed: ${quoteRes.statusText}`);
   const quoteData = await quoteRes.json();
 
@@ -1415,7 +1480,7 @@ export async function solanaMarginSwap(params: {
     isWritable: a.isWritable,
   }));
 
-  const execIx = await marginExecuteIx(owner, JUPITER_V6_PROGRAM_ID, Buffer.from(swapIx.data, "base64"), cpiAccounts);
+  const execIx = await marginExecuteIx(owner, JUPITER_V6_PROGRAM_ID, Buffer.from(swapIx.data, "base64"), cpiAccounts, null, [], [fromToken.mint, toToken.mint]);
 
   return sendSolanaInstructions([createAta, execIx], {
     label: `Margin Swap ${fromToken.symbol} → ${toToken.symbol}`,
@@ -1508,10 +1573,14 @@ export async function solanaFarmDeposit(params: {
   }
 
   // 2. Borrow for leverage if requested
+  const pendingDebt: number[] = [];
   if (borrowRaw > 0n) {
     const maxDebtShares = (borrowRaw * 105n) / 100n;
-    const remaining = await buildHealthRemainingAccounts(margin, {}, [token.mint]);
+    const asset = [...(await readAllAssetConfigs()).values()].find((a) => a.mint === token.mint);
+    // user_borrow values the borrowed asset itself (web appendBorrows)
+    const remaining = await buildHealthRemainingAccounts(margin, asset ? { collateral: [asset.assetIndex], debt: asset.assetIndex } : {}, [token.mint]);
     instructions.push(borrowIx(owner, token, borrowRaw, maxDebtShares, remaining));
+    if (asset) pendingDebt.push(asset.assetIndex);
   }
 
   // 3. Ensure receipt token ATA exists on margin
@@ -1541,7 +1610,7 @@ export async function solanaFarmDeposit(params: {
     m(INSTRUCTIONS_SYSVAR, false),
   ];
 
-  const execIx = await marginExecuteIx(owner, KLEND_PROGRAM_ID, cpiData, cpiAccounts);
+  const execIx = await marginExecuteIx(owner, KLEND_PROGRAM_ID, cpiData, cpiAccounts, null, [], [token.mint, r.collateralMint], { pendingDebt });
   instructions.push(execIx);
 
   return sendSolanaInstructions([...instructions, ...suffix], {
@@ -1594,7 +1663,7 @@ export async function solanaFarmWithdraw(params: {
     m(INSTRUCTIONS_SYSVAR, false),
   ];
 
-  const execIx = await marginExecuteIx(owner, KLEND_PROGRAM_ID, cpiData, cpiAccounts);
+  const execIx = await marginExecuteIx(owner, KLEND_PROGRAM_ID, cpiData, cpiAccounts, null, [], [token.mint, r.collateralMint]);
 
   return sendSolanaInstructions([execIx], {
     label: `Exit ${token.symbol} on Kamino`,
@@ -1845,13 +1914,28 @@ export async function solanaPerenaAction(
   const margin = marginPda(owner);
   const shareKey = resolvePerenaVaultKey(vaultId);
   const share = PERENA_SHARES[shareKey];
-  const rawAmount = toRaw(amountUi, 6);
+  let rawAmount = toRaw(amountUi, 6);
 
   if (rawAmount <= 0n) throw new Error("Amount must be greater than zero");
 
   // Ensure margin ATAs for USDC and share mint exist
   const marginUsdcAta = marginVault(margin, USDC_MINT, TOKEN_PROGRAM_ID);
   const marginShareAta = marginVault(margin, share.mint, TOKEN_PROGRAM_ID);
+
+  // A position is shown in dollars, but the vault redeems shares, so turn the typed value into shares at the vault's price.
+  if (call === "withdraw") {
+    const [balance, vault] = await Promise.all([
+      rpc<{ value: { amount: string } | null }>("getTokenAccountBalance", [marginShareAta]).catch(() => null),
+      rpc<{ value: { data: [string, string] } | null }>("getAccountInfo", [share.account, { encoding: "base64" }]),
+    ]);
+    const held = BigInt(balance?.value?.amount ?? "0");
+    if (held <= 0n) throw new Error("No position in this vault");
+    if (!vault?.value) throw new Error("Vault not found");
+    const price = Buffer.from(vault.value.data[0], "base64").readBigUInt64LE(share.priceAt);
+    const worth = (held * price) / 1_000_000n;
+    rawAmount = rawAmount * 10_000n >= worth * 9_999n ? held : mulDivCeil(rawAmount, 1_000_000n, price);
+    if (rawAmount > held) rawAmount = held;
+  }
 
   const createUsdcAta = createAssociatedTokenAccountIdempotentIx(owner, marginUsdcAta, margin, USDC_MINT, TOKEN_PROGRAM_ID);
   const createShareAta = createAssociatedTokenAccountIdempotentIx(owner, marginShareAta, margin, share.mint, TOKEN_PROGRAM_ID);
@@ -2321,7 +2405,7 @@ export async function ensurePhoenixTraderOnFork(owner: string, margin: string): 
             executable: false,
             rentEpoch: 0,
           },
-        ]).catch(() => {});
+        ]);
       }
     }
   }
@@ -2427,10 +2511,105 @@ export async function refreshPhoenixBookOnFork(
   const normKey = marketKey.toUpperCase().replace(/-PERP$/, "");
   const m = splines.find((s) => s.symbol.toUpperCase() === normKey);
   if (!m) return;
-  await Promise.allSettled([
-    rpc("surfnet_resetAccount", [m.orderbook]).catch(() => {}),
-    rpc("surfnet_resetAccount", [m.spline]).catch(() => {}),
+  // The asset map holds the mark price, which the fork otherwise leaves behind the re-copied book (web liveMainnetPhoenixMark).
+  await Promise.all([rpc("surfnet_resetAccount", [m.orderbook]), rpc("surfnet_resetAccount", [m.spline]), rpc("surfnet_resetAccount", [ex.perpAssetMap])]);
+}
+
+// Ported from apps/solana/lib/solana/perps.ts:openPerp
+// Spot tokens Jupiter prices for each Phoenix market's index (web fork-prices.ts:PERP_INDEX_PROXY).
+const PERP_INDEX_PROXY: Record<string, string> = {
+  ETH: "7vfCXTUXx5WJV5JADk17DUJ4ksgau7utNKj4b963voxs",
+  BTC: "cbbtcf3aa214zXHbiAZQwf4122FBYbraNdFqgw4iMij",
+  SOL: "So11111111111111111111111111111111111111112",
+  TSLA: "XsDoVfqeBukxuZHWhdvWHBhgEHjGNst4MLodqsJHzoB",
+  META: "Xsa62P5mvPszXL1krVUnU5ar38bBSVcWAB6fmPCo5Zu",
+};
+const MAX_CLOSE_SLIPPAGE_BPS = 500;
+const lotsToTokens = (lots: bigint, lotDecimals: number) => Number(lots) / 10 ** lotDecimals;
+
+interface PerpsContext {
+  owner: string;
+  margin: string;
+  ex: PhoenixExchangeState;
+  book: MarketBookState;
+  splines: PhoenixMarketState[];
+  assetMap: Map<number, AssetConfigState>;
+  trader: PhoenixTraderState | null;
+  openAssetIds: number[];
+  venueIndex: number;
+  lutAddress: string;
+}
+
+// Ported from apps/solana/lib/solana/perps.ts:loadPerpsContext
+async function loadPerps(owner: string): Promise<PerpsContext> {
+  const margin = marginPda(owner);
+  const [ex, bookInfo, assetMap, traderInfo] = await Promise.all([
+    readPhoenixExchange(),
+    rpc<{ value: { data: [string, string] } | null }>("getAccountInfo", [phoenixMarketBook(), { encoding: "base64" }]),
+    readAllAssetConfigs(),
+    rpc<{ value: { data: [string, string] } | null }>("getAccountInfo", [phoenixTraderPda(margin), { encoding: "base64" }]),
   ]);
+  if (!bookInfo?.value) throw new Error("Phoenix markets aren't listed on this network yet");
+  const book = decodeMarketBook(Buffer.from(bookInfo.value.data[0], "base64"));
+  const splines = await fetchPerpAssetMap(ex.perpAssetMap);
+  const trader = traderInfo?.value ? decodeTrader(Buffer.from(traderInfo.value.data[0], "base64")) : null;
+  if (trader && (trader.hot || trader.withdrawQueued)) throw new Error("This Phoenix account has a queued withdrawal; try again shortly");
+  const venue = [...assetMap.values()].find((a) => a.mint === PHOENIX_EXCHANGE);
+  if (!venue) throw new Error("The Phoenix venue is not registered with the protocol");
+  const lutAddress = await ensurePerpsLookupTableOnFork(owner, margin, assetMap, book, ex, splines);
+  return {
+    owner, margin, ex, book, splines, assetMap, trader, lutAddress,
+    openAssetIds: (trader?.positions ?? []).filter((x) => x.baseLots !== 0n).map((x) => x.assetId),
+    venueIndex: venue.assetIndex,
+  };
+}
+
+// A call at Phoenix always names the venue and gives the validator the target market plus every open position.
+function phoenixCall(
+  p: PerpsContext,
+  data: Buffer,
+  accounts: AccountMeta[],
+  targets: number[],
+  pricedMints: string[],
+  health: { pendingVenue?: number } = {}
+) {
+  return marginExecuteIx(
+    p.owner, PHOENIX_PROGRAM_ID, data, accounts, assetConfigPda(PHOENIX_EXCHANGE),
+    phoenixValidatorAccounts(p.book, [...targets, ...p.openAssetIds]), pricedMints,
+    { extraAssetIds: targets, venueScan: true, ...health }
+  );
+}
+
+const amountData = (selector: number[], amount: bigint) => {
+  const data = Buffer.alloc(16);
+  Buffer.from(selector).copy(data, 0);
+  data.writeBigUInt64LE(amount, 8);
+  return data;
+};
+
+async function freshPerpsMarket(market: string): Promise<{ key: string; spline: PhoenixMarketState; entry: MarketBookEntry }> {
+  const key = market.toUpperCase().replace(/-PERP$/, "");
+  const [ex, bookInfo, assetMap] = await Promise.all([
+    readPhoenixExchange(),
+    rpc<{ value: { data: [string, string] } | null }>("getAccountInfo", [phoenixMarketBook(), { encoding: "base64" }]),
+    readAllAssetConfigs(),
+  ]);
+  if (!bookInfo?.value) throw new Error("Phoenix markets aren't listed on this network yet");
+  const book = decodeMarketBook(Buffer.from(bookInfo.value.data[0], "base64"));
+  await refreshPhoenixBookOnFork(key, ex, await fetchPerpAssetMap(ex.perpAssetMap));
+  const splines = await fetchPerpAssetMap(ex.perpAssetMap);
+  await ensureFreshForkPrices(
+    TOKENS,
+    assetMap,
+    book.markets.flatMap((e) => {
+      const symbol = splines.find((s) => s.assetId === e.assetId)?.symbol;
+      return symbol && PERP_INDEX_PROXY[symbol] ? [{ symbol, mint: PERP_INDEX_PROXY[symbol], oracle: e.indexPrice }] : [];
+    })
+  );
+  const spline = splines.find((s) => s.symbol.toUpperCase() === key);
+  const entry = spline && book.markets.find((m) => m.assetId === spline.assetId);
+  if (!spline || !entry) throw new Error(`${key}-PERP is not a listed Phoenix market`);
+  return { key, spline, entry };
 }
 
 // Ported from apps/solana/lib/solana/perps.ts:openPerp
@@ -2441,110 +2620,82 @@ export async function solanaPerpsOpen(opts: {
   leverage: number;
   slippageBps?: number;
 }): Promise<string> {
-  const wallet = requireActiveRealWallet("solana");
-  const owner = wallet.full;
+  const owner = requireActiveRealWallet("solana").full;
   const margin = marginPda(owner);
   const amount = toRaw(opts.collateralUsdc, 6);
+  const { key, spline, entry } = await freshPerpsMarket(opts.market);
 
-  // 1. Ensure trader account exists and is granted capabilities
   await ensurePhoenixTraderOnFork(owner, margin);
+  const p = await loadPerps(owner);
 
-  // 2. Read protocol and Phoenix state
-  const [ex, bookInfo, assetMap] = await Promise.all([
-    readPhoenixExchange(),
-    rpc<{ value: { data: [string, string] } }>("getAccountInfo", [phoenixMarketBook(), { encoding: "base64" }]),
-    readAllAssetConfigs(),
-  ]);
-  if (!bookInfo?.value) throw new Error("Phoenix market book missing");
-  const book = decodeMarketBook(Buffer.from(bookInfo.value.data[0], "base64"));
-  const splines = await fetchPerpAssetMap(ex.perpAssetMap);
+  const maxLev = entry.maxLeverageBps / 10_000;
+  if (!entry.tradingEnabled) throw new Error(`${key}-PERP is closed for new positions`);
+  if (opts.leverage < 1 || opts.leverage > maxLev) throw new Error(`Leverage must be between 1x and ${maxLev}x`);
+  const usdcToken = getToken("USDC");
+  const usdcVault = marginVault(margin, usdcToken.mint, usdcToken.tokenProgram);
+  const marginUsdc = BigInt((await rpc<{ value: { amount: string } | null }>("getTokenAccountBalance", [usdcVault]).catch(() => null))?.value?.amount ?? "0");
+  if (amount > marginUsdc) throw new Error(`Not enough USDC in your margin account (${fromRaw(marginUsdc, 6)} available)`);
+  const traderCollateral = (p.trader?.collateral ?? 0n) + amount;
+  if (traderCollateral <= 0n) throw new Error("Add USDC to trade on Phoenix");
 
-  // 3. Re-clone book from upstream on fork to avoid stale maker orders
-  await refreshPhoenixBookOnFork(opts.market, ex, splines);
-
-  // 4. Ensure per-margin lookup table
-  const lutAddress = await ensurePerpsLookupTableOnFork(owner, margin, assetMap, book, ex, splines);
-
-  // 5. Find market
-  const normKey = opts.market.toUpperCase().replace(/-PERP$/, "");
-  const spline = splines.find((s) => s.symbol.toUpperCase() === normKey);
-  if (!spline) throw new Error(`Market ${opts.market} not found in Phoenix`);
-  const bookEntry = book.markets.find((m) => m.assetId === spline.assetId);
-  if (!bookEntry) throw new Error(`Market ${opts.market} not listed in market book`);
-
-  const markUsd = ticksToUsd(spline, spline.markTicks);
-  const slip = (opts.slippageBps ?? 100) / 10_000;
   const isLong = opts.side === "long";
-  const limitPrice = isLong ? markUsd * (1 + slip) : markUsd * (1 - slip);
-  const priceInTicks = usdToTicks(spline, limitPrice);
-
-  const collUsd = Number(amount) / 1e6;
-  const sizeUsd = collUsd > 0 ? collUsd * opts.leverage : 100 * opts.leverage;
-  const lots = BigInt(Math.max(1, Math.round((sizeUsd * 10 ** spline.lotDecimals) / limitPrice)));
+  const ref = ticksToUsd(spline, spline.markTicks);
+  if (!(ref > 0)) throw new Error(`No price for ${key}-PERP`);
+  const slip = (opts.slippageBps ?? 100) / 10_000;
+  const limit = isLong ? ref * (1 + slip) : ref * (1 - slip);
+  // Size = collateral x leverage valued at the limit price, as the validator does, kept inside the market's cap.
+  const sizeUsd = (Number(amount > 0n ? amount : traderCollateral) / 1e6) * opts.leverage;
+  const current = p.trader?.positions.find((x) => x.assetId === spline.assetId)?.baseLots ?? 0n;
+  const others = (p.trader?.positions ?? []).filter((x) => x.assetId !== spline.assetId && x.baseLots !== 0n).reduce((t, x) => t + Math.abs(Number(x.virtualQuoteLots)) / 1e6, 0);
+  const capUsd = (Number(traderCollateral) / 1e6) * maxLev - others;
+  let lots = BigInt(Math.floor((sizeUsd / limit) * 10 ** spline.lotDecimals));
+  if (lots <= 0n) throw new Error(`Size too small for ${key}-PERP`);
+  const after = (l: bigint) => Math.abs(lotsToTokens(current + (isLong ? l : -l), spline.lotDecimals)) * limit;
+  while (lots > 0n && after(lots) > capUsd) lots = (lots * 995n) / 1000n;
+  if (lots <= 0n) throw new Error(`Over ${key}-PERP's ${maxLev}x cap. Add collateral or reduce size`);
 
   const ixs: RawInstruction[] = [];
-
-  // Collateral flow: USDC -> phUSD via Ember -> deposit to Phoenix
   if (amount > 0n) {
-    const phusdVault = marginVault(margin, ex.canonicalMint, TOKEN_PROGRAM_ID);
-    ixs.push(createAssociatedTokenAccountIdempotentIx(owner, phusdVault, margin, ex.canonicalMint, TOKEN_PROGRAM_ID));
-
-    const emberData = Buffer.alloc(8 + 8);
-    Buffer.from(EMBER_DEPOSIT).copy(emberData, 0);
-    emberData.writeBigUInt64LE(amount, 8);
-    const emberIx = await marginExecuteIx(
-      owner,
-      EMBER_PROGRAM_ID,
-      emberData,
-      emberAccounts(ex, margin, USDC_MINT),
-      null,
-      [],
-      [USDC_MINT, ex.canonicalMint]
-    );
-    ixs.push(emberIx);
-
-    const depData = Buffer.alloc(8 + 8);
-    Buffer.from(DEPOSIT_FUNDS).copy(depData, 0);
-    depData.writeBigUInt64LE(amount, 8);
-    const depIx = await marginExecuteIx(
-      owner,
-      PHOENIX_PROGRAM_ID,
-      depData,
-      depositAccounts(ex, margin),
-      null,
-      [],
-      [ex.canonicalMint]
-    );
-    ixs.push(depIx);
+    ixs.push(createAssociatedTokenAccountIdempotentIx(owner, marginVault(margin, p.ex.canonicalMint, TOKEN_PROGRAM_ID), margin, p.ex.canonicalMint, TOKEN_PROGRAM_ID));
+    ixs.push(await marginExecuteIx(owner, EMBER_PROGRAM_ID, amountData(EMBER_DEPOSIT, amount), emberAccounts(p.ex, margin, USDC_MINT), null, [], [USDC_MINT, p.ex.canonicalMint]));
+    ixs.push(await phoenixCall(p, amountData(DEPOSIT_FUNDS, amount), depositAccounts(p.ex, margin), [], [p.ex.canonicalMint]));
   }
-
-  // Market Order
-  const orderData = marketOrderData({
-    side: isLong ? BID : ASK,
-    priceInTicks,
-    lots,
-    reduceOnly: false,
-  });
-
-  const venueAsset = assetConfigPda(PHOENIX_EXCHANGE);
-  const valAccounts = phoenixValidatorAccounts(book, [spline.assetId]);
-  const orderIx = await marginExecuteIx(
-    owner,
-    PHOENIX_PROGRAM_ID,
-    orderData,
-    orderAccounts(ex, margin, spline),
-    venueAsset,
-    valAccounts,
-    [],
-    { extraAssetIds: [spline.assetId], venueScan: true }
+  ixs.push(
+    await phoenixCall(
+      p,
+      marketOrderData({ side: isLong ? BID : ASK, priceInTicks: usdToTicks(spline, limit), lots, reduceOnly: false }),
+      orderAccounts(p.ex, margin, spline),
+      [spline.assetId],
+      [],
+      amount > 0n ? { pendingVenue: p.venueIndex } : {}
+    )
   );
-  ixs.push(orderIx);
 
-  return sendSolanaInstructions(ixs, {
-    label: `Open ${opts.market} Perp ${opts.side}`,
+  const signature = await sendSolanaInstructions(ixs, {
+    label: `Open ${key}-PERP ${opts.side}`,
     computeUnits: EXEC_COMPUTE_UNITS,
-    lookupTableAddresses: [lutAddress],
+    lookupTableAddresses: [p.lutAddress],
   });
+
+  // Phoenix market orders fill or cancel inside the transaction: a miss must not look like an open position.
+  const filled = (await loadPerps(owner)).trader?.positions.find((x) => x.assetId === spline.assetId)?.baseLots ?? 0n;
+  if (filled === current) throw new Error(`No fill at your price limit. Your USDC stays in Phoenix (Tx: ${signature})`);
+  return signature;
+}
+
+// Ported from apps/solana/lib/solana/perps.ts:withdrawIxs
+async function perpsWithdrawIxs(p: PerpsContext, amount: bigint, venueEmpties: boolean): Promise<RawInstruction[]> {
+  const usdcToken = getToken("USDC");
+  return [
+    createAssociatedTokenAccountIdempotentIx(p.owner, marginVault(p.margin, p.ex.canonicalMint, TOKEN_PROGRAM_ID), p.margin, p.ex.canonicalMint, TOKEN_PROGRAM_ID),
+    await phoenixCall(p, amountData(WITHDRAW_FUNDS, amount), withdrawAccounts(p.ex, p.margin), [], [p.ex.canonicalMint]),
+    createAssociatedTokenAccountIdempotentIx(p.owner, marginVault(p.margin, usdcToken.mint, usdcToken.tokenProgram), p.margin, usdcToken.mint, usdcToken.tokenProgram),
+    // No amount: Ember unwraps the whole phUSD balance.
+    await marginExecuteIx(
+      p.owner, EMBER_PROGRAM_ID, Buffer.concat([Buffer.from(EMBER_WITHDRAW), Buffer.from([0])]), emberAccounts(p.ex, p.margin, USDC_MINT), null, [],
+      [p.ex.canonicalMint, USDC_MINT], venueEmpties ? { closedVenue: p.venueIndex, venueScan: false } : {}
+    ),
+  ];
 }
 
 // Ported from apps/solana/lib/solana/perps.ts:closePerp
@@ -2554,138 +2705,71 @@ export async function solanaPerpsClose(opts: {
   sizeUsd?: number;
   slippageBps?: number;
 }): Promise<string> {
-  const wallet = requireActiveRealWallet("solana");
-  const owner = wallet.full;
-  const margin = marginPda(owner);
-
-  const [ex, bookInfo, assetMap, traderInfo] = await Promise.all([
-    readPhoenixExchange(),
-    rpc<{ value: { data: [string, string] } }>("getAccountInfo", [phoenixMarketBook(), { encoding: "base64" }]),
-    readAllAssetConfigs(),
-    rpc<{ value: { data: [string, string] } | null }>("getAccountInfo", [phoenixTraderPda(margin), { encoding: "base64" }]),
-  ]);
-  if (!bookInfo?.value) throw new Error("Phoenix market book missing");
-  const book = decodeMarketBook(Buffer.from(bookInfo.value.data[0], "base64"));
-  const splines = await fetchPerpAssetMap(ex.perpAssetMap);
-
-  await refreshPhoenixBookOnFork(opts.market, ex, splines);
-  const lutAddress = await ensurePerpsLookupTableOnFork(owner, margin, assetMap, book, ex, splines);
-
-  const normKey = opts.market.toUpperCase().replace(/-PERP$/, "");
-  const spline = splines.find((s) => s.symbol.toUpperCase() === normKey);
-  if (!spline) throw new Error(`Market ${opts.market} not found in Phoenix`);
-
-  let positionBaseLots = 0n;
-  if (traderInfo?.value) {
-    const trader = decodeTrader(Buffer.from(traderInfo.value.data[0], "base64"));
-    const pos = trader.positions.find((p) => p.assetId === spline.assetId);
-    if (pos) positionBaseLots = pos.baseLots;
+  const owner = requireActiveRealWallet("solana").full;
+  const { key, spline } = await freshPerpsMarket(opts.market);
+  const p = await loadPerps(owner);
+  const base = p.trader?.positions.find((x) => x.assetId === spline.assetId)?.baseLots ?? 0n;
+  if (base === 0n) throw new Error(`No open ${key}-PERP position`);
+  const isLong = base > 0n;
+  const abs = isLong ? base : -base;
+  const ref = ticksToUsd(spline, spline.markTicks);
+  let lots = abs;
+  if (opts.sizeUsd !== undefined) {
+    lots = BigInt(Math.floor((opts.sizeUsd / ref) * 10 ** spline.lotDecimals));
+    if (lots <= 0n) throw new Error(`Size too small for ${key}-PERP`);
+    if (lots > abs) lots = abs;
   }
+  // A close should go through: if nothing fills inside the requested limit, retry once with a wider one.
+  const requested = opts.slippageBps ?? 100;
+  let signature = "";
+  let filled = false;
+  for (const bps of [...new Set([requested, Math.max(requested, MAX_CLOSE_SLIPPAGE_BPS)])]) {
+    const ctx = signature ? await loadPerps(owner) : p;
+    const limit = isLong ? ref * (1 - bps / 10_000) : ref * (1 + bps / 10_000);
+    const close = await phoenixCall(
+      ctx,
+      marketOrderData({ side: isLong ? ASK : BID, priceInTicks: usdToTicks(spline, limit), lots, reduceOnly: true }),
+      orderAccounts(ctx.ex, ctx.margin, spline),
+      [spline.assetId],
+      []
+    );
+    signature = await sendSolanaInstructions([close], { label: `Close ${key}-PERP`, computeUnits: EXEC_COMPUTE_UNITS, lookupTableAddresses: [ctx.lutAddress] });
+    const now = (await loadPerps(owner)).trader?.positions.find((x) => x.assetId === spline.assetId)?.baseLots ?? 0n;
+    if (now !== base) {
+      filled = true;
+      break;
+    }
+  }
+  if (!filled) throw new Error(`No liquidity near the mark for ${key}-PERP. Try again shortly (Tx: ${signature})`);
 
-  const isLong = opts.side ? opts.side === "long" : positionBaseLots > 0n;
-  const absLots = positionBaseLots >= 0n ? positionBaseLots : -positionBaseLots;
-  const lots = absLots > 0n ? absLots : 100_000n;
-
-  const markUsd = ticksToUsd(spline, spline.markTicks);
-  const slip = (opts.slippageBps ?? 200) / 10_000;
-  const closeSide = isLong ? ASK : BID;
-  const limitPrice = isLong ? markUsd * (1 - slip) : markUsd * (1 + slip);
-  const priceInTicks = usdToTicks(spline, limitPrice);
-
-  const orderData = marketOrderData({
-    side: closeSide,
-    priceInTicks,
-    lots,
-    reduceOnly: true,
-  });
-
-  const venueAsset = assetConfigPda(PHOENIX_EXCHANGE);
-  const valAccounts = phoenixValidatorAccounts(book, [spline.assetId]);
-  const execIx = await marginExecuteIx(
-    owner,
-    PHOENIX_PROGRAM_ID,
-    orderData,
-    orderAccounts(ex, margin, spline),
-    venueAsset,
-    valAccounts,
-    [],
-    { extraAssetIds: [spline.assetId], venueScan: true }
-  );
-
-  return sendSolanaInstructions([execIx], {
-    label: `Close ${opts.market} Perp`,
-    computeUnits: EXEC_COMPUTE_UNITS,
-    lookupTableAddresses: [lutAddress],
-  });
+  // Nothing left open: bring the USDC home. If Phoenix can't pay right now it stays there, and Withdraw gets it later.
+  const after = await loadPerps(owner);
+  const collateral = after.trader?.collateral ?? 0n;
+  if (after.openAssetIds.length === 0 && collateral > 0n) {
+    try {
+      signature = await sendSolanaInstructions(await perpsWithdrawIxs(after, collateral, true), { label: "Withdraw from Phoenix", computeUnits: EXEC_COMPUTE_UNITS, lookupTableAddresses: [after.lutAddress] });
+    } catch {
+      // the position is already closed
+    }
+  }
+  return signature;
 }
 
 // Ported from apps/solana/lib/solana/perps.ts:withdrawPerpCollateral
 export async function solanaPerpsWithdraw(amountUi?: number | string, all?: boolean): Promise<string> {
-  const wallet = requireActiveRealWallet("solana");
-  const owner = wallet.full;
-  const margin = marginPda(owner);
-
-  const [ex, bookInfo, assetMap, traderInfo] = await Promise.all([
-    readPhoenixExchange(),
-    rpc<{ value: { data: [string, string] } }>("getAccountInfo", [phoenixMarketBook(), { encoding: "base64" }]),
-    readAllAssetConfigs(),
-    rpc<{ value: { data: [string, string] } | null }>("getAccountInfo", [phoenixTraderPda(margin), { encoding: "base64" }]),
-  ]);
-  if (!bookInfo?.value) throw new Error("Phoenix market book missing");
-  const book = decodeMarketBook(Buffer.from(bookInfo.value.data[0], "base64"));
-  const splines = await fetchPerpAssetMap(ex.perpAssetMap);
-  const lutAddress = await ensurePerpsLookupTableOnFork(owner, margin, assetMap, book, ex, splines);
-
-  let availableCollateral = 0n;
-  if (traderInfo?.value) {
-    const trader = decodeTrader(Buffer.from(traderInfo.value.data[0], "base64"));
-    availableCollateral = trader.collateral > 0n ? trader.collateral : 0n;
-  }
-
-  const rawAmount = all || amountUi === undefined ? availableCollateral : toRaw(amountUi, 6);
-  if (rawAmount <= 0n) throw new Error("No collateral available to withdraw");
-
-  // 1. Phoenix withdraw_funds
-  const withdrawData = Buffer.alloc(8 + 8);
-  Buffer.from(WITHDRAW_FUNDS).copy(withdrawData, 0);
-  withdrawData.writeBigUInt64LE(rawAmount, 8);
-
-  const phusdVault = marginVault(margin, ex.canonicalMint, TOKEN_PROGRAM_ID);
-  const createAta = createAssociatedTokenAccountIdempotentIx(owner, phusdVault, margin, ex.canonicalMint, TOKEN_PROGRAM_ID);
-
-  const venueAsset = assetConfigPda(PHOENIX_EXCHANGE);
-  const valAccounts = phoenixValidatorAccounts(book, []);
-  const withdrawIx = await marginExecuteIx(
-    owner,
-    PHOENIX_PROGRAM_ID,
-    withdrawData,
-    withdrawAccounts(ex, margin),
-    venueAsset,
-    valAccounts,
-    [ex.canonicalMint],
-    { venueScan: true }
-  );
-
-  // 2. Ember withdraw: phUSD -> USDC
-  const emberData = Buffer.alloc(8 + 1 + 8);
-  Buffer.from(EMBER_WITHDRAW).copy(emberData, 0);
-  emberData.writeUInt8(all ? 0 : 1, 8);
-  if (!all) emberData.writeBigUInt64LE(rawAmount, 9);
-
-  const emberIx = await marginExecuteIx(
-    owner,
-    EMBER_PROGRAM_ID,
-    emberData,
-    emberAccounts(ex, margin, USDC_MINT),
-    null,
-    [],
-    [ex.canonicalMint, USDC_MINT]
-  );
-
-  return sendSolanaInstructions([createAta, withdrawIx, emberIx], {
-    label: "Withdraw Phoenix Collateral",
+  const owner = requireActiveRealWallet("solana").full;
+  const assetMap = await readAllAssetConfigs();
+  await ensureFreshForkPrices(TOKENS, assetMap);
+  const p = await loadPerps(owner);
+  const collateral = p.trader?.collateral ?? 0n;
+  if (collateral <= 0n) throw new Error("No USDC in Phoenix to withdraw");
+  const requested = all || amountUi === undefined ? collateral : toRaw(amountUi, 6);
+  const amount = requested > collateral ? collateral : requested;
+  if (amount <= 0n) throw new Error("Enter an amount greater than zero");
+  return sendSolanaInstructions(await perpsWithdrawIxs(p, amount, amount === collateral && p.openAssetIds.length === 0), {
+    label: "Withdraw from Phoenix",
     computeUnits: EXEC_COMPUTE_UNITS,
-    lookupTableAddresses: [lutAddress],
+    lookupTableAddresses: [p.lutAddress],
   });
 }
 
@@ -2759,6 +2843,11 @@ export async function readPredictMarket(marketId: string): Promise<{ yesMint: st
 }
 
 // Ported from apps/solana/lib/predict/trade.server.ts:buildTrade
+// The Predict screen still lists sample markets, which don't exist on chain.
+function assertRealPredictMarket(marketId: string) {
+  if (marketId.includes("/")) throw new Error("Predict markets aren't live in the app yet. Nothing was sent.");
+}
+
 export async function solanaPredictTrade(opts: {
   marketId: string;
   outcome: "yes" | "no";
@@ -2769,6 +2858,7 @@ export async function solanaPredictTrade(opts: {
   const owner = wallet.full;
   const rawAmount = toRaw(opts.amount, 6);
 
+  assertRealPredictMarket(opts.marketId);
   const { yesMint, noMint, vault } = await readPredictMarket(opts.marketId);
 
   const cashAta = findAta(owner, CASH_MINT, TOKEN_2022_PROGRAM_ID);
@@ -2816,6 +2906,7 @@ export async function solanaPredictClaim(opts: {
   const owner = wallet.full;
   const rawAmount = toRaw(opts.amount, 6);
 
+  assertRealPredictMarket(opts.marketId);
   const { yesMint, noMint, vault } = await readPredictMarket(opts.marketId);
 
   const cashAta = findAta(owner, CASH_MINT, TOKEN_2022_PROGRAM_ID);
