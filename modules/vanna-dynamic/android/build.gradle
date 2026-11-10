@@ -1,0 +1,43 @@
+plugins {
+  id 'com.android.library'
+  id 'expo-module-gradle-plugin'
+}
+
+group = 'expo.modules.vannadynamic'
+version = '0.1.0'
+
+android {
+  namespace "expo.modules.vannadynamic"
+  defaultConfig {
+    versionCode 1
+    versionName "0.1.0"
+  }
+}
+
+dependencies {
+  // Dynamic's Android SDK is NOT on Maven. The AARs live in ./libs (scripts/fetch-android-sdk.mjs).
+  // A library module may only reference a local AAR as compileOnly; the withVannaDynamic config plugin
+  // adds the same AARs as `implementation` to the app module so they are packaged.
+  compileOnly files('libs/dynamic-sdk-android.aar')
+  compileOnly files('libs/solana-web3.aar')
+  implementation 'org.sol4k:sol4k:0.6.0'
+
+  // Transitive dependencies required by the Dynamic AAR (versions from Dynamic's README, SDK 1.7.1).
+  implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-core:1.9.0'
+  implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0'
+  implementation 'org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3'
+  implementation 'androidx.webkit:webkit:1.8.0'
+  implementation 'com.squareup.okhttp3:okhttp:4.12.0'
+  implementation 'androidx.browser:browser:1.7.0'
+  implementation 'androidx.datastore:datastore-preferences:1.1.1'
+  implementation 'com.google.crypto.tink:tink-android:1.15.0'
+  implementation 'androidx.credentials:credentials:1.2.2'
+  implementation 'androidx.credentials:credentials-play-services-auth:1.2.2'
+  implementation 'com.google.android.gms:play-services-auth:20.7.0'
+  implementation platform('androidx.compose:compose-bom:2024.09.00')
+  implementation 'androidx.compose.ui:ui'
+  implementation 'androidx.compose.foundation:foundation'
+  implementation 'androidx.compose.runtime:runtime'
+  implementation 'androidx.lifecycle:lifecycle-runtime-compose:2.6.2'
+  implementation 'androidx.activity:activity:1.8.1'
+}

@@ -1,0 +1,1021 @@
+<!doctype html>
+<html lang="en">
+<!-- Vanna Mobile V2 device lab: template. lab/build_lab.py inlines lab.css and lab.js and writes dist/lab.html. -->
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<title>Vanna Device Lab</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap">
+<style>
+/* Vanna Mobile V2 device lab. Design System V2 palette (vanna-tokens.json), Plus Jakarta Sans, brand gradient only as an accent. */
+:root {
+  --font: 'Plus Jakarta Sans', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --bg: #F7F7F7; --surface: #FFFFFF; --raised: #F4F4F4; --text: #1F1F1F; --muted: #595959; --faint: #949494; --line: #DFDFDF;
+  --link: #703AE6; --pos: #1C7C83; --neg: #B33C3E; --warn: #8C0043;
+  --on: #1F1F1F; --onink: #FFFFFF; --hover: rgba(17, 17, 17, .06); --strip: rgba(255, 255, 255, .92); --glow: rgba(112, 58, 230, .07);
+  --brand: linear-gradient(120deg, #FC5457 0%, #703AE6 100%);
+  --dev-shadow: 0 34px 60px -28px rgba(17, 17, 17, .45), 0 10px 22px -14px rgba(17, 17, 17, .35);
+  --t-compact-bg: #F1EBFD; --t-compact: #5029A3; --t-short-bg: #FFE6F2; --t-short: #8C0043;
+  --t-medium-bg: #EBFCFD; --t-medium: #155F64; --t-expanded-bg: #FFEEEE; --t-expanded: #8B2E30;
+  --strip-h: 64px;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #111111; --surface: #1E1E1E; --raised: #161616; --text: #FFFFFF; --muted: #BFBFBF; --faint: #777777; --line: #2C2C2C;
+    --link: #BDA4F4; --pos: #32E2EE; --neg: #FC5457; --warn: #FFB0D6;
+    --on: #FFFFFF; --onink: #111111; --hover: rgba(255, 255, 255, .07); --strip: rgba(30, 30, 30, .92); --glow: rgba(112, 58, 230, .16);
+    --dev-shadow: 0 34px 70px -28px rgba(0, 0, 0, .9), 0 0 0 1px rgba(255, 255, 255, .06);
+    --t-compact-bg: #2F1861; --t-compact: #D3C2F7; --t-short-bg: #6B0033; --t-short: #FFB0D6;
+    --t-medium-bg: #155F64; --t-medium: #BFF6FA; --t-expanded-bg: #6A2325; --t-expanded: #FECACB;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #111111; --surface: #1E1E1E; --raised: #161616; --text: #FFFFFF; --muted: #BFBFBF; --faint: #777777; --line: #2C2C2C;
+  --link: #BDA4F4; --pos: #32E2EE; --neg: #FC5457; --warn: #FFB0D6;
+  --on: #FFFFFF; --onink: #111111; --hover: rgba(255, 255, 255, .07); --strip: rgba(30, 30, 30, .92); --glow: rgba(112, 58, 230, .16);
+  --dev-shadow: 0 34px 70px -28px rgba(0, 0, 0, .9), 0 0 0 1px rgba(255, 255, 255, .06);
+  --t-compact-bg: #2F1861; --t-compact: #D3C2F7; --t-short-bg: #6B0033; --t-short: #FFB0D6;
+  --t-medium-bg: #155F64; --t-medium: #BFF6FA; --t-expanded-bg: #6A2325; --t-expanded: #FECACB;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; background: var(--bg); color: var(--text); }
+body { font-family: var(--font); font-variant-ligatures: no-contextual; -webkit-font-smoothing: antialiased; min-height: 100vh; }
+button, input, select { font: inherit; color: inherit; }
+[hidden] { display: none !important; }
+:focus-visible { outline: 2px solid var(--link); outline-offset: 2px; }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; }
+.i { display: block; flex: none; }
+
+/* ===== Strip ===== */
+.strip { position: sticky; top: 0; z-index: 20; background: var(--strip); border-bottom: 1px solid var(--line);
+  -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px); }
+.strip::after { content: ''; position: absolute; left: 0; right: 0; bottom: -1px; height: 1px; background: var(--brand); opacity: .5; }
+.strip-in { display: flex; align-items: flex-start; gap: 8px 18px; padding: 8px 16px 6px; }
+.strip-sub { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 16px; padding: 6px 16px 8px; border-top: 1px solid var(--line); }
+.sub-v { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px; min-width: 0; flex: 1; }
+.sub-v:empty { display: block; }
+.brand { display: flex; align-items: center; gap: 10px; flex: none; min-height: 32px; }
+.brand-logo { display: block; color: var(--text); }
+.logo-svg { display: block; height: 20px; width: auto; }
+.brand-t { display: flex; flex-direction: column; font: 700 13px/16px var(--font); padding-left: 10px; border-left: 1px solid var(--line); }
+.brand-t small { font: 500 11px/14px var(--font); color: var(--muted); }
+.ctrls { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; flex: 1; min-width: 0; }
+.sum { flex: 1; min-width: 0; align-self: center; font: 500 12px/16px var(--font); color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sum b { color: var(--text); font-weight: 600; }
+.grp { display: inline-flex; align-items: center; gap: 6px; min-width: 0; max-width: 100%; }
+.gl { font: 600 10.5px/14px var(--font); letter-spacing: .5px; text-transform: uppercase; color: var(--muted); white-space: nowrap; }
+.seg { display: inline-flex; align-items: center; padding: 2px; gap: 2px; border-radius: 999px; background: var(--raised); border: 1px solid var(--line); max-width: 100%; }
+.seg button { border: 0; background: none; min-height: 28px; padding: 4px 8px; border-radius: 999px; font: 600 12px/16px var(--font); color: var(--muted); cursor: pointer; white-space: nowrap; }
+.seg button:hover:not([aria-pressed="true"]):not(:disabled) { color: var(--text); background: var(--hover); }
+.seg button[aria-pressed="true"] { background: var(--on); color: var(--onink); }
+.seg button:disabled { opacity: .4; cursor: not-allowed; }
+.seg-div { width: 1px; height: 16px; background: var(--line); margin: 0 1px; flex: none; }
+.grp-view .seg button[aria-pressed="true"] { box-shadow: inset 0 -2px 0 0 transparent; position: relative; }
+.grp-view .seg button[aria-pressed="true"]::after { content: ''; position: absolute; left: 12px; right: 12px; bottom: 2px; height: 2px; border-radius: 2px; background: var(--brand); }
+.sel { position: relative; display: inline-flex; }
+.sel select { height: 32px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); color: var(--text); padding: 0 30px 0 12px;
+  font: 600 12px/16px var(--font); -webkit-appearance: none; appearance: none; cursor: pointer; max-width: 220px; }
+.sel::after { content: ''; position: absolute; right: 13px; top: 11px; width: 6px; height: 6px; border-right: 2px solid var(--muted); border-bottom: 2px solid var(--muted); transform: rotate(45deg); pointer-events: none; }
+.acts { display: inline-flex; flex-wrap: wrap; gap: 6px; }
+.act { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 12px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface);
+  color: var(--text); font: 600 12px/16px var(--font); cursor: pointer; text-decoration: none; white-space: nowrap; }
+.act:hover { background: var(--hover); }
+.act .i { width: 16px; height: 16px; }
+.act[aria-expanded="true"]:not(#ctrl-btn) { border-color: var(--text); }
+#ctrl-btn .i { transition: transform .2s; }
+#ctrl-btn[aria-expanded="false"] .i { transform: rotate(180deg); }
+.act-pri { background: var(--on); color: var(--onink); border-color: transparent; }
+.act-pri:hover { background: var(--on); opacity: .88; }
+
+/* ===== Stage ===== */
+.body { display: flex; align-items: flex-start; }
+.stage { flex: 1; min-width: 0; min-height: calc(100vh - var(--strip-h)); background: radial-gradient(1100px 520px at 50% -8%, var(--glow), transparent 72%); }
+.hint { font: 500 12px/16px var(--font); color: var(--muted); }
+.devs { display: flex; flex-wrap: wrap; justify-content: center; align-items: flex-end; align-content: flex-start; gap: 28px; padding: 16px 16px 22px; }
+
+/* ===== Device ===== */
+.dv { margin: 0; display: flex; flex-direction: column; align-items: center; gap: 10px; flex: none; }
+.dv-box { position: relative; display: flex; align-items: flex-end; justify-content: center; }
+.dv-fit { position: relative; flex: none; }
+.dv-scale { position: absolute; left: 0; top: 0; transform-origin: 0 0; --ring0: #26262A; --ring1: #55555B; --glass-bezel: #060607; }
+.dv-scale[data-kind="iphone"] { --ring0: #2A292D; --ring1: #6A6970; }
+.dv-scale[data-kind="ipad"] { --ring0: #34353A; --ring1: #74757B; --glass-bezel: #0A0A0B; }
+.dv-scale[data-kind="fold"] { --ring0: #26272B; --ring1: #5C5D63; }
+.dv-hw { position: absolute; inset: 0; }
+.hw-body { position: absolute; background: var(--glass-bezel); box-shadow: inset 0 0 0 2px var(--ring1), inset 0 0 0 3.5px var(--ring0), 0 0 0 1px rgba(0, 0, 0, .35), var(--dev-shadow); }
+.hw-btn { position: absolute; border-radius: 2px; background: linear-gradient(90deg, var(--ring0), var(--ring1)); }
+.hw-cam { position: absolute; width: 6px; height: 6px; border-radius: 50%; background: radial-gradient(circle at 35% 35%, #3A3A46 0, #0B0B0E 70%); }
+.dv-screen { position: absolute; overflow: hidden; isolation: isolate; background: var(--app-bg); }
+.dv-screen iframe.app { position: absolute; border: 0; display: block; background: var(--app-bg); z-index: 1; }
+.dv-chrome { position: absolute; inset: 0; pointer-events: none; z-index: 2; }
+.dv.morph .dv-scale { animation: morph .5s ease; }
+@keyframes morph { 0% { opacity: .15; } 100% { opacity: 1; } }
+
+.dv-screen[data-ui="light"] { --app-bg: #F7F7F7; --cr-bg: #FFFFFF; --cr-pill: #EFEFF1; --cr-ink: #1F1F1F; --cr-mut: #6B6B70; --cr-line: #E4E4E7;
+  --glass: rgba(255, 255, 255, .9); --glass-line: rgba(0, 0, 0, .08); --tab-bg: #E6E6EA; --hi: #111111; --crease: rgba(0, 0, 0, .1); --udc: rgba(0, 0, 0, .16); --lockc: #1C7C83; }
+.dv-screen[data-ui="dark"] { --app-bg: #111111; --cr-bg: #1E1E1E; --cr-pill: #2C2C2C; --cr-ink: #FFFFFF; --cr-mut: #A9A9A9; --cr-line: #2C2C2C;
+  --glass: rgba(56, 56, 60, .88); --glass-line: rgba(255, 255, 255, .09); --tab-bg: #0B0B0B; --hi: #FFFFFF; --crease: rgba(255, 255, 255, .07); --udc: rgba(255, 255, 255, .08); --lockc: #32E2EE; }
+
+/* chrome rows */
+.cr { position: absolute; left: 0; right: 0; color: var(--cr-ink); font-family: var(--font); }
+.cr .i { color: currentColor; }
+.cr-status { background: var(--cr-bg); }
+.dv-screen[data-chrome="safari"] .cr-status { background: var(--app-bg); }
+.sb { display: flex; align-items: center; justify-content: space-between; height: 100%; }
+.ink-dark { color: #111111; }
+.ink-light { color: #FFFFFF; }
+.sb-ic { display: flex; align-items: center; gap: 6px; }
+.sb-iphone { align-items: flex-start; padding-top: 19px; }
+.sb-iphone .sb-t, .sb-iphone .sb-ic { width: calc(50% - 63px); justify-content: center; text-align: center; }
+.sb-iphone .sb-t { font: 600 17px/22px var(--font); letter-spacing: -.2px; }
+.sb-iphone .sb-ic { padding-top: 5px; gap: 6px; }
+.sb-iphone .sb-sig { height: 12px; width: 18px; } .sb-iphone .sb-wifi { height: 12px; width: 17px; } .sb-iphone .sb-batt { height: 12.5px; width: 27px; }
+.sb-ipad { padding: 0 22px; font: 600 12px/16px var(--font); }
+.sb-ipad .sb-t span { font-weight: 500; margin-left: 4px; }
+.sb-ipad .sb-ic { gap: 5px; }
+.sb-ipad .sb-wifi { height: 10px; width: 14px; } .sb-ipad .sb-batt { height: 10.5px; width: 23px; }
+.sb-pct { font: 600 12px/16px var(--font); }
+.sb-and { padding: 0 20px 0 24px; font: 500 13px/16px var(--font); }
+.sb-and .sb-ic { gap: 4px; }
+.sb-and .sb-aw { height: 13px; width: 14px; } .sb-and .sb-as { height: 13px; width: 13px; } .sb-and .sb-ab { height: 14px; width: 13px; }
+
+.cr-sf-bar, .cr-sf-top { background: var(--app-bg); }
+.sf-row { display: flex; align-items: center; gap: 10px; padding: 6px 14px 0; }
+.sf-b { width: 48px; height: 48px; border-radius: 50%; display: grid; place-items: center; flex: none; }
+.sf-b .i { width: 22px; height: 22px; }
+.sf-url { flex: 1; min-width: 0; height: 48px; border-radius: 24px; display: flex; align-items: center; gap: 8px; padding: 0 14px; font: 500 15px/20px var(--font); }
+.sf-url .i { width: 19px; height: 19px; }
+.sf-d { flex: 1; min-width: 0; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.glass { background: var(--glass); box-shadow: 0 0 0 .5px var(--glass-line), 0 6px 18px rgba(0, 0, 0, .08); }
+.sf-row-top { justify-content: center; padding: 4px 70px 0; }
+.sf-row-top .sf-b { width: 36px; height: 36px; }
+.sf-row-top .sf-b .i { width: 19px; height: 19px; }
+.sf-row-top .sf-url { flex: 0 1 460px; height: 36px; border-radius: 18px; font-size: 14px; }
+.cr-sf-ipad { background: var(--app-bg); border-bottom: 1px solid var(--cr-line); }
+.sfi { display: flex; align-items: center; justify-content: space-between; gap: 16px; height: 100%; padding: 0 18px; }
+.sfi-g { display: flex; align-items: center; gap: 20px; }
+.sfi-g .i { width: 22px; height: 22px; }
+.sfi .dim { opacity: .35; }
+.sfi-url { flex: 0 1 46%; min-width: 0; height: 36px; border-radius: 12px; background: var(--cr-pill); display: flex; align-items: center; gap: 8px; padding: 0 12px; font: 500 14px/18px var(--font); }
+.sfi-url .i { width: 18px; height: 18px; }
+.cr-cr-tabs { background: var(--tab-bg); }
+.crt { display: flex; align-items: flex-end; gap: 8px; height: 100%; padding: 0 10px; }
+.crt-tab { display: flex; align-items: center; gap: 8px; height: 32px; width: 220px; padding: 0 10px; border-radius: 10px 10px 0 0; background: var(--cr-bg); font: 500 12px/16px var(--font); }
+.crt-tab span { flex: 1; }
+.crt-tab .i { width: 14px; height: 14px; color: var(--cr-mut); }
+.crt > .i { width: 18px; height: 18px; align-self: center; color: var(--cr-mut); }
+.vmark { display: block; flex: none; }
+.crt-fav { width: 15px; height: 15px; }
+.cr-cr-bar { background: var(--cr-bg); border-bottom: 1px solid var(--cr-line); }
+.crb { display: flex; align-items: center; gap: 16px; height: 100%; padding: 0 12px 0 14px; }
+.crb-url { flex: 1; min-width: 0; height: 40px; border-radius: 20px; background: var(--cr-pill); display: flex; align-items: center; gap: 10px; padding: 0 14px; font: 500 15px/20px var(--font); }
+.crb-url .sf-d { text-align: left; }
+.crb-url .i { width: 18px; height: 18px; }
+.crb > .i { width: 20px; height: 20px; }
+.crb-tabs { width: 20px; height: 20px; border: 2px solid currentColor; border-radius: 5px; display: grid; place-items: center; font: 700 11px/1 var(--font); flex: none; }
+.cr-wl-bar { background: var(--cr-bg); border-bottom: 1px solid var(--cr-line); }
+.wlb { display: flex; align-items: center; gap: 12px; height: 100%; padding: 0 14px; }
+.wlb > .i { width: 20px; height: 20px; }
+.wtile { width: 28px; height: 28px; border-radius: 8px; display: grid; place-items: center; font: 700 14px/1 var(--font); flex: none; }
+.wlb-t { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: center; }
+.wlb-d { display: flex; align-items: center; gap: 4px; font: 600 13px/17px var(--font); white-space: nowrap; }
+.wlb-d .i { width: 11px; height: 11px; color: var(--lockc); }
+.wlb-s { font: 500 11px/14px var(--font); color: var(--cr-mut); }
+.dv-screen[data-kind="iphone"][data-land="1"] .wlb { padding: 0 70px; }
+.cr-over { background: none; }
+
+/* hardware over the screen */
+.isl { position: absolute; top: 11px; left: 50%; width: 125px; height: 37px; margin-left: -62.5px; border-radius: 20px; background: #000; z-index: 3; }
+.isl-l { top: 50%; left: 11px; width: 37px; height: 125px; margin: -62.5px 0 0 0; }
+.punch { position: absolute; width: 11px; height: 11px; border-radius: 50%; background: radial-gradient(circle at 35% 35%, #2C2C36 0, #000 62%); box-shadow: 0 0 0 1.5px rgba(0, 0, 0, .85); z-index: 3; }
+.udc { position: absolute; width: 8px; height: 8px; margin-left: -4px; border-radius: 50%; background: var(--udc); }
+.hinge { position: absolute; top: 0; bottom: 0; left: 50%; width: 22px; margin-left: -11px; background: linear-gradient(90deg, transparent, var(--crease) 46%, var(--crease) 54%, transparent); opacity: .7; }
+.hinge::after { content: ''; position: absolute; top: 0; bottom: 0; left: 50%; width: 1px; margin-left: -.5px; background: var(--crease); }
+.hinge-h { left: 0; right: 0; top: 50%; bottom: auto; width: auto; height: 22px; margin: -11px 0 0; background: linear-gradient(180deg, transparent, var(--crease) 46%, var(--crease) 54%, transparent); }
+.hinge-h::after { top: 50%; bottom: auto; left: 0; right: 0; width: auto; height: 1px; margin: -.5px 0 0; }
+.home { position: absolute; bottom: 8px; left: 50%; width: 140px; height: 5px; margin-left: -70px; border-radius: 3px; background: var(--hi); opacity: .88; z-index: 3; }
+.home-l { width: 210px; margin-left: -105px; bottom: 6px; }
+.home-ipad { width: 210px; margin-left: -105px; bottom: 7px; }
+.gest { position: absolute; bottom: 7px; left: 50%; width: 108px; height: 4px; margin-left: -54px; border-radius: 2px; background: var(--hi); opacity: .7; z-index: 3; }
+
+/* caption */
+.cap { display: flex; flex-direction: column; align-items: center; gap: 3px; text-align: center; max-width: 100%; }
+.cap-1 { display: inline-flex; align-items: center; gap: 2px; max-width: 100%; }
+.cap-n { font: 600 13px/18px var(--font); color: var(--text); background: none; border: 0; padding: 0 2px; border-radius: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+button.cap-n { cursor: pointer; }
+button.cap-n:hover { color: var(--link); text-decoration: underline; text-underline-offset: 3px; }
+.cap-o { display: inline-grid; place-items: center; width: 24px; height: 24px; border-radius: 6px; color: var(--muted); flex: none; }
+.cap-o:hover { color: var(--text); background: var(--hover); }
+.cap-o .i { width: 14px; height: 14px; }
+.cap-2 { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 3px 6px; font: 500 11.5px/16px var(--font); color: var(--muted); }
+.cap-v { font-variant-numeric: tabular-nums; }
+.tier { font: 600 10.5px/16px var(--font); padding: 0 7px; border-radius: 999px; white-space: nowrap; }
+.t-compact { background: var(--t-compact-bg); color: var(--t-compact); }
+.t-short { background: var(--t-short-bg); color: var(--t-short); }
+.t-medium { background: var(--t-medium-bg); color: var(--t-medium); }
+.t-expanded { background: var(--t-expanded-bg); color: var(--t-expanded); }
+.t-off { background: none; color: var(--neg); box-shadow: inset 0 0 0 1px var(--neg); }
+.fold-arrow { align-self: center; display: flex; flex-direction: column; align-items: center; gap: 6px; width: 72px; color: var(--muted); font: 600 11px/14px var(--font); margin-bottom: 60px; flex: none; }
+.fold-arrow .i { width: 28px; height: 28px; color: var(--link); }
+
+/* ===== Notes ===== */
+.notes { width: 360px; flex: none; position: sticky; top: var(--strip-h); height: calc(100vh - var(--strip-h)); overflow: auto; overscroll-behavior: contain;
+  background: var(--surface); border-left: 1px solid var(--line); padding: 14px 16px 24px; }
+.notes-h { display: flex; align-items: center; justify-content: space-between; }
+.notes-h h2 { font: 700 16px/22px var(--font); margin: 0; }
+.notes-s { font: 500 12px/17px var(--font); color: var(--muted); margin: 6px 0 12px; }
+.x { width: 32px; height: 32px; border-radius: 50%; border: 1px solid var(--line); background: var(--surface); display: grid; place-items: center; cursor: pointer; color: var(--text); flex: none; }
+.x:hover { background: var(--hover); }
+.x .i { width: 16px; height: 16px; }
+.nc { border: 1px solid var(--line); border-radius: 14px; background: var(--bg); margin-bottom: 10px; }
+.nc summary { list-style: none; display: flex; justify-content: space-between; align-items: baseline; gap: 8px; padding: 10px 12px; cursor: pointer; border-radius: 14px; }
+.nc summary::-webkit-details-marker { display: none; }
+.nc summary::after { content: ''; width: 6px; height: 6px; border-right: 2px solid var(--muted); border-bottom: 2px solid var(--muted); transform: rotate(45deg) translateY(-2px); flex: none; align-self: center; }
+.nc[open] summary::after { transform: rotate(-135deg); }
+.nc-n { font: 600 13px/18px var(--font); }
+.nc-w { font: 500 11.5px/16px var(--font); color: var(--muted); flex: 1; text-align: right; }
+.nc-map { margin: 0 12px 8px; font: 600 12px/16px var(--font); color: var(--warn); }
+.nc dl { display: grid; grid-template-columns: 88px 1fr; gap: 6px 10px; margin: 0; padding: 0 12px 12px; font: 500 12px/17px var(--font); }
+.nc dt { color: var(--muted); font-weight: 600; }
+.nc dd { margin: 0; color: var(--text); min-width: 0; }
+.nc code { font: 500 10.5px/15px ui-monospace, SFMono-Regular, Menlo, monospace; word-break: break-all; color: var(--muted); }
+
+/* ===== On your phone ===== */
+.pop { position: fixed; z-index: 30; background: var(--surface); border: 1px solid var(--line); border-radius: 18px; padding: 14px 16px 16px;
+  box-shadow: 0 28px 60px -22px rgba(0, 0, 0, .4); }
+.pop-h { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+.pop-h h2 { font: 700 15px/20px var(--font); margin: 0; }
+.qr { width: 184px; height: 184px; margin: 0 auto 12px; border-radius: 14px; background: #FFFFFF; padding: 10px; display: grid; place-items: center; box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .08); }
+.qr svg { display: block; width: 100%; height: 100%; }
+.qr-off { font: 500 12px/16px var(--font); color: #595959; text-align: center; margin: 0; }
+.pp-l { display: block; font: 600 10.5px/14px var(--font); letter-spacing: .5px; text-transform: uppercase; color: var(--muted); margin-bottom: 4px; }
+#pp-url { width: 100%; height: 36px; border-radius: 10px; border: 1px solid var(--line); background: var(--bg); color: var(--text); padding: 0 10px; font: 500 12px/16px var(--font); }
+.pp-a { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0; }
+.pp-n { font: 500 12px/17px var(--font); color: var(--muted); margin: 0; }
+.pp-w { font: 600 12px/16px var(--font); color: var(--warn); margin: 6px 0 0; }
+
+/* ===== Responsive ===== */
+@media (max-width: 1400px) {
+  .ctrls .gl-opt { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; }
+  .ctrls .seg button { padding-left: 7px; padding-right: 7px; }
+  .sub-v .hint { display: none; }
+}
+@media (max-width: 1100px) {
+  .notes { position: fixed; right: 0; top: var(--strip-h); bottom: 0; height: auto; width: min(360px, calc(100vw - 32px)); z-index: 18; box-shadow: -24px 0 60px -30px rgba(0, 0, 0, .45); }
+}
+@media (max-width: 720px) {
+  .strip-in { flex-direction: column; }
+  .seg { flex-wrap: wrap; border-radius: 16px; }
+  .acts { margin-left: 0; }
+}
+@media (pointer: coarse) {
+  .seg button { min-height: 36px; padding: 6px 12px; }
+  .act, .sel select { height: 40px; }
+  .sel::after { top: 15px; }
+  .x { width: 40px; height: 40px; }
+  .cap-o { width: 32px; height: 32px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+}
+
+</style>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+  <defs>
+    <linearGradient id="lab-brand" x1="44.21" y1="0.02" x2="128.49" y2="50.57" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#FC5457"/><stop offset="1" stop-color="#703AE6"/></linearGradient>
+    <linearGradient id="lab-mark" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#FC5457"/><stop offset="1" stop-color="#703AE6"/></linearGradient>
+    <symbol id="lab-vmark" viewBox="12 11 105 101"><path d="M59.9886 16.0614C63.1147 13.6729 67.3757 13.3951 70.7757 15.3581C74.1757 17.3211 76.0413 21.1361 75.4986 25.0161L72.1417 49.0153L72.1454 49.0174L65.6912 95.1595L102.868 66.755L114.107 73.2444L68.4972 108.093C65.3711 110.481 61.11 110.759 57.7101 108.796C54.3101 106.833 52.4445 103.018 52.9872 99.138L56.3441 75.1388L56.3404 75.1367L62.7946 28.9947L25.6183 57.3991L14.3784 50.9098L59.9886 16.0614Z" fill="url(#lab-brand)"/><path d="M25.6183 57.3991L36.003 63.3948L33.9183 78.2994L45.9557 69.141L56.3404 75.1367L36.6411 90.1879C33.7348 92.4085 29.7734 92.6668 26.6125 90.8418C23.4545 89.0185 21.7201 85.4763 22.2206 81.872L25.6183 57.3991Z" fill="url(#lab-brand)"/><path d="M102.868 66.755L92.4828 60.7594L94.5675 45.8547L82.5301 55.0131L72.1454 49.0174L91.8447 33.9662C94.751 31.7457 98.7124 31.4874 101.873 33.3123C105.031 35.1356 106.766 38.6778 106.265 42.2822L102.868 66.755Z" fill="url(#lab-brand)"/></symbol>
+  </defs>
+</svg>
+
+<header class="strip" id="strip">
+  <div class="strip-in">
+    <span class="brand"><span class="brand-logo" role="img" aria-label="Vanna"><svg viewBox="0 0 400 125" aria-hidden="true" class="logo-svg"><path d="M59.9886 16.0614C63.1147 13.6729 67.3757 13.3951 70.7757 15.3581C74.1757 17.3211 76.0413 21.1361 75.4986 25.0161L72.1417 49.0153L72.1454 49.0174L65.6912 95.1595L102.868 66.755L114.107 73.2444L68.4972 108.093C65.3711 110.481 61.11 110.759 57.7101 108.796C54.3101 106.833 52.4445 103.018 52.9872 99.138L56.3441 75.1388L56.3404 75.1367L62.7946 28.9947L25.6183 57.3991L14.3784 50.9098L59.9886 16.0614Z" fill="url(#lab-brand)"/><path d="M25.6183 57.3991L36.003 63.3948L33.9183 78.2994L45.9557 69.141L56.3404 75.1367L36.6411 90.1879C33.7348 92.4085 29.7734 92.6668 26.6125 90.8418C23.4545 89.0185 21.7201 85.4763 22.2206 81.872L25.6183 57.3991Z" fill="url(#lab-brand)"/><path d="M102.868 66.755L92.4828 60.7594L94.5675 45.8547L82.5301 55.0131L72.1454 49.0174L91.8447 33.9662C94.751 31.7457 98.7124 31.4874 101.873 33.3123C105.031 35.1356 106.766 38.6778 106.265 42.2822L102.868 66.755Z" fill="url(#lab-brand)"/><path d="M247.114 90.226C247.114 90.226 247.057 69.9667 247.057 54.3309C247.057 38.8269 258.378 33.4176 270.969 33.4177C286.92 33.4179 294.825 43.9283 294.825 55.5122V90.226H281.858V58.564C281.858 56.2013 281.396 54.1668 280.472 52.4604C279.548 50.754 278.261 49.4414 276.612 48.5225C275.028 47.5381 273.147 47.0458 270.969 47.0458C268.858 47.0458 266.977 47.5381 265.327 48.5225C263.678 49.4414 262.391 50.754 261.467 52.4604C260.543 54.1668 260.081 56.2013 260.081 58.564V90.226H247.114Z" fill="currentColor"/><path d="M136.341 32.7905C139.79 44.9848 146.695 67.1417 150.83 80.4719C152.604 86.1925 157.891 90.1187 163.88 90.1187C169.79 90.1187 175.029 86.2856 176.806 80.6489L191.896 32.7905H178.045C178.045 32.7905 168.01 65.4386 164.231 73.9932C160.451 65.9571 149.765 32.7905 149.765 32.7905H136.341Z" fill="currentColor"/><path fill-rule="evenodd" clip-rule="evenodd" d="M227.804 89.1951V83.5789C227.121 84.3278 226.395 85.0185 225.627 85.651C223.713 87.1605 221.535 88.3419 219.094 89.1951C216.652 89.9826 213.947 90.3764 210.977 90.3764C207.216 90.3764 203.949 89.7529 201.178 88.5059C198.406 87.259 196.261 85.4869 194.744 83.1899C193.226 80.8272 192.467 78.1035 192.467 75.0188C192.467 72.0655 193.127 69.4403 194.447 67.1432C195.767 64.7805 197.812 62.8116 200.584 61.2364C203.355 59.6613 206.853 58.5456 211.076 57.8893L227.112 55.291V53.5577C227.112 51.2606 226.188 49.3573 224.34 47.8478C222.558 46.2727 220.183 45.4851 217.213 45.4851C214.442 45.4851 211.967 46.2398 209.789 47.7493C207.678 49.1932 206.127 51.1293 205.137 53.5577L194.546 48.4385C195.602 45.6163 197.251 43.188 199.495 41.1535C201.805 39.0533 204.51 37.4125 207.612 36.2312C210.713 35.0498 214.079 34.4591 217.708 34.4591C222.129 34.4591 226.023 35.2795 229.388 36.9203C232.754 38.4954 235.36 40.7269 237.208 43.6146C239.122 46.4367 240.079 49.7511 240.079 53.5577V89.1951H227.804ZM213.551 67.4385L227.112 65.1466V67.3401C227.112 69.7684 226.518 71.9998 225.33 74.0344C224.208 76.0689 222.591 77.6769 220.48 78.8582C218.434 79.974 216.058 80.5318 213.353 80.5318C211.241 80.5318 209.459 80.0068 208.008 78.9567C206.622 77.841 205.929 76.3643 205.929 74.5266C205.929 72.6233 206.556 71.081 207.81 69.8997C209.063 68.7183 210.977 67.8979 213.551 67.4385Z" fill="currentColor"/><path fill-rule="evenodd" clip-rule="evenodd" d="M387.726 89.1951V83.5789C387.043 84.3278 386.317 85.0185 385.548 85.651C383.635 87.1605 381.457 88.3419 379.015 89.1951C376.574 89.9826 373.868 90.3764 370.898 90.3764C367.137 90.3764 363.871 89.7529 361.099 88.5059C358.328 87.259 356.183 85.4869 354.665 83.1899C353.147 80.8272 352.388 78.1035 352.388 75.0188C352.388 72.0655 353.048 69.4403 354.368 67.1432C355.688 64.7805 357.734 62.8116 360.505 61.2364C363.277 59.6613 366.774 58.5456 370.997 57.8893L387.033 55.291V53.5577C387.033 51.2606 386.109 49.3573 384.261 47.8478C382.48 46.2727 380.104 45.4851 377.135 45.4851C374.363 45.4851 371.888 46.2398 369.711 47.7493C367.599 49.1932 366.048 51.1293 365.058 53.5577L354.467 48.4385C355.523 45.6163 357.173 43.188 359.416 41.1535C361.726 39.0533 364.432 37.4125 367.533 36.2312C370.635 35.0498 374 34.4591 377.629 34.4591C382.051 34.4591 385.944 35.2795 389.31 36.9203C392.675 38.4954 395.282 40.7269 397.129 43.6146C399.043 46.4367 400 49.7511 400 53.5577V89.1951H387.726ZM373.472 67.4385L387.033 65.1466V67.3401C387.033 69.7684 386.439 71.9998 385.251 74.0344C384.129 76.0689 382.513 77.6769 380.401 78.8582C378.355 79.974 375.98 80.5318 373.274 80.5318C371.162 80.5318 369.381 80.0068 367.929 78.9567C366.543 77.841 365.85 76.3643 365.85 74.5266C365.85 72.6233 366.477 71.081 367.731 69.8997C368.985 68.7183 370.899 67.8979 373.472 67.4385Z" fill="currentColor"/><path d="M300.661 90.226C300.661 90.226 300.604 69.9666 300.604 54.3308C300.604 38.8268 311.925 33.4176 324.516 33.4177C340.466 33.4178 348.371 43.9283 348.371 55.5122V90.226H335.404V58.564C335.404 56.2013 334.943 54.1667 334.019 52.4603C333.095 50.754 331.808 49.4413 330.158 48.5225C328.575 47.538 326.694 47.0458 324.516 47.0458C322.405 47.0458 320.524 47.538 318.874 48.5225C317.224 49.4413 315.938 50.754 315.014 52.4603C314.09 54.1667 313.628 56.2013 313.628 58.564V90.226H300.661Z" fill="currentColor"/></svg></span><span class="brand-t" title="Vanna Mobile V2, sample data">Device lab<small>Mobile V2</small></span></span>
+    <div class="ctrls" id="ctrls"></div><span class="sum" id="sum" hidden></span>
+  </div>
+  <div class="strip-sub" id="stagebar"></div>
+</header>
+
+<div class="body" id="body">
+  <main class="stage" id="stage" aria-label="Devices">
+    <div class="devs" id="devs"></div>
+  </main>
+  <aside class="notes" id="notes" aria-label="Notes" hidden></aside>
+</div>
+
+<div class="pop" id="phonepop" role="dialog" aria-modal="false" aria-labelledby="pp-t" hidden></div>
+<div class="sr" id="live" aria-live="polite"></div>
+
+<script>
+/* Vanna Mobile V2 device lab (agent L). The app (app.html, a sibling file) runs in iframes at real device CSS sizes and orientations,
+   inside drawn device frames and browser / wallet chrome, so its own media and container queries fire for real.
+   Sources: CONTRACT.md V2.2 (devices), V2.3 (tiers), V2.5 (contexts), V2.6 (mascot).
+
+   Iframe URL contract (the app reads these; every param is optional for the app on a real phone):
+     app.html?p=ios|android&ctx=<ctx>&dev=<device id>&t=light|dark&chain=solana|stellar&auth=email|wallet|out&vm=on|off&sa=<t,r,b,l>#<route>
+   The browser / wallet chrome is drawn OUTSIDE the iframe, so the iframe is only the visible viewport, and ?sa holds only the insets that
+   still overlap it (status bar in standalone, Dynamic Island and cutout in landscape, home indicator, gesture bar).
+   Optional messages the app may post to the lab (window.parent.postMessage): { vanna: 'route', hash }, { vanna: 'sb', ink: 'light'|'dark' }
+   (status bar text over the app in standalone), { vanna: 'tier', tier }. The lab posts { vanna: 'sa', sa: [t, r, b, l] } after a live fold.
+   Markup is built from constants; every dynamic value goes through esc() or is validated by ROUTE_RE before it reaches the DOM. */
+(() => {
+'use strict';
+
+/* ===================== Data ===================== */
+const APP = 'app.html';
+const DOMAIN = 'test.vanna.finance';
+const QR_SRC = 'https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js';
+const QR_SRI = 'sha512-ZDSPMa/JM1D+7kdg2x3BsruQ6T/JpJo3jWDWkCZsP+5yVyp1KfESqLI+7RqB5k24F7p2cV7i2YHh/890y6P6Sw==';
+const LIP = 4;        // device px around the frame for the side buttons
+const CAP_H = 60;     // first guess for the caption height under a device, with its gap (page px); measured after each render
+let capH = CAP_H;
+const CAP_MIN = 136;  // narrowest caption (page px)
+const GAP = 28;       // gap between devices (page px)
+
+/* V2.2. sa = portrait insets (top / bottom); land = landscape insets. Buttons: [edge, offset, length] on the portrait frame. */
+const DEVICES = {
+  'iphone':     { name: 'iPhone 17 Pro', short: '17 Pro', os: 'ios', kind: 'iphone', w: 402, h: 874, dpr: 3, sa: { t: 62, b: 34 }, land: { t: 0, r: 62, b: 21, l: 62 }, bezel: 12, r: 56,
+                  btn: [['l', 150, 30], ['l', 206, 58], ['l', 278, 58], ['r', 236, 96], ['r', 540, 54]] },
+  'iphone-max': { name: 'iPhone 17 Pro Max', short: '17 Pro Max', os: 'ios', kind: 'iphone', w: 440, h: 956, dpr: 3, sa: { t: 62, b: 34 }, land: { t: 0, r: 62, b: 21, l: 62 }, bezel: 12, r: 60,
+                  btn: [['l', 164, 32], ['l', 226, 62], ['l', 304, 62], ['r', 258, 104], ['r', 590, 58]] },
+  'seeker':     { name: 'Solana Seeker', short: 'Seeker', os: 'android', kind: 'android', w: 412, h: 915, dpr: 2.625, sa: { t: 28, b: 18 }, land: { t: 28, r: 0, b: 18, l: 32 }, bezel: 10, r: 34,
+                  btn: [['r', 210, 92], ['r', 330, 56], ['l', 250, 44]] },
+  'fold-c':     { name: 'Galaxy Z Fold7 closed', short: 'Fold7 closed', os: 'android', kind: 'android', w: 412, h: 960, dpr: 2.625, sa: { t: 32, b: 16 }, land: { t: 32, r: 0, b: 16, l: 32 }, bezel: 9, r: 26,
+                  btn: [['r', 230, 84], ['r', 340, 60]] },
+  'fold-o':     { name: 'Galaxy Z Fold7 open', short: 'Fold7 open', os: 'android', kind: 'fold', w: 750, h: 832, dpr: 2.625, sa: { t: 32, b: 16 }, land: { t: 32, r: 0, b: 16, l: 0 }, bezel: 10, r: 22,
+                  btn: [['r', 200, 84], ['r', 310, 60]] },
+  'ipad':       { name: 'iPad Air 11', short: 'iPad Air', os: 'ios', kind: 'ipad', w: 820, h: 1180, dpr: 2, sa: { t: 24, b: 20 }, land: { t: 24, r: 0, b: 20, l: 0 }, bezel: 20, r: 18,
+                  btn: [['t', 690, 64], ['r', 110, 54], ['r', 176, 54]] },
+  'ipad-pro':   { name: 'iPad Pro 13', short: 'iPad Pro', os: 'ios', kind: 'ipad', w: 1032, h: 1376, dpr: 2, sa: { t: 24, b: 20 }, land: { t: 24, r: 0, b: 20, l: 0 }, bezel: 20, r: 20,
+                  btn: [['t', 880, 70], ['r', 120, 58], ['r', 190, 58]] },
+};
+const ORDER = Object.keys(DEVICES);
+
+/* V2.5. chrome: what the lab draws around the app. 'device' = the device's own browser (Safari on iOS, Chrome on Android). */
+const CONTEXTS = {
+  safari:    { label: 'Safari', chrome: 'safari', group: 'browser', tip: 'iOS Safari' },
+  chrome:    { label: 'Chrome', chrome: 'chrome', group: 'browser', tip: 'Android Chrome' },
+  seeker:    { label: 'Seeker', chrome: 'chrome', group: 'browser', tip: 'Chrome on the Solana Seeker (MWA with Seed Vault)' },
+  phantom:   { label: 'Phantom', chrome: 'wallet', group: 'wallet', chain: 'solana', tip: 'Phantom in-app browser', wallet: { key: 'phantom', name: 'Phantom', bg: '#AB9FF2', ink: '#FFFFFF', mark: 'P' } },
+  solflare:  { label: 'Solflare', chrome: 'wallet', group: 'wallet', chain: 'solana', tip: 'Solflare in-app browser', wallet: { key: 'solflare', name: 'Solflare', bg: '#FFC93D', ink: '#1F1F1F', mark: 'S' } },
+  backpack:  { label: 'Backpack', chrome: 'wallet', group: 'wallet', chain: 'solana', tip: 'Backpack in-app browser', wallet: { key: 'backpack', name: 'Backpack', bg: '#E33E3F', ink: '#FFFFFF', mark: 'B' } },
+  lobstr:    { label: 'LOBSTR', chrome: 'device', group: 'stellar', chain: 'stellar', tip: 'LOBSTR over WalletConnect, from the device browser', wallet: { key: 'lobstr', name: 'LOBSTR', bg: '#3B82F6', ink: '#FFFFFF', mark: 'L' } },
+  freighter: { label: 'Freighter', chrome: 'wallet', group: 'stellar', chain: 'stellar', tip: 'Freighter in-app browser', wallet: { key: 'freighter', name: 'Freighter', bg: '#6E56CF', ink: '#FFFFFF', mark: 'F' } },
+  pwa:       { label: 'Installed', chrome: 'none', group: 'app', tip: 'Installed to the home screen: no browser chrome' },
+};
+
+/* Hash the lab sends for each route: real page routes of the V2 core (src/core.js ROUTES, `<module>-<page>` + pushed / modal routes). */
+const ROUTES = [
+  ['portfolio-overview', 'Portfolio'], ['earn-vaults', 'Lend: Earn'], ['predict-markets', 'Lend: Predict'], ['margin-home', 'Margin'],
+  ['spot-swap', 'Trade Spot'], ['perps-markets', 'Trade Perps'], ['farm-vaults', 'Farm'], ['copilot', 'Copilot'], ['rewards', 'Rewards'],
+  ['account', 'Account'], ['signin', 'Sign-in'],
+];
+
+/* V2.3 */
+const tierOf = (w, h) => (w < 600 ? 'compact' : h < 500 ? 'short' : w < 900 ? 'medium' : 'expanded');
+const TIER = {
+  compact:  { why: 'width under 600', nav: 'Module hero, page pill, bottom bar: Portfolio, Lend, Margin, Trade, Farm', pages: 'One column. Details push full screen', sheets: 'Bottom sheets (iOS detents, Android handle)' },
+  short:    { why: 'height under 500, width 600 or more', nav: 'Slim left rail (icons, 11 px labels). One slim header bar with the headline number', pages: 'Two columns where it helps: chart beside ticket, list beside detail', sheets: 'Right side panel, 420 px' },
+  medium:   { why: 'width 600 to 899', nav: 'Left rail with labels (80 px), compact module band (about 120 px)', pages: 'List left, detail right: detail routes open in the right pane', sheets: 'Centred dialog (max 520) or anchored menu' },
+  expanded: { why: 'width 900 or more', nav: '240 px sidebar grouped like the web', pages: 'Main and detail pane, or 2 to 3 column dashboards', sheets: 'Right side panel or dialog' },
+};
+const walletNote = n => ({ connect: `One tap Connect ${n} (injected provider). No wallet list, no Open in wallet. Email stays secondary`, sign: `${n}'s own approval overlay`, handle: 'Wallet top bar eats height. No popups or new tabs: explorer links copy or open in place' });
+const CTXNOTE = {
+  safari:    { connect: 'Email (embedded wallet, passkey or Face ID), or Open in Phantom, Solflare or Backpack (universal link)', sign: 'Face ID sheet for email. No MWA on iOS', handle: 'Address bar collapse, 100dvh, home indicator' },
+  chrome:    { connect: 'Email, or Mobile Wallet Adapter (picker: Phantom, Solflare, Backpack)', sign: 'MWA sheet', handle: 'Gesture bar. System back is the in-app back' },
+  seeker:    { connect: 'Mobile Wallet Adapter with Seed Vault first', sign: 'Seed Vault sheet', handle: 'Gesture bar. System back is the in-app back' },
+  phantom:   walletNote('Phantom'), solflare: walletNote('Solflare'), backpack: walletNote('Backpack'),
+  lobstr:    { connect: 'WalletConnect to LOBSTR from the device browser. Stellar preselected', sign: 'Approval in LOBSTR, then back to the browser tab', handle: 'Return from LOBSTR to the same tab and state' },
+  freighter: { connect: 'One tap Connect Freighter in its browser. Stellar preselected', sign: "Freighter's own approval overlay", handle: 'Wallet top bar eats height. No popups or new tabs' },
+  pwa:       { connect: "As the device's browser", sign: "As the device's browser", handle: 'Standalone: no browser chrome, own safe areas' },
+};
+
+/* ===================== Icons (inline SVG, drawn for the lab) ===================== */
+const sv = (body, vb = '0 0 24 24', cls = '') => `<svg class="i ${cls}" viewBox="${vb}" aria-hidden="true" focusable="false">${body}</svg>`;
+const st = 'fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"';
+const IC = {
+  back: sv(`<path d="M15 5l-7 7 7 7" ${st}/>`),
+  fwd: sv(`<path d="M9 5l7 7-7 7" ${st}/>`),
+  dots: sv('<circle cx="5" cy="12" r="1.9"/><circle cx="12" cy="12" r="1.9"/><circle cx="19" cy="12" r="1.9"/>', '0 0 24 24', 'fill'),
+  vdots: sv('<circle cx="12" cy="5" r="1.9"/><circle cx="12" cy="12" r="1.9"/><circle cx="12" cy="19" r="1.9"/>', '0 0 24 24', 'fill'),
+  reload: sv(`<path d="M19 12a7 7 0 1 1-2.05-4.95" ${st}/><path d="M19.5 4.5v4h-4" ${st}/>`),
+  lock: sv('<rect x="5.5" y="10.5" width="13" height="9.5" rx="2.2"/><path d="M8.5 10.5V8a3.5 3.5 0 0 1 7 0v2.5" fill="none" stroke="currentColor" stroke-width="2"/>', '0 0 24 24', 'fill'),
+  page: sv(`<rect x="4" y="5" width="16" height="14" rx="3.5" ${st} stroke-width="1.8"/><path d="M8 10h8M8 14h5" ${st} stroke-width="1.8"/>`),
+  tune: sv(`<path d="M4 8h8M17 8h3M4 16h3M12 16h8" ${st}/><circle cx="14.5" cy="8" r="2.3" ${st}/><circle cx="9.5" cy="16" r="2.3" ${st}/>`),
+  share: sv(`<path d="M12 3.5v11M8 7.5l4-4 4 4" ${st}/><path d="M7 10.5H6.5A1.5 1.5 0 0 0 5 12v7.5A1.5 1.5 0 0 0 6.5 21h11a1.5 1.5 0 0 0 1.5-1.5V12a1.5 1.5 0 0 0-1.5-1.5H17" ${st}/>`),
+  plus: sv(`<path d="M12 5v14M5 12h14" ${st}/>`),
+  tabs: sv(`<rect x="4" y="4" width="12" height="12" rx="2.5" ${st}/><path d="M8 20h9.5a2.5 2.5 0 0 0 2.5-2.5V8" ${st}/>`),
+  sidebar: sv(`<rect x="3.5" y="5" width="17" height="14" rx="3" ${st}/><path d="M9.5 5v14" ${st}/>`),
+  close: sv(`<path d="M6.5 6.5l11 11M17.5 6.5l-11 11" ${st}/>`),
+  ext: sv(`<path d="M14 4.5h5.5V10M19.5 4.5L11 13" ${st}/><path d="M18 14v4.5a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 4 18.5v-11A1.5 1.5 0 0 1 5.5 6H10" ${st}/>`),
+  phone: sv(`<rect x="6.5" y="2.5" width="11" height="19" rx="2.8" ${st}/><path d="M10.5 18.5h3" ${st}/>`),
+  notes: sv(`<rect x="5" y="3.5" width="14" height="17" rx="2.8" ${st}/><path d="M8.5 8.5h7M8.5 12h7M8.5 15.5h4" ${st}/>`),
+  copy: sv(`<rect x="8.5" y="8.5" width="11.5" height="11.5" rx="2.5" ${st}/><path d="M15.5 8.5V6a1.5 1.5 0 0 0-1.5-1.5H6A1.5 1.5 0 0 0 4.5 6v8A1.5 1.5 0 0 0 6 15.5h2.5" ${st}/>`),
+  chev: sv(`<path d="M6 15l6-6 6 6" ${st}/>`),
+  unfold: sv(`<path d="M4 12h16M15 7l5 5-5 5M9 7l-5 5 5 5" ${st}/>`),
+  /* status bars */
+  iSig: sv('<rect x="0" y="7.5" width="3" height="4.5" rx="1"/><rect x="5" y="5.5" width="3" height="6.5" rx="1"/><rect x="10" y="3" width="3" height="9" rx="1"/><rect x="15" y="0.5" width="3" height="11.5" rx="1"/>', '0 0 18 12', 'fill sb-sig'),
+  iWifi: sv('<path d="M8.5 11.6L6.1 9.2a3.4 3.4 0 0 1 4.8 0z"/><path d="M3.9 7a6.6 6.6 0 0 1 9.2 0" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M1.4 4.4a10.2 10.2 0 0 1 14.2 0" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>', '0 0 17 12', 'fill sb-wifi'),
+  iBatt: sv('<rect x="0.6" y="0.6" width="23" height="11.3" rx="3.6" fill="none" stroke="currentColor" stroke-opacity=".42" stroke-width="1.1"/><rect x="2.2" y="2.2" width="19.8" height="8.1" rx="2.2"/><path d="M25 4.1v4.3a2.2 2.2 0 0 0 0-4.3z" fill-opacity=".45"/>', '0 0 27 12.5', 'fill sb-batt'),
+  aWifi: sv('<path d="M8 13.6L.6 5.5a10.8 10.8 0 0 1 14.8 0z"/>', '0 0 16 15', 'fill sb-aw'),
+  aSig: sv('<path d="M14.5 1.5v13H1.5z"/>', '0 0 16 16', 'fill sb-as'),
+  aBatt: sv('<rect x="3.5" y="2.6" width="8" height="12.4" rx="1.6"/><rect x="5.8" y="1" width="3.4" height="2.2" rx=".6"/>', '0 0 15 16', 'fill sb-ab'),
+};
+const vmark = (cls = '') => `<svg class="vmark ${cls}" viewBox="12 11 105 101" aria-hidden="true" focusable="false"><use href="#lab-vmark"/></svg>`;
+const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+/* ===================== State (kept in the lab's own hash, so a lab link reopens the same setup) ===================== */
+const S = { view: 'one', dev: 'iphone', o: 'p', ctx: 'safari', t: 'light', chain: 'solana', auth: 'email', vm: 'on', mgc: 'off', cp: 'unlocked', route: 'portfolio-overview',
+            z: 'fit', notes: false, ipad: 'ipad', fm: 'side', folded: true, hc: false };
+const HKEYS = { v: 'view', d: 'dev', o: 'o', c: 'ctx', t: 't', ch: 'chain', a: 'auth', m: 'vm', mg: 'mgc', cp: 'cp', r: 'route', z: 'z', n: 'notes', ip: 'ipad', fm: 'fm', fd: 'folded', hc: 'hc' };
+const VALID = { view: ['one', 'all', 'fold', 'ipad'], dev: ORDER, o: ['p', 'l'], ctx: Object.keys(CONTEXTS), t: ['light', 'dark'], chain: ['solana', 'stellar'],
+                auth: ['email', 'wallet', 'out'], vm: ['on', 'off'], mgc: ['on', 'off'], cp: ['locked', 'unlocked', 'mcp'], z: ['fit', '50', '75', '100'], ipad: ['ipad', 'ipad-pro'], fm: ['side', 'live'] };
+const ROUTE_RE = /^[\w~.:-]{1,80}$/;
+function readHash(){
+  let h = '';
+  try { h = location.hash.slice(1); } catch (e) {}
+  const q = new URLSearchParams(h);
+  let tSet = false;
+  for (const [hk, sk] of Object.entries(HKEYS)){
+    const v = q.get(hk); if (v == null) continue;
+    if (sk === 'notes' || sk === 'folded' || sk === 'hc') S[sk] = v === '1';
+    else if (sk === 'route'){ if (ROUTE_RE.test(v)) S.route = v; }
+    else if (VALID[sk].includes(v)){ S[sk] = v; if (sk === 't') tSet = true; }
+  }
+  if (!tSet){ try { S.t = window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'; } catch (e) {} }
+}
+function writeHash(){
+  const q = new URLSearchParams();
+  for (const [hk, sk] of Object.entries(HKEYS)){ const v = S[sk]; q.set(hk, typeof v === 'boolean' ? (v ? '1' : '0') : v); }
+  try { history.replaceState(null, '', '#' + q.toString()); } catch (e) {}
+}
+
+/* ===================== Geometry ===================== */
+function effCtx(pick, id){
+  const d = DEVICES[id];
+  let eff = pick, note = '';
+  if (pick === 'safari' && d.os === 'android'){ eff = id === 'seeker' ? 'seeker' : 'chrome'; note = `Safari is iOS only: shown in ${CONTEXTS[eff].label}`; }
+  else if (pick === 'chrome' && d.os === 'ios'){ eff = 'safari'; note = 'Chrome on iOS runs WebKit with no MWA: shown in Safari'; }
+  else if (pick === 'chrome' && id === 'seeker'){ eff = 'seeker'; note = 'Chrome on the Seeker is the Seeker context'; }
+  else if (pick === 'seeker' && id !== 'seeker'){ eff = d.os === 'ios' ? 'safari' : 'chrome'; note = `Seeker needs the Seeker: shown in ${CONTEXTS[eff].label}`; }
+  return Object.assign({ id: eff, pick, note }, CONTEXTS[eff]);
+}
+function geo(id, o, pick){
+  const d = DEVICES[id], land = o === 'l';
+  const W = land ? d.h : d.w, H = land ? d.w : d.h;
+  const ctx = effCtx(pick, id);
+  const ins = land ? Object.assign({}, d.land) : { t: d.sa.t, r: 0, b: d.sa.b, l: 0 };
+  const statusH = d.kind === 'iphone' && land ? 0 : ins.t;          // iPhone hides the status bar in landscape
+  const kind = ctx.chrome === 'device' ? (d.os === 'ios' ? 'safari' : 'chrome') : ctx.chrome;
+  const top = [], bottom = [], sa = Object.assign({}, ins);
+  if (kind !== 'none'){
+    if (statusH) top.push({ k: 'status', h: statusH });
+    sa.t = 0;
+    if (kind === 'safari'){
+      if (d.kind === 'ipad') top.push({ k: 'sf-ipad', h: 50 });
+      else if (land) top.push({ k: 'sf-top', h: 44 });
+      else { bottom.push({ k: 'sf-bar', h: 84 }); sa.b = 0; }     // iOS 26 compact tab bar sits over the home indicator
+    } else if (kind === 'chrome'){
+      if (id === 'fold-o') top.push({ k: 'cr-tabs', h: 40 });     // Chrome's large-screen tab strip on the open Fold
+      top.push({ k: 'cr-bar', h: 56 });
+    } else if (kind === 'wallet'){
+      top.push({ k: 'wl-bar', h: d.kind === 'iphone' && land ? 44 : 52 });
+    }
+  }
+  const tH = top.reduce((a, r) => a + r.h, 0), bH = bottom.reduce((a, r) => a + r.h, 0);
+  const vp = { x: 0, y: tH, w: W, h: H - tH - bH };
+  return { id, d, o, land, W, H, ctx, kind, ins, statusH, top, bottom, sa, vp, tier: tierOf(vp.w, vp.h) };
+}
+const foot = g => ({ w: g.W + 2 * g.d.bezel + 2 * LIP, h: g.H + 2 * g.d.bezel + 2 * LIP });
+const saStr = sa => [sa.t, sa.r, sa.b, sa.l].join(',');
+function query(g){
+  return { p: g.d.os, ctx: g.ctx.id, dev: g.id, t: S.t, chain: S.chain, auth: S.auth, vm: S.vm, mgchart: S.mgc, cp: S.cp, sa: saStr(g.sa) };
+}
+const qs = q => Object.entries(q).map(([k, v]) => `${k}=${encodeURIComponent(v).replace(/%2C/g, ',')}`).join('&');
+const routeHash = () => '#' + encodeURIComponent(S.route).replace(/%7E/gi, '~');
+
+/* ===================== Slots per view ===================== */
+function slots(){
+  if (S.view === 'all') return ORDER.map(id => ({ key: 'all:' + id, id, o: S.o, focus: true }));
+  if (S.view === 'fold'){
+    if (S.fm === 'live') return [{ key: 'fold:live', id: S.folded ? 'fold-c' : 'fold-o', o: S.o, live: true, box: ['fold-c', 'fold-o'] }];
+    return [{ key: 'fold:c', id: 'fold-c', o: S.o, focus: true }, { key: 'fold:o', id: 'fold-o', o: S.o, focus: true }];
+  }
+  if (S.view === 'ipad') return [{ key: 'ipad:p', id: S.ipad, o: 'p', focus: true }, { key: 'ipad:l', id: S.ipad, o: 'l', focus: true }];
+  return [{ key: 'one', id: S.dev, o: S.o }];
+}
+
+/* ===================== Chrome (drawn around the iframe) ===================== */
+const uiInk = () => (S.t === 'dark' ? 'light' : 'dark');
+function statusHTML(g, ink){
+  const d = g.d;
+  if (d.kind === 'iphone') return `<div class="sb sb-iphone ink-${ink}"><span class="sb-t">9:41</span><span class="sb-ic">${IC.iSig}${IC.iWifi}${IC.iBatt}</span></div>`;
+  if (d.kind === 'ipad') return `<div class="sb sb-ipad ink-${ink}"><span class="sb-t">9:41 <span>Wed 22 Oct</span></span><span class="sb-ic">${IC.iWifi}<span class="sb-pct">100%</span>${IC.iBatt}</span></div>`;
+  return `<div class="sb sb-and ink-${ink}"><span class="sb-t">12:30</span><span class="sb-ic">${IC.aWifi}${IC.aSig}${IC.aBatt}</span></div>`;
+}
+const walletTile = w => `<span class="wtile" style="background:${w.bg};color:${w.ink}">${w.mark}</span>`;
+const sfRow = cls => `<div class="sf-row ${cls}"><span class="sf-b glass">${IC.back}</span><span class="sf-url glass">${IC.page}<span class="sf-d">${DOMAIN}</span>${IC.reload}</span><span class="sf-b glass">${IC.dots}</span></div>`;
+const ROW = {
+  status: g => statusHTML(g, uiInk()),
+  'sf-bar': () => sfRow(''),
+  'sf-top': () => sfRow('sf-row-top'),
+  'sf-ipad': () => `<div class="sfi"><span class="sfi-g">${IC.sidebar}${IC.back}<span class="dim">${IC.fwd}</span></span><span class="sfi-url">${IC.page}<span class="sf-d">${DOMAIN}</span>${IC.reload}</span><span class="sfi-g">${IC.share}${IC.plus}${IC.tabs}</span></div>`,
+  'cr-tabs': () => `<div class="crt"><span class="crt-tab">${vmark('crt-fav')}<span>Vanna</span>${IC.close}</span>${IC.plus}</div>`,
+  'cr-bar': () => `<div class="crb"><span class="crb-url">${IC.tune}<span class="sf-d">${DOMAIN}</span></span><span class="crb-tabs">2</span>${IC.vdots}</div>`,
+  'wl-bar': g => { const w = g.ctx.wallet; return `<div class="wlb">${IC.close}${walletTile(w)}<span class="wlb-t"><span class="wlb-d">${IC.lock}${DOMAIN}</span><span class="wlb-s">${esc(w.name)} browser</span></span>${IC.reload}${IC.vdots}</div>`; },
+};
+function chromeHTML(g, fig){
+  const d = g.d;
+  let h = '', y = 0;
+  for (const r of g.top){ h += `<div class="cr cr-${r.k}" style="top:${y}px;height:${r.h}px">${ROW[r.k](g)}</div>`; y += r.h; }
+  let yb = 0;
+  for (const r of g.bottom){ h += `<div class="cr cr-${r.k}" style="bottom:${yb}px;height:${r.h}px">${ROW[r.k](g)}</div>`; yb += r.h; }
+  /* standalone: the status bar floats over the app (its ink can come from the app: { vanna: 'sb', ink }) */
+  if (g.kind === 'none' && g.statusH) h += `<div class="cr cr-over" style="top:0;height:${g.statusH}px">${statusHTML(g, (fig && fig._sbInk) || uiInk())}</div>`;
+  /* hardware over the screen */
+  if (d.kind === 'iphone') h += g.land ? '<i class="isl isl-l"></i>' : '<i class="isl"></i>';
+  if (d.kind === 'android'){
+    h += g.land ? `<i class="punch" style="left:${Math.round(g.ins.l / 2 - 5.5)}px;top:calc(50% - 5.5px)"></i>` : `<i class="punch" style="top:${Math.round(g.ins.t / 2 - 5.5)}px;left:calc(50% - 5.5px)"></i>`;
+  }
+  if (d.kind === 'fold'){
+    h += g.land ? '<i class="hinge hinge-h"></i><i class="udc" style="left:12px;top:25%"></i>' : '<i class="hinge"></i><i class="udc" style="left:75%;top:12px"></i>';
+  }
+  if (d.os === 'ios') h += `<i class="home${g.land ? ' home-l' : ''}${d.kind === 'ipad' ? ' home-ipad' : ''}"></i>`;
+  else h += '<i class="gest"></i>';
+  return h;
+}
+function hwHTML(g){
+  const d = g.d, b = d.bezel, fw = g.W + 2 * b, fh = g.H + 2 * b, pw = d.w + 2 * b;   // pw: portrait frame width
+  let btn = '';
+  for (const [edge, pos, len] of d.btn){
+    let s;
+    if (!g.land){
+      if (edge === 'l') s = `left:${LIP - 3}px;top:${LIP + pos}px;width:3px;height:${len}px`;
+      else if (edge === 'r') s = `left:${LIP + fw}px;top:${LIP + pos}px;width:3px;height:${len}px`;
+      else s = `top:${LIP - 3}px;left:${LIP + pos}px;height:3px;width:${len}px`;
+    } else {   // rotated counter-clockwise: left edge -> bottom, right edge -> top, top edge -> left
+      if (edge === 'l') s = `top:${LIP + fh}px;left:${LIP + pos}px;height:3px;width:${len}px`;
+      else if (edge === 'r') s = `top:${LIP - 3}px;left:${LIP + pos}px;height:3px;width:${len}px`;
+      else s = `left:${LIP - 3}px;top:${LIP + (pw - pos - len)}px;width:3px;height:${len}px`;
+    }
+    btn += `<i class="hw-btn" style="${s}"></i>`;
+  }
+  const cam = d.kind === 'ipad' ? (g.land ? `<i class="hw-cam" style="left:${LIP + fw / 2 - 3}px;top:${LIP + b / 2 - 3}px"></i>` : `<i class="hw-cam" style="left:${LIP + fw - b / 2 - 3}px;top:${LIP + fh / 2 - 3}px"></i>`) : '';
+  return `<i class="hw-body" style="left:${LIP}px;top:${LIP}px;width:${fw}px;height:${fh}px;border-radius:${d.r + b}px"></i>${btn}${cam}`;
+}
+
+/* ===================== Figures (one per slot; iframes stay alive while their slot exists) ===================== */
+const FIGS = new Map();
+const $ = id => document.getElementById(id);
+function makeFrame(fig){
+  const f = document.createElement('iframe');
+  f.className = 'app';
+  f.setAttribute('allow', 'clipboard-read; clipboard-write');
+  f.addEventListener('load', () => { fig._loaded = true; readFrame(fig); });
+  return f;
+}
+function newFig(slot){
+  const fig = document.createElement('figure');
+  fig.className = 'dv';
+  fig.dataset.key = slot.key;
+  fig.innerHTML = '<div class="dv-box"><div class="dv-fit"><div class="dv-scale"><div class="dv-hw"></div><div class="dv-screen"><div class="dv-chrome"></div></div></div></div></div><figcaption class="cap"></figcaption>';
+  fig._ifr = makeFrame(fig);
+  fig.querySelector('.dv-screen').prepend(fig._ifr);
+  return fig;
+}
+function setSrc(fig, g, slot){
+  const q = query(g);
+  /* live fold: one running app is resized, so only a change of anything but dev / sa reloads it */
+  const base = Object.assign({}, q); delete base.dev; delete base.sa;
+  const bkey = qs(base);
+  let useQ = q;
+  if (slot.live && fig._bkey === bkey && fig._q) useQ = fig._q;
+  else { fig._bkey = bkey; fig._q = q; }
+  const url = `${APP}?${qs(useQ)}${routeHash()}`;
+  if (fig._url === url) return;
+  const sameDoc = fig._url && fig._url.split('#')[0] === url.split('#')[0];
+  fig._url = url; fig._hash = S.route;
+  if (!sameDoc) fig._loaded = false;
+  fig._ifr.src = url;   // when only the hash differs this is a fragment navigation, no reload
+}
+function patch(fig, slot, g, k){
+  fig._g = g; fig._slot = slot;
+  const d = g.d, b = d.bezel, ft = foot(g);
+  let bw = ft.w, bh = ft.h;
+  if (slot.box) slot.box.forEach(id => { const f2 = foot(geo(id, slot.o, S.ctx)); bw = Math.max(bw, f2.w); bh = Math.max(bh, f2.h); });
+  const box = fig.querySelector('.dv-box'), fit = fig.querySelector('.dv-fit'), sc = fig.querySelector('.dv-scale');
+  box.style.width = `${Math.ceil(bw * k)}px`; box.style.height = `${Math.ceil(bh * k)}px`;
+  fig.style.width = `${Math.max(Math.ceil(bw * k), CAP_MIN)}px`;
+  fit.style.width = `${ft.w * k}px`; fit.style.height = `${ft.h * k}px`;
+  sc.style.width = `${ft.w}px`; sc.style.height = `${ft.h}px`; sc.style.transform = `scale(${k})`;
+  sc.dataset.kind = d.kind;
+  fig.querySelector('.dv-hw').innerHTML = hwHTML(g);
+  const scr = fig.querySelector('.dv-screen');
+  scr.style.left = `${LIP + b}px`; scr.style.top = `${LIP + b}px`;
+  scr.style.width = `${g.W}px`; scr.style.height = `${g.H}px`; scr.style.borderRadius = `${d.r}px`;
+  scr.dataset.ui = S.t; scr.dataset.chrome = g.kind; scr.dataset.kind = d.kind; scr.dataset.land = g.land ? '1' : '0';
+  const f = fig._ifr;
+  Object.assign(f.style, { left: `${g.vp.x}px`, top: `${g.vp.y}px`, width: `${g.vp.w}px`, height: `${g.vp.h}px` });
+  f.title = `Vanna app on ${d.name}, ${g.land ? 'landscape' : 'portrait'}, ${g.ctx.label}`;
+  fig.querySelector('.dv-chrome').innerHTML = chromeHTML(g, fig);
+  setSrc(fig, g, slot);
+  fig.querySelector('.cap').innerHTML = capHTML(fig, slot, g);
+}
+function capHTML(fig, slot, g){
+  const d = g.d, app = fig._appTier, off = app && app !== g.tier;
+  const name = slot.focus ? `<button type="button" class="cap-n" data-focus="${g.id}" data-fo="${g.o}" title="Show ${esc(d.name)} alone">${esc(d.name)}</button>` : `<span class="cap-n">${esc(d.name)}</span>`;
+  const ctx = g.ctx.note ? `<span class="cap-c" title="${esc(g.ctx.note)}">${esc(g.ctx.label)}, mapped</span>` : `<span class="cap-c">${esc(g.ctx.label)}</span>`;
+  return `<span class="cap-1">${name}<a class="cap-o" href="${esc(fig._url || '#')}" target="_blank" rel="noopener" aria-label="Open the app as ${esc(d.name)} in a new tab" title="Open this URL in a new tab">${IC.ext}</a></span>
+    <span class="cap-2"><span class="cap-v">${g.vp.w} x ${g.vp.h}</span><b class="tier t-${g.tier}">${g.tier}</b>${off ? `<b class="tier t-off" title="The app reports a different tier">app: ${esc(app)}</b>` : ''}${ctx}</span>`;
+}
+
+/* ===================== Fit ===================== */
+function availBox(){
+  const devs = $('devs'), cs = getComputedStyle(devs);
+  const w = devs.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
+  const top = devs.getBoundingClientRect().top + window.scrollY;
+  const h = window.innerHeight - top - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom);
+  return { w: Math.max(200, w), h: Math.max(200, h) };
+}
+function scaleFor(list, extraW){
+  const A0 = availBox(), A = { w: A0.w - 8, h: A0.h - 4 }, fs = list.map(x => x.ft), maxW = Math.max(...fs.map(f => f.w));   // slack: rounding never wraps a row
+  const widthCap = (A.w - 2) / maxW;
+  if (S.z !== 'fit') return Math.max(0.1, Math.min(+S.z / 100, widthCap, 1));
+  if (S.view === 'all'){
+    const fits = k => {
+      let x = 0, rowH = 0, total = 0;
+      for (const f of fs){
+        const w = Math.max(Math.ceil(f.w * k), CAP_MIN);
+        if (x && x + GAP + w > A.w){ total += rowH + capH + GAP; x = 0; rowH = 0; }
+        x += (x ? GAP : 0) + w; rowH = Math.max(rowH, Math.ceil(f.h * k));
+      }
+      return total + rowH + capH <= A.h;
+    };
+    let lo = 0.1, hi = Math.min(1, widthCap);
+    if (fits(hi)) return hi;
+    for (let i = 0; i < 18; i++){ const mid = (lo + hi) / 2; if (fits(mid)) lo = mid; else hi = mid; }
+    return Math.max(0.1, lo * 0.995);
+  }
+  const sumW = fs.reduce((a, f) => a + f.w, 0), maxH = Math.max(...fs.map(f => f.h));
+  const kw = (A.w - GAP * (fs.length - 1) - extraW) / sumW, kh = (A.h - capH) / maxH;
+  return Math.max(0.1, Math.min(1, kw, kh));
+}
+
+/* ===================== Render ===================== */
+let lastView = null;
+function render(){
+  document.documentElement.dataset.theme = S.t;
+  document.documentElement.style.setProperty('--strip-h', `${$('strip').offsetHeight}px`);
+  stageBar();
+  syncControls();
+  const devs = $('devs'), list = slots().map(sl => {
+    const g = geo(sl.id, sl.o, S.ctx);
+    let ft = foot(g);
+    if (sl.box) sl.box.forEach(id => { const f2 = foot(geo(id, sl.o, S.ctx)); ft = { w: Math.max(ft.w, f2.w), h: Math.max(ft.h, f2.h) }; });
+    return { sl, g, ft };
+  });
+  const viewKey = S.view + ':' + (S.view === 'fold' ? S.fm : '');
+  if (viewKey !== lastView){
+    FIGS.clear(); devs.textContent = ''; lastView = viewKey;
+    devs.dataset.view = S.view;
+    list.forEach(({ sl }, i) => {
+      const fig = newFig(sl); FIGS.set(sl.key, fig); devs.appendChild(fig);
+      if (S.view === 'fold' && S.fm === 'side' && i === 0) devs.insertAdjacentHTML('beforeend', `<div class="fold-arrow" aria-hidden="true">${IC.unfold}<span>Unfold</span></div>`);
+    });
+  }
+  const extraW = S.view === 'fold' && S.fm === 'side' ? 72 + GAP : 0;
+  const k = scaleFor(list, extraW);
+  devs.style.setProperty('--k', k);
+  list.forEach(({ sl, g }) => patch(FIGS.get(sl.key), sl, g, k));
+  /* the caption height depends on wrapping and on touch sizing: measure it and refit once if the guess was off */
+  const ch = Math.max(...[...FIGS.values()].map(f => f.querySelector('.cap').offsetHeight)) + 10;
+  if (Math.abs(ch - capH) > 1 && !render.again){ capH = ch; render.again = true; render(); render.again = false; return; }
+  routeSelect();
+  if (S.notes) renderNotes();
+  if (!$('phonepop').hidden) phoneLink();
+}
+
+/* ===================== Strip ===================== */
+const GROUPS = [
+  { k: 'view', label: 'View', opts: [['one', 'One device'], ['all', 'All devices'], ['fold', 'Fold'], ['ipad', 'iPad']] },
+  { k: 'dev', label: 'Device', opts: ORDER.map(id => [id, DEVICES[id].short, `${DEVICES[id].name}, ${DEVICES[id].w} x ${DEVICES[id].h}`]) },
+  { k: 'o', label: 'Orientation', opts: [['p', 'Portrait'], ['l', 'Landscape']] },
+  { k: 't', label: 'Theme', opts: [['light', 'Light'], ['dark', 'Dark']] },
+  { k: 'ctx', label: 'Context', opts: Object.entries(CONTEXTS).map(([k, c]) => [k, c.label, c.tip, c.group]) },
+  { k: 'chain', label: 'Chain', opts: [['solana', 'Solana'], ['stellar', 'Stellar']] },
+  { k: 'auth', label: 'Sign-in', opts: [['email', 'Email'], ['wallet', 'Wallet'], ['out', 'Signed out']] },
+  { k: 'vm', label: 'Mascot', opts: [['on', 'On'], ['off', 'Off']], keep: true },
+  { k: 'cp', label: 'Copilot', opts: [['locked', 'Locked', 'Testnet gate: Copilot and MCP open after real use of the product'], ['unlocked', 'Unlocked', 'The full Copilot: chat, plan cards, review and sign'], ['mcp', 'MCP open', 'Seven days after the unlock: MCP is open too']], keep: true },
+  { k: 'mgc', label: 'Margin chart', opts: [['on', 'On', 'Margin chart (Net P&L | Health factor) at the bottom of the Margin page'], ['off', 'Off', 'Margin page without the chart']], keep: true },
+];
+function segHTML(gr){
+  let last = null;
+  const btns = gr.opts.map(([v, t, tip, grp]) => {
+    const div = grp && last && grp !== last ? '<i class="seg-div" aria-hidden="true"></i>' : '';
+    last = grp || last;
+    return `${div}<button type="button" data-k="${gr.k}" data-v="${v}" aria-pressed="false"${tip ? ` title="${esc(tip)}"` : ''}>${esc(t)}</button>`;
+  }).join('');
+  return `<div class="grp grp-${gr.k}" role="group" aria-labelledby="gl-${gr.k}"><span class="gl${gr.keep ? '' : ' gl-opt'}" id="gl-${gr.k}">${gr.label}</span><span class="seg">${btns}</span></div>`;
+}
+function buildStrip(){
+  $('ctrls').innerHTML = GROUPS.map(segHTML).join('');
+  $('stagebar').innerHTML = `<label class="grp grp-route"><span class="gl">Route</span><span class="sel"><select id="route"></select></span></label>
+    <div class="sub-v" id="subv"></div>
+    <div class="grp grp-z" role="group" aria-labelledby="gl-z"><span class="gl" id="gl-z">Scale</span><span class="seg">${[['fit', 'Fit'], ['50', '50%'], ['75', '75%'], ['100', '100%']].map(([v, t]) => `<button type="button" data-k="z" data-v="${v}" aria-pressed="false">${t}</button>`).join('')}</span></div>
+    <span class="acts">
+      <button type="button" class="act" id="ctrl-btn" aria-expanded="true" aria-controls="ctrls" title="Show or hide the controls">${IC.chev}<span>Controls</span></button>
+      <button type="button" class="act" id="reload" title="Reload every device">${IC.reload}<span>Reload</span></button>
+      <button type="button" class="act" id="notes-btn" aria-expanded="false" aria-controls="notes">${IC.notes}<span>Notes</span></button>
+      <button type="button" class="act act-pri" id="phone-btn" aria-expanded="false" aria-controls="phonepop" aria-haspopup="dialog">${IC.phone}<span>On your phone</span></button>
+    </span>`;
+}
+function pressedFor(k, v){
+  if (k === 'dev'){
+    if (S.view === 'one') return S.dev === v;
+    if (S.view === 'fold') return S.fm === 'live' ? v === (S.folded ? 'fold-c' : 'fold-o') : v === 'fold-c' || v === 'fold-o';
+    if (S.view === 'ipad') return S.ipad === v;
+    return false;
+  }
+  if (k === 'o' && S.view === 'ipad') return false;   // both orientations are on screen
+  return String(S[k]) === v;
+}
+function syncControls(){
+  document.querySelectorAll('[data-k][data-v]').forEach(b => {
+    b.setAttribute('aria-pressed', pressedFor(b.dataset.k, b.dataset.v) ? 'true' : 'false');
+    if (b.dataset.k === 'o'){ const off = S.view === 'ipad'; b.disabled = off; b.title = off ? 'The iPad view shows portrait and landscape together' : ''; }
+  });
+  const nb = $('notes-btn'); if (nb) nb.setAttribute('aria-expanded', S.notes ? 'true' : 'false');
+  $('ctrls').hidden = S.hc; $('sum').hidden = !S.hc; $('ctrl-btn').setAttribute('aria-expanded', S.hc ? 'false' : 'true');
+  if (S.hc) $('sum').innerHTML = summary();
+}
+function summary(){
+  const V = { one: 'One device', all: 'All devices', fold: 'Fold', ipad: 'iPad' }[S.view];
+  const dev = S.view === 'one' ? DEVICES[S.dev].name : S.view === 'ipad' ? DEVICES[S.ipad].name : S.view === 'fold' ? 'Galaxy Z Fold7' : 'every device';
+  const parts = [S.view === 'ipad' ? 'Portrait and landscape' : S.o === 'l' ? 'Landscape' : 'Portrait', CONTEXTS[S.ctx].label, S.chain === 'stellar' ? 'Stellar' : 'Solana',
+    { email: 'Email', wallet: 'Wallet', out: 'Signed out' }[S.auth], S.vm === 'on' ? 'Mascot on' : 'Mascot off', S.mgc === 'on' ? 'Margin chart on' : 'Margin chart off', { locked: 'Copilot locked', unlocked: 'Copilot unlocked', mcp: 'Copilot and MCP open' }[S.cp], S.t === 'dark' ? 'Dark' : 'Light'];
+  return `<b>${V}</b>: ${esc(dev)}, ${parts.map(esc).join(', ')}`;
+}
+function routeSelect(){
+  const sel = $('route'); if (!sel) return;
+  const known = ROUTES.some(([v]) => v === S.route);
+  const want = (known ? '' : S.route) + '|' + S.route;
+  if (sel.dataset.state === want) return;
+  sel.dataset.state = want;
+  sel.innerHTML = ROUTES.map(([v, l]) => `<option value="${v}">${esc(l)}</option>`).join('') + (known ? '' : `<option value="${esc(S.route)}">Now: #${esc(S.route)}</option>`);
+  sel.value = S.route;
+}
+function stageBar(){
+  const el = $('subv');
+  if (el.dataset.view !== S.view){
+    el.dataset.view = S.view;
+    let h = '';
+    if (S.view === 'all') h = '<span class="hint">Same route, shared scale. Select a name to see it alone.</span>';
+    if (S.view === 'fold') h = `<span class="seg" role="group" aria-label="Fold view"><button type="button" data-k="fm" data-v="side" aria-pressed="false">Side by side</button><button type="button" data-k="fm" data-v="live" aria-pressed="false" title="One running app that you fold and unfold: the app is resized, not reloaded, so you can judge state continuity">Live fold</button></span>
+      <button type="button" class="act" id="fold-btn">${IC.unfold}<span></span></button><span class="hint" id="fold-hint"></span>`;
+    if (S.view === 'ipad') h = '<span class="seg" role="group" aria-label="iPad model"><button type="button" data-k="ipad" data-v="ipad" aria-pressed="false">iPad Air 11</button><button type="button" data-k="ipad" data-v="ipad-pro" aria-pressed="false">iPad Pro 13</button></span><span class="hint">Portrait and landscape together.</span>';
+    el.innerHTML = h;
+  }
+  const fb = $('fold-btn');
+  if (fb){
+    fb.hidden = S.fm !== 'live';
+    fb.querySelector('span').textContent = S.folded ? 'Unfold' : 'Fold';
+    $('fold-hint').textContent = S.fm === 'live' ? 'One app instance, resized on unfold.' : 'Closed and open at the same route.';
+  }
+}
+
+/* ===================== Notes ===================== */
+function mascotNote(g){
+  if (S.vm === 'off') return 'Mascot off: no chameleon anywhere';
+  if (g.id === 'fold-o') return 'Hinge chameleon perches on the hinge line, eyes on the pane last touched. Hidden while a sheet is open or any HF is at or below 1.10';
+  if (g.tier === 'short') return 'Decorative placements hidden. One face per screen at the main HF';
+  if (g.tier === 'compact') return 'Main HF face in the module hero. One face per screen';
+  return 'Account face in the rail or sidebar footer; the hero face hides';
+}
+function noteCard(fig, open){
+  const g = fig._g, t = TIER[g.tier], c = CTXNOTE[g.ctx.id], d = g.d, sa = g.sa;
+  const rows = [
+    ['Viewport', `${g.vp.w} x ${g.vp.h} CSS px (screen ${g.W} x ${g.H}, DPR ${d.dpr} on the device)`],
+    ['Safe areas', `top ${sa.t}, right ${sa.r}, bottom ${sa.b}, left ${sa.l}`],
+    ['Tier', `<b class="tier t-${g.tier}">${g.tier}</b> ${t.why}${fig._appTier ? `. App reports <b>${esc(fig._appTier)}</b>` : ''}`],
+    ['Navigation', t.nav], ['Pages', t.pages], ['Sheets', t.sheets],
+    ['Connect', c.connect], ['Signing', c.sign], ['Must handle', c.handle],
+    ['Mascot', mascotNote(g)],
+  ];
+  if (g.id === 'fold-o') rows.splice(3, 0, ['Fold open', 'Its own composition: two panes split at the hinge (list, detail). Never a stretched phone']);
+  const where = `${g.land ? 'Landscape' : 'Portrait'}, ${esc(g.ctx.label)}`;
+  return `<details class="nc" data-key="${esc(fig._slot.key)}"${open ? ' open' : ''}><summary><span class="nc-n">${esc(d.name)}</span><span class="nc-w">${where}</span></summary>
+    ${g.ctx.note ? `<p class="nc-map">${esc(g.ctx.note)}</p>` : ''}
+    <dl>${rows.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('')}<dt>URL</dt><dd><code>${esc(fig._url || '')}</code></dd></dl></details>`;
+}
+let notesView = null;
+function renderNotes(){
+  const el = $('notes');
+  const figs = [...FIGS.values()].filter(f => f._g);
+  const keep = notesView === lastView ? new Set([...el.querySelectorAll('details[open]')].map(x => x.dataset.key)) : null;
+  const scroll = el.scrollTop;
+  el.innerHTML = `<div class="notes-h"><h2>Notes</h2><button type="button" class="x" id="notes-x" aria-label="Close notes">${IC.close}</button></div>
+    <p class="notes-s">What changes on each device and context (CONTRACT V2.3 and V2.5).</p>${figs.map((f, i) => noteCard(f, keep ? keep.has(f._slot.key) : (S.view !== 'all' || i === 0))).join('')}`;
+  el.scrollTop = scroll;
+  notesView = lastView;
+}
+
+/* ===================== On your phone ===================== */
+let qrState = 'idle'; const qrWait = [];
+function loadQR(cb){
+  if (window.qrcode) return cb();
+  qrWait.push(cb);
+  if (qrState === 'loading') return;
+  qrState = 'loading';
+  const s = document.createElement('script');
+  s.src = QR_SRC; s.integrity = QR_SRI; s.crossOrigin = 'anonymous'; s.referrerPolicy = 'no-referrer';
+  s.onload = () => { qrState = window.qrcode ? 'ok' : 'fail'; qrWait.splice(0).forEach(f => f()); };
+  s.onerror = () => { qrState = 'fail'; qrWait.splice(0).forEach(f => f()); };
+  document.head.appendChild(s);
+}
+let ppCustom = null;
+function defaultPhoneURL(){
+  const rel = `${APP}?${qs({ t: S.t, chain: S.chain, auth: S.auth, vm: S.vm, mgchart: S.mgc, cp: S.cp })}${routeHash()}`;
+  try { return new URL(rel, location.href).href; } catch (e) { return rel; }
+}
+function drawQR(url){
+  const box = $('pp-qr'); if (!box) return;
+  loadQR(() => {
+    if (!box.isConnected) return;
+    if (!window.qrcode){ box.innerHTML = '<p class="qr-off">The QR code needs an internet connection.</p>'; return; }
+    try {
+      const qr = window.qrcode(0, 'M'); qr.addData(url); qr.make();
+      box.innerHTML = qr.createSvgTag({ cellSize: 4, margin: 2, scalable: true, alt: 'QR code for the app link' });
+    } catch (e) { box.innerHTML = '<p class="qr-off">This link is too long for a QR code.</p>'; }
+  });
+}
+function phoneLink(){
+  const url = ppCustom || defaultPhoneURL();
+  const inp = $('pp-url'); if (inp && document.activeElement !== inp) inp.value = url;
+  const a = $('pp-open'); if (a) a.href = url;
+  drawQR(url);
+}
+function openPhone(){
+  const pop = $('phonepop');
+  pop.innerHTML = `<div class="pop-h"><h2 id="pp-t">Open on your phone</h2><button type="button" class="x" id="pp-x" aria-label="Close">${IC.close}</button></div>
+    <div class="qr" id="pp-qr"><p class="qr-off">Loading the QR code</p></div>
+    <label class="pp-l" for="pp-url">Link</label><input id="pp-url" type="url" spellcheck="false" autocomplete="off">
+    <div class="pp-a"><button type="button" class="act" id="pp-copy">${IC.copy}<span>Copy link</span></button><a class="act" id="pp-open" target="_blank" rel="noopener">${IC.ext}<span>Open app.html</span></a></div>
+    <p class="pp-n">Scan with the camera. The link has no ctx, so the app detects the real browser or wallet.</p>
+    ${location.protocol === 'file:' ? '<p class="pp-w">This page is on file://: paste a published or local network link above first.</p>' : ''}`;
+  pop.hidden = false;
+  placePop();
+  $('phone-btn').setAttribute('aria-expanded', 'true');
+  phoneLink();
+  $('pp-url').focus();
+}
+function closePhone(refocus){
+  const pop = $('phonepop'); if (pop.hidden) return;
+  pop.hidden = true; $('phone-btn').setAttribute('aria-expanded', 'false');
+  if (refocus) $('phone-btn').focus();
+}
+function placePop(){
+  const pop = $('phonepop'), b = $('phone-btn').getBoundingClientRect(), w = Math.min(320, window.innerWidth - 32);
+  pop.style.width = `${w}px`;
+  pop.style.top = `${Math.round(b.bottom + 8)}px`;
+  pop.style.left = `${Math.round(Math.max(16, Math.min(window.innerWidth - w - 16, b.right - w)))}px`;
+}
+async function copyLink(){
+  const v = $('pp-url').value;
+  let ok = false;
+  try { await navigator.clipboard.writeText(v); ok = true; } catch (e) {
+    try { $('pp-url').select(); ok = document.execCommand('copy'); } catch (e2) {}
+  }
+  say(ok ? 'Link copied' : 'Copy is blocked here: select the link and copy it');
+  const s = $('pp-copy').querySelector('span'); s.textContent = ok ? 'Copied' : 'Copy blocked';
+  setTimeout(() => { if (s.isConnected) s.textContent = 'Copy link'; }, 1600);
+}
+const say = t => { const l = $('live'); l.textContent = ''; setTimeout(() => { l.textContent = t; }, 30); };
+
+/* ===================== App frames: read route / tier when same-origin; accept optional messages ===================== */
+function readFrame(fig){
+  let h = null, tier = null;
+  try {
+    const w = fig._ifr.contentWindow, de = w.document.documentElement;
+    h = decodeURIComponent(w.location.hash.slice(1));
+    tier = de.getAttribute('data-tier') || (w.document.body && w.document.body.getAttribute('data-tier')) || null;
+  } catch (e) { return; }   // file:// or another origin: the iframe is opaque, nothing to read
+  if (tier && TIER[tier] && tier !== fig._appTier){ fig._appTier = tier; refreshCaption(fig); }
+  if (h && ROUTE_RE.test(h)) followRoute(fig, h);
+}
+function followRoute(fig, h){
+  if (h === fig._hash) return;
+  fig._hash = h;
+  if (h === S.route) return;
+  S.route = h;
+  if (fig._url) fig._url = fig._url.split('#')[0] + routeHash();   // this frame is already there
+  writeHash(); render();
+}
+function refreshCaption(fig){
+  if (!fig._g) return;
+  fig.querySelector('.cap').innerHTML = capHTML(fig, fig._slot, fig._g);
+  if (S.notes) renderNotes();
+}
+setInterval(() => { FIGS.forEach(f => { if (f._loaded) readFrame(f); }); }, 700);
+window.addEventListener('message', e => {
+  const m = e.data; if (!m || typeof m !== 'object' || !m.vanna) return;
+  const fig = [...FIGS.values()].find(f => f._ifr.contentWindow === e.source); if (!fig) return;
+  if (m.vanna === 'route' && typeof m.hash === 'string'){ const h = m.hash.replace(/^#/, ''); if (ROUTE_RE.test(h)) followRoute(fig, h); }
+  else if (m.vanna === 'sb' && (m.ink === 'light' || m.ink === 'dark')){ fig._sbInk = m.ink; if (fig._g) fig.querySelector('.dv-chrome').innerHTML = chromeHTML(fig._g, fig); }
+  else if (m.vanna === 'tier' && typeof m.tier === 'string' && TIER[m.tier]){ fig._appTier = m.tier; refreshCaption(fig); }
+});
+
+/* ===================== Events ===================== */
+function set(k, v){
+  if (k === 'dev'){
+    if (S.view === 'ipad' && DEVICES[v].kind === 'ipad') S.ipad = v;
+    else if (S.view === 'fold' && S.fm === 'live' && (v === 'fold-c' || v === 'fold-o')) S.folded = v === 'fold-c';
+    else { S.dev = v; S.view = 'one'; }
+  } else if (k === 'ctx'){
+    S.ctx = v;
+    const c = CONTEXTS[v];
+    if (c.chain && c.chain !== S.chain) S.chain = c.chain;   // Stellar wallets preselect Stellar, Solana wallets Solana
+  } else if (k === 'view'){
+    S.view = v;
+    if (v === 'ipad' && DEVICES[S.dev].kind === 'ipad') S.ipad = S.dev;
+  } else if (k === 'fm'){ S.fm = v; if (v === 'live') S.folded = true; }
+  else S[k] = v;
+  writeHash(); render();
+}
+function reloadAll(){
+  FIGS.forEach(fig => {
+    const n = makeFrame(fig);
+    n.style.cssText = fig._ifr.style.cssText; n.title = fig._ifr.title;
+    fig._ifr.replaceWith(n); fig._ifr = n; fig._loaded = false; n.src = fig._url;
+  });
+}
+document.addEventListener('click', e => {
+  const t = e.target && e.target.closest ? e.target : null; if (!t) return;
+  const b = t.closest('[data-k][data-v]');
+  if (b && !b.disabled){ set(b.dataset.k, b.dataset.v); return; }
+  const fo = t.closest('[data-focus]');
+  if (fo){ S.dev = fo.dataset.focus; S.o = fo.dataset.fo || S.o; S.view = 'one'; writeHash(); render(); say(`Showing ${DEVICES[S.dev].name}`); return; }
+  if (t.closest('#fold-btn')){
+    S.folded = !S.folded; writeHash(); render();
+    const fig = FIGS.get('fold:live');
+    if (fig){
+      fig.classList.add('morph'); setTimeout(() => fig.classList.remove('morph'), 520);
+      try { fig._ifr.contentWindow.postMessage({ vanna: 'sa', sa: [fig._g.sa.t, fig._g.sa.r, fig._g.sa.b, fig._g.sa.l] }, '*'); } catch (err) {}
+    }
+    say(S.folded ? 'Folded: cover screen' : 'Unfolded: inner screen');
+    return;
+  }
+  if (t.closest('#reload')){ reloadAll(); say('Reloaded'); return; }
+  if (t.closest('#ctrl-btn')){ S.hc = !S.hc; writeHash(); render(); return; }
+  if (t.closest('#notes-btn')){ S.notes = !S.notes; applyNotes(); writeHash(); render(); if (S.notes) $('notes-x').focus(); return; }
+  if (t.closest('#notes-x')){ S.notes = false; applyNotes(); writeHash(); render(); $('notes-btn').focus(); return; }
+  if (t.closest('#phone-btn')){ if ($('phonepop').hidden) openPhone(); else closePhone(false); return; }
+  if (t.closest('#pp-x')){ closePhone(true); return; }
+  if (t.closest('#pp-copy')){ copyLink(); return; }
+  if (!$('phonepop').hidden && !t.closest('#phonepop')) closePhone(false);
+});
+document.addEventListener('change', e => {
+  if (e.target.id === 'route'){ const v = e.target.value; if (ROUTE_RE.test(v)){ S.route = v; writeHash(); render(); } }
+});
+let qrTimer = 0;
+document.addEventListener('input', e => {
+  if (e.target.id !== 'pp-url') return;
+  const v = e.target.value.trim(); ppCustom = v || null;
+  $('pp-open').href = v || defaultPhoneURL();
+  clearTimeout(qrTimer); qrTimer = setTimeout(() => drawQR(v || defaultPhoneURL()), 250);
+});
+document.addEventListener('keydown', e => {
+  if (e.key !== 'Escape') return;
+  if (!$('phonepop').hidden){ closePhone(true); e.preventDefault(); return; }
+  if (S.notes && $('notes').contains(document.activeElement)){ S.notes = false; applyNotes(); writeHash(); render(); $('notes-btn').focus(); }
+});
+function applyNotes(){ $('notes').hidden = !S.notes; document.body.classList.toggle('with-notes', S.notes); }
+
+let raf = 0;
+const refit = () => { cancelAnimationFrame(raf); raf = requestAnimationFrame(() => { render(); if (!$('phonepop').hidden) placePop(); }); };
+window.addEventListener('resize', refit);
+let lastW = 0;
+if (window.ResizeObserver){
+  new ResizeObserver(en => { const w = Math.round(en[0].contentRect.width); if (w !== lastW){ lastW = w; refit(); } }).observe($('devs'));
+  let lastH = 0;
+  new ResizeObserver(en => { const h = Math.round(en[0].contentRect.height); if (h !== lastH){ lastH = h; refit(); } }).observe($('strip'));
+}
+window.addEventListener('hashchange', () => { readHash(); applyNotes(); render(); });
+
+/* ===================== Boot ===================== */
+readHash();
+buildStrip();
+applyNotes();
+render();
+if (document.fonts && document.fonts.ready) document.fonts.ready.then(refit);
+window.VannaLab = { S, DEVICES, CONTEXTS, ROUTES, geo, tierOf, render, set };   // for the lab's own checks
+})();
+
+</script>
+</html>
