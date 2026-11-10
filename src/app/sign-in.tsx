@@ -76,7 +76,28 @@ export default function SignIn() {
     finish();
   };
 
+  // In the real app a tile goes straight to that wallet: it opens, you approve there, and you come back connected.
+  const connectDirect = async (c: Chain, app: WalletApp, logo: string) => {
+    if (connecting.current) return;
+    connecting.current = true;
+    haptic.tap();
+    try {
+      const r = await (c === "solana" ? connectSolanaWallet(app) : connectStellarWallet(app));
+      const w = addExternalWallet(c, app, logo, r.address, r.session);
+      haptic.success();
+      setConnected({ app, logo, chain: c, addr: w.addr });
+      if (c !== appChain && !add) setChain(c);
+      setTimeout(() => afterAuth(true), 250);
+    } catch (e) {
+      haptic.error();
+      toast((e as Error).message || `Couldn't connect ${app}`, "err");
+    } finally {
+      connecting.current = false;
+    }
+  };
+
   const approveWallet = (c: Chain, app: WalletApp, logo: string) => {
+    if (dynamic.available) return void connectDirect(c, app, logo);
     openSheet({
       title: "",
       content: (close) => (
@@ -90,27 +111,11 @@ export default function SignIn() {
           </View>
           <View style={s.note}>
             <Icon name="info" size={18} color={LK} />
-            <Text style={[s.sheetS, { flex: 1 }]}>{c === "solana" ? "Android shows your installed Solana wallets. Pick the one you want." : `Pick ${app} when your phone asks which app to open.`} You approve once, then each transaction in the wallet.</Text>
+            <Text style={[s.sheetS, { flex: 1 }]}>You approve once, then each transaction in the wallet.</Text>
           </View>
           <Pressable
-            onPress={async () => {
-              let w: { addr: string };
-              if (dynamic.available) {
-                if (connecting.current) return;
-                connecting.current = true;
-                try {
-                  const r = await (c === "solana" ? connectSolanaWallet() : connectStellarWallet());
-                  w = addExternalWallet(c, app, logo, r.address, r.session);
-                } catch (e) {
-                  haptic.error();
-                  toast((e as Error).message || `Couldn't connect ${app}`, "err");
-                  return;
-                } finally {
-                  connecting.current = false;
-                }
-              } else {
-                w = connectWallet(c, app, logo);
-              }
+            onPress={() => {
+              const w = connectWallet(c, app, logo);
               haptic.success();
               setConnected({ app, logo, chain: c, addr: w.addr });
               if (c !== appChain && !add) setChain(c);
