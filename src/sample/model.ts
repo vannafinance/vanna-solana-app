@@ -37,18 +37,11 @@ export function acct(chain: Chain, scale = 1) {
   const m = d.margin;
   const collUsd = m.coll.reduce((t, c) => t + c.amt * pxAt(c.sym), 0);
   const availUsd = Object.entries(m.avail).reduce((t, [s, v]) => t + v * pxAt(s), 0);
-  let spotUsd = 0, spotW = 0, spotExp = 0, spotPnlV = 0;
+  let spotUsd = 0, spotPnlV = 0;
   d.spot.forEach((s) => {
     const v = s.qty * pxAt(s.sym);
     spotPnlV += sgn(s.side) * s.qty * (pxAt(s.sym) - s.entry);
-    spotExp += v;
-    if (s.side === "long") {
-      spotUsd += v;
-      spotW += v * ltOf(s.sym);
-    } else {
-      spotUsd += s.qty * s.entry;
-      spotW += s.qty * s.entry * 0.95;
-    }
+    spotUsd += s.side === "long" ? v : s.qty * s.entry;
   });
   let perpEq = d.phoenixIdle, perpNotional = 0, perpPnlV = 0;
   d.perps.forEach((p) => {
@@ -61,16 +54,13 @@ export function acct(chain: Chain, scale = 1) {
   const assets = collUsd + availUsd + spotUsd + perpEq + farmUsd;
   const debtUsd = m.debt.reduce((t, x) => t + x.amt * pxAt(x.sym), 0);
   const equity = assets - debtUsd;
-  const weighted =
-    m.coll.reduce((t, c) => t + c.amt * pxAt(c.sym) * ltOf(c.sym), 0) +
-    Object.entries(m.avail).reduce((t, [s, v]) => t + v * pxAt(s) * (isStable(s) ? 0.95 : ltOf(s)), 0) +
-    spotW + perpEq * 0.9 + farmUsd * 0.9;
-  const maint = 0.15 * perpNotional;
-  const hf = debtUsd + maint > 1e-9 ? weighted / (debtUsd + maint) : Infinity;
-  const volAssets =
-    m.coll.filter((c) => !isStable(c.sym)).reduce((t, c) => t + c.amt * pxAt(c.sym), 0) +
-    Object.entries(m.avail).filter(([s]) => !isStable(s)).reduce((t, [s, v]) => t + v * pxAt(s), 0);
-  const exposure = volAssets + spotExp + perpNotional;
+  // The website's rule on both chains: health = everything held / debt (Solana margin.ts, Stellar account-model.ts).
+  // Borrowed tokens land in the account, so a borrow raises both sides.
+  const weighted = assets;
+  const maint = 0;
+  const hf = debtUsd > 1e-9 ? assets / debtUsd : Infinity;
+  // Gross position value / equity: every token held, plus the larger of the Phoenix balance and its open notional.
+  const exposure = assets - perpEq + Math.max(perpEq, perpNotional);
   const lev = equity > 0 ? exposure / equity : Infinity;
   // A real signed-in account: health, debt, equity and leverage are the chain readers' figures (same as the website).
   // Price-room searches (scaled prices) keep the model's shape, calibrated so scale 1 equals the chain's health factor.

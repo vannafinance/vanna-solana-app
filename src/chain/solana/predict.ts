@@ -59,6 +59,7 @@ async function mainnetAccounts(keys: string[]): Promise<Acc[]> {
   return out;
 }
 
+const toRaw = (ui: number) => BigInt(Math.round(ui * 1e6));
 const b64 = (a: { data: [string, string] }) => Buffer.from(a.data[0], "base64");
 const key = (d: Buffer, o: number) => base58(d.subarray(o, o + 32));
 const isMs = (v: number) => v > 1.6e12 && v < 2.5e12;
@@ -279,6 +280,24 @@ async function ensureMaker(): Promise<Maker> {
   return m;
 }
 
+/** Ported from apps/solana/lib/predict/maker.server.ts:fundCashOnFork. Adds CASH on the fork, plus SOL for fees if the wallet is low. */
+export async function fundCash(owner: string, cash = 1000): Promise<void> {
+  const m = await ensureMaker();
+  const sol = await rpc<{ value: number }>("getBalance", [owner]);
+  if (sol.value < 0.2e9) await rpc("requestAirdrop", [owner, 1e9]);
+  const ata = tokenAta(owner, CASH_MINT, TOKEN_2022);
+  const read = async () => (await rpc<{ value: Acc }>("getAccountInfo", [ata, { encoding: "base64" }])).value;
+  let account = await read();
+  if (!account) {
+    await sendAsMaker(m, [createAssociatedTokenAccountIdempotentIx(m.pubkey, ata, owner, CASH_MINT, TOKEN_2022)]);
+    account = await read();
+  }
+  if (!account) throw new Error("Couldn't create your CASH account");
+  const data = b64(account);
+  data.writeBigUInt64LE(data.readBigUInt64LE(64) + toRaw(cash), 64);
+  await rpc("surfnet_setAccount", [ata, { lamports: account.lamports, data: data.toString("hex"), owner: account.owner, executable: false }]);
+}
+
 const transfer = (mint: string, program: string, from: string, to: string, signer: string, amount: bigint): RawInstruction => {
   const data = Buffer.alloc(10);
   data[0] = 12; // TransferChecked
@@ -295,8 +314,6 @@ const transfer = (mint: string, program: string, from: string, to: string, signe
     data,
   };
 };
-
-const toRaw = (ui: number) => BigInt(Math.round(ui * 1e6));
 
 /**
  * Ported from apps/solana/lib/predict/trade.server.ts:buildTrade. Buying N shares for C at ask p (N = C / p): the maker adds

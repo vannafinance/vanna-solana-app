@@ -13,6 +13,7 @@ const {
 } = require('expo/config-plugins');
 
 const MARK = '// vanna-dynamic AARs';
+const WALLET_PACKAGES = ['app.phantom', 'com.solflare.mobile', 'app.backpack.mobile', 'org.stellar.freighterwallet', 'so.onekey.app.wallet', 'com.lobstr.client'];
 const REDIRECT_SCHEME = 'vannadynamic'; // keep in sync with redirectUrl default in the native module
 
 function withMinSdk(config) {
@@ -43,6 +44,8 @@ function withManifest(config) {
         manifest['uses-permission'].push({ $: { 'android:name': name } });
       }
     }
+    // Android hides other apps from us unless they are named here; we need to know which wallets are installed.
+    manifest.queries = [...(manifest.queries ?? []), { package: WALLET_PACKAGES.map((id) => ({ $: { 'android:name': id } })) }];
     const app = AndroidConfig.Manifest.getMainApplicationOrThrow(c.modResults);
     app.activity = app.activity ?? [];
     app.$['android:usesCleartextTraffic'] = 'true'; // as in Dynamic's Android quickstart

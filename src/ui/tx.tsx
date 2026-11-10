@@ -48,13 +48,13 @@ type Phase = "review" | "sign" | "progress" | "done" | "fail";
 
 // With "confirm transactions" on (Account > Security), the phone's own prompt (fingerprint, face unlock, Face ID) opens
 // as soon as the sign step shows; otherwise the step is the tap-to-confirm stand-in.
-function SignWithBiometrics({ onOk }: { onOk: () => void }) {
+function SignWithBiometrics({ onConfirm }: { onConfirm: () => void }) {
   const asked = useRef(false);
   useEffect(() => {
     if (asked.current || !lockState().confirmTx) return;
     asked.current = true;
-    authenticate("Confirm transaction").then((ok) => ok && onOk());
-  }, [onOk]);
+    onConfirm();
+  }, [onConfirm]);
   return null;
 }
 
@@ -64,6 +64,14 @@ function TxFlow({ spec, close }: { spec: TxSpec; close: () => void }) {
   const [step, setStep] = useState(0);
   const [fail, setFail] = useState("Nothing was sent.");
   const [hash, setHash] = useState<string | null>(null);
+  const [authFailed, setAuthFailed] = useState(false);
+  // The phone's own prompt, which also offers its PIN or passcode.
+  const confirmIdentity = () => {
+    setAuthFailed(false);
+    authenticate("Confirm transaction")
+      .then((ok) => (ok ? void approve() : setAuthFailed(true)))
+      .catch(() => setAuthFailed(true));
+  };
 
   const approve = async () => {
     setPhase("progress");
@@ -124,7 +132,7 @@ function TxFlow({ spec, close }: { spec: TxSpec; close: () => void }) {
           ))}
         </View>
         </>)}
-        <Button label={spec.cta} fam={spec.fam} icon={Platform.OS === "ios" ? "face" : "fingerprint"} onPress={() => setPhase("sign")} />
+        <Button label={spec.cta} fam={spec.fam} icon={lockState().confirmTx ? (Platform.OS === "ios" ? "face" : "fingerprint") : undefined} onPress={() => (lockState().confirmTx ? setPhase("sign") : void approve())} />
       </View>
     );
   }
@@ -133,12 +141,13 @@ function TxFlow({ spec, close }: { spec: TxSpec; close: () => void }) {
     const ios = Platform.OS === "ios";
     return (
       <View style={{ alignItems: "center", gap: 6, paddingVertical: 8 }}>
-        <SignWithBiometrics onOk={approve} />
+        <SignWithBiometrics onConfirm={confirmIdentity} />
         <Text style={[styles.h, { color: colors.text }]}>{ios ? "Face ID" : "Confirm it's you"}</Text>
-        <Pressable onPress={() => (lockState().confirmTx ? authenticate("Confirm transaction").then((ok) => { if (ok) void approve(); }) : void approve())} accessibilityRole="button" accessibilityLabel={ios ? "Face ID, tap to confirm" : "Use your passkey"} style={[styles.bio, { backgroundColor: colors.purpleTint }]}>
+        <Pressable onPress={confirmIdentity} accessibilityRole="button" accessibilityLabel={ios ? "Face ID, tap to confirm" : "Use your passkey"} style={[styles.bio, { backgroundColor: colors.purpleTint }]}>
           <Icon name={ios ? "face" : "fingerprint"} size={44} color="#703AE6" />
         </Pressable>
-        <Text style={[styles.cap, { color: colors.muted }]}>{ios ? "Look at your phone" : "Touch the sensor"}</Text>
+        <Text style={[styles.cap, { color: colors.muted }]}>{authFailed ? "That didn't work. Try again, or use your phone's PIN." : ios ? "Look at your phone" : "Touch the sensor"}</Text>
+        {authFailed && <Button label={ios ? "Try again or use passcode" : "Try again or use PIN"} fam={spec.fam} size="md" onPress={confirmIdentity} style={{ alignSelf: "stretch", marginTop: 8 }} />}
         <Button label="Cancel" v="text" size="md" onPress={() => (haptic.error(), setPhase("fail"))} style={{ alignSelf: "stretch", marginTop: 8 }} />
       </View>
     );
