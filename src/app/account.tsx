@@ -1,3 +1,4 @@
+import * as Clipboard from "expo-clipboard";
 import { type Href, router } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import * as WebBrowser from "expo-web-browser";
@@ -22,9 +23,11 @@ import { haptic } from "@/ui/haptics";
 import { hasMargin, walletUsd } from "@/sample/model";
 import { type AppearanceMode, setAppearance, useAppearance } from "@/state/appearance";
 import { type Chain, CHAIN_LABEL, useChain } from "@/state/chain";
-import { switchChain, WalletsCard } from "@/screens/wallets/wallets";
+import { openAddWallet, switchChain, WalletsCard } from "@/screens/wallets/wallets";
 import { usePersonal } from "@/state/personal";
-import { signOut, useWallets, walletState } from "@/state/wallets";
+import { LIVE_ACCT } from "@/chain/account-live";
+import * as dynamic from "@/chain/dynamic";
+import { inUseWallet, short, signOut, useWallets, walletState } from "@/state/wallets";
 import { useTheme } from "@/theme/use-theme";
 import { BRAND_GRADIENT, font } from "@/theme/tokens";
 import { openSheet, toast } from "@/ui/overlay";
@@ -65,10 +68,10 @@ export default function Account() {
           </View>
           <View style={{ flex: 1, minWidth: 0, gap: 4 }}>
             <Text style={styles.pcName} numberOfLines={1}>{me.name}</Text>
-            <Text style={styles.pcSub} numberOfLines={1}>{ACCOUNT.email}</Text>
-            <View style={styles.tester}>
+            <Text style={styles.pcSub} numberOfLines={1}>{walletState().email ?? inUseWallet(chain)?.addr ?? ""}</Text>
+            {!dynamic.available && <View style={styles.tester}>
               <Text style={styles.testerText}>Copilot tester</Text>
-            </View>
+            </View>}
           </View>
           <View style={styles.pcActs}>
             <IconAction icon="south" label="Deposit" tone="hero" onPress={() => openDeposit(chain)} />
@@ -111,22 +114,27 @@ export default function Account() {
           </View>
         </Card>
 
-        {signedIn && <WalletsCard />}
         <Card style={styles.list}>
-          <Head>{signedIn ? "This chain" : "Wallets"}</Head>
-          <InfoRow icon="login" label="Sign-in" value={ACCOUNT.email} after={ACCOUNT.verified ? <Icon name="verified" size={16} color={colors.positive} filled /> : undefined} />
-          {(["solana", "stellar"] as Chain[]).map((c) => (
-            <View key={c} style={styles.r}>
-              <TokenLogo sym={CHAIN_LOGO[c]} size={20} />
-              <Text style={[styles.rl, { color: colors.muted }]}>{CHAIN_LABEL[c]}</Text>
-              <Text style={[styles.rv, { color: colors.text, fontFamily: font.regular }]}>{ACCOUNT.wallets[c].addr}</Text>
-              <Pressable onPress={() => toast("Address copied")} accessibilityRole="button" accessibilityLabel={`Copy ${CHAIN_LABEL[c]} address`} hitSlop={8}>
-                <Icon name="content_copy" size={18} color="muted" />
+          <Head>This chain</Head>
+          <InfoRow icon="login" label="Sign-in" value={walletState().email ?? inUseWallet(chain)?.app ?? ""} after={ACCOUNT.verified ? <Icon name="verified" size={16} color={colors.positive} filled /> : undefined} />
+          {(["solana", "stellar"] as Chain[]).map((c) => {
+            const w = inUseWallet(c);
+            return (
+              // Tap to switch, add or remove wallets on this chain.
+              <Pressable key={c} onPress={() => (w ? openSheet({ title: "", content: () => <WalletsCard /> }) : openAddWallet(c))} style={styles.r} accessibilityRole="button" accessibilityLabel={w ? `${CHAIN_LABEL[c]} wallets` : `Add a ${CHAIN_LABEL[c]} wallet`}>
+                <TokenLogo sym={CHAIN_LOGO[c]} size={20} />
+                <Text style={[styles.rl, { color: colors.muted }]}>{CHAIN_LABEL[c]}</Text>
+                <Text style={[styles.rv, { color: w ? colors.text : colors.link, fontFamily: font.regular }]}>{w ? `${w.app} ${w.addr}` : "Add a wallet"}</Text>
+                {w && (
+                  <Pressable onPress={() => void Clipboard.setStringAsync(w.full).then(() => toast("Address copied"))} accessibilityRole="button" accessibilityLabel={`Copy ${CHAIN_LABEL[c]} address`} hitSlop={8}>
+                    <Icon name="content_copy" size={18} color="muted" />
+                  </Pressable>
+                )}
               </Pressable>
-            </View>
-          ))}
+            );
+          })}
           <InfoRow icon="account_balance_wallet" label="Balance" value={mine ? usd(walletUsd(chain)) : "—"} />
-          <NavRow icon="account_balance" label="Margin account" value={!mine ? "—" : hasMargin(DATA[chain]) ? MARGIN_ADDR[chain] : "Not created"} onPress={() => router.navigate("/margin")} />
+          <NavRow icon="account_balance" label="Margin account" value={!mine ? "—" : hasMargin(DATA[chain]) ? (LIVE_ACCT[chain]?.address ? short(LIVE_ACCT[chain]!.address!) : MARGIN_ADDR[chain]) : "Not created"} onPress={() => router.navigate("/margin")} />
         </Card>
 
         <Card style={styles.list}>

@@ -79,6 +79,8 @@ export type SendOptions = {
   maxRetries?: number;
   timeoutMs?: number;
   onStatus?: (status: "simulating" | "signing" | "sending" | "confirming") => void;
+  /** Signers other than the wallet, e.g. the fork's market maker. */
+  extraSigners?: { pubkey: string; sign: (message: Uint8Array) => Uint8Array }[];
 };
 
 // ---------------------------------------------------------------------------------------------
@@ -767,8 +769,9 @@ export async function sendSolanaInstructions(
   // 1. Simulation Phase (placeholder blockhash)
   const placeholderHash = "11111111111111111111111111111111";
   const simulate = () => {
-    const { serialized: simMsgBytes } = compileV0Message(payer, ixs, placeholderHash, lookupTables);
-    const simBase64 = Buffer.from(serializeTransaction(simMsgBytes, [new Uint8Array(64)])).toString("base64");
+    const { serialized: simMsgBytes, message: simMsg } = compileV0Message(payer, ixs, placeholderHash, lookupTables);
+    const blank = Array.from({ length: simMsg.header.numRequiredSignatures }, () => new Uint8Array(64));
+    const simBase64 = Buffer.from(serializeTransaction(simMsgBytes, blank)).toString("base64");
     return rpc<{ value: { err: unknown; logs: string[] | null } }>("simulateTransaction", [
       simBase64,
       { encoding: "base64", sigVerify: false, replaceRecentBlockhash: true, commitment: "confirmed" },
@@ -799,16 +802,24 @@ export async function sendSolanaInstructions(
   );
 
   // 3. Re-compile with fresh blockhash
-  const { serialized: finalMsgBytes } = compileV0Message(payer, ixs, latest.value.blockhash, lookupTables);
-  const unsignedTxBytes = serializeTransaction(finalMsgBytes, [new Uint8Array(64)]);
+  const { serialized: finalMsgBytes, message: finalMsg } = compileV0Message(payer, ixs, latest.value.blockhash, lookupTables);
+  const unsignedTxBytes = serializeTransaction(finalMsgBytes, Array.from({ length: finalMsg.header.numRequiredSignatures }, () => new Uint8Array(64)));
   const unsignedBase64 = Buffer.from(unsignedTxBytes).toString("base64");
 
   // 4. Sign
   opts.onStatus?.("signing");
-  const signedBase64 = await signSolana(unsignedBase64);
+  let signedBase64 = await signSolana(unsignedBase64);
 
   // 5. Extract fallback signature (first 64-byte signature slot at offset 1)
   const signedBytes = Buffer.from(signedBase64, "base64");
+  if (opts.extraSigners?.length) {
+    for (const signer of opts.extraSigners) {
+      const slot = finalMsg.staticAccountKeys.indexOf(signer.pubkey);
+      if (slot < 0 || slot >= finalMsg.header.numRequiredSignatures) throw new Error("A required signer is missing from the transaction");
+      signedBytes.set(signer.sign(finalMsgBytes), 1 + 64 * slot);
+    }
+    signedBase64 = signedBytes.toString("base64");
+  }
   const fallbackSignature = base58(signedBytes.subarray(1, 65));
 
   // 6. Broadcast

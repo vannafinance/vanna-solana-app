@@ -8,7 +8,7 @@ import { ACCOUNT, POINTS } from "./data";
 
 export const SEASON = { name: "Testnet Season", tag: "Season 0" };
 export const USERS = 18420, MY_RANK = 312;
-export const OVERVIEW = { points: POINTS, lastDrop: 3493, week: { mods: 3, days: 3 }, byChain: { solana: 8161, stellar: 1960 } };
+export const OVERVIEW = POINTS ? { points: POINTS, lastDrop: 3493, week: { mods: 3, days: 3 }, byChain: { solana: 8161, stellar: 1960 } } : { points: 0, lastDrop: 0, week: { mods: 0, days: 0 }, byChain: { solana: 0, stellar: 0 } };
 
 // Quests (design QDEF): the module's icon and colour, what to do while open, the day it was done.
 export const QUESTS: { t: string; icon: "south" | "savings" | "account_balance" | "candlestick_chart" | "eco" | "how_to_vote" | "group"; color: string; todo: string; go: string; done: boolean; day: string }[] = [

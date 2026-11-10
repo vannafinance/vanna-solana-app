@@ -19,6 +19,8 @@ export interface VannaDynamicNativeModule {
   configure(environmentId: string, options?: VannaDynamicConfigureOptions): Promise<void>;
   sendEmailCode(email: string): Promise<void>;
   verifyEmailCode(code: string): Promise<VannaDynamicSession>;
+  /** Google or X in the browser, then the same wallets as email. Android only so far. */
+  signInSocial?(provider: "google" | "x"): Promise<VannaDynamicSession>;
   getSession(): Promise<VannaDynamicSession | null>;
   /** Base64 transaction envelope XDR in, signed envelope XDR out. */
   signStellarXdr(xdr: string): Promise<string>;

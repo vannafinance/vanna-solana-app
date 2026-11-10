@@ -24,6 +24,12 @@ function withMinSdk(config) {
     } else {
       c.modResults.push({ type: 'property', key, value: '28' });
     }
+    // Dynamic's SDK ships no keep rules, and minifying renames the classes its web bridge and JSON parsing rely on.
+    for (const name of ['android.enableMinifyInReleaseBuilds', 'android.enableShrinkResourcesInReleaseBuilds']) {
+      const existing = c.modResults.find((p) => p.type === 'property' && p.key === name);
+      if (existing) existing.value = 'false';
+      else c.modResults.push({ type: 'property', key: name, value: 'false' });
+    }
     return c;
   });
 }
@@ -39,6 +45,7 @@ function withManifest(config) {
     }
     const app = AndroidConfig.Manifest.getMainApplicationOrThrow(c.modResults);
     app.activity = app.activity ?? [];
+    app.$['android:usesCleartextTraffic'] = 'true'; // as in Dynamic's Android quickstart
     const cb = 'com.dynamic.sdk.android.Auth.AuthCallbackActivity';
     if (!app.activity.some((a) => a.$['android:name'] === cb)) {
       app.activity.push({

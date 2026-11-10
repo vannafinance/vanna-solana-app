@@ -11,12 +11,12 @@ import type { Chain } from "@/state/chain";
 // wallet in use. Email / Google / X give one Vanna (Dynamic) wallet on each chain.
 // Saved on the phone (AsyncStorage: public addresses and app names only, never keys).
 export type WalletApp = "Vanna wallet" | "Phantom" | "Solflare" | "Backpack" | "Freighter" | "OneKey" | "LOBSTR";
-export type WalletEntry = { id: string; app: WalletApp; logo: string; addr: string; full: string; kind: "embedded" | "external"; sample?: boolean };
+export type WalletEntry = { id: string; app: WalletApp; logo: string; addr: string; full: string; kind: "embedded" | "external"; sample?: boolean; session?: string };
 export type SignIn = "email" | "google" | "x" | "wallet";
 
 export const WALLET_APPS: Record<Chain, { app: WalletApp; logo: string; soon?: boolean }[]> = {
   solana: [{ app: "Phantom", logo: "PHANTOM" }, { app: "Solflare", logo: "SOLFLARE" }, { app: "Backpack", logo: "BACKPACK" }],
-  stellar: [{ app: "Freighter", logo: "FREIGHTER" }, { app: "OneKey", logo: "ONEKEY" }, { app: "LOBSTR", logo: "LOBSTR", soon: true }],
+  stellar: [{ app: "Freighter", logo: "FREIGHTER" }, { app: "OneKey", logo: "ONEKEY" }, { app: "LOBSTR", logo: "LOBSTR" }],
 };
 
 type State = {
@@ -90,6 +90,13 @@ export function connectWallet(c: Chain, app: WalletApp, logo: string): WalletEnt
   const full = sampleAddr(c);
   const w: WalletEntry = { id: `${app}-${full.slice(0, 6)}`, app, logo, addr: short(full), full, kind: "external", sample: true };
   set({ wallets: { ...state.wallets, [c]: [...state.wallets[c], w] }, inUse: { ...state.inUse, [c]: w.id }, signedIn: true, method: state.method ?? "wallet" });
+  return w;
+}
+
+// A real external wallet the user just approved in its app. `session` is what signs later without a new connection.
+export function addExternalWallet(c: Chain, app: WalletApp, logo: string, full: string, session: string): WalletEntry {
+  const w: WalletEntry = { id: `${app}-${full.slice(0, 6)}`, app, logo, addr: short(full), full, kind: "external", session };
+  set({ wallets: { ...state.wallets, [c]: [...state.wallets[c].filter((x) => x.full !== full), w] }, inUse: { ...state.inUse, [c]: w.id }, signedIn: true, method: state.method ?? "wallet" });
   return w;
 }
 

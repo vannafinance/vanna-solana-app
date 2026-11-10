@@ -8,6 +8,10 @@ import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import * as dynamic from "@/chain/dynamic";
+import "@/chain/external"; // registers the external wallet signers
+import { clearSampleData } from "@/chain/account-live";
+import { clearSamplePredict, refreshLivePredict } from "@/screens/predict/model";
+import { useWallets } from "@/state/wallets";
 import { startAccountLive } from "@/chain/account-live";
 import { startLiveData } from "@/chain/live";
 import "@/state/appearance";
@@ -18,6 +22,11 @@ import { useTheme } from "@/theme/use-theme";
 import { OverlayHost } from "@/ui/overlay";
 import { ThemeFadeHost } from "@/ui/theme-fade";
 
+
+if (dynamic.available) {
+  clearSampleData();
+  clearSamplePredict();
+}
 SplashScreen.preventAutoHideAsync();
 
 export default function RootLayout() {
@@ -30,16 +39,21 @@ export default function RootLayout() {
     hydrateSession().finally(() => setHydrated(true));
   }, []);
   const ready = (fontsLoaded || !!fontError) && hydrated;
+  const { signedIn, inUse } = useWallets();
+  const inUseSolana = inUse.solana;
 
   useEffect(() => {
     if (ready) SplashScreen.hideAsync();
   }, [ready]);
   // A reload used to restore Portfolio. Until this open's intro is finished, stay on it.
   useEffect(() => {
-    if (!ready || isWelcomeSeen()) return;
+    if (!ready || (isWelcomeSeen() && signedIn)) return;
     if (pathname === "/welcome" || pathname.startsWith("/sign-in")) return;
     router.replace("/welcome");
-  }, [ready, pathname]);
+  }, [ready, pathname, signedIn]);
+  useEffect(() => {
+    if (signedIn) void refreshLivePredict(true).catch(() => {});
+  }, [signedIn, inUseSolana]);
   useEffect(() => startLiveData(), []);
   useEffect(() => startAccountLive(), []);
   useEffect(() => {

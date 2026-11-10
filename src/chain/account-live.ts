@@ -1,10 +1,10 @@
 import { nativeToScVal } from "@stellar/stellar-base";
 import { AppState } from "react-native";
 
-import { DATA, type ChainData, type FarmPos } from "@/sample/data";
+import { ACCOUNT, ACTIVITY, DATA, NOTES, PERP_HIST, PREDICT, type ChainData, type FarmPos } from "@/sample/data";
 import type { Chain } from "@/state/chain";
 import { mutate } from "@/state/store";
-import { inUseWallet, onWalletsChanged } from "@/state/wallets";
+import { inUseWallet, onWalletsChanged, walletState } from "@/state/wallets";
 
 import { fetchSolanaAccount } from "./solana/account";
 import { fetchSolanaPositions } from "./solana/positions";
@@ -19,7 +19,7 @@ import { readContract } from "./stellar/read";
    Only a real wallet is read: with a stand-in (preview) wallet the screens show dashes (src/state/personal.ts) and DATA
    keeps the demo account. Refreshes when the wallet in use changes, every 30 s, and when the app comes back. */
 
-export type LiveAcct = { hf: number; debtUsd: number; equity: number; lev: number; collUsd: number; k?: number };
+export type LiveAcct = { hf: number; debtUsd: number; equity: number; lev: number; collUsd: number; k?: number; address?: string };
 export const LIVE_ACCT: Partial<Record<Chain, LiveAcct>> = {};
 // When the demo account is replaced, keep a copy so signing out can put it back.
 const DEMO: Partial<Record<Chain, ChainData>> = {};
@@ -91,7 +91,7 @@ async function loadStellar(owner: string) {
       } else d.margin.coll.push({ sym: app(k), amt: b.amount });
     }
     for (const [k, b] of Object.entries(m.debt)) d.margin.debt.push({ sym: app(k), amt: b.amount });
-    live = { hf: m.healthFactor, debtUsd: m.debtUsd, equity: m.netAvailableCollateral, lev: m.leverage, collUsd: m.grossCollateralUsd };
+    live = { hf: m.healthFactor, debtUsd: m.debtUsd, equity: m.netAvailableCollateral, lev: m.leverage, collUsd: m.grossCollateralUsd, address: m.address };
   }
   return { d, live };
 }
@@ -112,9 +112,29 @@ async function loadSolana(owner: string) {
     d.margin.created = today();
     for (const [k, b] of Object.entries(m.collateral)) d.margin.coll.push({ sym: k, amt: b.amount });
     for (const [k, b] of Object.entries(m.debt)) d.margin.debt.push({ sym: k, amt: b.amount });
-    live = { hf: m.healthFactor, debtUsd: m.debtUsd, equity: m.netAvailableCollateral, lev: m.leverage, collUsd: m.collateralUsd };
+    live = { hf: m.healthFactor, debtUsd: m.debtUsd, equity: m.netAvailableCollateral, lev: m.leverage, collUsd: m.collateralUsd, address: m.address };
   }
   return { d, live };
+}
+
+/** A real build never shows the design's sample user: positions, history, notifications and the sample profile all start empty. */
+export function clearSampleData() {
+  for (const c of ["solana", "stellar"] as Chain[]) {
+    Object.assign(DATA[c], empty());
+    ACTIVITY[c].length = 0;
+  }
+  PREDICT.length = 0;
+  PERP_HIST.length = 0;
+  NOTES.length = 0;
+  const syncProfile = () => {
+    ACCOUNT.email = walletState().email ?? "";
+    for (const c of ["solana", "stellar"] as Chain[]) {
+      const w = inUseWallet(c);
+      ACCOUNT.wallets[c] = { ...ACCOUNT.wallets[c], addr: w?.addr ?? "" };
+    }
+  };
+  syncProfile();
+  onWalletsChanged(syncProfile);
 }
 
 let running: Partial<Record<Chain, boolean>> = {};

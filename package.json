@@ -1,16 +1,21 @@
 {
   "name": "vanna-mobile-app",
   "version": "1.0.0",
-  "main": "expo-router/entry",
+  "main": "index.js",
   "dependencies": {
     "@expo-google-fonts/plus-jakarta-sans": "^0.4.2",
     "@expo/ui": "~58.0.27",
     "@noble/curves": "^1.9.7",
     "@noble/hashes": "^1.8.0",
     "@react-native-async-storage/async-storage": "2.2.0",
+    "@react-native-community/netinfo": "12.0.1",
+    "@solana-mobile/mobile-wallet-adapter-protocol": "^3.0.2",
     "@stellar/stellar-base": "^14.1.0",
+    "@walletconnect/react-native-compat": "^2.26.0",
+    "@walletconnect/sign-client": "^2.26.0",
     "buffer": "^6.0.3",
     "expo": "~58.0.23",
+    "expo-application": "~58.1.2",
     "expo-clipboard": "~58.0.4",
     "expo-constants": "~58.0.15",
     "expo-dev-client": "~58.0.18",
@@ -33,6 +38,7 @@
     "react-dom": "19.3.0",
     "react-native": "0.88.1",
     "react-native-gesture-handler": "~3.3.0",
+    "react-native-get-random-values": "^2.1.0",
     "react-native-qrcode-svg": "^6.3.52",
     "react-native-reanimated": "4.7.1",
     "react-native-safe-area-context": "~5.11.1",
@@ -56,5 +62,8 @@
     "lint": "expo lint",
     "typecheck": "tsc --noEmit"
   },
-  "private": true
+  "private": true,
+  "overrides": {
+    "@react-native-async-storage/async-storage": "$@react-native-async-storage/async-storage"
+  }
 }

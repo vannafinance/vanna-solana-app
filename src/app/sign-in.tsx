@@ -14,7 +14,8 @@ import { setRewards, useRewards } from "@/sample/rewards";
 import { CHAIN_LABEL, type Chain, useChain } from "@/state/chain";
 import { markWelcomeSeen } from "@/state/session";
 import * as dynamic from "@/chain/dynamic";
-import { addEmbedded, connectWallet, markAskedOther, signInWithEmail, walletState, WALLET_APPS, type WalletApp } from "@/state/wallets";
+import { connectSolanaWallet, connectStellarWallet } from "@/chain/external";
+import { addEmbedded, addExternalWallet, connectWallet, markAskedOther, signInWithEmail, walletState, WALLET_APPS, type WalletApp } from "@/state/wallets";
 import { BRAND_GRADIENT, font } from "@/theme/tokens";
 import { haptic } from "@/ui/haptics";
 import { openSheet, toast } from "@/ui/overlay";
@@ -28,6 +29,8 @@ type Step = "main" | "code" | "other" | "name";
 const other = (c: Chain): Chain => (c === "solana" ? "stellar" : "solana");
 const BG = "#000000", SF = "#161618", BC = "#3A3944", MU = "#A9A9B2", LK = "#CBB6FA";
 const RESEND_MS = 30_000;
+const within = <T,>(work: Promise<T>, ms: number, message: string) =>
+  Promise.race([work, new Promise<T>((_, reject) => setTimeout(() => reject(new Error(message)), ms))]);
 
 export default function SignIn() {
   const insets = useSafeAreaInsets();
@@ -42,9 +45,10 @@ export default function SignIn() {
   const [code, setCode] = useState("");
   const [connected, setConnected] = useState<{ app: WalletApp; logo: string; chain: Chain; addr: string } | null>(null);
   const me = useRewards();
-  const [name, setName] = useState(me.name);
+  const [name, setName] = useState(me.name === "Maya" ? "" : me.name);
   const [verifying, setVerifying] = useState(false);
   const checking = useRef(false); // the last digit can fire twice before verifying is set
+  const connecting = useRef(false); // a wallet or Google / X prompt is open
   const [codeErr, setCodeErr] = useState<string | null>(null);
   const [errorKey, setErrorKey] = useState(0);
   const [resendAt, setResendAt] = useState(0);
@@ -66,6 +70,9 @@ export default function SignIn() {
     if (mode === "add") return finish();
     if (fromWallet && mode === "new" && !walletState().askedOther && walletState().wallets[other(chain)].length === 0) return setStep("other");
     if (mode === "new") return setStep("name");
+    // Returning here without ever picking a name: start from the email rather than the sample name.
+    const mail = walletState().email;
+    if (me.name === "Maya" && mail) setRewards({ name: mail.split("@")[0] });
     finish();
   };
 
@@ -83,11 +90,27 @@ export default function SignIn() {
           </View>
           <View style={s.note}>
             <Icon name="info" size={18} color={LK} />
-            <Text style={[s.sheetS, { flex: 1 }]}>You approve the connection once. After that, switching to it needs no approval.</Text>
+            <Text style={[s.sheetS, { flex: 1 }]}>{c === "solana" ? "Android shows your installed Solana wallets. Pick the one you want." : `Pick ${app} when your phone asks which app to open.`} You approve once, then each transaction in the wallet.</Text>
           </View>
           <Pressable
-            onPress={() => {
-              const w = connectWallet(c, app, logo);
+            onPress={async () => {
+              let w: { addr: string };
+              if (dynamic.available) {
+                if (connecting.current) return;
+                connecting.current = true;
+                try {
+                  const r = await (c === "solana" ? connectSolanaWallet() : connectStellarWallet());
+                  w = addExternalWallet(c, app, logo, r.address, r.session);
+                } catch (e) {
+                  haptic.error();
+                  toast((e as Error).message || `Couldn't connect ${app}`, "err");
+                  return;
+                } finally {
+                  connecting.current = false;
+                }
+              } else {
+                w = connectWallet(c, app, logo);
+              }
               haptic.success();
               setConnected({ app, logo, chain: c, addr: w.addr });
               if (c !== appChain && !add) setChain(c);
@@ -110,8 +133,27 @@ export default function SignIn() {
 
   const social = (method: "google" | "x") => {
     const label = method === "google" ? "Google" : "X";
-    // The real build has no Google or X connection yet, and must never sign someone in with a made-up account.
-    if (dynamic.available) return toast(`${label} sign-in is coming soon. Use email for now.`);
+    if (dynamic.available) {
+      if (connecting.current) return;
+      connecting.current = true;
+      haptic.tap();
+      dynamic
+        .signInSocial(method)
+        .then((ses) => {
+          if (!ses.solanaAddress || !ses.stellarAddress) throw new Error("Your wallets are still being set up. Try again in a moment.");
+          haptic.success();
+          signInWithEmail(method, ses.email ?? label, { solana: ses.solanaAddress, stellar: ses.stellarAddress });
+          afterAuth(false);
+        })
+        .catch((e: Error) => {
+          haptic.error();
+          toast(e.message || `${label} sign-in didn't finish`, "err");
+        })
+        .finally(() => {
+          connecting.current = false;
+        });
+      return;
+    }
     openSheet({
       title: "",
       content: (close) => (
@@ -143,7 +185,10 @@ export default function SignIn() {
     if (!/^\S+@\S+\.\S+$/.test(email.trim())) return toast("Enter an email like name@example.com", "err");
     haptic.tap();
     // Development build: Dynamic emails the real code. Expo Go has no native module, so the preview code step stands in.
-    if (dynamic.available) dynamic.sendEmailCode(email.trim()).catch((e: Error) => toast(e.message || "Couldn't send the code", "err"));
+    if (dynamic.available) {
+      within(dynamic.sendEmailCode(email.trim()), 30_000, "The sign-in service didn't respond")
+        .catch((e: Error) => setCodeErr(`Couldn't send the code. ${e.message}`));
+    }
     setCode("");
     setCodeErr(null);
     setResendAt(Date.now() + RESEND_MS);
@@ -161,7 +206,7 @@ export default function SignIn() {
     let real: { solana?: string; stellar?: string } = {};
     try {
       if (dynamic.available) {
-        const ses = await dynamic.verifyEmailCode(v);
+        const ses = await within(dynamic.verifyEmailCode(v), 60_000, "Checking the code took too long");
         real = { solana: ses.solanaAddress, stellar: ses.stellarAddress };
         // Never carry on with a made-up address in a build that has real wallets.
         const needed: Chain[] = add ? [add] : emailFor ? [emailFor] : ["solana", "stellar"];
@@ -202,8 +247,7 @@ export default function SignIn() {
   const wallets = (c: Chain) => (
     <View style={s.grid}>
       {WALLET_APPS[c].map((w) => {
-        // Wallet apps aren't connected in the real build yet, so they can't hand out a made-up address there.
-        const soon = w.soon || dynamic.available;
+        const soon = w.soon;
         return (
           <Pressable
             key={w.app}
@@ -307,7 +351,7 @@ export default function SignIn() {
               </>
             )}
             <View style={{ flex: 1, minHeight: 24 }} />
-            <Text style={s.fine}>Your email gives you a Solana and a Stellar wallet, secured by Dynamic. Vanna never holds your keys.</Text>
+            <Text style={s.fine}>Email, Google and X give you a Solana and a Stellar wallet, secured by Dynamic. Vanna never holds your keys.</Text>
           </>
         )}
 
