@@ -1,6 +1,7 @@
 // Sample data from the V7 design (design/app.html, core.js: PX, TOK, POOLS_BY, DATA, PREDICT_FALLBACK).
 // Powers Guest mode and every screen until the chain adapters are wired. Prototype clock: Oct 7.
 
+import { available } from "@/chain/dynamic";
 import type { Chain } from "@/state/chain";
 
 export const PX: Record<string, number> = {
@@ -133,7 +134,7 @@ export const ACCOUNT = {
 };
 
 // Rewards total shown as the header chip (Rewards itself is parked).
-export const POINTS = 10121;
+export const POINTS = available ? 0 : 10121; // rewards are not connected yet, so a real account starts at zero
 
 export type Activity = { t: string; area: string; action: string; detail: string; amt: string; usd?: number; via?: string; tx: string; sym?: string };
 

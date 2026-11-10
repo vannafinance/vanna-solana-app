@@ -3,7 +3,8 @@ import { ACTIVITY, DATA, POOLS_BY, PREDICT, PX } from "@/sample/data";
 import { nowT, randTx } from "@/screens/earn/model";
 import { mutate } from "@/state/store";
 import * as solanaActions from "@/chain/solana/actions";
-const solanaPredictTrade: (opts: { marketId: string; outcome: "yes" | "no"; side: "buy" | "sell"; amount: number }) => Promise<string> = (solanaActions as any).solanaPredictTrade;
+import { type LiveEvent, type LiveOutcome, loadPredictEvents, predictPositions, type Prices, predictTrade } from "@/chain/solana/predict";
+import { inUseWallet } from "@/state/wallets";
 const solanaPredictClaim: (opts: { marketId: string; amount: number }) => Promise<string> = (solanaActions as any).solanaPredictClaim;
 
 /* Predict model (design screens/predict.js, web V7): events in cents (Yes + No = 100-102), order-book quotes, earning while you wait (a share
@@ -16,6 +17,8 @@ export type EvType = "binary" | "updown" | "match" | "multi" | "date" | "strike"
 export type Out = {
   k: string; name: string; col?: string; ini?: string; grp?: string; res?: Side; y: number; n: number; d?: number; vol: number;
   yl?: string; nl?: string; pool: { yes: number; no: number }; uid: string;
+  /** World's live quote, in dollars; set on real markets only. */
+  live?: Prices;
 };
 export type Ev = {
   id: string; type: EvType; cat: string; tag: string; icn?: string; asset?: string; title: string; live?: boolean; score?: string; when?: string;
@@ -210,9 +213,9 @@ export const OUT = (e: Ev | undefined, k?: string) => e?.outs.find((o) => o.k ==
 export const yl = (o: Out) => o.yl || "Yes";
 export const nl = (o: Out) => o.nl || "No";
 export const lab = (o: Out, s: Side) => (s === "yes" ? yl(o) : nl(o));
-export const ask = (o: Out, s: Side) => (s === "yes" ? o.y : o.n);
+export const ask = (o: Out, s: Side) => (o.live ? ((s === "yes" ? o.live.yesAsk : o.live.noAsk) ?? 0) * 100 : s === "yes" ? o.y : o.n);
 const tick = (c: number) => (c <= 1 || c > 99 ? 0.1 : 1);
-export const bid = (o: Out, s: Side) => { const a = ask(o, s); return Math.max(0, +(a - tick(a)).toFixed(1)); };
+export const bid = (o: Out, s: Side) => { if (o.live) return ((s === "yes" ? o.live.yesBid : o.live.noBid) ?? 0) * 100; const a = ask(o, s); return Math.max(0, +(a - tick(a)).toFixed(1)); };
 export const openOuts = (e: Ev) => e.outs.filter((o) => !o.res);
 export const mainOuts = (e: Ev) => openOuts(e).filter((o) => !o.grp);
 export const isOther = (o: Out) => o.k === "other";
@@ -239,6 +242,8 @@ export function levels(o: Out, s: Side, dir: 1 | -1): Lvl[] {
   return (BK[key] = out);
 }
 export function qBuy(o: Out, s: Side, usdAmt: number) {
+  // A real market fills at one price, exactly what the transaction uses.
+  if (o.live) { const a = ask(o, s); return { avg: a, sh: usdAmt > 0 && a > 0 ? usdAmt / (a / 100) : 0 }; }
   const lv = levels(o, s, 1);
   if (!(usdAmt > 0) || !lv.length) return { avg: ask(o, s), sh: 0 };
   let left = usdAmt, sh = 0;
@@ -251,6 +256,7 @@ export function qBuy(o: Out, s: Side, usdAmt: number) {
   return { avg: sh ? (spent / sh) * 100 : ask(o, s), sh };
 }
 export function qSell(o: Out, s: Side, n: number) {
+  if (o.live) { const b = bid(o, s); return { avg: b, usd: n > 0 ? (n * b) / 100 : 0 }; }
   const lv = levels(o, s, -1);
   if (!(n > 0) || !lv.length) return { avg: bid(o, s), usd: 0 };
   let left = n, got = 0;
@@ -377,6 +383,64 @@ export function syncPredict() {
 function log(action: string, detail: string, amt: string, usdv: number, sym = "USDC") {
   ACTIVITY.solana.unshift({ t: nowT(), area: "Predict", action, detail, amt, usd: usdv, tx: randTx(), sym });
 }
+
+/* ---------- World's real markets ---------- */
+export function clearSamplePredict() {
+  EV.length = 0;
+  P.pos = [];
+  P.hold = [];
+  P.real = 0;
+  P.yreal = 0;
+}
+
+const toOut = (o: LiveOutcome): Out => ({
+  k: o.marketId, uid: o.marketId, name: o.name, live: { yesAsk: o.yesAsk, noAsk: o.noAsk, yesBid: o.yesBid, noBid: o.noBid },
+  y: (o.yesAsk ?? 0) * 100, n: (o.noAsk ?? 0) * 100, d: 0, vol: 0, pool: { yes: 0, no: 0 },
+});
+const toEv = (e: LiveEvent): Ev => ({
+  id: e.id, type: e.outs.length > 1 ? "multi" : "binary", cat: e.cat, tag: e.tag, title: e.title, ends: e.ends, opened: "", vol: e.vol, v24: 0, source: e.source, rules: e.rules,
+  outs: e.outs.map(toOut),
+});
+let liveAt = 0;
+let liveOuts: LiveOutcome[] = [];
+let liveLoading: Promise<void> | null = null;
+
+/** Replaces the sample markets with World's, and the sample positions with what the wallet holds on the fork. */
+export function refreshLivePredict(force = false): Promise<void> {
+  if (!force && Date.now() - liveAt < 30_000) return Promise.resolve();
+  liveLoading ??= (async () => {
+    const events = await loadPredictEvents();
+    if (!events.length) return;
+    const wallet = inUseWallet("solana");
+    const owner = wallet && !wallet.sample ? wallet.full : null;
+    liveOuts = events.flatMap((e) => e.outs);
+    const held = owner ? await predictPositions(owner, liveOuts) : [];
+    mutate(() => {
+      EV.splice(0, EV.length, ...events.map(toEv));
+      const before = P.pos;
+      P.hold = [];
+      P.pos = held.flatMap((h) => {
+        const ev = EV.find((e) => e.outs.some((o) => o.k === h.marketId));
+        const out = ev?.outs.find((o) => o.k === h.marketId);
+        if (!ev || !out) return [];
+        const old = before.find((x) => x.ev === ev.id && x.o === out.k && x.side === h.side);
+        return [{ id: `w-${h.marketId}-${h.side}`, ev: ev.id, o: out.k, side: h.side, sh: h.shares, avg: old?.avg ?? ask(out, h.side) / 100, yld: 0, t: old?.t ?? nowT().split(",")[0], src: "vanna" as const, wallet: "w1" }];
+      });
+      syncPredict();
+    });
+    liveAt = Date.now();
+  })().finally(() => {
+    liveLoading = null;
+  });
+  return liveLoading;
+}
+const afterTrade = () => setTimeout(() => void refreshLivePredict(true).catch(() => {}), 1500);
+async function sendTrade(opts: Parameters<typeof predictTrade>[0]) {
+  const hash = await predictTrade(opts);
+  afterTrade();
+  return hash;
+}
+
 const later = () => setTimeout(() => mutate(syncPredict), 3700);   // a new position "joins the pool" for a moment, then earns
 
 /* ---------- trade state (one shared by the sheet and its pinned footer) ---------- */
@@ -417,6 +481,8 @@ export type Quote = ReturnType<typeof quote>;
 const HC: Record<string, number[]> = {};
 export function hist(o: Out) {
   if (HC[o.uid]) return HC[o.uid];
+  // No real price history is available yet, so a live market shows its current price rather than an invented line.
+  if (o.live) return (HC[o.uid] = Array.from({ length: 120 }, () => +o.y.toFixed(1)));
   const N = 120, r = rng(hash(o.uid)), end = o.res ? (o.res === "yes" ? 100 : 0) : o.y, start = clamp(end + (r() - 0.5) * 44, 2, 97), ws: number[] = [];
   let w = 0;
   for (let i = 0; i < N; i++) { w += (r() - 0.5) * 4.2; ws.push(w); }
@@ -448,7 +514,7 @@ export function tradeSpec(t: Trade) {
       legs: [{ l: "You pay", v: `${nf(a, 2)} ${pay}`, s: pay === "USDC" ? "Swapped to CASH at par first" : "From your wallet" }, { l: "You get", v: `${shf(q.sh)} ${L} shares`, s: evLabel(e, o) }],
       rows: [["Avg price", cf(q.avg)], ["Pays if right", usd(q.sh)], ["Profit if right", (q.sh - a >= 0 ? "+" : "−") + usd(Math.abs(q.sh - a)), "pos"], ["Earns while you wait", `${p2(fx.apy)} APY`, "pos"], ["Paired", `${pp(fx.share)} of these shares`]] as [string, string, ("pos" | "neg" | "")?][],
       done: { title: `You bought ${shf(q.sh)} ${L}`, line: `${nm}. Earning on ${pp(fx.share)} of them once they join the pool.` }, view,
-      send: async () => await solanaPredictTrade({ marketId: o.uid || e.id, outcome: s, side: "buy", amount: a }),
+      send: async () => await sendTrade({ marketId: o.uid || e.id, outcome: s, side: "buy", amount: a, pay }),
       apply: () => {
         withPairing(() => {
           const qq = qBuy(o, s, a);
@@ -471,7 +537,7 @@ export function tradeSpec(t: Trade) {
     legs: [{ l: "You sell", v: `${shf(n)} ${L} shares`, s: evLabel(e, o) }, { l: "You receive", v: `${nf(q.usd, 2)} USDC`, s: "To your wallet" }],
     rows: [["Avg price", cf(q.avg)], ["Includes yield", `${shf(Q.ySh)} shares`], ["P&L on these", (Q.pnl >= 0 ? "+" : "−") + usd(Math.abs(Q.pnl)), Q.pnl >= 0 ? "pos" : "neg"], ["How it sells", Q.r.needUsd > 0.005 ? "Unpaired first, then USDC from the pool" : "Unpaired shares, no USDC needed"]] as [string, string, ("pos" | "neg" | "")?][],
     done: { title: `Sold ${shf(n)} ${L}`, line: `${usd(q.usd)} is back in your wallet` }, view,
-    send: async () => await solanaPredictTrade({ marketId: o.uid || e.id, outcome: s, side: "sell", amount: n }),
+    send: async () => await sendTrade({ marketId: o.uid || e.id, outcome: s, side: "sell", amount: n }),
     apply: () => {
       const p = posOf(e, o, s);
       if (!p) return;

@@ -15,7 +15,7 @@ import { families, font } from "@/theme/tokens";
 
 import { BetList, betRows, openLinked } from "./bets";
 import {
-  byChance, CATS, EV, type Ev, mainOuts, type Out, p2, pc, openPos, P, pmx, resPos, single, summary, team, usdC, whenOf, yourApy, posTitle, worldIdle, startSpec, holdx,
+  byChance, CATS, EV, refreshLivePredict, type Ev, mainOuts, type Out, p2, pc, openPos, P, pmx, resPos, single, summary, team, usdC, whenOf, yourApy, posTitle, worldIdle, startSpec, holdx,
 } from "./model";
 import { openMarket } from "./nav";
 import { onTabRequest, openTrade, runClaim, runSpec } from "./trade";
@@ -27,6 +27,9 @@ export type PredictTab = "markets" | "positions" | "history";
 
 export function PredictHero() {
   useDataVersion();
+  useEffect(() => {
+    void refreshLivePredict().catch(() => {});
+  }, []);
   const sm = summary(), gain = sm.value - sm.cost;
   if (!sm.count && !sm.resolved)
     return <Hero label="Predictions value" value={usd(0)} stats={[{ label: "Cash", value: usd(sm.cash) }, { label: "In pool", value: "—" }, { label: "Pays if right", value: "—" }]} />;

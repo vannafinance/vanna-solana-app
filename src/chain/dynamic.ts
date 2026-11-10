@@ -62,6 +62,12 @@ export async function verifyEmailCode(code: string): Promise<VannaDynamicSession
   return (await ready()).verifyEmailCode(code);
 }
 
+export async function signInSocial(provider: "google" | "x"): Promise<VannaDynamicSession> {
+  const module = await ready();
+  if (!module.signInSocial) throw new Error("Google and X sign-in aren't available on this device yet");
+  return module.signInSocial(provider);
+}
+
 /** The signed-in user and wallet addresses, or null when signed out. */
 export async function getSession(): Promise<VannaDynamicSession | null> {
   if (!available) return null; // Expo Go: simply no session, so startup never errors

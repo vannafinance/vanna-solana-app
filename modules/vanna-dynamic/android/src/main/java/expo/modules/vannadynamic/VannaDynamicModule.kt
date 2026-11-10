@@ -3,6 +3,7 @@ package expo.modules.vannadynamic
 import androidx.activity.ComponentActivity
 import com.dynamic.sdk.android.DynamicSDK
 import com.dynamic.sdk.android.Models.BaseWallet
+import com.dynamic.sdk.android.Module.Auth.SocialAuthModule
 import com.dynamic.sdk.android.core.ClientProps
 import com.dynamic.sdk.android.core.LoggerLevel
 import expo.modules.kotlin.exception.CodedException
@@ -49,6 +50,22 @@ class VannaDynamicModule : Module() {
         sdk.auth.email.verifyOTP(code.trim())
         // Dynamic creates the embedded wallets after authentication; wait for both chains.
         // A first-time user's two wallets take a while, so a short wait here would return only one of them.
+        withTimeoutOrNull(WALLETS_TIMEOUT_MS) {
+          sdk.wallets.userWalletsChanges.first { w -> solana(w) != null && stellar(w) != null }
+        }
+        sessionMap(sdk)
+      }
+    }
+
+    AsyncFunction("signInSocial") Coroutine { provider: String ->
+      guarded {
+        val sdk = awaitSdk()
+        val social = when (provider) {
+          "google" -> SocialAuthModule.SocialProvider.GOOGLE
+          "x" -> SocialAuthModule.SocialProvider.TWITTER
+          else -> throw CodedException(CODE, "Unknown sign-in provider", null)
+        }
+        sdk.auth.social.connect(social)
         withTimeoutOrNull(WALLETS_TIMEOUT_MS) {
           sdk.wallets.userWalletsChanges.first { w -> solana(w) != null && stellar(w) != null }
         }

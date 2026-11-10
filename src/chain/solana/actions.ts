@@ -2843,60 +2843,6 @@ export async function readPredictMarket(marketId: string): Promise<{ yesMint: st
 }
 
 // Ported from apps/solana/lib/predict/trade.server.ts:buildTrade
-// The Predict screen still lists sample markets, which don't exist on chain.
-function assertRealPredictMarket(marketId: string) {
-  if (marketId.includes("/")) throw new Error("Predict markets aren't live in the app yet. Nothing was sent.");
-}
-
-export async function solanaPredictTrade(opts: {
-  marketId: string;
-  outcome: "yes" | "no";
-  side: "buy" | "sell";
-  amount: number;
-}): Promise<string> {
-  const wallet = requireActiveRealWallet("solana");
-  const owner = wallet.full;
-  const rawAmount = toRaw(opts.amount, 6);
-
-  assertRealPredictMarket(opts.marketId);
-  const { yesMint, noMint, vault } = await readPredictMarket(opts.marketId);
-
-  const cashAta = findAta(owner, CASH_MINT, TOKEN_2022_PROGRAM_ID);
-  if (opts.side === "buy") {
-    let cashBalance = 0n;
-    try {
-      const balRes = await rpc<{ value: { amount: string } | null }>("getTokenAccountBalance", [cashAta]);
-      cashBalance = BigInt(balRes?.value?.amount ?? "0");
-    } catch {}
-    if (cashBalance < rawAmount) {
-      const topUpAmount = rawAmount > 10_000_000_000n ? rawAmount * 2n : 10_000_000_000n;
-      await rpc("surfnet_setTokenAccount", [
-        owner,
-        CASH_MINT,
-        { amount: Number(topUpAmount) },
-        TOKEN_2022_PROGRAM_ID,
-      ]).catch(() => {});
-    }
-  }
-
-  const yesAta = findAta(owner, yesMint, TOKEN_2022_PROGRAM_ID);
-  const noAta = findAta(owner, noMint, TOKEN_2022_PROGRAM_ID);
-
-  const ixs: RawInstruction[] = [
-    createAssociatedTokenAccountIdempotentIx(owner, cashAta, owner, CASH_MINT, TOKEN_2022_PROGRAM_ID),
-    createAssociatedTokenAccountIdempotentIx(owner, yesAta, owner, yesMint, TOKEN_2022_PROGRAM_ID),
-    createAssociatedTokenAccountIdempotentIx(owner, noAta, owner, noMint, TOKEN_2022_PROGRAM_ID),
-  ];
-
-  const actionKind = opts.side === "buy" ? "split" : "merge";
-  ixs.push(completeSetIx(actionKind, owner, opts.marketId, yesMint, noMint, vault, rawAmount));
-
-  return sendSolanaInstructions(ixs, {
-    label: `Predict ${opts.side === "buy" ? "Buy" : "Sell"} ${opts.outcome.toUpperCase()}`,
-    computeUnits: 400_000,
-  });
-}
-
 // Ported from apps/solana/lib/predict/trade.server.ts:buildTrade
 export async function solanaPredictClaim(opts: {
   marketId: string;
@@ -2906,7 +2852,7 @@ export async function solanaPredictClaim(opts: {
   const owner = wallet.full;
   const rawAmount = toRaw(opts.amount, 6);
 
-  assertRealPredictMarket(opts.marketId);
+  if (opts.marketId.includes("/")) throw new Error("Predict markets aren't live in the app yet. Nothing was sent.");
   const { yesMint, noMint, vault } = await readPredictMarket(opts.marketId);
 
   const cashAta = findAta(owner, CASH_MINT, TOKEN_2022_PROGRAM_ID);
