@@ -1,7 +1,7 @@
 // External wallets: Mobile Wallet Adapter on Solana (Android), WalletConnect on Stellar.
 // The libraries load on first use, so nothing here can affect app start-up.
 import { Buffer } from "buffer";
-import { Linking } from "react-native";
+import { AppState, Linking } from "react-native";
 
 import * as dynamic from "@/chain/dynamic";
 import { registerExternalSolanaSigner, registerExternalStellarSigner } from "@/chain/sign";
@@ -41,6 +41,13 @@ async function cantOpen(app: WalletApp): Promise<Error> {
   if (id && (await dynamic.appInstalled(id))) return new Error(`${app} couldn't take the connection. Update ${app} and try again.`);
   if (id) Linking.openURL(`https://play.google.com/store/apps/details?id=${id}`).catch(() => {});
   return new Error(`${app} isn't installed. Install it, then try again.`);
+}
+
+const APP_ID = "finance.vanna.app";
+// WalletConnect wallets can't send you back to the app that asked (Freighter only says "return to the browser"), so the moment
+// their answer arrives Vanna brings itself forward. Some phones refuse that from the background; there you switch back by hand.
+function comeBack() {
+  if (AppState.currentState !== "active") void dynamic.launchApp(APP_ID);
 }
 
 const text = (e: unknown) => String((e as { message?: string } | null)?.message ?? e ?? "");
@@ -162,6 +169,7 @@ export async function connectStellarWallet(app: WalletApp): Promise<ExternalConn
   });
   try {
     const session = await Promise.race([approval(), gate]);
+    comeBack();
     const address = session.namespaces.stellar?.accounts[0]?.split(":")[2];
     if (!address) throw new Error(`${app} didn't approve Stellar testnet. Switch it to Testnet and try again.`);
     return { address, session: session.topic };
@@ -188,7 +196,9 @@ registerExternalStellarSigner(async (xdr, entry) => {
   const id = PACKAGE[entry.app];
   if (id) void dynamic.launchApp(id);
   try {
-    return (await pending).signedXDR;
+    const { signedXDR } = await pending;
+    comeBack();
+    return signedXDR;
   } catch (e) {
     const m = text(e);
     if (/reject|declin|denied/i.test(m)) throw new Error(`You declined it in ${entry.app}.`);
