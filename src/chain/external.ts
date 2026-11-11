@@ -119,8 +119,9 @@ let client: Promise<WcClient> | null = null;
 
 function walletConnect(): Promise<WcClient> {
   client ??= (async () => {
-    await import("@walletconnect/react-native-compat"); // must load before the client
-    const { SignClient } = await import("@walletconnect/sign-client");
+    // Plain require, not import(): Metro would otherwise split these into separate lazy chunks, which fail to load in development builds.
+    require("@walletconnect/react-native-compat"); // must load before the client
+    const { SignClient } = require("@walletconnect/sign-client") as typeof import("@walletconnect/sign-client");
     return SignClient.init({
       projectId: WALLETCONNECT_PROJECT_ID,
       metadata: { name: "Vanna", description: "Vanna Finance", url: IDENTITY.uri, icons: [`${IDENTITY.uri}/favicon.ico`], redirect: { native: "vanna://" } },

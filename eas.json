@@ -23,6 +23,17 @@
         "EXPO_PUBLIC_DYNAMIC_ENV_ID": "90dad26e-c7b1-4047-857e-ab4ad5596f9a",
         "ORG_GRADLE_PROJECT_reactNativeArchitectures": "arm64-v8a"
       }
+    },
+    "emulator": {
+      "developmentClient": true,
+      "distribution": "internal",
+      "android": {
+        "buildType": "apk"
+      },
+      "env": {
+        "EXPO_PUBLIC_DYNAMIC_ENV_ID": "90dad26e-c7b1-4047-857e-ab4ad5596f9a",
+        "ORG_GRADLE_PROJECT_reactNativeArchitectures": "x86_64"
+      }
     }
   }
 }
