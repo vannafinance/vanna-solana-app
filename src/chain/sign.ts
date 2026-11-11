@@ -18,6 +18,18 @@ export type ExternalSolanaSigner = (base64Tx: string, wallet: WalletEntry) => Pr
 let externalStellarSigner: ExternalStellarSigner | null = null;
 let externalSolanaSigner: ExternalSolanaSigner | null = null;
 
+// The transaction sheet listens, so its progress moves to "Sent" when the wallet has signed, not before.
+const signedSubs = new Set<() => void>();
+export function onSigned(fn: () => void) {
+  signedSubs.add(fn);
+  return () => void signedSubs.delete(fn);
+}
+const signed = async (work: Promise<string>) => {
+  const out = await work;
+  signedSubs.forEach((f) => f());
+  return out;
+};
+
 export function registerExternalStellarSigner(fn: ExternalStellarSigner) {
   externalStellarSigner = fn;
 }
@@ -44,12 +56,12 @@ export async function signStellar(xdr: string): Promise<string> {
     if (!dynamic.available) {
       throw new Error("Email wallet signing requires the Vanna development build APK (not Expo Go).");
     }
-    return dynamic.signStellarXdr(xdr);
+    return signed(dynamic.signStellarXdr(xdr));
   }
   if (!externalStellarSigner) {
     throw new Error(`${wallet.app} signing via WalletConnect is not connected yet. Connect ${wallet.app} in Account > Wallets.`);
   }
-  return externalStellarSigner(xdr, wallet);
+  return signed(externalStellarSigner(xdr, wallet));
 }
 
 /**
@@ -62,10 +74,10 @@ export async function signSolana(base64Tx: string): Promise<string> {
     if (!dynamic.available) {
       throw new Error("Email wallet signing requires the Vanna development build APK (not Expo Go).");
     }
-    return dynamic.signSolanaTransaction(base64Tx);
+    return signed(dynamic.signSolanaTransaction(base64Tx));
   }
   if (!externalSolanaSigner) {
     throw new Error(`${wallet.app} signing via Mobile Wallet Adapter is not connected yet. Connect ${wallet.app} in Account > Wallets.`);
   }
-  return externalSolanaSigner(base64Tx, wallet);
+  return signed(externalSolanaSigner(base64Tx, wallet));
 }

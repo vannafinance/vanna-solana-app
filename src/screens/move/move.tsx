@@ -1,12 +1,13 @@
 import { LinearGradient } from "expo-linear-gradient";
 import * as Clipboard from "expo-clipboard";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Animated, { cancelAnimation, Easing, useAnimatedStyle, useSharedValue, withRepeat, withTiming } from "react-native-reanimated";
 import Svg, { Circle, Defs, LinearGradient as SvgGradient, Stop } from "react-native-svg";
-import { Platform, Pressable, StyleSheet, Text, TextInput, View, Share } from "react-native";
+import { type HostInstance, Platform, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import QRCode from "react-native-qrcode-svg";
 
-import { TokenLogo } from "@/components/brand";
+import { TokenLogo, VannaMark, Wordmark } from "@/components/brand";
+import { shareCaptured } from "@/screens/share/share-image";
 import { cleanAmt, Seg2, TokenPill } from "@/components/form";
 import { Swap } from "@/components/motion";
 import { Button } from "@/components/ui/button";
@@ -198,6 +199,7 @@ function Faucet({ chain }: { chain: Chain }) {
           // One at a time and XLM first: a brand-new account has to exist before it can hold anything else.
           for (const [sym] of items) await stellarFaucet(sym);
           await refreshAccount("stellar");
+          setTimeout(() => void refreshAccount("stellar"), 4000); // the chain can take a moment to show it
         } else {
           const addr = inUseWallet("solana")?.full ?? inUseWallet("solana")?.addr;
           if (addr) {
@@ -206,6 +208,7 @@ function Faucet({ chain }: { chain: Chain }) {
               else await solanaFundFaucet(addr, sym);
             }
             await refreshAccount("solana");
+            setTimeout(() => void refreshAccount("solana"), 4000);
           }
         }
       }
@@ -345,6 +348,7 @@ function Receive({ chain }: { chain: Chain }) {
   // Never show a sample address here: someone could send real funds to it.
   const addr = inUseWallet(chain)?.full ?? (dynamic.available ? "" : FULL[chain]);
   const [copied, setCopied] = useState(false);
+  const shot = useRef<HostInstance>(null);
   if (!addr) {
     return (
       <View style={[styles.card, { backgroundColor: colors.bg, alignItems: "center", gap: 14 }]}>
@@ -354,37 +358,50 @@ function Receive({ chain }: { chain: Chain }) {
     );
   }
   const groups = addr.match(/.{1,4}/g) ?? [addr];
+  // This white card is also the picture that gets shared: the code and the address together, readable on any background.
   return (
     <View style={[styles.card, { backgroundColor: colors.bg, alignItems: "center", gap: 14 }]}>
-      <View style={styles.qr}>
-        <QRCode
-          value={addr}
-          size={168}
-          backgroundColor="#FFFFFF"
-          color="#111111"
-          logo={(LOGO_PNG as Record<string, number>)[chain === "solana" ? "SOLANA_CHAIN" : "STELLAR_CHAIN"]}
-          logoSize={36}
-          logoBackgroundColor="#FFFFFF"
-          logoBorderRadius={18}
-          logoMargin={3}
-        />
+      <View ref={shot} collapsable={false} style={styles.shot}>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 6, alignSelf: "flex-start" }}>
+          <VannaMark size={18} />
+          <Wordmark height={13} color="#1F1F1F" />
+        </View>
+        <Text style={{ fontFamily: font.semibold, fontSize: 14, color: "#595959", alignSelf: "flex-start" }}>My {CHAIN_LABEL[chain]} testnet address</Text>
+        <View style={styles.qr}>
+          <QRCode
+            value={addr}
+            size={168}
+            backgroundColor="#FFFFFF"
+            color="#111111"
+            logo={(LOGO_PNG as Record<string, number>)[chain === "solana" ? "SOLANA_CHAIN" : "STELLAR_CHAIN"]}
+            logoSize={36}
+            logoBackgroundColor="#FFFFFF"
+            logoBorderRadius={18}
+            logoMargin={3}
+          />
+        </View>
+        <Text style={[styles.addr, { color: "#1F1F1F" }]} selectable>
+          {groups.map((g, i) => (
+            <Text
+              key={i}
+              style={{
+                color: i === 0 || i === groups.length - 1 ? "#1F1F1F" : "#595959",
+                fontWeight: i === 0 || i === groups.length - 1 ? "700" : "400",
+              }}
+            >
+              {g}
+              {i < groups.length - 1 ? "  " : ""}
+            </Text>
+          ))}
+        </Text>
       </View>
-      <Text style={styles.addr} selectable>
-        {groups.map((g, i) => (
-          <Text
-            key={i}
-            style={{
-              color: i === 0 || i === groups.length - 1 ? colors.text : colors.muted,
-              fontWeight: i === 0 || i === groups.length - 1 ? "700" : "400",
-            }}
-          >
-            {g}
-            {i < groups.length - 1 ? "  " : ""}
-          </Text>
-        ))}
-      </Text>
       <View style={{ alignSelf: "stretch", gap: 8 }}>
-        <Button label="Share address" icon={shareIcon} fam={fam} onPress={() => void Share.share({ message: addr }).catch(() => {})} />
+        <Button
+          label="Share address"
+          icon={shareIcon}
+          fam={fam}
+          onPress={() => void shareCaptured(shot, `My ${CHAIN_LABEL[chain]} testnet address on Vanna:\n${addr}`, `vanna-${chain}-address.png`).catch(() => toast("Couldn't open the share menu", "err"))}
+        />
         <Button
           label={copied ? "Copied" : "Copy address"}
           icon={copied ? "check" : "content_copy"}
@@ -757,6 +774,7 @@ function Withdraw({ chain }: { chain: Chain }) {
 }
 
 const styles = StyleSheet.create({
+  shot: { alignSelf: "stretch", alignItems: "center", gap: 12, padding: 16, borderRadius: 16, backgroundColor: "#FFFFFF" },
   src: {
     alignSelf: "flex-start",
     flexDirection: "row",

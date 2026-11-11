@@ -15,6 +15,7 @@ import { families, font } from "@/theme/tokens";
 import { closeSheet, openSheet } from "@/ui/overlay";
 import { submitEarn } from "@/chain/stellar/submit";
 import { solanaEarnSupply, solanaEarnWithdraw } from "@/chain/solana/actions";
+import { bioIcon } from "@/state/lock";
 import { runTx } from "@/ui/tx";
 
 import { applyEarn, balTok, decOf, freeTok, fullAmt, isStable, lendOf, poolOf, px, shareRate, shareSym } from "./model";
@@ -37,9 +38,12 @@ function AmountForm({ chain, sym, initial }: { chain: Chain; sym: string; initia
   useDataVersion();
   const { colors } = useTheme();
   const fam = families.earn;
-  const [mode, setMode] = useState<Mode>(initial);
-  const [text, setText] = useState("");
   const p = poolOf(chain, sym);
+  const hasPos = !!p && balTok(lendOf(chain, p.sym)) > 0;
+  // Nothing supplied yet means nothing to withdraw: only Supply is offered.
+  const [pick, setMode] = useState<Mode>(initial);
+  const mode: Mode = hasPos ? pick : "supply";
+  const [text, setText] = useState("");
   if (!p) return null;
   const s = p.sym, l = lendOf(chain, s), bal = balTok(l), wal = DATA[chain].wallet[s] ?? 0, d = decOf(s), price = px(s);
   const sup = mode === "supply", limit = sup ? wal : bal, x = parseFloat(text) || 0, free = freeTok(p);
@@ -88,7 +92,7 @@ function AmountForm({ chain, sym, initial }: { chain: Chain; sym: string; initia
 
   return (
     <View style={{ gap: 12, paddingBottom: 4 }}>
-      <SubTabs items={[["supply", "Supply"], ["withdraw", "Withdraw"]]} value={mode} onChange={(m) => (setMode(m), setText(""))} fam={fam} />
+      {hasPos && <SubTabs items={[["supply", "Supply"], ["withdraw", "Withdraw"]]} value={mode} onChange={(m) => (setMode(m), setText(""))} fam={fam} />}
       <Card style={{ backgroundColor: colors.bg }}>
         <Text style={[styles.lim, { color: colors.muted }]}>
           {sup ? "Wallet" : "Supplied"} {fullAmt(limit, s)}
@@ -150,7 +154,7 @@ function AmountForm({ chain, sym, initial }: { chain: Chain; sym: string; initia
         ))}
       </Card>
       {/* design V5 T2: no CTA until there is an amount */}
-      {problem !== "empty" && <Button label={cta} fam={fam} disabled={!!problem} icon={problem ? undefined : "fingerprint"} onPress={submit} />}
+      {problem !== "empty" && <Button label={cta} fam={fam} disabled={!!problem} icon={problem ? undefined : bioIcon()} onPress={submit} />}
     </View>
   );
 }

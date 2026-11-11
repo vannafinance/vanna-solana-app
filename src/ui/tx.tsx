@@ -9,7 +9,8 @@ import { MascotDone } from "@/mascot/mascot";
 import { TailLoader } from "@/mascot/tail-loader";
 import { ACCOUNT } from "@/sample/data";
 import { type Chain, CHAIN_LABEL } from "@/state/chain";
-import { refreshAccount } from "@/chain/account-live";
+import { refreshAccountSoon } from "@/chain/account-live";
+import { onSigned } from "@/chain/sign";
 import { personalReady } from "@/state/personal";
 import { mutate } from "@/state/store";
 import { inUseWallet } from "@/state/wallets";
@@ -66,6 +67,8 @@ function TxFlow({ spec, close }: { spec: TxSpec; close: () => void }) {
   const [hash, setHash] = useState<string | null>(null);
   const [authFailed, setAuthFailed] = useState(false);
   // The phone's own prompt, which also offers its PIN or passcode.
+  const wallet = inUseWallet(spec.chain);
+  const waitLabel = wallet && !wallet.sample && wallet.kind === "external" ? `Waiting for ${wallet.app}` : "Sending";
   const confirmIdentity = () => {
     setAuthFailed(false);
     authenticate("Confirm transaction")
@@ -76,11 +79,12 @@ function TxFlow({ spec, close }: { spec: TxSpec; close: () => void }) {
   const approve = async () => {
     setPhase("progress");
     setStep(0);
+    // "Sent" only once the wallet has really signed.
+    const stopSigned = onSigned(() => setStep((s) => Math.max(s, 1)));
     try {
       // A real wallet must never see a pretend success: actions without an on-chain path stop here.
       if (!spec.send && personalReady(spec.chain)) throw new Error("This action is not connected to the chain yet. Nothing was sent.");
       if (spec.send) {
-        setStep(1);
         const h = await spec.send();
         if (h) setHash(h);
         setStep(2);
@@ -88,13 +92,15 @@ function TxFlow({ spec, close }: { spec: TxSpec; close: () => void }) {
       setStep(3);
       mutate(spec.apply);
       // re-read the real account so every screen shows the chain's figures
-      if (spec.send) void refreshAccount(spec.chain);
+      if (spec.send) refreshAccountSoon(spec.chain);
       setPhase("done");
       haptic.success();
     } catch (e) {
       setFail(e instanceof Error ? e.message : "The transaction was not sent");
       setPhase("fail");
       haptic.error();
+    } finally {
+      stopSigned();
     }
   };
   const finish = (action?: () => void) => {
@@ -177,10 +183,13 @@ function TxFlow({ spec, close }: { spec: TxSpec; close: () => void }) {
       <View style={styles.hd}>
         {phase === "done" ? <MascotDone size={56} /> : <TailLoader size={48} />}
         <View style={{ flex: 1, minWidth: 0 }}>
-          <Text style={[styles.h, { color: colors.text }]}>{phase === "done" ? spec.done.title : step === 0 ? "Sending" : `Sent to ${CHAIN_LABEL[spec.chain]}`}</Text>
+          <Text style={[styles.h, { color: colors.text }]}>{phase === "done" ? spec.done.title : step === 0 ? waitLabel : `Sent to ${CHAIN_LABEL[spec.chain]}`}</Text>
           {phase === "done" && spec.done.line && <Text style={[styles.cap, { color: colors.muted }]}>{spec.done.line}</Text>}
         </View>
-        <IconAction icon="open_in_new" label={`View on ${spec.chain === "solana" ? "Solscan" : "Stellar Expert"}`} onPress={() => (hash ? Linking.openURL(spec.chain === "stellar" ? `https://stellar.expert/explorer/testnet/tx/${hash}` : `https://solscan.io/tx/${hash}`) : toast("Opens the explorer"))} />
+        {/* Only once the chain has the transaction and there is a link to open */}
+        {phase === "done" && hash && (
+          <IconAction icon="open_in_new" label={`View on ${spec.chain === "solana" ? "Solscan" : "Stellar Expert"}`} onPress={() => Linking.openURL(spec.chain === "stellar" ? `https://stellar.expert/explorer/testnet/tx/${hash}` : `https://solscan.io/tx/${hash}`).catch(() => toast("Couldn't open the explorer"))} />
+        )}
       </View>
       <Progress step={step} />
       {phase === "done" && (

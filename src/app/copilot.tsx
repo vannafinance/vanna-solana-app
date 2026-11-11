@@ -24,6 +24,7 @@ import { families, font } from "@/theme/tokens";
 import { openSheet } from "@/ui/overlay";
 import { runTx } from "@/ui/tx";
 import { haptic } from "@/ui/haptics";
+import { bioIcon } from "@/state/lock";
 
 /* Vanna Copilot (design screens/copilot.js, compact): testnet-gated. Locked = the unlock checklist, Rewards, "Preview unlocked", and the
    MCP card. Unlocked = context chips (health with the face, network, MCP), the intents, then a thread whose changes arrive as checked
@@ -381,7 +382,7 @@ function AnswerView({ r, onApprove, onDismiss, onEdit }: { r: Answer; onApprove:
       <Guards exp={live ? p.exp : undefined} />
       {live && (
         <View style={{ flexDirection: "row", gap: 8, alignItems: "center" }}>
-          <Button label="Approve" icon="fingerprint" size="md" fam={families.portfolio} style={{ flex: 1 }} onPress={() => onApprove(p)} />
+          <Button label="Approve" icon={bioIcon()} size="md" fam={families.portfolio} style={{ flex: 1 }} onPress={() => onApprove(p)} />
           <Pressable onPress={() => onEdit(p)} style={[styles.ia, { backgroundColor: colors.bg }]} accessibilityRole="button" accessibilityLabel="Edit">
             <Icon name="edit" size={20} />
           </Pressable>

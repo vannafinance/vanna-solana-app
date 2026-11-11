@@ -121,7 +121,7 @@ export default function Account() {
             const w = inUseWallet(c);
             return (
               // Tap to switch, add or remove wallets on this chain.
-              <Pressable key={c} onPress={() => (w ? openSheet({ title: "", content: () => <WalletsCard /> }) : openAddWallet(c))} style={styles.r} accessibilityRole="button" accessibilityLabel={w ? `${CHAIN_LABEL[c]} wallets` : `Add a ${CHAIN_LABEL[c]} wallet`}>
+              <Pressable key={c} onPress={() => (w ? openSheet({ title: "Wallets", content: () => <WalletsCard sheet /> }) : openAddWallet(c))} style={styles.r} accessibilityRole="button" accessibilityLabel={w ? `${CHAIN_LABEL[c]} wallets` : `Add a ${CHAIN_LABEL[c]} wallet`}>
                 <TokenLogo sym={CHAIN_LOGO[c]} size={20} />
                 <Text style={[styles.rl, { color: colors.muted }]}>{CHAIN_LABEL[c]}</Text>
                 <Text style={[styles.rv, { color: w ? colors.text : colors.link, fontFamily: font.regular }]}>{w ? `${w.app} ${w.addr}` : "Add a wallet"}</Text>

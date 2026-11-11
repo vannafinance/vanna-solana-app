@@ -15,6 +15,9 @@ const set = (v: string | null) => {
 export async function crossFadeTheme(apply: () => void) {
   if (Platform.OS === "web") return apply();
   try {
+    // Let the screen finish drawing what the tap changed (the selected dot) so the snapshot already shows it,
+    // otherwise the old snapshot lands on top and the dot appears to jump back and forth.
+    await new Promise<void>((r) => requestAnimationFrame(() => requestAnimationFrame(() => r())));
     const uri = await captureScreen({ format: "jpg", quality: 0.9, result: "tmpfile" });
     set(uri);
     // let the snapshot paint before the theme changes beneath it

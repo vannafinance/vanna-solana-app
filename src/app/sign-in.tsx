@@ -14,7 +14,7 @@ import { setRewards, useRewards } from "@/sample/rewards";
 import { CHAIN_LABEL, type Chain, useChain } from "@/state/chain";
 import { markWelcomeSeen } from "@/state/session";
 import * as dynamic from "@/chain/dynamic";
-import { connectSolanaWallet, connectStellarWallet } from "@/chain/external";
+import { connectSolanaWallet, connectStellarWallet, CONNECT_DROPPED, dropPendingConnect } from "@/chain/external";
 import { addEmbedded, addExternalWallet, connectWallet, markAskedOther, signInWithEmail, walletState, WALLET_APPS, type WalletApp } from "@/state/wallets";
 import { BRAND_GRADIENT, font } from "@/theme/tokens";
 import { haptic } from "@/ui/haptics";
@@ -49,6 +49,8 @@ export default function SignIn() {
   const [verifying, setVerifying] = useState(false);
   const checking = useRef(false); // the last digit can fire twice before verifying is set
   const connecting = useRef(false); // a wallet or Google / X prompt is open
+  const startedAt = useRef(0);
+  const attempt = useRef(0);
   const [codeErr, setCodeErr] = useState<string | null>(null);
   const [errorKey, setErrorKey] = useState(0);
   const [resendAt, setResendAt] = useState(0);
@@ -79,9 +81,15 @@ export default function SignIn() {
 
   // In the real app a tile goes straight to that wallet: it opens, you approve there, and you come back connected.
   const connectDirect = async (c: Chain, app: WalletApp, logo: string) => {
-    if (connecting.current) return;
+    // A tap while another wallet is still waiting drops that one and starts clean, so a wallet that never answered can't lock the tiles.
+    const now = Date.now();
+    if (connecting.current && now - startedAt.current < 800) return; // a double tap
+    dropPendingConnect();
+    startedAt.current = now;
+    const mine = ++attempt.current;
     connecting.current = true;
     haptic.tap();
+    if (c === "stellar") toast(`Opening ${app}. Approve there, then come back.`);
     try {
       const r = await (c === "solana" ? connectSolanaWallet(app) : connectStellarWallet(app));
       const w = addExternalWallet(c, app, logo, r.address, r.session);
@@ -90,10 +98,11 @@ export default function SignIn() {
       if (c !== appChain && !add) setChain(c);
       setTimeout(() => afterAuth(true), 250);
     } catch (e) {
+      if ((e as Error).message === CONNECT_DROPPED) return;
       haptic.error();
       toast((e as Error).message || `Couldn't connect ${app}`, "err");
     } finally {
-      connecting.current = false;
+      if (attempt.current === mine) connecting.current = false;
     }
   };
 
@@ -250,7 +259,15 @@ export default function SignIn() {
     if (step === "other" || step === "name") return finish();
   };
 
+  const brand = (
+    <View style={s.lockup} accessibilityLabel="Vanna">
+      <VannaMark size={40} />
+      <Wordmark height={20} />
+    </View>
+  );
+
   const wallets = (c: Chain) => (
+    <>
     <View style={s.grid}>
       {WALLET_APPS[c].map((w) => {
         const soon = w.soon;
@@ -274,6 +291,8 @@ export default function SignIn() {
         );
       })}
     </View>
+    {c === "stellar" && <Text style={s.fine}>Freighter and OneKey connect on Testnet. Switch the wallet to Testnet first, then pick it here.</Text>}
+    </>
   );
 
   const title = mode === "add" ? `Add a ${CHAIN_LABEL[chain]} wallet` : mode === "back" ? "Welcome back" : "Create your account";
@@ -288,9 +307,9 @@ export default function SignIn() {
 
         {step === "main" && (
           <>
-            <View style={{ gap: 8, marginTop: 18 }}>
-              <VannaMark size={40} />
-              <Text style={s.h}>{title}</Text>
+            <View style={{ gap: 8, marginTop: 4 }}>
+              {brand}
+              <Text style={[s.h, { marginTop: 10 }]}>{title}</Text>
               <Text style={s.sub}>{mode === "add" ? "It joins your list; you pick which one is in use." : mode === "back" ? "Use the same sign-in as on test.vanna.finance." : "One sign-in for Solana and Stellar."}</Text>
             </View>
             {mode !== "add" && (
@@ -420,6 +439,7 @@ export default function SignIn() {
 
         {step === "other" && connected && (
           <>
+            {brand}
             <View style={s.done}>
               <WalletLogo logo={connected.logo} size={32} />
               <View style={{ flex: 1 }}>
@@ -476,6 +496,7 @@ export default function SignIn() {
 
         {step === "name" && (
           <>
+            {brand}
             <Text style={[s.h, { marginTop: 12 }]}>Pick a display name</Text>
             <Text style={s.sub}>Shown on the leaderboard. You can change it once a season.</Text>
             <View style={[s.field, { paddingRight: 18 }]}>
