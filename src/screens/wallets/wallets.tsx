@@ -64,15 +64,21 @@ function NoWallet({ chain, back }: { chain: Chain; back: () => void }) {
 
 // Account > Wallets: every kept wallet per chain; tap one to make it the one in use (no approval). Long-press or the
 // menu removes it. Add opens that chain's wallets.
-export function WalletsCard() {
+export function WalletsCard({ sheet }: { sheet?: boolean } = {}) {
   const { colors } = useTheme();
   const st = useWallets();
+  // In the sheet the sheet's own title says "Wallets", and the wallets sit straight on the sheet.
+  const Wrap = (sheet ? View : Card) as typeof View;
   return (
-    <Card style={{ gap: 4 }}>
-      <View style={styles.head}>
-        <Text style={[styles.h, { color: colors.text, flex: 1 }]}>Wallets</Text>
-        {st.email && <Text style={[styles.t12, { color: colors.muted }]}>{st.email}</Text>}
-      </View>
+    <Wrap style={{ gap: 4, ...(sheet ? { paddingBottom: 8 } : null) }}>
+      {sheet ? (
+        st.email ? <Text style={[styles.t12, { color: colors.muted }]}>{st.email}</Text> : null
+      ) : (
+        <View style={styles.head}>
+          <Text style={[styles.h, { color: colors.text, flex: 1 }]}>Wallets</Text>
+          {st.email && <Text style={[styles.t12, { color: colors.muted }]}>{st.email}</Text>}
+        </View>
+      )}
       {(["solana", "stellar"] as Chain[]).map((c, ci) => (
         <View key={c} style={[{ paddingTop: 6 }, ci > 0 && { borderTopWidth: 1, borderTopColor: colors.divider, marginTop: 6 }]}>
           <View style={styles.chainRow}>
@@ -152,7 +158,7 @@ export function WalletsCard() {
         </View>
       ))}
       <Text style={[styles.t12, { color: colors.muted, marginTop: 4 }]}>One wallet per chain is in use. Switching doesn&apos;t ask again; every transaction is approved in the wallet in use.</Text>
-    </Card>
+    </Wrap>
   );
 }
 

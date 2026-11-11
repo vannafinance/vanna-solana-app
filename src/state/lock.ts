@@ -1,3 +1,4 @@
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as LocalAuthentication from "expo-local-authentication";
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { Platform } from "react-native";
@@ -11,6 +12,20 @@ let state: State = { enabled: false, locked: false, confirmTx: false };
 const subs = new Set<() => void>();
 const set = (p: Partial<State>) => ((state = { ...state, ...p }), subs.forEach((f) => f()));
 export const lockState = () => state;
+
+// Saved on the phone: before, a restart forgot both switches. With the lock on, the app opens locked.
+const KEY = "vanna-lock";
+const save = () => AsyncStorage.setItem(KEY, JSON.stringify({ enabled: state.enabled, confirmTx: state.confirmTx })).catch(() => {});
+AsyncStorage.getItem(KEY)
+  .then((raw) => {
+    if (!raw) return;
+    const s = JSON.parse(raw) as Partial<State>;
+    set({ enabled: !!s.enabled, confirmTx: !!s.confirmTx, locked: !!s.enabled });
+  })
+  .catch(() => {});
+
+// The icon for a transaction button: the phone's fingerprint or face only while biometrics for transactions is on, else none.
+export const bioIcon = (): "face" | "fingerprint" | undefined => (state.confirmTx ? (Platform.OS === "ios" ? "face" : "fingerprint") : undefined);
 export const useLock = () =>
   useSyncExternalStore(
     (f) => (subs.add(f), () => void subs.delete(f)),
@@ -46,6 +61,7 @@ export async function authenticate(reason: string): Promise<boolean> {
 export async function setConfirmTx(on: boolean): Promise<boolean> {
   if (on && !(await authenticate("Confirm transactions with biometrics"))) return false;
   set({ confirmTx: on });
+  save();
   return true;
 }
 
@@ -53,5 +69,6 @@ export async function setConfirmTx(on: boolean): Promise<boolean> {
 export async function setLockEnabled(on: boolean): Promise<boolean> {
   if (on && !(await authenticate("Turn on app lock"))) return false;
   set({ enabled: on, locked: false });
+  save();
   return true;
 }

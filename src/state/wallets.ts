@@ -107,6 +107,10 @@ export function addExternalWallet(c: Chain, app: WalletApp, logo: string, full: 
   return w;
 }
 
+// A wallet hands back a fresh approval token now and then; keep the newest so the next transaction only asks to sign.
+export function updateWalletSession(c: Chain, id: string, session: string) {
+  set({ wallets: { ...state.wallets, [c]: state.wallets[c].map((w) => (w.id === id ? { ...w, session } : w)) } });
+}
 export const setWalletInUse = (c: Chain, id: string) => set({ inUse: { ...state.inUse, [c]: id } });
 const emptyWallets = (): State["wallets"] => ({ solana: [], stellar: [] });
 const stillEmbedded = (wallets: State["wallets"]) => wallets.solana.concat(wallets.stellar).some((w) => w.kind === "embedded" && !w.sample);

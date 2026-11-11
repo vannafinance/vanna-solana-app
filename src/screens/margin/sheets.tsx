@@ -19,6 +19,7 @@ import { closeSheet, openSheet } from "@/ui/overlay";
 import { runTx } from "@/ui/tx";
 import { stellarBorrow, stellarFlashRepay } from "@/chain/stellar/actions";
 import { solanaDepositAndBorrow, solanaFlashRepay } from "@/chain/solana/actions";
+import { bioIcon } from "@/state/lock";
 
 /* Borrow more and Flash repay (design margin.js bmBody / frPlan), opened from the account strip's + and lightning buttons. */
 const fam = families.margin;
@@ -607,7 +608,7 @@ function FlashRepay({ chain }: { chain: Chain }) {
               : `Close ${nPos} position${nPos === 1 ? "" : "s"}`
         }
         fam={fam}
-        icon="fingerprint"
+        icon={bioIcon()}
         onPress={go}
       />
     </View>

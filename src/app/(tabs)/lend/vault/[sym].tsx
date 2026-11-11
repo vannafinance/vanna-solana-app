@@ -103,11 +103,6 @@ export default function Vault() {
                     { label: "Earned", value: (pos > 0 ? "+" : "") + nf(l?.earned ?? 0, stable ? 2 : 4), sub: p.sym, tone: pos > 0 ? "pos" : undefined },
                   ]}
                 />
-                {pos === 0 && (
-                  <View style={{ marginTop: 12 }}>
-                    <Button label="Supply" fam={families.earn} onPress={() => openAmount(chain, p.sym, "supply")} />
-                  </View>
-                )}
               </Card>
             )}
             {cur === "details" && <Details />}

@@ -146,16 +146,13 @@ export function clearSampleData() {
   onWalletsChanged(syncProfile);
 }
 
-let running: Partial<Record<Chain, boolean>> = {};
-export async function refreshAccount(chain: Chain) {
+async function readOnce(chain: Chain) {
   const w = inUseWallet(chain);
   if (!w || w.sample) {
     if (loadedFor[chain]) restoreDemo(chain);
     delete loadedFor[chain];
     return;
   }
-  if (running[chain]) return;
-  running[chain] = true;
   try {
     const { d, live } = chain === "stellar" ? await loadStellar(w.full) : await loadSolana(w.full);
     // the wallet may have changed while reading
@@ -164,9 +161,34 @@ export async function refreshAccount(chain: Chain) {
     loadedFor[chain] = w.full;
   } catch (e) {
     console.warn("[account] read failed", chain, String(e));
-  } finally {
-    running[chain] = false;
   }
+}
+
+// A refresh that arrives while one is already reading (the 30 s timer, say) used to be thrown away, and that read could have
+// started before the tokens landed. Now it queues one more read right after, so new balances show as soon as the chain has them.
+const running: Partial<Record<Chain, Promise<void>>> = {};
+const again: Partial<Record<Chain, boolean>> = {};
+export function refreshAccount(chain: Chain): Promise<void> {
+  const busy = running[chain];
+  if (busy) {
+    again[chain] = true;
+    return busy;
+  }
+  const run = (async () => {
+    do {
+      again[chain] = false;
+      await readOnce(chain);
+    } while (again[chain]);
+  })().finally(() => delete running[chain]);
+  running[chain] = run;
+  return run;
+}
+
+// After sending or receiving: read now, then twice more, because the chain can take a few seconds to show the new figures.
+export function refreshAccountSoon(chain: Chain) {
+  void refreshAccount(chain);
+  setTimeout(() => void refreshAccount(chain), 3000);
+  setTimeout(() => void refreshAccount(chain), 8000);
 }
 
 const refreshAll = () => {
