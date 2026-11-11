@@ -7,7 +7,6 @@ import * as dynamic from "@/chain/dynamic";
 import { registerExternalSolanaSigner, registerExternalStellarSigner } from "@/chain/sign";
 import { base58 } from "@/chain/solana/prices";
 import { short, updateWalletSession, type WalletApp } from "@/state/wallets";
-import { toast } from "@/ui/overlay";
 
 export type ExternalConnection = { address: string; session: string };
 
@@ -94,8 +93,7 @@ registerExternalSolanaSigner((base64Tx, entry) =>
     try {
       auth = await wallet.authorize({ identity: IDENTITY, chain: SOLANA_CHAIN, auth_token: entry.session });
     } catch {
-      // Phones that close apps in the background (Redmi, Xiaomi, Samsung battery savers) make the wallet forget the saved approval.
-      toast(`${entry.app} forgot the connection, so it asks once more. To avoid this, let ${entry.app} run in the background in the phone's battery settings.`);
+      // The wallet forgot the saved approval (phones that close apps in the background do this): ask once more, quietly.
       auth = await wallet.authorize({ identity: IDENTITY, chain: SOLANA_CHAIN });
     }
     const shared = auth.accounts.map((a) => base58(Buffer.from(a.address, "base64")));
