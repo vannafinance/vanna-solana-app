@@ -41,7 +41,10 @@ const RESERVE_OF: Record<string, string> = {
 const FRIENDBOT_URL = "https://friendbot.stellar.org";
 const BLEND_FAUCET_URL = "https://ewqw4hx7oa.execute-api.us-east-1.amazonaws.com/getAssets";
 const SOROSWAP_FAUCET_URL = "https://api.soroswap.finance/api/faucet";
-const AQUARIUS_FAUCET_SECRET = "REMOVED-AQUARIUS-FAUCET-KEY";
+// The Aquarius test USDC is issued by this key, so it signs the faucet payment. It is NOT stored in the code: it comes from the build's
+// environment (.env, git-ignored). EXPO_PUBLIC_ values are bundled into the app, so use this only for testnet builds, and prefer a
+// server route that does the signing.
+const AQUARIUS_FAUCET_SECRET = process.env.EXPO_PUBLIC_AQUARIUS_FAUCET_SECRET ?? "";
 const AQUARIUS_USDC_CODE = "USDC";
 const AQUARIUS_USDC_ISSUER = "GAHPYWLK6YRN7CVYZOO4H3VDRZ7PVF5UJGLZCSPAEIKJE2XSWF5LAGER";
 
@@ -653,6 +656,7 @@ export async function stellarFaucet(sym?: string): Promise<string> {
 
   // 4. Aquarius USDC via distribution keypair payment
   if (s === "AQUSDC" || s === "AQUARIUS_USDC") {
+    if (!AQUARIUS_FAUCET_SECRET) throw new Error("The Aquarius test faucet isn't set up in this build.");
     const faucetKeypair = Keypair.fromSecret(AQUARIUS_FAUCET_SECRET);
     const asset = new Asset(AQUARIUS_USDC_CODE, AQUARIUS_USDC_ISSUER);
     console.warn("[faucet] Aquarius: reading account");
