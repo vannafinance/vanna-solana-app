@@ -39,9 +39,9 @@ A dedicated **Solana-only** app: the Vanna mobile app codebase and V7 design (so
 
 ## Working copies
 
-- Main clone: `Company Work\solana app latest` (branch `solana-latest`). Metro and the Android build run from here.
-- Git worktree for Claude Desktop sessions: `Company Work\solana app latest worktree` (local branch `solana-latest-claude`, shares the same `.git`; `node_modules` is a junction to the main clone's, `.env` is a copy). Open this folder in Claude Desktop to carry on.
-- Push rule (always): squash everything local into ONE new commit on top of the remote tip, then `git push origin HEAD:solana-latest`. From the worktree: `git fetch origin; git reset --soft origin/solana-latest` (keeps your work staged), commit once, push. Never push several commits, never force-push. Then in the main clone: `git pull --ff-only origin solana-latest`.
+- Main clone: this folder (branch `solana-latest`). Metro and the Android build run from here.
+- Claude worktree inside it: `.claude/worktrees/solana-continue` (local branch `solana-latest-claude`, same `.git`, git-ignored through `.git/info/exclude`; `node_modules` is a junction to the main one, `.env` a copy). A Claude Desktop session can work there and read this handoff from it.
+- Push rule (always): squash everything local into ONE new commit on top of the remote tip, then push it to `solana-latest`. In the main clone: `git push origin HEAD:solana-latest`. From the worktree: commit once on top of `solana-latest` (merge `solana-latest` first), then `git push origin HEAD:solana-latest`. Never push several commits, never force-push. Afterwards fast-forward the other copy: `git merge --ff-only solana-latest` (or `solana-latest-claude`).
 
 ## Rules to keep
 

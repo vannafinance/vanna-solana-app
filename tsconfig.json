@@ -19,6 +19,7 @@
   ],
   "exclude": [
     "optional",
+    ".claude",
     "node_modules"
   ]
 }
