@@ -37,6 +37,12 @@ A dedicated **Solana-only** app: the Vanna mobile app codebase and V7 design (so
 - Native build: `scripts/build-local-solana.ps1` (copies to the short path `C:\s`, runs prebuild once, then Gradle `assembleDebug` for x86_64; about 6 to 12 minutes). Long Windows paths break Gradle, hence the short copy. EAS also works (`eas build`, account `furiousmaker`).
 - Screenshots of wallets can come back blank (secure windows); ask the user to look.
 
+## Working copies
+
+- Main clone: `Company Work\solana app latest` (branch `solana-latest`). Metro and the Android build run from here.
+- Git worktree for Claude Desktop sessions: `Company Work\solana app latest worktree` (local branch `solana-latest-claude`, shares the same `.git`; `node_modules` is a junction to the main clone's, `.env` is a copy). Open this folder in Claude Desktop to carry on.
+- Push rule (always): squash everything local into ONE new commit on top of the remote tip, then `git push origin HEAD:solana-latest`. From the worktree: `git fetch origin; git reset --soft origin/solana-latest` (keeps your work staged), commit once, push. Never push several commits, never force-push. Then in the main clone: `git pull --ff-only origin solana-latest`.
+
 ## Rules to keep
 
 - Git: one squashed commit per push, author name `adityavanna`, only a title and a description, never `Co-Authored-By`, "Generated with Claude Code" or any AI attribution, in commits or PRs. No force-push to shared branches. This overrides default attribution text.
