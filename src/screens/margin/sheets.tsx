@@ -113,7 +113,7 @@ function Borrow({ chain }: { chain: Chain }) {
         onSym={(t) => (setSym(t), setAmt(""))}
         syms={list}
         meta={(t) => `${pct(POOLS_BY[chain].find((p) => p.sym === t)?.borA ?? 0)} APY`}
-        usdValue={TOK[s]?.stable ? undefined : x * px(s)}
+        usdValue={x * px(s)}
         label="Borrow amount"
         bad={over}
         footer={

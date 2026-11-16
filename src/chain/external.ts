@@ -27,10 +27,11 @@ const PACKAGE: Partial<Record<WalletApp, string>> = {
   OneKey: "so.onekey.app.wallet",
   LOBSTR: "com.lobstr.client",
 };
-// Each wallet's own WalletConnect links. Freighter's is from its source (docs/best-practices/navigation.md, build.gradle),
-// the others from WalletConnect's wallet directory.
+// Each wallet's own WalletConnect links, the others from WalletConnect's wallet directory. Freighter only pairs a link that
+// contains its WALLET_KIT_MT_REDIRECT_NATIVE, which the Play Store build sets to "freighterwallet://wc-redirect"
+// (src/hooks/useWalletKitEventsManager.ts); "freighterwallet://wc?uri=" opens the app but is silently ignored.
 const WC_LINKS: Partial<Record<WalletApp, string[]>> = {
-  Freighter: ["freighterwallet://wc"],
+  Freighter: ["freighterwallet://wc-redirect"],
   OneKey: ["onekey-wallet://wc", "https://app.onekey.so/wc/connect"],
   LOBSTR: ["lobstr://wc", "https://lobstr.co/uni/wc"],
 };
@@ -158,7 +159,7 @@ export async function connectStellarWallet(app: WalletApp): Promise<ExternalConn
   const wc = await walletConnect();
   // The standard Stellar WalletConnect request (what Freighter, LOBSTR and the Stellar wallet kits send).
   const { uri, approval } = await wc.connect({
-    requiredNamespaces: { stellar: { chains: [STELLAR_CHAIN], methods: ["stellar_signXDR"], events: [] } },
+    optionalNamespaces: { stellar: { chains: [STELLAR_CHAIN], methods: ["stellar_signXDR"], events: [] } },
   });
   if (!uri) throw new Error("Couldn't start the wallet connection");
   if (!(await openInWallet(app, uri))) throw await cantOpen(app);

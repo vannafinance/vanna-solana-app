@@ -16,13 +16,16 @@ const apply = (m: AppearanceMode) => Appearance.setColorScheme(m === "system" ? 
 // the saved choice applies at launch without the cross-fade
 AsyncStorage.getItem(KEY)
   .then((v) => {
-    if (v === "light" || v === "dark") {
+    if (v === "light" || v === "dark" || v === "system") {
       mode = v;
       apply(v);
       subs.forEach((s) => s());
     }
   })
   .catch(() => {});
+
+/** Applies the saved choice again. Android ignores an override set before its screen is up, so the app calls this once it is. */
+export const reapplyAppearance = () => apply(mode);
 
 export function setAppearance(m: AppearanceMode) {
   if (m === mode) return;

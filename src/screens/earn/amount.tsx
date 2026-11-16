@@ -18,7 +18,7 @@ import { solanaEarnSupply, solanaEarnWithdraw } from "@/chain/solana/actions";
 import { bioIcon } from "@/state/lock";
 import { runTx } from "@/ui/tx";
 
-import { applyEarn, balTok, decOf, freeTok, fullAmt, isStable, lendOf, poolOf, px, shareRate, shareSym } from "./model";
+import { applyEarn, balTok, decOf, freeTok, fullAmt, lendOf, poolOf, px, shareRate, shareSym } from "./model";
 
 type Mode = "supply" | "withdraw";
 
@@ -112,7 +112,7 @@ function AmountForm({ chain, sym, initial }: { chain: Chain; sym: string; initia
             <Text style={[styles.tpT, { color: colors.text }]}>{s}</Text>
           </View>
         </View>
-        {!isStable(s) && <Text style={[styles.lim, { color: colors.muted, textAlign: "left" }]}>~{usd(x * price)}</Text>}
+        <Text style={[styles.lim, { color: colors.muted, textAlign: "left" }]}>~{usd(x * price)}</Text>
         <View style={styles.qfs}>
           {(
             [

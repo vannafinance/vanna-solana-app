@@ -5,6 +5,7 @@ import { AppState } from "react-native";
 import { ACCOUNT, ACTIVITY, DATA, NOTES, PERP_HIST, PREDICT, type ChainData, type FarmPos } from "@/sample/data";
 import { rewardsNow, setRewards } from "@/sample/rewards";
 import type { Chain } from "@/state/chain";
+import { loadActivity } from "@/state/activity-store";
 import { mutate } from "@/state/store";
 import { inUseWallet, onWalletsChanged, walletState } from "@/state/wallets";
 
@@ -12,6 +13,7 @@ import { fetchSolanaAccount } from "./solana/account";
 import { fetchSolanaPositions } from "./solana/positions";
 import { APP_SYM, fetchStellarAccount } from "./stellar/account";
 import { EARN_POOLS } from "./stellar/config";
+import { fetchStellarEarnHistory } from "./stellar/history";
 import { fetchStellarPool } from "./stellar/pools";
 import { readContract } from "./stellar/read";
 
@@ -88,12 +90,18 @@ async function loadStellar(owner: string) {
       if (k === "SS_XLM_USDC" || k === "AQ_XLM_USDC") {
         // Farm LP shares held by the margin account, valued from the pool reserves (priced as USD via BLUSDC)
         const aq = k === "AQ_XLM_USDC";
-        const f: FarmPos = { id: aq ? "aquarius-xlm" : "soroswap-xlm", kind: "lp", venue: aq ? "Aquarius" : "Soroswap", name: "XLM / USDC", sym: "BLUSDC", icon: "XLM", amt: b.usd, apy: 0, earned: 0, since: "" };
+        const f: FarmPos = { id: aq ? "aquarius-xlm" : "soroswap-xlm", kind: "lp", venue: aq ? "Aquarius" : "Soroswap", name: "XLM / USDC", sym: aq ? "AqUSDC" : "SoUSDC", icon: "XLM", amt: b.usd, apy: 0, earned: 0, since: "" };
         d.farm.push(f);
       } else d.margin.coll.push({ sym: app(k), amt: b.amount });
     }
     for (const [k, b] of Object.entries(m.debt)) d.margin.debt.push({ sym: app(k), amt: b.amount });
     live = { hf: m.healthFactor, debtUsd: m.debtUsd, equity: m.netAvailableCollateral, lev: m.leverage, collUsd: m.grossCollateralUsd, address: m.address };
+    // Blend supply held by the margin account (the Farm lending positions)
+    const blend = m.blend;
+    if (blend) {
+      if (blend.XLM > 1e-6) d.farm.push({ id: "blend-xlm", kind: "lend", venue: "Blend", name: "XLM", sym: "XLM", icon: "XLM", amt: blend.XLM, apy: 0, earned: 0, since: "" });
+      if (blend.USDC > 1e-6) d.farm.push({ id: "blend-usdc", kind: "lend", venue: "Blend", name: "USDC", sym: "BLUSDC", icon: "BLUSDC", amt: blend.USDC, apy: 0, earned: 0, since: "" });
+    }
   }
   return { d, live };
 }
@@ -158,7 +166,11 @@ async function readOnce(chain: Chain) {
     // the wallet may have changed while reading
     if (inUseWallet(chain)?.full !== w.full) return;
     replace(chain, d, live);
-    loadedFor[chain] = w.full;
+    // this wallet's transaction history: saved on the phone, plus what the chain still shows (once per wallet, not on every refresh)
+    if (loadedFor[chain] !== w.full) {
+      loadedFor[chain] = w.full;
+      void (chain === "stellar" ? fetchStellarEarnHistory(w.full) : Promise.resolve([])).then((onChain) => loadActivity(chain, w.full, onChain));
+    }
   } catch (e) {
     console.warn("[account] read failed", chain, String(e));
   }

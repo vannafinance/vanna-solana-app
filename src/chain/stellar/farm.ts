@@ -1,5 +1,7 @@
 import { nativeToScVal } from "@stellar/stellar-base";
 
+import { CONTRACTS, VENUES } from "./config";
+
 import { fetchStellarPrices } from "./prices";
 import { readContract } from "./read";
 
@@ -7,15 +9,15 @@ import { readContract } from "./read";
 // rate-display.ts): Blend reserves from the pool's get_reserve(asset): supplied = b_supply x b_rate, borrowed =
 // d_supply x d_rate, three-tier rate curve with ir_mod, borrow APY compounded daily, supply APR = borrow APR x util x
 // (1 - 10% backstop) compounded weekly. LP pools: TVL = reserves priced at the oracle.
-const BLEND_POOL = "CCEBVDYM32YNYCVNRXQKDFFPISJJCV557CDZEIRBEE4NCV4KHPQ44HGF";
+const BLEND_POOL = VENUES.BLEND_POOL;
 const BLEND_ASSETS = { XLM: "CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC", USDC: "CAQCFVLOBK5GIULPNZRGATJJMIZL5BSP7X5YJVMGCPTUEPFM4AVSRCJU" };
 const LP = {
-  soroswap: { pool: "CDVAIOYHCD4RUSLQNVFI7RIZBFT2JZMJWM4RTOLQZQXL4QAVXU5RFKDB", first: "token_0" },
-  aquarius: { pool: "CD3LFMMLBQ6RBJUD3Z2LFDFE6544WDRMWHEZYPI5YDVESYRSO2TT32BX", first: "get_tokens" },
+  soroswap: { pool: VENUES.SOROSWAP_XLM_USDC_PAIR, first: "token_0" },
+  aquarius: { pool: VENUES.AQUARIUS_XLM_USDC_POOL, first: "get_tokens" },
 };
 const XLM = BLEND_ASSETS.XLM;
 
-export type BlendReserve = { supplied: number; borrowed: number; util: number; supplyApy: number; borrowApy: number };
+export type BlendReserve = { bRate: number; supplied: number; borrowed: number; util: number; supplyApy: number; borrowApy: number };
 type RawReserve = { data: Record<string, bigint>; config: Record<string, bigint | number> };
 
 function parse(r: RawReserve): BlendReserve {
@@ -30,7 +32,7 @@ function parse(r: RawReserve): BlendReserve {
   else ir = (((u - 0.95) / 0.05) * S7 * rThree) / S7 + ((rTwo + rOne + rBase) * irMod) / S7;
   const borrowApr = ir / S7;
   const supplyApr = borrowApr * u * 0.9;
-  return { supplied, borrowed, util: u * 100, borrowApy: (Math.pow(1 + borrowApr / 365, 365) - 1) * 100, supplyApy: Math.max(0, (Math.pow(1 + supplyApr / 52, 52) - 1) * 100) };
+  return { bRate: bRate / S12, supplied, borrowed, util: u * 100, borrowApy: (Math.pow(1 + borrowApr / 365, 365) - 1) * 100, supplyApy: Math.max(0, (Math.pow(1 + supplyApr / 52, 52) - 1) * 100) };
 }
 
 export async function fetchBlendReserves(): Promise<Record<"XLM" | "USDC", BlendReserve>> {
@@ -71,4 +73,16 @@ export async function fetchLpTvl(): Promise<Record<"soroswap" | "aquarius", LpSt
   };
   const [soroswap, aquarius, apr] = await Promise.all([one(LP.soroswap), one(LP.aquarius), aquariusApr()]);
   return { soroswap: { tvl: soroswap, apr: 0 }, aquarius: { tvl: aquarius, apr } };
+}
+
+// What the margin account has supplied to Blend (apps/stellar/lib/margin-credit-reads.ts blendPositions): BlendValuer.positions(pool, margin)
+// returns one row per token with the underlying `owned` / `owed` in native units (7 decimals).
+export async function fetchBlendPositions(marginAddress: string): Promise<Record<"XLM" | "USDC", number>> {
+  const out = { XLM: 0, USDC: 0 };
+  const rows = (await readContract(CONTRACTS.BLEND_VALUER, "positions", nativeToScVal(BLEND_POOL, { type: "address" }), nativeToScVal(marginAddress, { type: "address" })).catch(() => [])) as { token: string; owned?: bigint }[];
+  for (const r of rows ?? []) {
+    const k = r.token === BLEND_ASSETS.XLM ? "XLM" : r.token === BLEND_ASSETS.USDC ? "USDC" : null;
+    if (k) out[k] += Number(r.owned ?? 0n) / 1e7;
+  }
+  return out;
 }

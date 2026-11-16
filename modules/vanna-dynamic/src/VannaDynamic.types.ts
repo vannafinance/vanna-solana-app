@@ -31,6 +31,8 @@ export interface VannaDynamicNativeModule {
   getSession(): Promise<VannaDynamicSession | null>;
   /** Base64 transaction envelope XDR in, signed envelope XDR out. */
   signStellarXdr(xdr: string): Promise<string>;
+  /** Raw ed25519 signature (hex) over the given hex bytes, with the Stellar wallet. Android only for now. */
+  signStellarHash?(hashHex: string): Promise<string>;
   /** Base64 serialized transaction in, signed base64 transaction out (not broadcast). */
   signSolanaTransaction(base64: string): Promise<string>;
   /** Network of the Stellar wallet as configured in the Dynamic dashboard (e.g. "PUBLIC", "TESTNET"). */

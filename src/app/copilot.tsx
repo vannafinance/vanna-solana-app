@@ -89,23 +89,7 @@ function Locked() {
           <Text style={[styles.lbB, { color: colors.link }]}>Preview unlocked</Text>
         </Pressable>
       </Card>
-      <McpCard />
     </ScrollView>
-  );
-}
-
-function McpCard() {
-  const { colors } = useTheme();
-  return (
-    <Card>
-      <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
-        <View style={[styles.mcpI, { backgroundColor: colors.bg }]}>
-          <Icon name="cable" size={22} />
-        </View>
-        <Text style={[styles.lbB, { color: colors.text, flex: 1, fontSize: 15 }]}>Agent (MCP)</Text>
-        <Pill label="Locked" tone="grey" icon={<Icon name="lock" size={12} color="muted" />} />
-      </View>
-    </Card>
   );
 }
 

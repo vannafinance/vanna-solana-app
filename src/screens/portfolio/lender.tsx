@@ -2,7 +2,7 @@ import { router } from "expo-router";
 import { useState } from "react";
 import { StyleSheet, Text, View } from "react-native";
 
-import { Chart, curve } from "@/components/chart";
+import { Chart } from "@/components/chart";
 import { HistoryList } from "@/components/history";
 import { PillTabs, SubTabs, Swap } from "@/components/motion";
 import { Card, EmptyCard, IconAction, Pairs, shareIcon, supplyMark, text, TokenBadge, withdrawMark } from "@/components/ui/kit";
@@ -16,6 +16,7 @@ import { families, font } from "@/theme/tokens";
 import { toast } from "@/ui/overlay";
 
 import { usePfColors } from "./shared";
+import { openAmount } from "@/screens/earn/amount";
 import { openShare } from "@/screens/share/share";
 
 type Sub = "pools" | "predict";
@@ -75,7 +76,7 @@ function Pools() {
         tone={ready ? sign(l.earned) : undefined}
         range="30D"
         pairs={ready ? [{ label: "Holdings", value: usd(l.sup + l.earned) }, { label: "Avg APY", value: pct(l.apy) }] : []}
-        chart={ready ? <Chart pts={curve(l.earned, 2)} color={colors.positive} label="Interest earned, last 30 days" /> : null}
+        chart={ready ? <Chart pts={[]} color={colors.positive} label="Interest earned, last 30 days" /> : null}
       />
       <SubTabs items={[["cur", "Current", rows.length], ["hist", "History", hist.length]]} value={tab} onChange={setTab} fam={families.portfolio} />
       <Swap k={tab}>
@@ -97,8 +98,8 @@ function Pools() {
                 </View>
                 <Pairs items={[{ label: "Supplied", value: tokFmt(r.amt, r.sym) }, { label: "APY", value: pct(r.apy) }]} />
                 <View style={styles.acts}>
-                  <IconAction icon={supplyMark} label={`Supply more ${r.sym}`} onPress={() => router.navigate("/lend")} />
-                  <IconAction icon={withdrawMark} label={`Withdraw ${r.sym}`} onPress={() => router.navigate("/lend")} />
+                  <IconAction icon={supplyMark} label={`Supply more ${r.sym}`} onPress={() => openAmount(chain, r.sym, "supply")} />
+                  <IconAction icon={withdrawMark} label={`Withdraw ${r.sym}`} onPress={() => openAmount(chain, r.sym, "withdraw")} />
                   <IconAction icon={shareIcon} label={`Share ${r.sym} lending`} onPress={() => openShare({ kind: "earn", id: r.sym })} />
                 </View>
               </Card>
@@ -127,7 +128,7 @@ function Predict() {
           { label: "Earned", value: sUsd(s.earned), tone: sign(s.earned) },
           { label: "Positions", value: String(s.count) },
         ]}
-        chart={<Chart pts={curve(s.pnl, 3)} color={colors.link} label="Prediction P&L, last 30 days" />}
+        chart={<Chart pts={[]} color={colors.link} label="Prediction P&L, last 30 days" />}
       />
       {ps.map((p) => (
         <Card key={p.eventId}>

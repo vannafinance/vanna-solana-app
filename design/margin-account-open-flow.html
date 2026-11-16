@@ -1,0 +1,1032 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Margin transaction flow</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600&display=swap" rel="stylesheet">
+<style>
+/* Tokens copied from src/theme/tokens.ts (light / dark palettes, families.margin, brand). */
+:root,[data-theme="dark"]{
+  --bg:#111111; --surface:#1E1E1E; --text:#FFFFFF; --muted:#E2E2E2; --divider:#2C2C2C; --border:#2C2C2C; --border-control:#6A6A6A;
+  --positive:#32EEE2; --link:#CBB6FA;
+  --purple-tint:#2F1B61; --on-purple-tint:#E1D5FA; --teal-tint:#155F64; --on-teal-tint:#BFF6FA; --pink-tint:#6B0033; --on-pink-tint:#FFB0D6;
+  --chip-active:#FFFFFF; --on-chip-active:#111111; --segment:#111111; --scrim:rgba(0,0,0,0.56);
+  --page:#0A0A0B; --panel:#171717; --pt-halo:#CBB6FA; --pt-core:#FFFFFF; --frame:#26262B;
+  color-scheme:dark;
+}
+[data-theme="light"]{
+  --bg:#F7F7F7; --surface:#FFFFFF; --text:#1F1F1F; --muted:#595959; --divider:#F4F4F4; --border:#E5E7EB; --border-control:#8F94A0;
+  --positive:#1C7C83; --link:#703AE6;
+  --purple-tint:#F1EBFD; --on-purple-tint:#5029A3; --teal-tint:#EBFCFD; --on-teal-tint:#155F64; --pink-tint:#FFE6F2; --on-pink-tint:#8C0043;
+  --chip-active:#111111; --on-chip-active:#FFFFFF; --segment:#F4F4F4; --scrim:rgba(17,17,17,0.32);
+  --page:#E9E9EC; --panel:#FFFFFF; --pt-halo:#8D61EB; --pt-core:#703AE6; --frame:#CFCFD4;
+  color-scheme:light;
+}
+:root{
+  --primary:#703AE6;
+  /* families.margin: CTA c0 -> c1 (diagonal), hero h0 -> h1 (42%) -> h2 at 180deg, glow top right */
+  --cta:linear-gradient(135deg,#B6479E,#6B2766);
+  --hero:radial-gradient(90% 70% at 100% 0%,rgba(240,160,224,0.5),rgba(240,160,224,0) 70%),linear-gradient(180deg,#6B2766 0%,#B6479E 42%,#8E3784 100%);
+  --ease:cubic-bezier(.2,0,0,1);
+  --spring:cubic-bezier(.34,1.4,.64,1);
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--page);color:var(--text);font-family:"Plus Jakarta Sans",system-ui,-apple-system,"Segoe UI",sans-serif;-webkit-font-smoothing:antialiased;overflow-x:hidden;transition:background .3s}
+button{font:inherit;color:inherit}
+.tnum{font-variant-numeric:tabular-nums}
+
+/* ---------- page ---------- */
+.wrap{max-width:1080px;margin:0 auto;padding:32px 16px 64px;display:grid;gap:28px;grid-template-columns:minmax(0,1fr);grid-template-areas:"head" "phone" "side"}
+.head{grid-area:head}.phone-col{grid-area:phone;min-width:0}.side{grid-area:side;min-width:0}
+@media(min-width:900px){.wrap{grid-template-columns:390px minmax(0,1fr);grid-template-areas:"phone head" "phone side";grid-template-rows:auto 1fr;column-gap:56px;row-gap:24px;padding-top:48px}}
+.head h1{font-size:26px;font-weight:600;letter-spacing:-.02em;margin:0 0 8px}
+.head p{color:var(--muted);font-size:15px;line-height:1.55;margin:0;max-width:58ch}
+
+/* ---------- phone ---------- */
+.phone{position:relative;width:100%;max-width:390px;height:844px;margin:0 auto;border-radius:48px;background:var(--bg);overflow:hidden;
+  box-shadow:0 0 0 1px var(--frame),0 0 0 7px #050506,0 0 0 8px var(--frame),0 40px 80px -24px rgba(0,0,0,.5)}
+.hero{position:relative;background:var(--hero);color:#fff;padding:0 16px 56px}
+.sb{height:50px;display:flex;align-items:center;justify-content:space-between;padding:4px 14px 0;font-size:15px;font-weight:600}
+.sb-i{display:flex;gap:6px;align-items:center}
+.hrow{display:flex;align-items:center;justify-content:space-between;height:48px}
+.hrow .t{font-size:20px;font-weight:600}
+.hchip{display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;background:rgba(255,255,255,.18);border-radius:999px;padding:6px 10px}
+.hchip i{width:6px;height:6px;border-radius:3px;background:#32EEE2}
+.hk{font-size:13px;opacity:.85;margin-top:20px}
+.hbig{font-size:36px;font-weight:600;letter-spacing:-.02em;line-height:44px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.app{padding:0 16px;margin-top:-32px;position:relative}
+.ecard{background:var(--surface);border-radius:16px;padding:16px;display:flex;align-items:center;gap:12px}
+.ecard .tx{flex:1;min-width:0}
+.ecard .t1{font-size:14px;font-weight:600;line-height:20px}
+.ecard .t2{font-size:13px;line-height:18px;color:var(--muted)}
+.ecard .t1,.ecard .t2{white-space:normal}
+.ecard .mb{flex:none;width:72px}
+.ecard .mb svg{display:block}
+.ecard .btn{width:auto;flex:none}
+.arows{margin-top:12px;background:var(--surface);border-radius:16px;padding:0 16px}
+.arows div{display:flex;justify-content:space-between;gap:12px;min-height:44px;align-items:center;font-size:14px;color:var(--muted)}
+.arows div+div{border-top:1px solid var(--divider)}
+.arows b{color:var(--text);font-weight:600;min-width:0;text-align:right;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tabbar{position:absolute;left:0;right:0;bottom:0;height:84px;background:var(--surface);display:flex;justify-content:space-around;padding-top:10px;font-size:11px;color:var(--muted)}
+.tabbar div{display:grid;justify-items:center;gap:4px}
+.tabbar .on{color:#8E3784;font-weight:600}
+[data-theme="dark"] .tabbar .on{color:#E3A3D8}
+.scrim{position:absolute;inset:0;background:var(--scrim);transition:opacity .45s var(--ease)}
+.scrim.off{opacity:0;pointer-events:none}
+.homebar{position:absolute;left:50%;bottom:8px;width:134px;height:5px;margin-left:-67px;border-radius:3px;background:var(--text);opacity:.9;z-index:5}
+
+/* ---------- sheet (src/ui/overlay.tsx) ---------- */
+.sheet{position:absolute;left:0;right:0;bottom:0;max-height:calc(100% - 56px);display:flex;flex-direction:column;background:var(--surface);border-radius:24px 24px 0 0;padding-bottom:46px;transition:transform .55s var(--ease);will-change:transform}
+.sheet.closed{transform:translateY(102%)}
+.grab{width:36px;height:5px;border-radius:3px;background:var(--border-control);opacity:.5;margin:8px auto 0;flex:none}
+.sh-head{display:flex;align-items:center;padding:0 12px 0 20px;min-height:60px;gap:12px;flex:none}
+.sh-head h2{flex:1;min-width:0;font-size:20px;line-height:28px;font-weight:600;margin:0}
+.x{width:40px;height:40px;border-radius:20px;background:var(--segment);border:0;display:grid;place-items:center;cursor:pointer;color:var(--text);flex:none;padding:0}
+.views{position:relative;flex:1 1 auto;min-height:0;overflow-x:hidden;overflow-y:auto;scrollbar-width:none;padding:0 16px 8px;transition:height .45s var(--ease)}
+.views::-webkit-scrollbar{display:none}
+.view[hidden]{display:none}
+.view{transition:opacity .17s ease,transform .17s ease}
+.view.leave{opacity:0;transform:translateY(-6px)}
+.view.enter>*{animation:rise .5s var(--ease) backwards;animation-delay:calc(var(--i,0) * 45ms)}
+@keyframes rise{from{opacity:0;transform:translateY(10px)}}
+.stack{display:flex;flex-direction:column}
+.g12{gap:12px}.g16{gap:16px}.g20{gap:20px}
+
+/* tx.tsx review pieces */
+.legs{background:var(--bg);border-radius:16px;padding:16px}
+.legL{font-size:13px;line-height:18px;color:var(--muted)}
+.legV{font-size:22px;line-height:30px;font-weight:600;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+.legS{font-size:12px;line-height:16px;color:var(--muted)}
+.arrow{display:flex;justify-content:center;padding:4px 0;color:var(--muted)}
+.row{display:flex;align-items:center;gap:12px;min-height:44px}
+.row+.row{border-top:1px solid var(--divider)}
+.rowL{font-size:14px;color:var(--muted);flex:none}
+.rowV{flex:1;min-width:0;text-align:right;font-size:14px;font-weight:600;font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rowV.multi{white-space:normal;line-height:20px;padding:12px 0}
+
+/* components/ui/button.tsx */
+.btn{position:relative;display:flex;align-items:center;justify-content:center;gap:8px;width:100%;padding:0 20px;border:0;cursor:pointer;font-weight:600;overflow:hidden;transition:opacity .12s;white-space:nowrap}
+.btn:active{opacity:.85}
+.btn.lg{height:52px;border-radius:26px;font-size:16px}
+.btn.md{height:44px;border-radius:22px;font-size:14px}
+.btn.primary{background:var(--cta);color:#fff}
+.btn.text{background:transparent;color:var(--text)}
+.btn:focus-visible,.x:focus-visible,.chip:focus-visible,.lnk:focus-visible{outline:2px solid var(--link);outline-offset:2px}
+
+/* first-time card (new; built from the purple tonal tokens) */
+.first{background:var(--purple-tint);border-radius:16px;padding:16px}
+.first-t{font-size:16px;line-height:22px;font-weight:600;color:var(--text)}
+.first-d{font-size:13px;line-height:18px;color:var(--muted);margin-top:4px}
+.fsteps{list-style:none;margin:12px 0 0;padding:0}
+.fsteps li{display:flex;gap:12px;position:relative;padding:6px 0}
+.fsteps li:not(:last-child)::after{content:"";position:absolute;left:11.5px;top:32px;bottom:-6px;width:1px;background:var(--on-purple-tint);opacity:.3}
+.num{width:24px;height:24px;border-radius:12px;border:1px solid var(--on-purple-tint);display:grid;place-items:center;font-size:12px;font-weight:600;color:var(--on-purple-tint);flex:none;margin-top:1px}
+.fsteps li.one .num{border:0;background:var(--primary);color:#fff}
+.st{min-width:0}
+.st-t{font-size:14px;line-height:20px;font-weight:600;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.st-d{font-size:12px;line-height:16px;color:var(--muted)}
+.tag{font-size:11px;line-height:18px;font-weight:600;color:#fff;background:var(--primary);padding:0 8px;border-radius:9px}
+.note{text-align:center;font-size:13px;line-height:18px;color:var(--muted);margin:0}
+
+/* progress: stage */
+.stage{position:relative;height:216px}
+.stage.lite{height:166px}
+.flow{position:absolute;left:0;top:0;overflow:visible;pointer-events:none}
+.flow .base{fill:none;stroke:var(--border-control);stroke-width:2;stroke-linecap:round;stroke-dasharray:0 6;opacity:0;transition:opacity .4s ease .3s}
+.docked .flow .base{opacity:.8}
+.flow .pa{fill:none;stroke:var(--link);stroke-width:2;stroke-linecap:round;stroke-dasharray:1 1;stroke-dashoffset:1;opacity:.9;transition:stroke-dashoffset .55s var(--ease),opacity .4s ease}
+.flow .pa.draw{stroke-dashoffset:0}
+.flow .pa.done{opacity:.3}
+.flow .pa.bad{stroke:var(--on-pink-tint);opacity:.6}
+.pt-h{fill:var(--pt-halo);opacity:.2}.pt-c{fill:var(--pt-core)}
+
+.node{position:absolute;top:128px;text-align:center;opacity:0;transform:translateY(8px);transition:opacity .45s var(--ease),transform .45s var(--ease)}
+.lite .node{top:100px}
+.docked .node{opacity:.55;transform:none;transition-delay:calc(.3s + var(--d,0s))}
+.docked .node.on,.docked .node.bad{opacity:1;transition-delay:0s}
+.n-c{width:44px;height:44px;border-radius:22px;margin:0 auto 6px;background:var(--bg);border:1px solid var(--border);display:grid;place-items:center;position:relative;color:var(--text);transition:border-color .3s,box-shadow .4s var(--ease)}
+.lite .n-c{width:36px;height:36px;border-radius:18px}
+.node.on .n-c{border-color:var(--primary);box-shadow:0 0 0 5px rgba(112,58,230,.18)}
+.node.bad .n-c{border-color:var(--on-pink-tint);box-shadow:0 0 0 5px var(--pink-tint)}
+.n-ok{position:absolute;right:-3px;bottom:-3px;width:18px;height:18px;border-radius:9px;background:var(--primary);border:2px solid var(--surface);display:grid;place-items:center;transform:scale(0);transition:transform .45s var(--spring)}
+.node.done .n-ok{transform:scale(1)}
+.n-l,.n-v{font-size:12px;line-height:16px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.n-l{font-weight:600}
+.n-v{color:var(--muted);font-variant-numeric:tabular-nums}
+
+/* the margin account object */
+.acct{position:absolute;left:calc(50% - 116px);top:38px;width:232px;height:140px;transition:left .6s var(--ease),top .6s var(--ease),width .6s var(--ease),height .6s var(--ease)}
+.docked .acct{left:0;top:0;width:100%;height:64px}
+.lite.docked .acct{height:56px}
+.aglow{position:absolute;inset:-14px;background:radial-gradient(closest-side,rgba(182,71,158,.42),transparent);opacity:0;transition:opacity .6s ease}
+.forming .aglow{opacity:.75;animation:breathe 1.6s ease-in-out infinite}
+.settled .aglow{animation:none;opacity:.8}
+.docked .aglow{opacity:.2}
+.docked .acct.recv .aglow{opacity:.55}
+@keyframes breathe{50%{opacity:.35}}
+.card{position:absolute;inset:0;border-radius:16px;overflow:hidden;background:transparent;transition:background .4s ease}
+.forming .card{background:var(--bg)}
+.fill{position:absolute;inset:0;background:var(--hero);opacity:0;transition:opacity .55s var(--ease)}
+.settled .fill{opacity:1}
+.shim{position:absolute;inset:0;background:linear-gradient(100deg,transparent 30%,rgba(141,97,235,.14) 50%,transparent 70%);transform:translateX(-100%);opacity:0}
+.forming:not(.settled) .shim{opacity:1;animation:shim 1.35s linear infinite}
+@keyframes shim{to{transform:translateX(100%)}}
+.sheen{position:absolute;inset:0;background:linear-gradient(105deg,transparent 35%,rgba(255,255,255,.28) 50%,transparent 65%);transform:translateX(-110%)}
+.settled .sheen{animation:sheen .95s var(--ease) .12s both}
+.acct.recv .sheen{animation:sheen2 1.2s var(--ease) both}
+@keyframes sheen2{from{transform:translateX(-110%)}to{transform:translateX(110%)}}
+@keyframes sheen{to{transform:translateX(110%)}}
+.rip{position:absolute;inset:0;border-radius:16px;border:1.5px solid #B6479E;opacity:0;pointer-events:none}
+.settled .rip{animation:rip .9s var(--ease) both}
+.settled .rip.r2{animation-delay:.14s}
+@keyframes rip{0%{opacity:.6;transform:scale(1)}100%{opacity:0;transform:scale(1.16,1.3)}}
+.acct.settled{animation:settle .7s var(--ease)}
+@keyframes settle{0%{transform:scale(1)}35%{transform:scale(1.04)}100%{transform:scale(1)}}
+.acct.quiet .aglow,.acct.quiet .rip,.acct.quiet.settled{animation:none!important}
+.acct.quiet:not(.recv) .sheen{animation:none!important}
+.outline{position:absolute;inset:0;width:100%;height:100%;overflow:visible;pointer-events:none}
+.outline rect{fill:none;rx:16px}
+.o-base{stroke:var(--border-control);stroke-width:1.5;stroke-dasharray:1 1;stroke-dashoffset:1;transition:stroke-dashoffset .75s var(--ease),opacity .45s ease}
+.draw .o-base{stroke-dashoffset:0}
+.forming .o-base{opacity:0}
+.o-grad{stroke:url(#og);stroke-width:1.5;opacity:0;transition:opacity .5s ease}
+.forming .o-grad{opacity:1}
+.settled .o-grad{opacity:0}
+.instant,.instant *{transition:none!important}
+
+.big{position:absolute;left:0;top:0;width:232px;height:140px;padding:16px;display:flex;flex-direction:column;justify-content:space-between;opacity:0;transition:opacity .35s ease .35s}
+.draw .big{opacity:1}
+.docked .big{opacity:0;transition:opacity .18s ease}
+.b-top{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.b-k{font-size:12px;color:var(--muted);transition:color .4s}
+.settled .b-k{color:rgba(255,255,255,.85)}
+.b-chain{display:flex;align-items:center;gap:6px;font-size:11px;font-weight:600;padding:4px 8px;border-radius:999px;background:var(--divider);color:var(--muted);transition:background .4s,color .4s}
+.settled .b-chain{background:rgba(255,255,255,.18);color:#fff}
+.b-addr{position:relative;height:26px}
+.skel{position:absolute;left:0;top:6px;height:14px;width:136px;border-radius:7px;background:var(--border);transition:opacity .3s}
+.skel.s2{width:56px;left:144px;opacity:.6}
+.b-addr .a{font-size:20px;font-weight:600;letter-spacing:.02em;line-height:26px;color:#fff;clip-path:inset(0 100% 0 0);transition:clip-path .65s var(--ease) .15s}
+.settled .b-addr .a{clip-path:inset(0 0 0 0)}
+.settled .skel{opacity:0}
+.b-meta{font-size:12px;line-height:16px;color:var(--muted);display:flex;align-items:center;gap:6px;margin-top:4px;transition:color .4s}
+.settled .b-meta{color:rgba(255,255,255,.85)}
+.b-meta i{width:6px;height:6px;border-radius:3px;background:var(--border-control);flex:none}
+.forming .b-meta i{background:var(--primary);animation:livep 1.2s ease-in-out infinite}
+.settled .b-meta i{background:#32EEE2;animation:none}
+@keyframes livep{50%{opacity:.3}}
+
+/* docked strip: a flex row; the address never shrinks, the balance side truncates */
+.strip{position:absolute;inset:0;display:flex;align-items:center;padding:0 14px;gap:12px;color:#fff;opacity:0;transition:opacity .2s ease}
+.docked .strip{opacity:1;transition:opacity .35s ease .3s}
+.s-l{display:flex;align-items:center;gap:10px;flex:0 0 auto;min-width:0}
+.s-ic{width:32px;height:32px;border-radius:10px;background:rgba(255,255,255,.18);display:grid;place-items:center;flex:none}
+.lite .s-ic{width:28px;height:28px;border-radius:9px}
+.s-tx{min-width:0}
+.s-k{font-size:11px;line-height:14px;color:rgba(255,255,255,.82);white-space:nowrap}
+.s-a{font-size:14px;font-weight:600;line-height:20px;white-space:nowrap}
+.s-r{flex:1 1 auto;min-width:0;text-align:right;font-variant-numeric:tabular-nums}
+.s-v{font-size:14px;font-weight:600;line-height:20px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;transition:color .3s}
+.s-v.flash,.s-v2.flash{color:#BFF6FA}
+.s-v2{font-size:11px;line-height:14px;color:rgba(255,255,255,.82);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;opacity:0;transition:opacity .35s ease,color .3s}
+.s-v2.show{opacity:1}
+@media(max-width:360px){.s-ic{display:none}}
+
+/* stepper (new) */
+.stepper{display:flex;align-items:flex-start}
+.sp{flex:1 1 0;min-width:0;display:flex;flex-direction:column;align-items:center;gap:6px;position:relative}
+.sp+.sp::before{content:"";position:absolute;top:12px;left:calc(-50% + 18px);right:calc(50% + 18px);height:1px;background:var(--border-control);opacity:.5;transition:background .3s,opacity .3s}
+.sp.done::before,.sp.on::before{background:var(--primary);opacity:1}
+.sp .c{width:24px;height:24px;border-radius:12px;border:1px solid var(--border-control);display:grid;place-items:center;font-size:12px;font-weight:600;color:var(--muted);transition:background .3s,border-color .3s,color .3s}
+.sp.on .c{border:2px solid var(--primary);color:var(--text)}
+.sp.done .c{background:var(--primary);border-color:var(--primary)}
+.sp.bad .c{background:var(--pink-tint);border-color:transparent;color:var(--on-pink-tint)}
+.sp .l{font-size:13px;line-height:18px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;padding:0 2px;transition:color .3s}
+.sp.on .l,.sp.done .l{color:var(--text)}
+.sp.on .l{font-weight:600}
+
+/* tx.tsx progress / done / fail */
+.hd{display:flex;align-items:center;gap:14px}
+.hd .tx{flex:1;min-width:0}
+.h{font-size:20px;line-height:28px;font-weight:600}
+.cap{font-size:13px;line-height:18px;color:var(--muted)}
+.ring{width:52px;height:52px;border-radius:26px;background:var(--pink-tint);color:var(--on-pink-tint);display:grid;place-items:center;flex:none}
+.tl{width:48px;height:48px;flex:none;position:relative}
+.tl>svg{display:block;width:48px;height:48px;animation:spin 1.8s linear infinite}
+.tl .draw{animation:tlDraw 1.8s infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes tlDraw{0%{stroke-dashoffset:100;animation-timing-function:cubic-bezier(.45,0,.25,1)}50%{stroke-dashoffset:0}62%{stroke-dashoffset:0;animation-timing-function:cubic-bezier(.45,0,.25,1)}100%{stroke-dashoffset:100}}
+.tl.bad>svg{opacity:0}
+.tl-bad{position:absolute;inset:2px;border-radius:22px;background:var(--pink-tint);color:var(--on-pink-tint);display:grid;place-items:center;transform:scale(.4);opacity:0;transition:transform .5s var(--spring),opacity .25s}
+.tl.bad .tl-bad{transform:none;opacity:1}
+.swap{display:grid}
+.swap>span{grid-area:1/1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.swap>.cur{animation:swapIn .34s var(--ease) .09s both}
+.swap>.old{animation:swapOut .14s ease both}
+@keyframes swapIn{from{opacity:0;transform:translateY(7px)}}
+@keyframes swapOut{to{opacity:0;transform:translateY(-7px)}}
+.prog{display:flex;flex-direction:column;gap:12px}
+.bar{height:4px;border-radius:2px;background:var(--divider);overflow:hidden}
+.bar b{display:block;height:4px;border-radius:2px;background:var(--primary);width:8%;transition:width .5s cubic-bezier(.2,0,0,1)}
+.dots{display:flex;justify-content:center;gap:8px;flex-wrap:wrap}
+.dt{display:flex;align-items:center;gap:6px;font-size:14px;line-height:20px;color:var(--muted);transition:color .3s}
+.dt .em{width:20px;height:1px;background:var(--border);margin-right:2px}
+.dt .d{width:8px;height:8px;border-radius:4px;background:var(--border);transition:background .3s}
+.dt.on{color:var(--text)}.dt.on .d{background:var(--primary)}
+
+/* MascotDone (mascot.tsx) */
+.mdone{width:56px;height:56px;border-radius:28px;overflow:hidden;display:grid;place-items:center;flex:none;position:relative}
+[data-theme="dark"] .mdone{border:2px solid rgba(255,255,255,.22)}
+.mdone svg{display:block}
+.mdw{position:relative;flex:none;animation:pop .6s var(--spring) both}
+.mdw::before,.mdw::after{content:"";position:absolute;inset:0;border-radius:50%;border:1.5px solid var(--primary);opacity:0;animation:halo 1.4s var(--ease) .25s both;pointer-events:none}
+.mdw::after{animation-delay:.45s}
+@keyframes halo{from{transform:scale(1);opacity:.55}to{transform:scale(1.7);opacity:0}}
+@keyframes pop{from{transform:scale(.6);opacity:0}}
+
+.card2{background:var(--bg);border-radius:16px;padding:0 16px}
+.acc-row{display:flex;align-items:center;gap:12px;min-height:60px}
+.tile{width:36px;height:36px;border-radius:12px;background:var(--hero);display:grid;place-items:center;flex:none}
+.grow{flex:1;min-width:0}
+.t1{font-size:14px;line-height:20px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.t2{font-size:12px;line-height:16px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-variant-numeric:tabular-nums}
+.trow .t1,.trow .t2{white-space:normal}
+.nw{white-space:nowrap}
+.pill{font-size:12px;line-height:20px;font-weight:600;padding:0 10px;border-radius:10px;white-space:nowrap;flex:none}
+.pill.ok{background:var(--teal-tint);color:var(--on-teal-tint)}
+.pill.bad{background:var(--pink-tint);color:var(--on-pink-tint)}
+.pill.wait{background:var(--segment);color:var(--muted)}
+.ck{width:24px;height:24px;border-radius:12px;background:var(--primary);display:grid;place-items:center;flex:none}
+.ck.bad{background:var(--pink-tint);color:var(--on-pink-tint)}
+.ck.idle{background:transparent;border:1px solid var(--border-control);color:var(--muted);font-size:12px;font-weight:600}
+.trow{display:flex;align-items:center;gap:12px;min-height:56px;padding:8px 0}
+.trow+.trow,.acc-row+.row{border-top:1px solid var(--divider)}
+.lnk{flex:none;width:40px;height:40px;border-radius:20px;background:var(--segment);display:grid;place-items:center;color:var(--text);text-decoration:none}
+.sec{font-size:13px;line-height:18px;color:var(--muted);margin:0 0 -8px}
+
+/* ---------- side panels ---------- */
+.panel{background:var(--panel);border:1px solid var(--border);border-radius:16px;padding:20px;margin-bottom:16px}
+.panel h3{font-size:12px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin:0 0 16px}
+.ctl{display:grid;gap:8px}
+.ctl+.ctl{margin-top:16px}
+.ctl-l{font-size:12px;color:var(--muted)}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chip{height:36px;padding:0 14px;border-radius:18px;border:1px solid var(--border-control);background:transparent;font-size:13px;font-weight:600;cursor:pointer;transition:background .2s,color .2s,opacity .2s}
+.chip[aria-pressed="true"]{background:var(--chip-active);color:var(--on-chip-active);border-color:var(--chip-active)}
+.chip.pri{background:var(--cta);color:#fff;border-color:transparent}
+.chip:disabled{opacity:.35;cursor:not-allowed}
+.notes{margin:0;padding:0;list-style:none;display:grid;gap:14px}
+.notes li{font-size:14px;line-height:1.55;color:var(--muted);padding-left:16px;position:relative}
+.notes li::before{content:"";position:absolute;left:0;top:9px;width:6px;height:6px;border-radius:3px;background:var(--cta)}
+.notes b{color:var(--text);font-weight:600}
+.notes code{font-family:inherit;font-size:13px;color:var(--link)}
+
+@media (prefers-reduced-motion: reduce){
+  *,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.12s!important;transition-delay:0s!important}
+  .tl>svg{animation:none!important}.tl .draw{animation:none!important;stroke-dashoffset:30!important}
+  .forming .aglow,.forming .shim,.forming .b-meta i{animation:none!important}
+}
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <linearGradient id="og" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#FC5457"/><stop offset=".5" stop-color="#B6479E"/><stop offset="1" stop-color="#703AE6"/>
+      <animateTransform attributeName="gradientTransform" type="rotate" from="0 .5 .5" to="360 .5 .5" dur="2.2s" repeatCount="indefinite"/>
+    </linearGradient>
+    <linearGradient id="tlg" gradientUnits="userSpaceOnUse" x1="4" y1="86" x2="48" y2="40"><stop offset="0" stop-color="#FC5457"/><stop offset=".5" stop-color="#B6479E"/><stop offset="1" stop-color="#703AE6"/></linearGradient>
+  </defs>
+</svg>
+
+<div class="wrap">
+  <header class="head">
+    <h1>Margin transaction sheet</h1>
+    <p>Deposit and borrow on the Margin tab, for a wallet opening its margin account for the first time and for a wallet that already has one. Built from the app's own sheet, legs card, rows, buttons, progress bar and mascot, for up to three deposits and two borrows at once.</p>
+  </header>
+
+  <div class="phone-col">
+    <div class="phone" id="phone">
+      <div class="hero">
+        <div class="sb"><span>9:41</span><span class="sb-i">
+          <svg width="18" height="12" viewBox="0 0 18 12" fill="#fff"><rect x="0" y="8" width="3" height="4" rx="1"/><rect x="5" y="5.5" width="3" height="6.5" rx="1"/><rect x="10" y="3" width="3" height="9" rx="1"/><rect x="15" y="0" width="3" height="12" rx="1"/></svg>
+          <svg width="26" height="12" viewBox="0 0 26 12" fill="none"><rect x=".5" y=".5" width="22" height="11" rx="3.5" stroke="#fff" opacity=".5"/><rect x="2" y="2" width="17" height="8" rx="2" fill="#fff"/></svg>
+        </span></div>
+        <div class="hrow"><span class="t">Margin</span><span class="hchip"><i></i><span id="bgChain">Stellar</span></span></div>
+        <div class="hk">Margin collateral</div>
+        <div class="hbig tnum" id="bgBig">$0.00</div>
+      </div>
+      <div class="app" id="app"></div>
+      <nav class="tabbar" aria-hidden="true">
+        <div><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M4 10.5L12 4l8 6.5V20H4z"/></svg>Portfolio</div>
+        <div><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="8"/><path d="M9 15l6-6"/></svg>Earn</div>
+        <div class="on"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 18l5-6 4 3 7-9"/></svg>Margin</div>
+        <div><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M7 4v16M4 7l3-3 3 3M17 20V4M14 17l3 3 3-3"/></svg>Trade</div>
+      </nav>
+      <div class="scrim" id="scrim"></div>
+      <section class="sheet" id="sheet" role="dialog" aria-modal="true" aria-labelledby="shTitle">
+        <div class="grab"></div>
+        <div class="sh-head"><h2 id="shTitle">Review deposit and borrow</h2><button class="x" data-act="close" aria-label="Close" id="xBtn"></button></div>
+        <div class="views" id="views">
+          <div class="view" id="v-review" hidden></div>
+          <div class="view" id="v-progress" hidden aria-live="polite"></div>
+          <div class="view" id="v-success" hidden></div>
+          <div class="view" id="v-fail" hidden></div>
+        </div>
+      </section>
+      <div class="homebar"></div>
+    </div>
+  </div>
+
+  <aside class="side">
+    <section class="panel">
+      <h3>Controls</h3>
+      <div class="ctl"><span class="ctl-l">Margin account</span>
+        <div class="chips" data-k="mode"><button class="chip" data-v="new" aria-pressed="true">New wallet (first time)</button><button class="chip" data-v="existing" aria-pressed="false">Already have one</button></div>
+      </div>
+      <div class="ctl"><span class="ctl-l">Theme</span>
+        <div class="chips" data-k="theme"><button class="chip" data-v="dark" aria-pressed="true">Dark</button><button class="chip" data-v="light" aria-pressed="false">Light</button></div>
+      </div>
+      <div class="ctl"><span class="ctl-l">Chain</span>
+        <div class="chips" data-k="chain"><button class="chip" data-v="stellar" aria-pressed="true">Stellar</button><button class="chip" data-v="solana" aria-pressed="false">Solana</button></div>
+      </div>
+      <div class="ctl"><span class="ctl-l">Action</span>
+        <div class="chips" data-k="flow"><button class="chip" data-v="both" aria-pressed="true">Deposit + borrow</button><button class="chip" data-v="dep" aria-pressed="false">Deposit only</button><button class="chip" data-v="x" aria-pressed="false" id="xChip">Just open account</button></div>
+      </div>
+      <div class="ctl"><span class="ctl-l">Deposits</span>
+        <div class="chips" data-k="nDep"><button class="chip" data-v="1" aria-pressed="true">1</button><button class="chip" data-v="2" aria-pressed="false">2</button><button class="chip" data-v="3" aria-pressed="false">3</button></div>
+      </div>
+      <div class="ctl"><span class="ctl-l">Borrows</span>
+        <div class="chips" data-k="nBor"><button class="chip" data-v="1" aria-pressed="true">1</button><button class="chip" data-v="2" aria-pressed="false">2</button></div>
+      </div>
+      <div class="ctl"><span class="ctl-l">Play</span>
+        <div class="chips"><button class="chip pri" id="cReplay">Replay</button><button class="chip" id="cFail">Replay with a failure at step 2</button></div>
+      </div>
+      <div class="ctl"><span class="ctl-l">Jump to</span>
+        <div class="chips"><button class="chip" data-jump="review">Review</button><button class="chip" data-jump="success">Success</button><button class="chip" data-jump="fail" id="jFail">Failure</button></div>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h3>Decisions</h3>
+      <ul class="notes">
+        <li><b>Built from the real sheet.</b> Sheet shell, title row and close button from <code>overlay.tsx</code>; legs card, rows, progress bar with Sent, Processed, Confirmed, the done and failure layouts from <code>tx.tsx</code>; buttons from <code>button.tsx</code> with the Margin family gradient; colours from <code>tokens.ts</code>, light and dark.</li>
+        <li><b>The real mascot.</b> TailLoader while a transaction is sending, MascotDone (tongue strike, happy eyes, then blinks) the moment the last one is confirmed. Ported from <code>tail-loader.tsx</code>, <code>mascot.tsx</code> and <code>chameleon.ts</code>.</li>
+        <li><b>Two paths.</b> A new wallet opens its margin account first (one time). A wallet that already has one sees the app's normal review, with Health factor and Account leverage rows, and never a word about opening an account.</li>
+        <li><b>Transactions per chain.</b> On Stellar each deposit and each borrow is its own transaction. On Solana the deposits travel together and the borrows travel together; with an existing account, deposit and borrow go in one transaction.</li>
+        <li><b>One transaction keeps the app's sheet.</b> Loader, Sending, Sent to Stellar, the bar and dots, then the done face, with a lighter account strip and flow above. Several transactions add a stepper and resume from the failed one.</li>
+        <li><b>Value has a direction.</b> Each deposit flows up from its wallet node and each borrow from its pool node. The strip counts the landing amount, then folds to a count such as "3 assets" and truncates rather than overlap.</li>
+        <li><b>Failure keeps the app's layout</b> (pink ring, Not confirmed, Try again). With several transactions it lists each one and retries from the failed step.</li>
+      </ul>
+    </section>
+  </aside>
+</div>
+
+<script>
+(() => {
+  const $ = (s, r = document) => r.querySelector(s);
+  const NS = "http://www.w3.org/2000/svg";
+  const RM = matchMedia("(prefers-reduced-motion: reduce)");
+
+  /* ===== chameleon generator: ported 1:1 from src/mascot/chameleon.ts ===== */
+  const INK = "#111111", WH = "#FFFFFF", BRAND = ["#FC5457", "#B6479E", "#703AE6"];
+  const hx = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
+  const toHex = (a) => "#" + a.map((v) => Math.max(0, Math.min(255, Math.round(v))).toString(16).padStart(2, "0")).join("").toUpperCase();
+  const mix = (a, b, t) => { const A = hx(a), B = hx(b); return toHex(A.map((v, i) => v + (B[i] - v) * t)); };
+  let uidN = 0; const uid = (p) => p + "_" + ++uidN;
+  const f = (v) => (Math.round(v * 100) / 100).toString();
+  function grad(id, c, x1, y1, x2, y2) {
+    return `<linearGradient id="${id}" gradientUnits="userSpaceOnUse" x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}">` +
+      c.map((col, i) => `<stop offset="${(i / (c.length - 1)).toFixed(2)}" stop-color="${col}"/>`).join("") + `</linearGradient>`;
+  }
+  function sp(cx, cy, r0, r1, a0, sweep, k) {
+    const p = [];
+    for (let i = 0; i <= k; i++) { const t = i / k, a = ((a0 + sweep * t) * Math.PI) / 180, r = r0 + (r1 - r0) * t; p.push([cx + r * Math.cos(a), cy - r * Math.sin(a)]); }
+    return p;
+  }
+  function eye(cx, cy, R, look, o, skinRef) {
+    const dial = R * 0.84, rr = R * 0.6, sw = R * 0.2;
+    let s = `<circle cx="${f(cx)}" cy="${f(cy)}" r="${f(dial)}" fill="${INK}"/>`;
+    if (o.lid === "happy") return s + `<path d="M${f(cx - rr)} ${f(cy + rr * 0.35)} Q${f(cx)} ${f(cy - rr * 0.95)} ${f(cx + rr)} ${f(cy + rr * 0.35)}" stroke="${WH}" stroke-width="${f(sw * 0.85)}" stroke-linecap="round" fill="none"/>`;
+    if ((typeof o.lid === "number" && o.lid >= 0.98) || o.kind === "closed") return s + `<path d="M${f(cx - rr)} ${f(cy)} Q${f(cx)} ${f(cy + rr * 0.55)} ${f(cx + rr)} ${f(cy)}" stroke="${WH}" stroke-width="${f(sw * 0.8)}" stroke-linecap="round" fill="none"/>`;
+    s += `<circle cx="${f(cx)}" cy="${f(cy)}" r="${f(rr)}" stroke="${WH}" stroke-width="${f(sw)}" fill="none"/>`;
+    s += `<circle cx="${f(cx + look[0] * R * 0.3)}" cy="${f(cy + look[1] * R * 0.3)}" r="${f(R * 0.22)}" fill="${WH}"/>`;
+    const lid = typeof o.lid === "number" ? o.lid : 0;
+    if (lid > 0) {
+      const h = dial * 2 * lid, cid = uid("lid");
+      s += `<clipPath id="${cid}"><circle cx="${f(cx)}" cy="${f(cy)}" r="${f(dial + 0.2)}"/></clipPath><rect x="${f(cx - dial - 1)}" y="${f(cy - dial - 1)}" width="${f(dial * 2 + 2)}" height="${f(h + 1)}" fill="url(#${skinRef})" clip-path="url(#${cid})"/>`;
+      s += `<path d="M${f(cx - dial * 0.92)} ${f(cy - dial + h)} L${f(cx + dial * 0.92)} ${f(cy - dial + h)}" stroke="${INK}" stroke-width="${f(sw * 0.5)}" stroke-linecap="round"/>`;
+    }
+    return s;
+  }
+  const strokeP = (pts, w, paint) => `<path d="M${pts.map((p) => f(p[0]) + " " + f(p[1])).join(" L")}" stroke="${paint}" stroke-width="${w}" stroke-linecap="round" stroke-linejoin="round" fill="none"/>`;
+  const MOUTH = {
+    smile: `<path d="M125.5 41 Q115 50 103.5 46" stroke="${INK}" stroke-width="2" stroke-linecap="round" fill="none"/>`,
+    line: `<path d="M125.5 41 Q115 48.5 104 48.5" stroke="${INK}" stroke-width="2" stroke-linecap="round" fill="none"/>`,
+  };
+  const NEAR = [103, 30, 11.5], FAR = [116.5, 17.5, 7.5];
+  function parts(o, g) {
+    const P = `url(#${g})`;
+    let b = "";
+    if (o.tail !== false) b += strokeP(sp(26, 62, 21, 7, 80, 330, 60), 11, P);
+    b += `<path d="M30 42 C 38 22 66 16 92 25" stroke="${P}" stroke-width="21" stroke-linecap="round" fill="none"/>`;
+    if (o.legs !== false) b += `<path d="M48 36 L51 64" stroke="${P}" stroke-width="8" stroke-linecap="round"/><path d="M84 36 L87 64" stroke="${P}" stroke-width="8" stroke-linecap="round"/>`;
+    b += `<path d="M86 12 L124 36 L118 46 L100 50 L88 40 Z" fill="${P}" stroke="${P}" stroke-width="8" stroke-linejoin="round"/>`;
+    const m = o.mouth === undefined ? "smile" : o.mouth;
+    if (m && MOUTH[m]) b += MOUTH[m];
+    if (o.tongue) { const L = o.tongue; b += `<path d="M121 43 L${f(121 + L)} 43" stroke="#FF3395" stroke-width="3.2" stroke-linecap="round"/><circle cx="${f(122 + L)}" cy="43" r="3.6" fill="#FF3395"/>`; }
+    b += `<circle cx="${FAR[0]}" cy="${FAR[1]}" r="${f(FAR[2] * 1.18)}" fill="${P}"/>` + eye(FAR[0], FAR[1], FAR[2], o.lookFar || [0.7, -0.4], { lid: o.lidFar || 0 }, g);
+    b += `<circle cx="${NEAR[0]}" cy="${NEAR[1]}" r="${f(NEAR[2] * 1.12)}" fill="${P}"/>` + eye(NEAR[0], NEAR[1], NEAR[2], o.lookNear || [-0.7, -0.1], { lid: o.lidNear || 0 }, g);
+    return b;
+  }
+  const skinOf = (o) => { const c = o.colours || BRAND; return o.pale ? c.map((x) => mix(x, "#FFFFFF", typeof o.pale === "number" ? o.pale : 0.42)) : c; };
+  function markA(o = {}) { const g = uid("a"); return { vb: "0 2 140 90", svg: `<defs>${grad(g, skinOf(o), 10, 84, 128, 8)}</defs>${parts(o, g)}` }; }
+  function face(o = {}) {
+    const g = uid("f"), cp = uid("fc"), c = skinOf(o);
+    let s = `<defs>${grad(g, c, 10, 84, 128, 8)}<clipPath id="${cp}"><circle cx="103" cy="30" r="35"/></clipPath></defs><g clip-path="url(#${cp})">`;
+    if (o.tile !== null) s += `<rect x="60" y="-10" width="90" height="90" fill="${o.tile || "#1E1E1E"}"/>`;
+    s += parts({ legs: false, tail: false, lookNear: [0.6, 0.2], lookFar: [0.1, 0.4], ...o }, g) + `</g>`;
+    return { vb: "68 -5 70 70", svg: s };
+  }
+  const svgOf = (r, w, h) => `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${r.vb}" width="${w}" height="${h}" aria-hidden="true">${r.svg}</svg>`;
+  const tri = (a, b) => { const m = hx(a).map((v, i) => Math.round((v + hx(b)[i]) / 2).toString(16).padStart(2, "0")).join("").toUpperCase(); return [a, "#" + m, b]; };
+  const MARGIN_SKIN = tri("#8D61EB", "#5029A3");
+  const isDark = () => document.documentElement.dataset.theme !== "light";
+
+  /* MascotDone (src/mascot/mascot.tsx): brand face, ring eyes; the tongue strikes once (160 ms out, 180 ms back) with happy eyes
+     while it is out, then the face idles (blinks every 4 to 7 s). Dark theme: tile #2E2C35 and a 2 px white 22% ring. */
+  function mascotDone(host, size = 56, flick = true) {
+    const tk = S.tk;
+    const st = { tg: 0, lid: 0 };
+    const draw = () => {
+      if (tk !== S.tk || !host.isConnected) return;
+      const happy = st.tg > 12 * 0.6, d = isDark(), px = d ? size - 4 : size;
+      host.innerHTML = svgOf(face({ lookNear: [0.6, 0.1], lookFar: [0.4, 0.2], lidNear: happy ? "happy" : st.lid, lidFar: happy ? "happy" : st.lid, tongue: st.tg || undefined, tile: d ? "#2E2C35" : undefined }), px, px);
+    };
+    draw();
+    if (RM.matches) return;
+    if (flick) [3, 6, 9, 12].forEach((v, i) => later(() => { st.tg = v; draw(); }, 220 + i * 40));
+    if (flick) [9, 6, 3, 0].forEach((v, i) => later(() => { st.tg = v; draw(); }, 220 + 160 + i * 45));
+    const blink = () => {
+      [0.5, 0.99, 0.5, 0].forEach((l, i) => later(() => { st.lid = l; draw(); }, i * 30 + 30));
+      later(blink, 4000 + Math.random() * 3000);
+    };
+    later(blink, 2500 + Math.random() * 2500);
+  }
+  /* TailLoader (src/mascot/tail-loader.tsx): the tail coil, draws in 0-50%, holds to 62%, retracts, 1.8 s; whole coil turns. */
+  const COIL = "M" + sp(26, 62, 21, 7, 80, 330, 60).map((q) => q[0].toFixed(2) + " " + q[1].toFixed(2)).join(" L");
+  const tailLoader = () => `<div class="tl" id="tl" role="progressbar" aria-label="Working"><svg viewBox="-2 34 56 56" width="48" height="48"><path d="${COIL}" stroke="#703AE6" stroke-opacity=".14" stroke-width="11" stroke-linecap="round" fill="none"/><path class="draw" d="${COIL}" pathLength="100" stroke="url(#tlg)" stroke-width="11" stroke-linecap="round" fill="none" stroke-dasharray="100 100" stroke-dashoffset="100"/></svg><span class="tl-bad">${mi("close", 24)}</span></div>`;
+
+  /* Material Symbols glyphs used by the app */
+  function mi(n, s = 22, c = "currentColor") {
+    const P = {
+      close: "M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z",
+      down: "M20 12l-1.41-1.41L13 16.17V4h-2v12.17l-5.58-5.59L4 12l8 8 8-8z",
+      open: "M19 19H5V5h7V3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14c1.1 0 2-.9 2-2v-7h-2v7zM14 3v2h3.59l-9.83 9.83 1.41 1.41L19 6.41V10h2V3h-7z",
+      check: "M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z",
+      wallet: "M21 18v1c0 1.1-.9 2-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h14c1.1 0 2 .9 2 2v1h-9a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h9zm-9-2h10V8H12v8zm4-2.5c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5z",
+      bank: "M4 10v7h3v-7H4zm6 0v7h3v-7h-3zM2 22h19v-3H2v3zm14-12v7h3v-7h-3zm-4.5-9L2 6v2h19V6l-9.5-5z",
+      acct: "M19 14V6c0-1.1-.9-2-2-2H3c-1.1 0-2 .9-2 2v8c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zm-9-1c-1.66 0-3-1.34-3-3s1.34-3 3-3 3 1.34 3 3-1.34 3-3 3zm13-6v11c0 1.1-.9 2-2 2H4v-2h17V7h2z",
+    };
+    return `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="${c}" aria-hidden="true"><path d="${P[n]}"/></svg>`;
+  }
+
+  /* ===== data ===== */
+  const CH = {
+    stellar: { name: "Stellar", fee: "~0.00001 XLM", addr: "CD6S…6PGK", wallet: "GCIV…4RQM", explorer: "Stellar Expert",
+      deps: [{ n: 2100, t: "XLM" }, { n: 500, t: "SoUSDC" }, { n: 200, t: "AqUSDC" }], bors: [{ n: 50, t: "SoUSDC" }, { n: 100, t: "AqUSDC" }],
+      base: { col: { XLM: 2100 }, debt: { SoUSDC: 50 } }, hf: "2.84 → 1.97", lev: "1.21x → 1.48x",
+      hashes: ["a3f9…21c0", "7be2…94d1", "c05d…e8a7", "91ab…3f2e", "d4c7…0b18", "e2f0…77ad"] },
+    solana: { name: "Solana", fee: "~0.000005 SOL", addr: "7Hk2…q9Fe", wallet: "5FHw…Jk2P", explorer: "Solana Explorer",
+      deps: [{ n: 10, t: "SOL" }, { n: 500, t: "USDC" }, { n: 5, t: "JitoSOL" }], bors: [{ n: 500, t: "USDC" }, { n: 200, t: "JupUSD" }],
+      base: { col: { SOL: 10 }, debt: { USDC: 500 } }, hf: "3.10 → 2.05", lev: "1.18x → 1.52x",
+      hashes: ["4xKq…Tz9m", "2nVb…8sWc", "5Ruh…Lp3e", "3mPd…Qa7k", "6tWz…Hn2c", "8yLc…Rf4d"] },
+  };
+  const S = { mode: "new", chain: "stellar", flow: "both", nDep: 1, nBor: 1, failAt: null, tk: 0, failedStep: 1 };
+  let timers = [], streams = [];
+  const later = (fn, ms) => { const id = setTimeout(fn, ms); timers.push(id); return id; };
+  const sleep = (ms) => new Promise((r) => later(r, ms));
+  function stopAll() { timers.forEach(clearTimeout); timers = []; S.tk++; streams.forEach((s) => s.kill()); streams = []; }
+  const fmt = (n) => n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const amt = (x) => x.n.toLocaleString("en-US") + " " + x.t;
+  const isNew = () => S.mode === "new";
+
+  /* The plan: nodes (deposits left, borrows right) and the transactions that move them, per chain and mode. */
+  function plan() {
+    const c = CH[S.chain], st = S.chain === "stellar", nw = isNew();
+    const doDep = S.flow === "both" || S.flow === "dep";
+    const doBor = S.flow === "both" || (S.flow === "x" && !nw);
+    const deps = doDep ? c.deps.slice(0, S.nDep) : [], bors = doBor ? c.bors.slice(0, S.nBor) : [];
+    const nodes = [...deps.map((a) => ({ role: "dep", a })), ...bors.map((a) => ({ role: "bor", a }))];
+    const depIdx = deps.map((_, j) => j), borIdx = bors.map((_, j) => deps.length + j);
+    const list = (idx) => idx.map((j) => amt(nodes[j].a));
+    const mk = (k, idx) => {
+      const d = idx.filter((j) => nodes[j].role === "dep"), b = idx.filter((j) => nodes[j].role === "bor");
+      let title, doing, short;
+      if (k === "depbor") { title = "Deposit and borrow"; doing = "Depositing and borrowing"; short = "Deposit and borrow"; }
+      else if (k === "dep") { title = d.length === 1 ? `Deposit ${list(d)[0]}` : `Deposit ${d.length} assets`; doing = d.length === 1 ? `Depositing ${list(d)[0]}` : `Depositing ${d.length} assets`; short = d.length === 1 ? nodes[d[0]].a.t : "Deposit"; }
+      else { title = b.length === 1 ? `Borrow ${list(b)[0]}` : `Borrow ${b.length} assets`; doing = b.length === 1 ? `Borrowing ${list(b)[0]}` : `Borrowing ${b.length} assets`; short = b.length === 1 ? nodes[b[0]].a.t : "Borrow"; }
+      return { k, nodes: idx, title, doing, short, sub: idx.length > 1 ? list(idx).join(" · ") : "" };
+    };
+    const txs = [];
+    if (nw) txs.push({ k: "open", nodes: [], title: "Open margin account", doing: "Opening your margin account", short: "Account", sub: "" });
+    if (!nw && !st && deps.length && bors.length) txs.push(mk("depbor", depIdx.concat(borIdx)));
+    else {
+      if (deps.length) { if (st) depIdx.forEach((j) => txs.push(mk("dep", [j]))); else txs.push(mk("dep", depIdx)); }
+      if (bors.length) { if (st) borIdx.forEach((j) => txs.push(mk("bor", [j]))); else txs.push(mk("bor", borIdx)); }
+    }
+    // stepper: phases when there are several, otherwise one item per transaction
+    const PH = { open: "Open account", dep: "Deposit", bor: "Borrow", depbor: "Deposit and borrow" };
+    const phases = [];
+    txs.forEach((t, i) => { const last = phases[phases.length - 1]; if (last && last.k === t.k) last.idx.push(i); else phases.push({ k: t.k, label: PH[t.k], idx: [i] }); });
+    const steps = phases.length > 1 ? phases : txs.length > 1 ? txs.map((t, i) => ({ label: t.short, idx: [i] })) : [];
+    return { c, st, deps, bors, nodes, txs, phases, steps };
+  }
+  function holdingsAt(pl, k) {
+    const h = isNew() ? { col: {}, debt: {} } : { col: { ...pl.c.base.col }, debt: { ...pl.c.base.debt } };
+    for (let i = 0; i < k && i < pl.txs.length; i++) pl.txs[i].nodes.forEach((j) => { const nd = pl.nodes[j], side = nd.role === "dep" ? h.col : h.debt; side[nd.a.t] = (side[nd.a.t] || 0) + nd.a.n; });
+    return h;
+  }
+  const lineOf = (side, suffix, empty) => { const k = Object.keys(side); return k.length === 0 ? empty : k.length === 1 ? `${fmt(side[k[0]])} ${k[0]}${suffix}` : `${k.length} assets${suffix}`; };
+  const listOf = (side) => Object.keys(side).map((t) => `${fmt(side[t])} ${t}`).join(" · ");
+  const sheetTitle = () => {
+    if (isNew() && S.flow === "x") return "Open margin account";
+    if (S.flow === "x") return "Review borrow";
+    return S.flow === "dep" ? "Review deposit" : "Review deposit and borrow";
+  };
+
+  /* ===== sheet + view transitions ===== */
+  const sheet = $("#sheet"), scrim = $("#scrim"), views = $("#views");
+  $("#xBtn").innerHTML = mi("close", 22);
+  let cur = null, goTk = 0;
+  function openSheet() { sheet.classList.remove("closed"); scrim.classList.remove("off"); }
+  function closeSheet() { stopAll(); sheet.classList.add("closed"); scrim.classList.add("off"); }
+  function go(name) {
+    const next = $("#v-" + name), tk = ++goTk;
+    openSheet();
+    $("#shTitle").textContent = sheetTitle();
+    const first = !cur;
+    if (!first) views.style.height = views.offsetHeight + "px";
+    const swapIn = () => {
+      [...views.children].forEach((v) => { if (v !== next) { v.hidden = true; v.classList.remove("leave", "enter"); } });
+      next.hidden = false; next.classList.remove("enter", "leave");
+      [...next.children].forEach((c, i) => c.style.setProperty("--i", i));
+      void next.offsetWidth; next.classList.add("enter");
+      views.scrollTop = 0;
+      if (!first) views.style.height = (next.offsetHeight + 8) + "px";
+      cur = next;
+      setTimeout(() => { if (tk === goTk) views.style.height = ""; }, 520);
+    };
+    if (cur && cur !== next && !cur.hidden) { cur.classList.add("leave"); setTimeout(() => { if (tk === goTk) swapIn(); }, 170); }
+    else swapIn();
+  }
+
+  /* ===== background Margin screen ===== */
+  function setBg(kind) {
+    const pl = plan(), c = pl.c;
+    $("#bgChain").textContent = c.name;
+    let card, rows;
+    if (kind === "start" && isNew()) {
+      $("#bgBig").textContent = "$0.00";
+      card = `<div class="mb">${svgOf(markA({ mouth: "line", pale: true, colours: MARGIN_SKIN, lidNear: 1, lidFar: 1 }), 72, 46)}</div><div class="tx"><div class="t1">No margin account yet</div><div class="t2">Your first deposit opens one</div></div><button class="btn primary md" data-bg="open">${S.flow === "x" ? "Open" : "Deposit"}</button>`;
+      rows = `<div><span>Borrow power</span><b>—</b></div><div><span>Health factor</span><b>—</b></div>`;
+    } else {
+      const k = kind === "funded" ? pl.txs.length : kind === "partial" ? S.failedStep : 0, h = holdingsAt(pl, k);
+      $("#bgBig").textContent = lineOf(h.col, "", "$0.00");
+      const right = kind === "partial" ? `<button class="btn primary md" data-bg="resume">Finish</button>` : kind === "start" ? `<button class="btn primary md" data-bg="open">${S.flow === "x" ? "Borrow" : "Deposit"}</button>` : `<span class="pill ok">Open</span>`;
+      card = `<div class="tile">${mi("acct", 20, "#fff")}</div><div class="tx"><div class="t1">Margin account</div><div class="t2">${kind === "partial" ? "Not everything went through" : c.addr}</div></div>${right}`;
+      rows = `<div><span>Collateral</span><b>${listOf(h.col) || "None"}</b></div><div><span>Borrowed</span><b>${listOf(h.debt) || "None"}</b></div>`;
+    }
+    $("#app").innerHTML = `<div class="ecard">${card}</div><div class="arows">${rows}</div>`;
+  }
+
+  /* ===== 1. review ===== */
+  function renderReview() {
+    const pl = plan(), c = pl.c, n = pl.txs.length, nw = isNew();
+    let cta;
+    if (nw) cta = S.flow === "x" ? "Open account" : S.flow === "dep" ? "Open account and deposit" : "Open account, deposit and borrow";
+    else cta = S.flow === "x" ? "Borrow" : S.flow === "dep" ? "Deposit" : "Deposit and borrow";
+    const leg = (label, arr, sub) => `<div><div class="legL">${label}</div>${arr.map((a) => `<div class="legV">${amt(a)}</div>`).join("")}<div class="legS">${sub}</div></div>`;
+    let legs;
+    if (nw && S.flow === "x") legs = `<div><div class="legL">You open</div><div class="legV">Margin account</div><div class="legS">On ${c.name}, once</div></div>`;
+    else {
+      const parts = [];
+      if (pl.deps.length) parts.push(leg("You deposit", pl.deps, "From your wallet"));
+      if (pl.bors.length) parts.push(leg("You borrow", pl.bors, "From the lending pool"));
+      legs = parts.join(`<div class="arrow">${mi("down", 22)}</div>`);
+    }
+    let first = "";
+    if (nw) {
+      const ph = [{ t: "Open margin account", d: `Creates your account on ${c.name}`, one: true }];
+      const per = pl.st ? "one transaction each" : "one transaction";
+      if (pl.deps.length) ph.push(pl.deps.length === 1 ? { t: `Deposit ${amt(pl.deps[0])}`, d: "From your wallet into the account" } : { t: `Deposit ${pl.deps.length} assets`, d: `${pl.deps.map(amt).join(" · ")}, ${per}` });
+      if (pl.bors.length) ph.push(pl.bors.length === 1 ? { t: `Borrow ${amt(pl.bors[0])}`, d: "From the lending pool, against your deposit" } : { t: `Borrow ${pl.bors.length} assets`, d: `${pl.bors.map(amt).join(" · ")}, ${per}` });
+      first = `<div class="first">
+          <div class="first-t">First time on ${c.name}</div>
+          <div class="first-d">${ph.length === 1 ? "Your margin account is created once. Every deposit and loan after this runs through it." : "Your margin account is opened first. It happens once; after this, each action is a single step."}</div>
+          <ol class="fsteps">${ph.map((s, i) => `<li class="${s.one ? "one" : ""}"><span class="num">${i + 1}</span><div class="st"><div class="st-t">${s.t}${s.one ? '<span class="tag">One time</span>' : ""}</div><div class="st-d">${s.d}</div></div></li>`).join("")}</ol>
+        </div>`;
+    }
+    const rows = (nw ? [] : [["Health factor", c.hf], ["Account leverage", c.lev]]).concat([["Fee", c.fee + (n > 1 ? " each" : "")], ["Account", c.wallet]]);
+    $("#v-review").innerHTML = `
+      <div class="stack g12">
+        <div class="legs">${legs}</div>
+        ${first}
+        <div>${rows.map(([l, v]) => `<div class="row"><span class="rowL">${l}</span><span class="rowV">${v}</span></div>`).join("")}</div>
+        <button class="btn primary lg" data-act="start">${cta}</button>
+        ${n > 1 ? `<p class="note">${n} transactions, confirmed one after another</p>` : ""}
+      </div>`;
+  }
+
+  /* ===== 2. progress ===== */
+  function renderProgress(pl, from) {
+    const c = pl.c, nw = isNew(), lite = !nw && pl.txs.length === 1;
+    const pre = !nw || from > 0;
+    const W = sheet.clientWidth - 32, H = lite ? 166 : 216, top = lite ? 100 : 128, sy = lite ? 56 : 64;
+    const n = pl.nodes.length, slot = W / Math.max(n, 1), nodeW = Math.min(104, Math.floor(slot) - 4);
+    const spread = n > 1 ? Math.min(26, W / (n * 2 + 1)) : 0;
+    const h = holdingsAt(pl, from);
+    const doneNode = new Set(); pl.txs.slice(0, from).forEach((t) => t.nodes.forEach((j) => doneNode.add(j)));
+    let paths = "", nodes = "";
+    pl.nodes.forEach((nd, j) => {
+      const x = Math.round(slot * (j + 0.5)), t = W / 2 + (j - (n - 1) / 2) * spread;
+      const d = `M${x} ${top - 2}C${x} ${top - 34} ${t} ${sy + 34} ${t} ${sy + 2}`, dn = doneNode.has(j);
+      paths += `<path class="base" d="${d}"/><path class="pa ${dn ? "draw done" : ""}" id="pa${j}" d="${d}" pathLength="1"/>`;
+      const few = n === 1 || (n === 2 && pl.nodes[0].role !== pl.nodes[1].role);
+      const l1 = lite ? (few ? amt(nd.a) : nd.a.t) : few ? (nd.role === "dep" ? "Your wallet" : "Lending pool") : nd.a.t;
+      const l2 = lite ? "" : few ? amt(nd.a) : nd.a.n.toLocaleString("en-US");
+      nodes += `<div class="node ${dn ? "done" : ""}" id="nd${j}" style="left:${x - nodeW / 2}px;width:${nodeW}px;--d:${j * 0.06}s"><div class="n-c">${mi(nd.role === "dep" ? "wallet" : "bank", lite ? 18 : 20)}<span class="n-ok">${mi("check", 12, "#fff")}</span></div><div class="n-l">${l1}</div>${l2 ? `<div class="n-v">${l2}</div>` : ""}</div>`;
+    });
+    const showDebt = Object.keys(h.debt).length > 0;
+    $("#v-progress").innerHTML = `
+      <div class="stack g20">
+        <div class="stage ${lite ? "lite" : ""} ${pre ? "docked instant" : ""}" id="stage">
+          <svg class="flow" id="flow" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">${paths}</svg>
+          ${nodes}
+          <div class="acct ${pre ? "draw forming settled quiet" : ""}" id="acct">
+            <div class="aglow"></div><div class="rip"></div><div class="rip r2"></div>
+            <div class="card"><div class="fill"></div><div class="shim"></div><div class="sheen"></div>
+              <div class="big">
+                <div class="b-top"><span class="b-k">Margin account</span><span class="b-chain">${c.name}</span></div>
+                <div><div class="b-addr"><span class="skel"></span><span class="skel s2"></span><div class="a">${c.addr}</div></div>
+                <div class="b-meta"><i></i><span class="swap" id="bMeta"></span></div></div>
+              </div>
+              <div class="strip">
+                <div class="s-l"><div class="s-ic">${mi("acct", 18, "#fff")}</div><div class="s-tx"><div class="s-k">Margin account</div><div class="s-a">${c.addr}</div></div></div>
+                <div class="s-r"><div class="s-v" id="sv">${lineOf(h.col, "", nw && !pl.deps.length ? "Open" : "No collateral yet")}</div>
+                  <div class="s-v2 ${showDebt ? "show" : ""}" id="sv2">${lineOf(h.debt, " borrowed", "")}</div></div>
+              </div>
+            </div>
+            <svg class="outline"><rect class="o-base" x="0" y="0" width="100%" height="100%" pathLength="1"/><rect class="o-grad" x="0" y="0" width="100%" height="100%"/></svg>
+          </div>
+        </div>
+        ${nw && pl.steps.length ? `<div class="stepper" id="stepper">${pl.steps.map((s, k) => `<div class="sp"><span class="c">${k + 1}</span><span class="l">${s.label}</span></div>`).join("")}</div>` : ""}
+        <div class="hd">${tailLoader()}<div class="tx"><div class="h swap" id="pTitle"></div><div class="cap swap" id="pCap"></div></div></div>
+        <div class="prog"><div class="bar"><b id="bar"></b></div>
+          <div class="dots" id="dots">${["Sent", "Processed", "Confirmed"].map((l, i) => `<div class="dt">${i > 0 ? '<span class="em"></span>' : ""}<span class="d"></span>${l}</div>`).join("")}</div></div>
+      </div>`;
+    const P = {
+      pl, stage: $("#stage"), acct: $("#acct"), meta: $("#bMeta"), title: $("#pTitle"), cap: $("#pCap"), tl: $("#tl"), bar: $("#bar"),
+      dots: [...document.querySelectorAll("#dots .dt")], sps: [...document.querySelectorAll("#stepper .sp")],
+      nodes: pl.nodes.map((_, j) => $("#nd" + j)), paths: pl.nodes.map((_, j) => $("#pa" + j)), sv: $("#sv"), sv2: $("#sv2"),
+      done: new Set([...Array(from).keys()]), cur: from,
+    };
+    swap(P.meta, "Waiting to sign", true);
+    syncStepper(P, false);
+    if (pre) requestAnimationFrame(() => requestAnimationFrame(() => P.stage.classList.remove("instant")));
+    return P;
+  }
+
+  function swap(el, text, instant) {
+    if (!el || el.dataset.t === text) return;
+    el.dataset.t = text;
+    const old = el.querySelector("span.cur");
+    const n = document.createElement("span"); n.className = "cur"; n.textContent = text;
+    if (instant) { el.innerHTML = ""; n.style.animation = "none"; el.appendChild(n); return; }
+    if (old) { old.className = "old"; setTimeout(() => old.remove(), 240); }
+    el.appendChild(n);
+  }
+  // the app's Progress: width 8 / 33 / 66 / 100 %, dots Sent, Processed, Confirmed (per transaction)
+  function setTx(P, s, reset) {
+    if (reset) { P.bar.style.transition = "none"; P.bar.style.width = "8%"; void P.bar.offsetWidth; P.bar.style.transition = ""; }
+    P.bar.style.width = [8, 33, 66, 100][s] + "%";
+    P.dots.forEach((d, i) => d.classList.toggle("on", s > i));
+  }
+  function syncStepper(P, bad) {
+    P.pl.steps.forEach((s, k) => {
+      const e = P.sps[k]; if (!e) return;
+      const done = s.idx.every((i) => P.done.has(i)), isBad = bad && s.idx.includes(P.cur), on = !done && s.idx.includes(P.cur);
+      const cls = isBad ? "bad" : done ? "done" : on ? "on" : "";
+      if (e.dataset.s === cls) return;
+      e.dataset.s = cls; e.className = "sp " + cls;
+      e.querySelector(".c").innerHTML = isBad ? mi("close", 14) : done ? mi("check", 16, "#fff") : String(k + 1);
+    });
+  }
+  function head(P, i) {
+    const txs = P.pl.txs;
+    P.cur = i;
+    swap(P.title, "Sending");
+    swap(P.cap, (txs.length === 1 ? "" : `Step ${i + 1} of ${txs.length} · `) + txs[i].doing);
+    setTx(P, 0, true); syncStepper(P, false);
+  }
+  // last transaction confirmed: the header's TailLoader becomes MascotDone (tongue strike, happy eyes), as in tx.tsx
+  function finalFace(P) {
+    const w = document.createElement("div"); w.className = "mdw"; w.innerHTML = '<div class="mdone"></div>';
+    P.tl.replaceWith(w); P.tl = w; mascotDone(w.firstChild, 56);
+  }
+
+  function stream(path, { count = 7, gap = 140, dur = 860, delay = 0 } = {}) {
+    if (RM.matches || !path) return { stop() {}, kill() {} };
+    const svg = path.ownerSVGElement, L = path.getTotalLength(), g = document.createElementNS(NS, "g"), ps = [];
+    for (let i = 0; i < count; i++) {
+      const p = document.createElementNS(NS, "g");
+      p.innerHTML = `<circle class="pt-h" r="6.5"/><circle class="pt-c" r="2.6"/>`;
+      p.setAttribute("opacity", "0"); g.appendChild(p); ps.push(p);
+    }
+    svg.appendChild(g);
+    const t0 = performance.now() + delay; let raf = 0, stalled = null, dead = false;
+    const ease = (t) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
+    function frame(now) {
+      if (dead) return;
+      let alive = false;
+      ps.forEach((p, i) => {
+        let el = now - t0 - i * gap;
+        if (stalled !== null) el = Math.min(el, stalled - t0 - i * gap);
+        const t = el / dur;
+        if (t < 0 || t > 1) { p.setAttribute("opacity", "0"); if (t < 0 && stalled === null) alive = true; return; }
+        alive = true;
+        const pt = path.getPointAtLength(L * ease(t));
+        let o = Math.min(1, t / 0.15, (1 - t) / 0.14);
+        if (stalled !== null) o *= Math.max(0, 1 - (now - stalled) / 420);
+        p.setAttribute("transform", `translate(${pt.x.toFixed(1)} ${pt.y.toFixed(1)})`);
+        p.setAttribute("opacity", o.toFixed(3));
+      });
+      if (stalled !== null && now - stalled > 450) alive = false;
+      if (alive) raf = requestAnimationFrame(frame); else g.remove();
+    }
+    raf = requestAnimationFrame(frame);
+    const api = { stop() { if (stalled === null) stalled = performance.now(); }, kill() { dead = true; cancelAnimationFrame(raf); g.remove(); } };
+    streams.push(api);
+    return api;
+  }
+  function tween(el, from, to, dur, delay, render) {
+    const tk = S.tk;
+    if (RM.matches) return;
+    const st = performance.now() + delay;
+    const fr = (now) => {
+      if (tk !== S.tk) return;
+      const t = Math.min(1, Math.max(0, (now - st) / dur)), e = 1 - Math.pow(1 - t, 3);
+      if (now >= st) el.textContent = render(from + (to - from) * e);
+      if (t < 1) requestAnimationFrame(fr);
+    };
+    requestAnimationFrame(fr);
+  }
+  // strip lines: a single landing asset counts up, then the line folds to its summary ("3 assets") once confirmed
+  function animateLines(P, tx, before, after) {
+    [["dep", "col", P.sv, ""], ["bor", "debt", P.sv2, " borrowed"]].forEach(([role, side, el, suf]) => {
+      const a = tx.nodes.map((j) => P.pl.nodes[j]).filter((nd) => nd.role === role);
+      if (!a.length || !el) return;
+      if (a.length === 1) { const t = a[0].a.t; tween(el, before[side][t] || 0, after[side][t], 950, 800, (v) => `${fmt(v)} ${t}${suf}`); }
+    });
+  }
+  function settleLines(P, after) {
+    P.sv.textContent = lineOf(after.col, "", isNew() && !P.pl.deps.length ? "Open" : "No collateral yet");
+    if (P.sv2) { P.sv2.textContent = lineOf(after.debt, " borrowed", ""); if (Object.keys(after.debt).length) P.sv2.classList.add("show"); }
+    [P.sv, P.sv2].forEach((e) => { if (e) { e.classList.add("flash"); later(() => e.classList.remove("flash"), 650); } });
+  }
+
+  async function stepOpen(P, i) {
+    const c = P.pl.c, last = i === P.pl.txs.length - 1;
+    head(P, i);
+    P.acct.classList.add("draw");
+    await sleep(650);
+    P.acct.classList.add("forming"); swap(P.title, `Sent to ${c.name}`); setTx(P, 1); swap(P.meta, `Creating on ${c.name}`);
+    await sleep(650);
+    setTx(P, 2);
+    await sleep(650);
+    P.acct.classList.add("settled"); setTx(P, 3); swap(P.title, "Confirmed"); swap(P.meta, "Opened just now");
+    P.done.add(i); syncStepper(P, false);
+    if (last) finalFace(P);
+    await sleep(last ? 500 : 700);
+    if (!last) { P.stage.classList.add("docked"); await sleep(600); }
+  }
+  async function stepFlow(P, i) {
+    const pl = P.pl, c = pl.c, tx = pl.txs[i], last = i === pl.txs.length - 1;
+    const before = holdingsAt(pl, i), after = holdingsAt(pl, i + 1);
+    head(P, i);
+    tx.nodes.forEach((j) => { P.nodes[j].classList.add("on"); P.paths[j].classList.add("draw"); });
+    if (tx.nodes.some((j) => pl.nodes[j].role === "bor")) P.sv2.classList.add("show");
+    await sleep(500);
+    swap(P.title, `Sent to ${c.name}`); setTx(P, 1);
+    const many = tx.nodes.length > 1;
+    const sts = tx.nodes.map((j, q) => stream(P.paths[j], { count: many ? 5 : 7, gap: many ? 170 : 140, dur: 860, delay: q * 110 }));
+    P.acct.classList.add("recv");
+    if (S.failAt === i) {
+      await sleep(1150);
+      sts.forEach((s) => s.stop()); P.acct.classList.remove("recv");
+      tx.nodes.forEach((j) => { P.paths[j].classList.add("bad"); P.nodes[j].classList.remove("on"); P.nodes[j].classList.add("bad"); });
+      syncStepper(P, true);
+      P.tl.classList.add("bad"); swap(P.title, "Not confirmed");
+      return "fail";
+    }
+    animateLines(P, tx, before, after);
+    later(() => setTx(P, 2), 750);
+    await sleep(1650);
+    P.acct.classList.remove("recv");
+    settleLines(P, after);
+    setTx(P, 3); swap(P.title, "Confirmed");
+    tx.nodes.forEach((j) => { P.nodes[j].classList.remove("on"); P.nodes[j].classList.add("done"); P.paths[j].classList.add("done"); });
+    P.done.add(i); syncStepper(P, false);
+    if (last) finalFace(P);
+    await sleep(400);
+  }
+  async function run(from = 0) {
+    stopAll();
+    const pl = plan(), txs = pl.txs;
+    const P = renderProgress(pl, from);
+    go("progress");
+    P.cur = from;
+    swap(P.title, "Sending", true);
+    swap(P.cap, from > 0 ? "Picking up where you left off" : (txs.length === 1 ? "" : `Step 1 of ${txs.length} · `) + txs[0].doing, true);
+    syncStepper(P, false);
+    await sleep(from > 0 ? 650 : 420);
+    for (let i = from; i < txs.length; i++) {
+      const r = txs[i].k === "open" ? await stepOpen(P, i) : await stepFlow(P, i);
+      if (r === "fail") { S.failedStep = i; await sleep(1000); renderFail(i); go("fail"); setBg(txs.length > 1 ? "partial" : "start"); return; }
+    }
+    await sleep(1300);
+    renderSuccess(false); go("success"); setBg("funded");
+  }
+
+  /* ===== 3. done ===== */
+  function doneCopy(pl) {
+    const dl = pl.deps.map(amt).join(" + "), bl = pl.bors.map(amt).join(" + ");
+    if (isNew()) {
+      if (S.flow === "x") return ["Margin account opened", `${pl.c.addr} on ${pl.c.name}`];
+      if (S.flow === "dep") return ["Account opened, deposited", dl];
+      return ["Deposited and borrowed", `${dl} → ${bl}`];
+    }
+    // margin.tsx done copy
+    if (S.flow === "both") return ["Deposited and borrowed", `${dl} → ${bl}`];
+    if (S.flow === "x") return ["Borrowed", bl];
+    return ["Collateral added", dl];
+  }
+  const dotsFull = `<div class="prog"><div class="bar"><b style="width:100%"></b></div>
+          <div class="dots">${["Sent", "Processed", "Confirmed"].map((l, i) => `<div class="dt on">${i > 0 ? '<span class="em"></span>' : ""}<span class="d"></span>${l}</div>`).join("")}</div></div>`;
+  function renderSuccess(flick = true) {
+    const pl = plan(), c = pl.c, [title, line] = doneCopy(pl), txs = pl.txs;
+    if (txs.length === 1 && !isNew()) {
+      // the app's own done layout: face, title, line, explorer action; the bar; Done
+      $("#v-success").innerHTML = `
+        <div class="stack g20">
+          <div class="hd"><div class="mdw"><div class="mdone" id="md"></div></div><div class="tx"><div class="h">${title}</div><div class="cap">${line}</div></div><a class="lnk" href="#" data-act="noop" aria-label="View on ${c.explorer}" title="View on ${c.explorer}">${mi("open", 22)}</a></div>
+          ${dotsFull}
+          <button class="btn primary lg" data-act="done">Done</button>
+        </div>`;
+    } else {
+      const h = holdingsAt(pl, txs.length);
+      $("#v-success").innerHTML = `
+        <div class="stack g20">
+          <div class="hd"><div class="mdw"><div class="mdone" id="md"></div></div><div class="tx"><div class="h">${title}</div><div class="cap">${line}</div></div></div>
+          ${dotsFull}
+          <div class="card2">
+            <div class="acc-row"><div class="tile">${mi("acct", 18, "#fff")}</div><div class="grow"><div class="t1">Margin account</div><div class="t2">${c.name} · ${c.addr}</div></div><span class="pill ok">Open</span></div>
+            ${Object.keys(h.col).length ? `<div class="row"><span class="rowL">Collateral</span><span class="rowV multi">${listOf(h.col)}</span></div>` : ""}
+            ${Object.keys(h.debt).length ? `<div class="row"><span class="rowL">Borrowed</span><span class="rowV multi">${listOf(h.debt)}</span></div>` : ""}
+          </div>
+          <div>
+            <p class="sec">${txs.length === 1 ? "1 transaction" : txs.length + " transactions"}</p>
+            <div style="margin-top:8px">${txs.map((t, i) => `<div class="trow"><span class="ck">${mi("check", 16, "#fff")}</span><div class="grow"><div class="t1">${t.title}</div><div class="t2">${t.sub ? t.sub + " · " : ""}<span class="nw">${c.hashes[i]}</span></div></div><a class="lnk" href="#" data-act="noop" aria-label="View on ${c.explorer}" title="View on ${c.explorer}">${mi("open", 20)}</a></div>`).join("")}</div>
+          </div>
+          <button class="btn primary lg" data-act="done">Done</button>
+        </div>`;
+    }
+    mascotDone($("#md"), 56, flick);
+  }
+
+  /* ===== 4. failure ===== */
+  function renderFail(i) {
+    const pl = plan(), c = pl.c, txs = pl.txs, t = txs[i];
+    if (txs.length === 1) {
+      // the app's own failure layout
+      $("#v-fail").innerHTML = `
+        <div class="stack g16">
+          <div class="hd"><div class="ring">${mi("close", 24)}</div><div class="tx"><div class="h">Not confirmed</div><div class="cap">The network was busy and it expired. Nothing was sent.</div></div></div>
+          <div class="stack" style="gap:4px">
+            <button class="btn primary lg" data-act="again">Try again</button>
+            <button class="btn text md" data-act="close">Done</button>
+          </div>
+        </div>`;
+      return;
+    }
+    const safe = isNew() ? "Your margin account is open and safe." : "Earlier steps are confirmed.";
+    $("#v-fail").innerHTML = `
+      <div class="stack g16">
+        <div class="hd"><div class="ring">${mi("close", 24)}</div><div class="tx"><div class="h">Not confirmed</div><div class="cap">${t.title} didn't go through and nothing was sent for it. ${safe}</div></div></div>
+        <div class="card2">${txs.map((x, j) => {
+          const sub = x.sub ? `${x.sub} · ` : "";
+          if (j < i) return `<div class="trow"><span class="ck">${mi("check", 16, "#fff")}</span><div class="grow"><div class="t1">${x.k === "open" ? "Account opened" : x.title}</div><div class="t2">${x.k === "open" ? c.addr : sub + `<span class="nw">${c.hashes[j]}</span>`}</div></div><span class="pill ok">Confirmed</span></div>`;
+          if (j === i) return `<div class="trow"><span class="ck bad">${mi("close", 14)}</span><div class="grow"><div class="t1">${x.title}</div><div class="t2">${sub}<span class="nw">Expired, network busy</span></div></div><span class="pill bad">Not confirmed</span></div>`;
+          return `<div class="trow"><span class="ck idle">${j + 1}</span><div class="grow"><div class="t1">${x.title}</div><div class="t2">${sub}<span class="nw">Runs after step ${i + 1}</span></div></div><span class="pill wait">Waiting</span></div>`;
+        }).join("")}</div>
+        <button class="btn primary lg" data-act="retry" data-i="${i}">Try again from step ${i + 1}</button>
+      </div>`;
+  }
+
+  /* ===== wiring ===== */
+  sheet.addEventListener("click", (e) => {
+    const b = e.target.closest("[data-act]"); if (!b) return;
+    const a = b.dataset.act;
+    if (a === "noop") { e.preventDefault(); return; }
+    if (a === "start") { S.failAt = null; run(0); }
+    if (a === "close") { closeSheet(); setBg(cur && cur.id === "v-success" ? "funded" : cur && cur.id === "v-fail" && plan().txs.length > 1 ? "partial" : "start"); }
+    if (a === "done") { closeSheet(); setBg("funded"); }
+    if (a === "retry") { S.failAt = null; run(+b.dataset.i); }
+    if (a === "again") { S.failAt = null; setBg("start"); renderReview(); go("review"); }
+  });
+  $("#app").addEventListener("click", (e) => {
+    const b = e.target.closest("[data-bg]"); if (!b) return;
+    if (b.dataset.bg === "open") { renderReview(); go("review"); }
+    if (b.dataset.bg === "resume") { renderFail(S.failedStep); go("fail"); }
+  });
+  const failIdx = () => (plan().txs.length > 1 ? 1 : 0);
+  function syncControls() {
+    const nw = isNew(), pl = plan();
+    $("#xChip").textContent = nw ? "Just open account" : "Borrow only";
+    const canFail = !(nw && S.flow === "x");
+    $("#cFail").disabled = !canFail; $("#jFail").disabled = !canFail;
+    $("#cFail").textContent = pl.txs.length > 1 ? "Replay with a failure at step 2" : "Replay with a failure";
+    document.querySelectorAll('[data-k="nDep"] button').forEach((b) => (b.disabled = !pl.deps.length));
+    document.querySelectorAll('[data-k="nBor"] button').forEach((b) => (b.disabled = !pl.bors.length));
+  }
+  function reset() { stopAll(); S.failAt = null; setBg("start"); renderReview(); go("review"); syncControls(); }
+  document.querySelectorAll(".chips[data-k]").forEach((grp) => grp.addEventListener("click", (e) => {
+    const b = e.target.closest("button"); if (!b || b.disabled) return;
+    grp.querySelectorAll("button").forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
+    const k = grp.dataset.k;
+    if (k === "theme") {
+      document.documentElement.dataset.theme = b.dataset.v;
+      document.querySelectorAll(".mdone").forEach((m) => mascotDone(m, 56, false));
+      return;
+    }
+    S[k] = k === "nDep" || k === "nBor" ? +b.dataset.v : b.dataset.v;
+    reset();
+  }));
+  $("#cReplay").onclick = () => { S.failAt = null; setBg("start"); run(0); };
+  $("#cFail").onclick = () => { S.failAt = failIdx(); setBg("start"); run(0); };
+  document.querySelectorAll("[data-jump]").forEach((b) => b.addEventListener("click", () => {
+    stopAll(); const j = b.dataset.jump;
+    if (j === "review") { setBg("start"); renderReview(); go("review"); }
+    if (j === "success") { setBg("funded"); renderSuccess(); go("success"); }
+    if (j === "fail") { S.failedStep = failIdx(); setBg(plan().txs.length > 1 ? "partial" : "start"); renderFail(S.failedStep); go("fail"); }
+  }));
+
+  setBg("start"); renderReview(); go("review"); syncControls();
+  window.__vanna = { S, plan, run, reset, renderSuccess, renderFail, go, setBg, renderReview };
+})();
+</script>
+</body>
+</html>

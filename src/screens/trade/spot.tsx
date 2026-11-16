@@ -1,16 +1,15 @@
 import { useRef, useState } from "react";
-import { type HostInstance, Pressable, StyleSheet, Switch, Text, TextInput, View } from "react-native";
+import { type HostInstance, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import Animated, { Easing, useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
 
 import { TokenLogo } from "@/components/brand";
-import { Chart } from "@/components/chart";
 import { cleanAmt, hfTone, PctChips, Preview, TokenPill } from "@/components/form";
 import { HistoryList } from "@/components/history";
 import { SubTabs, Swap } from "@/components/motion";
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 import { Card } from "@/components/ui/kit";
-import { hfFmt, nf, pct, spct, tokFmt, usd } from "@/format";
+import { hfFmt, nf, pct, tokFmt, usd } from "@/format";
 import { ACTIVITY, type ChainData, DATA, POOLS_BY, PX, TOK } from "@/sample/data";
 import { acct, mAddDebt, mAddIdle, mPayDebt, simAcct } from "@/sample/model";
 import { nowT, randTx } from "@/screens/earn/model";
@@ -31,22 +30,6 @@ export const SPOT_TOKS: Record<Chain, string[]> = {
   stellar: ["XLM", "SoUSDC", "AqUSDC"],
 };
 const VENUES: Record<Chain, [string, string][]> = { solana: [["Jupiter", "JUP"], ["Titan", "TITAN"]], stellar: [["Soroswap", "SOROSWAP"], ["Aquarius", "AQUARIUS"]] };
-const CHG: Record<string, number> = {
-  SOL: 2.41,
-  USDC: 0.0,
-  USDT: 0.0,
-  JitoSOL: 2.85,
-  JupSOL: 2.62,
-  JupUSD: 0.0,
-  NVDAx: 3.14,
-  GOOGLx: 1.25,
-  AAPLx: -0.84,
-  TSLAx: 4.12,
-  XLM: -1.84,
-  SoUSDC: 0.0,
-  AqUSDC: 0.0,
-  BLUSDC: 0.0,
-};
 const FEE = 0.0003;
 const stable = (s: string) => !!TOK[s]?.stable;
 const px = (s: string) => PX[s] ?? 0;
@@ -188,8 +171,8 @@ function SwapCard() {
   const [recv, setRecv] = useState(toks[1]);
   const [amt, setAmt] = useState("");
   const [pctV, setPct] = useState<number | undefined>();
-  const [useColl, setUseColl] = useState(false);
-  const [range, setRange] = useState<"1D" | "1W" | "1M">("1D");
+  // Every token in the margin account is collateral and swappable at once (the website's rule); the health check runs after the swap.
+  const useColl = true;
   const venueRef = useRef<HostInstance>(null);
   const payBox = useRef<HostInstance>(null);
   const recvBox = useRef<HostInstance>(null);
@@ -291,12 +274,6 @@ function SwapCard() {
       },
     });
 
-  const chartSym = stable(p) ? r : p;
-  const quote = stable(p) ? p : r;
-  const n = range === "1D" ? 48 : range === "1W" ? 56 : 60;
-  const pts = Array.from({ length: n }, (_, i) => px(chartSym) * (1 - ((CHG[chartSym] ?? 0.5) / 100) * (1 - i / (n - 1)) + 0.004 * Math.sin(i * 1.3) * (1 - i / n)));
-  const entry = d.spot.find((s) => s.sym === chartSym);
-
   const openVenueMenu = () =>
     openMenu(
       venueRef,
@@ -369,14 +346,6 @@ function SwapCard() {
             <Text style={[styles.cap, { color: colors.muted }]}>{x > 0 ? "~" + usd(x * px(p)) : ""}</Text>
           </View>
           <PctChips value={pctV} items={[25, 50, 75, 100]} onPick={(q) => (setPct(q), setAmt(fmt((swappable * q) / 100, p)))} />
-          <View style={[styles.hr, { backgroundColor: colors.divider }]} />
-          <View style={styles.side}>
-            <View style={{ flex: 1 }}>
-              <Text style={{ fontFamily: font.semibold, fontSize: 14, color: colors.text }}>Use collateral</Text>
-              <Text style={[styles.cap, { color: colors.muted }]}>{tokFmt(collOf(d, p), p)} deposited</Text>
-            </View>
-            <Switch value={useColl} onValueChange={setUseColl} trackColor={{ true: fam.n[0], false: colors.disabled }} thumbColor="#FFFFFF" accessibilityLabel="Use collateral" />
-          </View>
         </View>
 
         {/* flip: centred between the two boxes, over their edges */}
@@ -389,7 +358,7 @@ function SwapCard() {
         </View>
 
         {/* You receive */}
-        <View ref={recvBox} style={[styles.box, { backgroundColor: colors.bg }]}>
+        <View ref={recvBox} style={[styles.box, { backgroundColor: colors.bg, borderColor: "transparent" }]}>
           <Text style={[styles.lab, { color: colors.muted }]}>You receive</Text>
           <View style={styles.side}>
             <TokenPill
@@ -414,42 +383,6 @@ function SwapCard() {
         <Button label={!(x > 0) ? "Enter an amount" : unsafe ? "Below the safe floor" : borrow > 0 ? "Borrow and swap" : "Swap"} fam={fam} disabled={!(x > 0) || unsafe} onPress={go} />
       </Card>
 
-      <Card>
-        <View style={styles.head}>
-          <TokenLogo sym={chartSym} size={32} />
-          <Text style={{ flex: 1, fontFamily: font.semibold, fontSize: 16, color: colors.text }}>
-            {chartSym} <Text style={{ fontFamily: font.regular, fontSize: 12, color: colors.muted }}>/ {quote}</Text>
-          </Text>
-          <View style={{ alignItems: "flex-end" }}>
-            <Text style={{ fontFamily: font.semibold, fontSize: 16, color: colors.text }}>{usd(px(chartSym), px(chartSym) < 1 ? 4 : 2)}</Text>
-            <Text style={{ fontFamily: font.regular, fontSize: 12, color: (CHG[chartSym] ?? 0) >= 0 ? colors.positive : colors.negative }}>{spct(CHG[chartSym] ?? 0)} 24h</Text>
-          </View>
-        </View>
-        <Swap k={chartSym + range}>
-          <Chart
-            pts={pts}
-            color={colors.positive}
-            height={140}
-            zero={false}
-            dot
-            refLine={entry ? { v: entry.entry, label: "Entry" } : undefined}
-            x={range === "1D" ? ["15:00", "03:00", "15:00 "] : range === "1W" ? ["Sep 30", "Oct 3", "Oct 7"] : ["Sep 7", "Sep 22", "Oct 7"]}
-            label={`${chartSym} price, ${range}`}
-          />
-        </Swap>
-        {entry && (
-          <Text style={[styles.cap, { color: colors.muted, textAlign: "right" }]}>
-            ┄ {entry.side === "long" ? "Long" : "Short"} entry {usd(entry.entry, entry.entry < 1 ? 4 : 2)}
-          </Text>
-        )}
-        <View style={[styles.rch, { backgroundColor: colors.segment }]}>
-          {(["1D", "1W", "1M"] as const).map((k) => (
-            <Pressable key={k} onPress={() => setRange(k)} style={[styles.rc, k === range && { backgroundColor: fam.tab }]} accessibilityRole="tab" accessibilityState={{ selected: k === range }}>
-              <Text style={{ fontFamily: font.semibold, fontSize: 13, color: k === range ? "#FFFFFF" : colors.muted }}>{k}</Text>
-            </Pressable>
-          ))}
-        </View>
-      </Card>
     </>
   );
 }

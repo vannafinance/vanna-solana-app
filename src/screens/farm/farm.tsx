@@ -1,5 +1,5 @@
 import { type Href, router } from "expo-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { StyleSheet, Text, View, Pressable } from "react-native";
 
 import { TokenLogo } from "@/components/brand";
@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Card, EmptyCard, IconAction, Pairs, shareIcon, Tag } from "@/components/ui/kit";
 import { hfFmt, nf, pct, sUsd, tokFmt, usd } from "@/format";
 import { ACTIVITY, type ChainData, DATA, type FarmPos, PX } from "@/sample/data";
-import { acct, SAFE_HF, simAcct } from "@/sample/model";
+import { acct, mAddColl, mbal, mTake, SAFE_HF, simAcct } from "@/sample/model";
 import { nowT, randTx } from "@/screens/earn/model";
 import { type Chain, useChain } from "@/state/chain";
 import { personalReady } from "@/state/personal";
@@ -22,6 +22,7 @@ import { runTx } from "@/ui/tx";
 import { openShare } from "@/screens/share/share";
 import { stellarFarmAction } from "@/chain/stellar/actions";
 import { LP_X } from "@/screens/farm/vault-model";
+import { lpReserves } from "@/chain/stellar/account";
 import { solanaFarmDeposit, solanaFarmWithdraw } from "@/chain/solana/actions";
 import * as solanaActions from "@/chain/solana/actions";
 const solanaPerenaAction: (vaultId: string, call: "deposit" | "withdraw", amountUi: number | string) => Promise<string> = (solanaActions as any).solanaPerenaAction;
@@ -64,11 +65,13 @@ export const CATS: Record<Chain, [Cat, string, FamilyName][]> = {
 };
 export const px = (s: string) => PX[s] ?? 1;
 export const posOf = (d: ChainData, id: string) => d.farm.find((f) => f.id === id);
+// A position read from the chain carries no rate of its own: it earns its vault's live one.
+export const apyOf = (chain: Chain, f: FarmPos) => VAULTS[chain].find((v) => v.id === f.id)?.apy ?? f.apy;
 export const valOf = (f: FarmPos) => (f.amt + f.earned) * px(f.sym);
 
 export function farmTotals(chain: Chain) {
   const fs = DATA[chain].farm, val = fs.reduce((t, f) => t + valOf(f), 0);
-  const apy = val ? fs.reduce((t, f) => t + valOf(f) * f.apy, 0) / val : 0;
+  const apy = val ? fs.reduce((t, f) => t + valOf(f) * apyOf(chain, f), 0) / val : 0;
   return { val, apy };
 }
 
@@ -122,7 +125,10 @@ function Vaults({ cat }: { cat: Cat }) {
                     {pos && (
                       <View style={styles.hold}>
                         <Text style={[styles.holdL, { color: colors.muted }]}>Holding</Text>
-                        <Text style={[styles.holdV, { color: colors.text }]}>{usd(valOf(pos))}</Text>
+                        <View style={{ alignItems: "flex-end" }}>
+                          <Text style={[styles.holdV, { color: colors.text }]}>{tokFmt(pos.amt + pos.earned, pos.sym)}</Text>
+                          <Text style={[styles.cap, { color: colors.muted }]}>{usd(valOf(pos))}</Text>
+                        </View>
                       </View>
                     )}
                   </Card>
@@ -262,10 +268,10 @@ function Positions({ cat }: { cat: Cat }) {
                 <Text style={[styles.cap, { color: colors.positive }]}>{sUsd(e)}</Text>
               </View>
             </Pressable>
-            <Pairs items={[{ label: "Deposited", value: tokFmt(f.amt, f.sym) }, { label: v.apyLabel, value: pct(f.apy), tone: "pos" }, { label: "Since", value: f.since }]} />
+            <Pairs items={[{ label: "Deposited", value: tokFmt(f.amt, f.sym) }, { label: v.apyLabel, value: pct(apyOf(chain, f)), tone: "pos" }, { label: "Since", value: f.since || "—" }]} />
             <View style={{ flexDirection: "row", justifyContent: "flex-end", gap: 8 }}>
-              <IconAction icon="south" label={`Deposit more in ${v.name}`} onPress={() => openFarm(chain, v, "deposit")} />
-              <IconAction icon="north" label={`Withdraw from ${v.name}`} onPress={() => openFarm(chain, v, "withdraw")} />
+              <IconAction icon="south" label={v.kind === "lp" ? `Add LP to ${v.name}` : `Deposit more in ${v.name}`} onPress={() => openFarm(chain, v, "deposit")} />
+              <IconAction icon="north" label={v.kind === "lp" ? `Remove LP from ${v.name}` : `Withdraw from ${v.name}`} onPress={() => openFarm(chain, v, "withdraw")} />
               <IconAction icon={shareIcon} label={`Share ${v.name}`} onPress={() => openShare({ kind: "farm", id: v.id })} />
             </View>
           </Card>
@@ -280,7 +286,9 @@ function Positions({ cat }: { cat: Cat }) {
 export const openVault = (id: string) => router.push(`/farm/vault/${id}` as Href);
 
 export function openFarm(chain: Chain, v: Vault, mode: "deposit" | "withdraw") {
-  openSheet({ title: v.name, content: () => <FarmForm chain={chain} v={v} initial={mode} /> });
+  // An LP pool's sheet does one thing: "Add LP" shows only the add form, "Remove LP" only the remove form.
+  const title = v.kind === "lp" ? (mode === "deposit" ? "Add LP" : "Remove LP") : v.name;
+  openSheet({ title, content: () => <FarmForm chain={chain} v={v} initial={mode} /> });
 }
 
 function FarmForm({ chain, v, initial }: { chain: Chain; v: Vault; initial: "deposit" | "withdraw" }) {
@@ -292,13 +300,27 @@ function FarmForm({ chain, v, initial }: { chain: Chain; v: Vault; initial: "dep
   const [pctV, setPct] = useState<number | undefined>();
   const pos = posOf(d, v.id);
   const dep = mode === "deposit";
-  const limit = dep ? d.margin.avail[v.sym] ?? 0 : pos ? pos.amt + pos.earned : 0;
+  const lp = v.kind === "lp"; // an LP sheet is only ever "Add LP" or "Remove LP"
+  // An LP deposit pairs the USDC with XLM at the pool's live reserves (the stored ratio is only a sample)
+  const [ratio, setRatio] = useState<number | null>(null);
+  useEffect(() => {
+    if (chain !== "stellar" || v.kind !== "lp") return;
+    lpReserves(v.id === "aquarius-xlm" ? "AQ_XLM_USDC" : "SS_XLM_USDC").then((r) => r.usdc > 0 && setRatio(r.xlm / r.usdc)).catch(() => {});
+  }, [chain, v.id, v.kind]);
+  const limit = dep ? mbal(d, v.sym) : pos ? pos.amt + pos.earned : 0;
+  // Stellar LP deposit: two fields as on the website. Typing either side fills the other at the pool's live ratio; the USDC side is
+  // what the deposit sends (the validator sizes the XLM side to the pool).
+  const twoSided = chain === "stellar" && v.kind === "lp" && dep && ratio != null && ratio > 0;
+  const [xamt, setXamt] = useState("");
+  const round = (n: number) => String(Math.round(n * 1e4) / 1e4);
   const x = parseFloat(amt) || 0;
-  const over = x > limit + 1e-9;
+  const xlmNeed = twoSided ? (parseFloat(xamt) || 0) : 0;
+  const xlmHave = twoSided ? mbal(d, "XLM") : 0;
+  const over = x > limit + 1e-9 || (twoSided && xlmNeed > xlmHave + 1e-9);
   const apply = (c: ChainData) => {
     const p = c.farm.find((q) => q.id === v.id);
     if (dep) {
-      c.margin.avail[v.sym] = (c.margin.avail[v.sym] ?? 0) - x;
+      mTake(c, v.sym, x);
       if (p) p.amt += x;
       else c.farm.push({ id: v.id, kind: v.kind, venue: v.venue, name: v.name, sym: v.sym, icon: v.icon, amt: x, apy: v.apy, earned: 0, since: "Oct 7" });
     } else if (p) {
@@ -308,7 +330,7 @@ function FarmForm({ chain, v, initial }: { chain: Chain; v: Vault; initial: "dep
         p.amt = 0;
       }
       if (p.amt + p.earned < 1e-6) c.farm = c.farm.filter((q) => q !== p);
-      c.margin.avail[v.sym] = (c.margin.avail[v.sym] ?? 0) + x;
+      mAddColl(c, v.sym, x);
     }
   };
   const before = acct(chain);
@@ -318,15 +340,15 @@ function FarmForm({ chain, v, initial }: { chain: Chain; v: Vault; initial: "dep
     setTimeout(
       () =>
         runTx({
-          chain, fam: f, title: dep ? "Review deposit" : "Review withdrawal", cta: dep ? "Deposit" : "Withdraw",
+          chain, fam: f, title: lp ? (dep ? "Review add LP" : "Review remove LP") : dep ? "Review deposit" : "Review withdrawal", cta: lp ? (dep ? "Add LP" : "Remove LP") : dep ? "Deposit" : "Withdraw",
           legs: [{
             l: dep ? "You deposit" : "You withdraw",
             v: tokFmt(x, v.sym),
             // An LP deposit pairs the USDC with XLM at the pool's live ratio, and both leave the margin account.
-            s: dep && LP_X[v.id] ? `Plus about ${tokFmt((x * LP_X[v.id].ra) / LP_X[v.id].rb, "XLM")}, from your margin account` : dep ? "From your margin account" : "Back to your margin account",
+            s: dep && v.kind === "lp" && (ratio != null || LP_X[v.id]) ? `Plus about ${tokFmt(ratio != null ? x * ratio : (x * LP_X[v.id].ra) / LP_X[v.id].rb, "XLM")}, from your margin account` : dep ? "From your margin account" : "Back to your margin account",
           }],
           rows: [[v.apyLabel, pct(v.apy), "pos"], ["Venue", v.venue], ["Health factor", `${hfFmt(before.hf)} → ${hfFmt(after!.hf)}`]],
-          done: { title: dep ? `Deposited ${tokFmt(x, v.sym)}` : `Withdrew ${tokFmt(x, v.sym)}`, line: dep ? `Earning ${pct(v.apy)} on ${v.venue}` : "Back in your margin account" },
+          done: { title: lp ? (dep ? `Added ${tokFmt(x, v.sym)} to the pool` : `Removed ${tokFmt(x, v.sym)} from the pool`) : dep ? `Deposited ${tokFmt(x, v.sym)}` : `Withdrew ${tokFmt(x, v.sym)}`, line: dep ? `Earning ${pct(v.apy)} on ${v.venue}` : "Back in your margin account" },
           send: async () => {
             if (chain === "stellar") {
               return await stellarFarmAction({
@@ -361,9 +383,54 @@ function FarmForm({ chain, v, initial }: { chain: Chain; v: Vault; initial: "dep
           <Text style={[styles.apy, { color: colors.positive, fontSize: 20 }]}>{pct(v.apy)}</Text>
         </View>
       </Card>
-      <SubTabs items={[["deposit", "Deposit"], ["withdraw", "Withdraw"]]} value={mode} onChange={(m) => (setMode(m), setAmt(""))} fam={f} />
-      <AmountField value={amt} onChange={(t) => (setAmt(t), setPct(undefined))} sym={v.sym} usdValue={x * px(v.sym)} label={dep ? "Deposit amount" : "Withdraw amount"} bad={over} right={`${dep ? "In your account" : "Deposited"} ${nf(limit, 2)}`} />
-      <PctChips value={pctV} items={[25, 50, 75, 100]} onPick={(q) => (setPct(q), setAmt(String(Math.floor(limit * q) / 100)))} />
+      {!lp && <SubTabs items={[["deposit", "Deposit"], ["withdraw", "Withdraw"]]} value={mode} onChange={(m) => (setMode(m), setAmt(""))} fam={f} />}
+      {twoSided && ratio != null && (
+        <Text style={{ fontFamily: font.regular, fontSize: 13, color: colors.muted }}>
+          1 XLM ≈ {nf(1 / ratio, 4)} {v.sym} · 1 {v.sym} ≈ {nf(ratio, 2)} XLM
+        </Text>
+      )}
+      {twoSided && (
+        <AmountField
+          value={xamt}
+          onChange={(t) => {
+            setXamt(t);
+            setPct(undefined);
+            const n = parseFloat(t);
+            setAmt(n > 0 && ratio ? round(n / ratio) : "");
+          }}
+          sym="XLM"
+          usdValue={xlmNeed * px("XLM")}
+          label="XLM"
+          bad={xlmNeed > xlmHave + 1e-9}
+          right={`In your account ${nf(xlmHave, 2)}`}
+        />
+      )}
+      <AmountField
+        value={amt}
+        onChange={(t) => {
+          setAmt(t);
+          setPct(undefined);
+          if (twoSided) {
+            const n = parseFloat(t);
+            setXamt(n > 0 && ratio ? round(n * ratio) : "");
+          }
+        }}
+        sym={v.sym}
+        usdValue={x * px(v.sym)}
+        label={dep ? (twoSided ? v.sym : lp ? "Amount to add" : "Deposit amount") : lp ? "Amount to remove" : "Withdraw amount"}
+        bad={over}
+        right={`${dep ? "In your account" : "Deposited"} ${nf(limit, 2)}`}
+      />
+      <PctChips
+        value={pctV}
+        items={[25, 50, 75, 100]}
+        onPick={(q) => {
+          setPct(q);
+          const n = Math.floor(limit * q) / 100;
+          setAmt(String(n));
+          if (twoSided && ratio) setXamt(round(n * ratio));
+        }}
+      />
       {dep && limit <= 0 && <Text style={{ fontFamily: font.regular, fontSize: 13, color: colors.muted }}>No idle {v.sym} in your margin account. Borrow or transfer on Margin first.</Text>}
       {after && (
         <Preview
@@ -373,7 +440,7 @@ function FarmForm({ chain, v, initial }: { chain: Chain; v: Vault; initial: "dep
           ]}
         />
       )}
-      {x > 0 && <Button label={over ? (dep ? `Not enough ${v.sym}` : "More than deposited") : dep ? "Deposit" : "Withdraw"} fam={f} disabled={over} onPress={go} />}
+      {x > 0 && <Button label={over ? (dep ? `Not enough ${v.sym}` : "More than deposited") : lp ? (dep ? "Add LP" : "Remove LP") : dep ? "Deposit" : "Withdraw"} fam={f} disabled={over} onPress={go} />}
     </View>
   );
 }

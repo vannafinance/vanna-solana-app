@@ -72,7 +72,6 @@ export default function Vault() {
             <TokenLogo sym={p.sym} size={40} />
             <View style={{ flex: 1 }}>
               <Text style={[styles.sym, { color: colors.text }]}>{p.sym}</Text>
-              {chain === "stellar" && <Text style={[styles.cap, { color: colors.muted }]}>Blend</Text>}
             </View>
             <View style={{ alignItems: "flex-end" }}>
               <Text style={[styles.apy, { color: colors.positive }]}>{pct(p.supA)}</Text>
@@ -81,8 +80,8 @@ export default function Vault() {
           </View>
           <Pairs
             items={[
-              { label: "Total supply", value: cNum(p.sup), sub: stable ? undefined : cUsd(p.sup * px(p.sym)) },
-              { label: "Available", value: cNum(free), sub: stable ? undefined : cUsd(free * px(p.sym)) },
+              { label: "Total supply", value: cNum(p.sup), sub: cUsd(p.sup * px(p.sym)) },
+              { label: "Available", value: cNum(free), sub: cUsd(free * px(p.sym)) },
               { label: "Utilization", value: pct(p.util, 1) },
             ]}
           />
@@ -258,12 +257,10 @@ function contractsOf(chain: "solana" | "stellar", s: string): [string, string, s
   const c = chain === "stellar" ? EARN_POOLS[s] : undefined;
   if (!c) return ADDR[chain];
   const rows: [string, string][] = [
-    [`${shareSym(s)} token`, c.vToken],
-    ["Lending pool", c.pool],
-    ["Risk engine", CONTRACTS.RISK_ENGINE],
+    [`Reserve (${shareSym(s)} token)`, c.pool],
+    ["Credit layer", CONTRACTS.CREDIT_LAYER],
     ["Oracle", CONTRACTS.ORACLE],
-    ["Interest rate model", CONTRACTS.RATE_MODEL],
-    ["Registry", CONTRACTS.REGISTRY],
+    ["Validator", CONTRACTS.VALIDATOR_FACADE],
   ];
   return rows.map(([l, a]) => [l, cut(a), a]);
 }

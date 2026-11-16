@@ -25,8 +25,8 @@ import { BRAND_GRADIENT, families, font } from "@/theme/tokens";
 import { openSheet, toast , closeSheet } from "@/ui/overlay";
 import { runTx } from "@/ui/tx";
 import { personalReady } from "@/state/personal";
-import { inUseWallet } from "@/state/wallets";
-import { refreshAccount } from "@/chain/account-live";
+import { inUseWallet, walletState } from "@/state/wallets";
+import { refreshAccount, refreshAccountSoon } from "@/chain/account-live";
 import { stellarFaucet, stellarTransfer } from "@/chain/stellar/actions";
 import { solanaFundFaucet, solanaWalletTransfer } from "@/chain/solana/actions";
 import { fundCash } from "@/chain/solana/predict";
@@ -65,18 +65,6 @@ const RESERVE: Record<Chain, Record<string, number>> = {
 const FULL: Record<Chain, string> = {
   solana: "7xKXitdq4bBLzfS4PyNucdyedmr93H4UTKGBW8qS9fQ2",
   stellar: "GD3KQ7MZWBOV5YPRB3CTBU4NCXH6S7RL2VOE2FJMYX2DQHCVQ7MZ",
-};
-const LINKED: Record<Chain, { app: string; logo: string; addr: string }> = {
-  solana: {
-    app: "Phantom",
-    logo: "PHANTOM",
-    addr: "9xQeWvG816bUx9EPjHmaT23yvVM2ZWbrrpZb9PusFh2K",
-  },
-  stellar: {
-    app: "Freighter",
-    logo: "FREIGHTER",
-    addr: "GCFXHS4GXL6BVUCXBWXGTITROWLVYXQKQLF4YH5O5JT3YZXCYPA7TQA",
-  },
 };
 const short = (a: string) => (a.length > 12 ? a.slice(0, 4) + "…" + a.slice(-4) : a);
 const px = (s: string) => PX[s] ?? 1;
@@ -176,10 +164,25 @@ function SendRing() {
   );
 }
 
+// A faucet step that never answers (a signing prompt that doesn't return, a slow server) must end as "Failed", not spin forever.
+function withTimeout<T>(p: Promise<T>, ms: number, msg: string): Promise<T> {
+  return new Promise((res, rej) => {
+    const t = setTimeout(() => rej(new Error(msg)), ms);
+    p.then(
+      (v) => (clearTimeout(t), res(v)),
+      (e) => (clearTimeout(t), rej(e)),
+    );
+  });
+}
+
+// What this wallet has already claimed on Stellar (its faucets give once), kept while the app is open.
+const CLAIMED: Record<string, Record<string, true>> = {};
+
 function Faucet({ chain }: { chain: Chain }) {
   const { colors } = useTheme();
-  const [st, setSt] = useState<Record<string, "pending" | "done">>({});
-  const [msg, setMsg] = useState<string | null>(null);
+  const key = `${chain}:${inUseWallet(chain)?.full ?? ""}`;
+  const [st, setSt] = useState<Record<string, "pending" | "done" | "failed">>(() => (chain === "stellar" ? Object.fromEntries(Object.keys(CLAIMED[key] ?? {}).map((s) => [s, "done" as const])) : {}));
+  const [msg, setMsg] = useState<{ text: string; bad?: boolean } | null>(null);
   const list = FAUCET[chain];
   const claim = async (items: [string, number][]) => {
     if (!items.length) return;
@@ -189,58 +192,80 @@ function Faucet({ chain }: { chain: Chain }) {
       openAddWallet(chain);
       return;
     }
+    setMsg(null);
     setSt((p) => ({
       ...p,
       ...Object.fromEntries(items.map(([s]) => [s, "pending" as const])),
     }));
-    try {
-      if (personalReady(chain)) {
-        if (chain === "stellar") {
-          // One at a time and XLM first: a brand-new account has to exist before it can hold anything else.
-          for (const [sym] of items) await stellarFaucet(sym);
-          await refreshAccount("stellar");
-          setTimeout(() => void refreshAccount("stellar"), 4000); // the chain can take a moment to show it
-        } else {
-          const addr = inUseWallet("solana")?.full ?? inUseWallet("solana")?.addr;
-          if (addr) {
-            for (const [sym, amount] of items) {
+    const failed: string[] = [];
+    let firstWhy = "";
+    let sent = 0;
+    const one = async ([sym, amount]: [string, number]) => {
+      try {
+        if (personalReady(chain)) {
+          if (chain === "stellar") await withTimeout(stellarFaucet(sym), 180_000, `${sym} timed out`);
+          else {
+            const addr = inUseWallet("solana")?.full ?? inUseWallet("solana")?.addr;
+            if (addr) {
               if (sym === "CASH") await fundCash(addr, amount);
               else await solanaFundFaucet(addr, sym);
             }
-            await refreshAccount("solana");
-            setTimeout(() => void refreshAccount("solana"), 4000);
           }
+          void refreshAccount(chain); // show each token as soon as it lands
         }
+        sent++;
+        if (chain === "stellar" && sym === "XLM") (CLAIMED[key] ??= {})[sym] = true; // Friendbot gives once; the USDC faucets any time
+        setSt((p) => ({ ...p, [sym]: "done" }));
+      } catch (e: any) {
+        failed.push(sym);
+        firstWhy ||= String(e?.message ?? "Faucet failed").split("\n")[0].slice(0, 120);
+        setSt((p) => ({ ...p, [sym]: "failed" }));
       }
+    };
+    if (chain === "stellar") {
+      // XLM first (a brand-new account has to exist). Then the tokens that need your signature go one after another
+      // (they share the account's sequence number); the rest, like SoUSDC, run alongside them.
+      const needsSign = (s: string) => s === "AqUSDC" || s === "BLUSDC";
+      const xlm = items.filter(([s]) => s === "XLM");
+      for (const it of xlm) await one(it);
+      const signed = items.filter(([s]) => needsSign(s));
+      const rest = items.filter(([s]) => s !== "XLM" && !needsSign(s));
+      await Promise.all([(async () => { for (const it of signed) await one(it); })(), ...rest.map(one)]);
+    } else {
+      // Solana: a few at a time, SOL first so the account can pay fees.
+      const sol = items.filter(([s]) => s === "SOL");
+      for (const it of sol) await one(it);
+      const queue = items.filter(([s]) => s !== "SOL");
+      await Promise.all(Array.from({ length: 4 }, async () => { for (let it = queue.shift(); it; it = queue.shift()) await one(it); }));
+    }
+    if (sent) {
+      refreshAccountSoon(chain);
       mutate(() => {
         // A real wallet's balance already came back from the chain above.
-        if (!personalReady(chain)) items.forEach(([s, v]) => (DATA[chain].wallet[s] = (DATA[chain].wallet[s] ?? 0) + v));
+        const ok = items.filter(([s]) => !failed.includes(s));
+        if (!personalReady(chain)) ok.forEach(([s, v]) => (DATA[chain].wallet[s] = (DATA[chain].wallet[s] ?? 0) + v));
         ACTIVITY[chain].unshift({
           t: nowT(),
           area: "Wallet",
           action: "Test funds",
-          detail: items.map(([s]) => s).join(", "),
-          amt: items.map(([s, v]) => `${nf(v)} ${s}`).join(", "),
-          usd: items.reduce((t, [s, v]) => t + v * px(s), 0),
+          detail: ok.map(([s]) => s).join(", "),
+          amt: ok.map(([s, v]) => `${nf(v)} ${s}`).join(", "),
+          usd: ok.reduce((t, [s, v]) => t + v * px(s), 0),
           tx: randTx(),
-          sym: items[0][0],
+          sym: ok[0][0],
         });
       });
-      setSt((p) => ({
-        ...p,
-        ...Object.fromEntries(items.map(([s]) => [s, "done" as const])),
-      }));
-      setMsg(items.length > 1 ? (chain === "solana" ? "Sent to your wallet. Unlimited on the fork." : "Sent to your wallet. Come back tomorrow for more.") : `Sent ${nf(items[0][1])} ${items[0][0]} to your wallet.`);
-    } catch (e: any) {
-      toast(e?.message ?? "Faucet failed", "err");
-      setSt((p) => ({
-        ...p,
-        ...Object.fromEntries(items.map(([s]) => [s, undefined as any])),
-      }));
+    }
+    if (!failed.length) {
+      setMsg({ text: items.length > 1 ? (chain === "solana" ? "Sent to your wallet. Unlimited on the fork." : "Sent to your wallet. XLM comes once per wallet; the USDC faucets any time.") : `Sent ${nf(items[0][1])} ${items[0][0]} to your wallet.` });
+    } else {
+      setMsg({ text: `${failed.join(", ")} didn't go through. Tap ${failed.length > 1 ? "one" : "it"} to try again. ${firstWhy}`, bad: true });
+      toast(`${failed.join(", ")} failed`, "err");
     }
   };
-  const available = (s: string) => (chain === "solana" ? st[s] !== "pending" : !st[s]); // the Solana fork has no limit
+  const available = (s: string) => (chain === "stellar" && s === "XLM" ? st[s] !== "done" && st[s] !== "pending" : st[s] !== "pending"); // only Friendbot (XLM) is once per wallet
   const open = list.filter(([s]) => available(s));
+  const allDone = chain === "stellar" && !open.length;
   return (
     <View style={[styles.card, { backgroundColor: colors.bg }]}>
       <View style={styles.fh}>
@@ -275,7 +300,7 @@ function Faucet({ chain }: { chain: Chain }) {
                 onPress={() => available(s) && claim([[s, v]])}
                 style={[styles.tile, { backgroundColor: colors.surface }]}
                 accessibilityRole="button"
-                accessibilityLabel={st[s] === "done" ? `${s} sent` : `Get ${nf(v)} test ${s}`}
+                accessibilityLabel={st[s] === "done" ? `${s} sent` : st[s] === "failed" ? `${s} failed, tap to retry` : `Get ${nf(v)} test ${s}`}
               >
                 <View style={styles.logoBox}>
                   {st[s] === "pending" && <SendRing />}
@@ -285,6 +310,11 @@ function Faucet({ chain }: { chain: Chain }) {
                   {st[s] === "done" && (
                     <View style={[styles.ok, { borderColor: colors.surface }]}>
                       <Icon name="check" size={10} color="#FFFFFF" />
+                    </View>
+                  )}
+                  {st[s] === "failed" && (
+                    <View style={[styles.ok, { borderColor: colors.surface, backgroundColor: colors.negative }]}>
+                      <Icon name="close" size={10} color="#FFFFFF" />
                     </View>
                   )}
                 </View>
@@ -304,11 +334,11 @@ function Faucet({ chain }: { chain: Chain }) {
                     style={{
                       fontFamily: font.regular,
                       fontSize: 11,
-                      color: st[s] === "done" ? colors.positive : colors.muted,
+                      color: st[s] === "done" ? colors.positive : st[s] === "failed" ? colors.negative : colors.muted,
                       fontVariant: ["tabular-nums"],
                     }}
                   >
-                    {st[s] === "done" ? "Sent" : st[s] === "pending" ? "Sending" : `+${nf(v)}`}
+                    {st[s] === "done" ? "Sent" : st[s] === "pending" ? "Sending" : st[s] === "failed" ? "Failed" : `+${nf(v)}`}
                   </Text>
                 </View>
               </Pressable>
@@ -322,19 +352,20 @@ function Faucet({ chain }: { chain: Chain }) {
       <Pressable onPress={() => claim(open)} disabled={!open.length} style={[styles.getAll, !open.length && { opacity: 0.5 }]} accessibilityRole="button">
         <LinearGradient colors={BRAND_GRADIENT} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={[StyleSheet.absoluteFill, { borderRadius: 26 }]} />
         <Icon name="add" size={20} color="#FFFFFF" />
-        <Text style={{ fontFamily: font.semibold, fontSize: 16, color: "#FFFFFF" }}>Get all</Text>
+        <Text style={{ fontFamily: font.semibold, fontSize: 16, color: "#FFFFFF" }}>{allDone ? "All claimed" : Object.values(st).includes("failed") ? "Get the rest" : "Get all"}</Text>
       </Pressable>
       {msg && (
         <View style={styles.msg}>
-          <Icon name="info" size={16} color={colors.positive} />
+          <Icon name="info" size={16} color={msg.bad ? colors.negative : colors.positive} />
           <Text
             style={{
+              flex: 1,
               fontFamily: font.regular,
               fontSize: 12,
-              color: colors.positive,
+              color: msg.bad ? colors.negative : colors.positive,
             }}
           >
-            {msg}
+            {msg.text}
           </Text>
         </View>
       )}
@@ -492,7 +523,8 @@ function Withdraw({ chain }: { chain: Chain }) {
         ? "That is this wallet"
         : "";
   const issue = !x ? "Enter an amount" : x > max ? `Not enough ${sym}` : !t ? "Enter an address" : addrErr ? "Check the address" : null;
-  const lk = LINKED[chain];
+  const cur = inUseWallet(chain);
+  const otherWallets = walletState().wallets[chain].filter((w) => !w.sample && w.id !== cur?.id);
   const dp = stable(sym) ? 2 : 4;
   const go = () =>
     runTx({
@@ -505,7 +537,7 @@ function Withdraw({ chain }: { chain: Chain }) {
         {
           l: `To ${CHAIN_LABEL[chain]}`,
           v: short(t),
-          s: t === lk.addr ? `Your ${lk.app}` : memo ? "Memo " + memo : "Address",
+          s: otherWallets.some((w) => w.full === t) ? `Your ${otherWallets.find((w) => w.full === t)!.app}` : memo ? "Memo " + memo : "Address",
         },
       ],
       rows: [
@@ -518,7 +550,7 @@ function Withdraw({ chain }: { chain: Chain }) {
       },
       send: async () =>
         chain === "stellar"
-          ? await stellarTransfer({ sym, amount: x, from: "wallet", to: t, toAddress: t, kind: "external" } as any)
+          ? await stellarTransfer({ sym, amount: x, from: cur?.full ?? "", to: t, memo: memo.trim() || undefined })
           : await solanaWalletTransfer(t, sym, x),
       apply: () => {
         d.wallet[sym] = Math.max(0, bal - x);
@@ -690,32 +722,21 @@ function Withdraw({ chain }: { chain: Chain }) {
             {addrErr}
           </Text>
         ) : null}
-        <Pressable
-          onPress={() => (setTo(lk.addr), setPasteMsg(""))}
-          style={[styles.mine, { borderColor: colors.border }]}
-          accessibilityRole="button"
-          accessibilityLabel={`Send to your ${lk.app} wallet`}
-        >
-          <TokenLogo sym={lk.logo} size={20} />
-          <Text
-            style={{
-              fontFamily: font.semibold,
-              fontSize: 13,
-              color: colors.text,
-            }}
+        {/* The person's own other wallets on this chain, one tap each. With only one wallet connected there is nothing to offer
+            (the old chip showed a made-up example address that could never validate). */}
+        {otherWallets.map((w) => (
+          <Pressable
+            key={w.id}
+            onPress={() => (setTo(w.full), setPasteMsg(""))}
+            style={[styles.mine, { borderColor: colors.border }]}
+            accessibilityRole="button"
+            accessibilityLabel={`Send to your ${w.app} wallet`}
           >
-            {lk.app}
-          </Text>
-          <Text
-            style={{
-              fontFamily: font.regular,
-              fontSize: 13,
-              color: colors.muted,
-            }}
-          >
-            {short(lk.addr)}
-          </Text>
-        </Pressable>
+            <TokenLogo sym={w.logo} size={20} />
+            <Text style={{ fontFamily: font.semibold, fontSize: 13, color: colors.text }}>{w.app}</Text>
+            <Text style={{ fontFamily: font.regular, fontSize: 13, color: colors.muted }}>{short(w.full)}</Text>
+          </Pressable>
+        ))}
         {chain === "stellar" && (
           <View style={[styles.field, { borderColor: colors.borderControl }]}>
             <Text style={[styles.flabel, { color: colors.muted, backgroundColor: colors.bg }]}>Memo (only for exchanges)</Text>

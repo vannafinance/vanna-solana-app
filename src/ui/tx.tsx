@@ -1,5 +1,8 @@
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import { Linking, Platform, Pressable, StyleSheet, Text, View } from "react-native";
+
+import { ACTIVITY } from "@/sample/data";
+import { rememberActivity } from "@/state/activity-store";
 import Animated, { Easing, useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
 
 import { Button } from "@/components/ui/button";
@@ -18,6 +21,7 @@ import { authenticate, lockState } from "@/state/lock";
 import { useTheme } from "@/theme/use-theme";
 import { type Family, font } from "@/theme/tokens";
 
+import { type FirstTime, FirstTimeFlow } from "./first-time-flow";
 import { openSheet, toast } from "./overlay";
 import { haptic } from "@/ui/haptics";
 
@@ -37,11 +41,38 @@ export type TxSpec = {
   send?: () => Promise<string | void>;
   // a custom review (design sheets that are their own review, e.g. Close all positions); replaces legs + rows
   body?: ReactNode;
+  // First time on a chain (no margin account yet): the account is opened first, then each action is its own transaction. When set, the
+  // sheet uses the multi-step layout (ui/first-time-flow.tsx) and runs these steps instead of `send`.
+  firstTime?: FirstTime;
+  // Called once every first-time step has confirmed, with the last transaction hash (the sheet then records the history row).
+  onAllDone?: (lastHash?: string) => void;
 };
 
 const FEE: Record<Chain, string> = { solana: "~0.000005 SOL", stellar: "~0.00001 XLM" };
 
+// The history row the action adds carries the chain's transaction hash, so its explorer link is real (shared by both layouts).
+function recordDone(spec: TxSpec, h?: string) {
+  mutate(() => {
+    spec.apply();
+    const row = h && ACTIVITY[spec.chain][0];
+    if (h && row) {
+      row.hash = h;
+      row.chain = spec.chain;
+      row.ms = Date.now();
+      row.tx = `${h.slice(0, 4)}…${h.slice(-4)}`;
+      const owner = inUseWallet(spec.chain)?.full;
+      if (owner) void rememberActivity(spec.chain, owner, { ...row });
+    }
+  });
+  refreshAccountSoon(spec.chain);
+}
+
 export function runTx(spec: TxSpec) {
+  if (spec.firstTime) {
+    const ft: TxSpec = { ...spec, onAllDone: (h) => recordDone(spec, h) };
+    openSheet({ title: spec.title, content: (close) => <FirstTimeFlow spec={ft} close={close} /> });
+    return;
+  }
   openSheet({ title: spec.title, content: (close) => <TxFlow spec={spec} close={close} /> });
 }
 
@@ -84,13 +115,26 @@ function TxFlow({ spec, close }: { spec: TxSpec; close: () => void }) {
     try {
       // A real wallet must never see a pretend success: actions without an on-chain path stop here.
       if (!spec.send && personalReady(spec.chain)) throw new Error("This action is not connected to the chain yet. Nothing was sent.");
+      let h: string | undefined;
       if (spec.send) {
-        const h = await spec.send();
+        h = (await spec.send()) || undefined;
         if (h) setHash(h);
         setStep(2);
       }
       setStep(3);
-      mutate(spec.apply);
+      mutate(() => {
+        spec.apply();
+        // the history row the action just added carries the chain's own transaction hash, so its explorer link is real
+        const row = h && ACTIVITY[spec.chain][0];
+        if (h && row) {
+          row.hash = h;
+          row.chain = spec.chain;
+          row.ms = Date.now();
+          row.tx = `${h.slice(0, 4)}…${h.slice(-4)}`;
+          const owner = inUseWallet(spec.chain)?.full;
+          if (owner) void rememberActivity(spec.chain, owner, { ...row });
+        }
+      });
       // re-read the real account so every screen shows the chain's figures
       if (spec.send) refreshAccountSoon(spec.chain);
       setPhase("done");
@@ -130,7 +174,7 @@ function TxFlow({ spec, close }: { spec: TxSpec; close: () => void }) {
           ))}
         </View>
         <View>
-          {[...spec.rows, ["Fee", FEE[spec.chain]] as [string, string], ["Account", `${w.app} ${w.addr}`] as [string, string]].map(([l, v, t], i) => (
+          {[...spec.rows, ["Fee", FEE[spec.chain]] as [string, string], ["Account", w.app === "Vanna wallet" ? w.addr : `${w.app} ${w.addr}`] as [string, string]].map(([l, v, t], i) => (
             <View key={l} style={[styles.row, i > 0 && { borderTopWidth: 1, borderTopColor: colors.divider }]}>
               <Text style={[styles.rowL, { color: colors.muted }]}>{l}</Text>
               <Text style={[styles.rowV, { color: t === "pos" ? colors.positive : t === "neg" ? colors.negative : colors.text }]}>{v}</Text>
@@ -188,7 +232,7 @@ function TxFlow({ spec, close }: { spec: TxSpec; close: () => void }) {
         </View>
         {/* Only once the chain has the transaction and there is a link to open */}
         {phase === "done" && hash && (
-          <IconAction icon="open_in_new" label={`View on ${spec.chain === "solana" ? "Solscan" : "Stellar Expert"}`} onPress={() => Linking.openURL(spec.chain === "stellar" ? `https://stellar.expert/explorer/testnet/tx/${hash}` : `https://solscan.io/tx/${hash}`).catch(() => toast("Couldn't open the explorer"))} />
+          <IconAction icon="open_in_new" label={`View on ${spec.chain === "solana" ? "Solana Explorer" : "Stellar Expert"}`} onPress={() => Linking.openURL(spec.chain === "stellar" ? `https://stellar.expert/explorer/testnet/tx/${hash}` : `https://explorer.solana.com/tx/${hash}?cluster=custom&customUrl=${encodeURIComponent("https://rpc-devnet.solana.vanna.finance")}`).catch(() => toast("Couldn't open the explorer"))} />
         )}
       </View>
       <Progress step={step} />

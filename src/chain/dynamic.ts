@@ -101,6 +101,13 @@ export async function signStellarXdr(xdr: string): Promise<string> {
   return (await ready()).signStellarXdr(xdr);
 }
 
+/** ed25519 signature (base64) over the 32 bytes given as 64 hex chars, with the Stellar wallet; throws when this build has no such call. */
+export async function signStellarHash(hashHex: string): Promise<string> {
+  const module = await ready();
+  if (!module.signStellarHash) throw new Error("This build can't sign a hash yet");
+  return module.signStellarHash(hashHex);
+}
+
 /** Signs a base64 serialized Solana transaction (does not broadcast); returns the signed base64. */
 export async function signSolanaTransaction(base64: string): Promise<string> {
   return (await ready()).signSolanaTransaction(base64);

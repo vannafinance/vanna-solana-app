@@ -12,7 +12,8 @@
       },
       "env": {
         "EXPO_PUBLIC_DYNAMIC_ENV_ID": "90dad26e-c7b1-4047-857e-ab4ad5596f9a"
-      }
+      },
+      "credentialsSource": "local"
     },
     "preview": {
       "distribution": "internal",
@@ -22,7 +23,8 @@
       "env": {
         "EXPO_PUBLIC_DYNAMIC_ENV_ID": "90dad26e-c7b1-4047-857e-ab4ad5596f9a",
         "ORG_GRADLE_PROJECT_reactNativeArchitectures": "arm64-v8a"
-      }
+      },
+      "credentialsSource": "local"
     },
     "emulator": {
       "developmentClient": true,
@@ -33,7 +35,8 @@
       "env": {
         "EXPO_PUBLIC_DYNAMIC_ENV_ID": "90dad26e-c7b1-4047-857e-ab4ad5596f9a",
         "ORG_GRADLE_PROJECT_reactNativeArchitectures": "x86_64"
-      }
+      },
+      "credentialsSource": "local"
     }
   }
 }

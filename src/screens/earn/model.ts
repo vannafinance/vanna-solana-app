@@ -9,7 +9,7 @@ import type { Chain } from "@/state/chain";
 export const CATS = ["xStocks", "PreStocks", "Crypto", "Stablecoins"] as const;
 const STOCK = new Set(["TSLAx", "AAPLx", "GOOGLx", "NVDAx"]), PRE = new Set(["ANTHROPIC", "OPENAI"]);
 export const catOf = (s: string) => (TOK[s]?.stable ? "Stablecoins" : PRE.has(s) ? "PreStocks" : STOCK.has(s) ? "xStocks" : "Crypto");
-export const nameOf = (chain: Chain, s: string) => (TOK[s]?.name ?? s) + (chain === "stellar" ? " on Blend" : "");
+export const nameOf = (_chain: Chain, s: string) => TOK[s]?.name ?? s;
 export const isStable = (s: string) => !!TOK[s]?.stable;
 export const shareSym = (s: string) => "v" + s;
 export const shareRate = (chain: Chain, s: string) => poolOf(chain, s)?.rate ?? 1 + ((poolOf(chain, s)?.supA ?? 4) / 100) * 0.13;
@@ -54,12 +54,12 @@ export const COLL: Record<Chain, [string, boolean, boolean, number][]> = {
 
 export const ADDR: Record<Chain, [string, string][]> = {
   solana: [["Vault", "VnUS…kQ2"], ["vToken mint", "vUSD…N8w"], ["Pyth price feed", "Gnt2…Z4Hp"]],
-  stellar: [["Blend pool", "CCEB…4HGF"], ["vToken", "CBLU…BLND"], ["Reflector oracle", "CAVL…6HLP"]],
+  stellar: [["Reserve", "CCM6…4TZ"], ["Credit layer", "CAMQ…53I"], ["Oracle", "CAAJ…NS5"]],
 };
 
 const now = () => {
   const d = new Date();
-  return `Oct 7, ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+  return `${d.toLocaleDateString("en-US", { month: "short", day: "numeric" })}, ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
 };
 const randTx = () => {
   const a = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz123456789";

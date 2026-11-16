@@ -1,19 +1,18 @@
 import { useState } from "react";
 import { Pressable, StyleSheet, Switch, Text, View } from "react-native";
 
-import { Chart, curve } from "@/components/chart";
-import { AmountField, Eyebrow, hfTone, InfoTip, LevSlider, Note, PctChips, Preview, Seg2 } from "@/components/form";
+import { AmountField, Eyebrow, hfTone, LevSlider, Note, PctChips, Preview, Seg2 } from "@/components/form";
 import { HistoryList } from "@/components/history";
 import { SubTabs, Swap } from "@/components/motion";
 import { VannaMark } from "@/components/brand";
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 import { Card, EmptyCard } from "@/components/ui/kit";
-import { hfFmt, levFmt, nf, pct, sUsd, tokFmt, usd } from "@/format";
+import { hfFmt, levFmt, nf, pct, tokFmt, usd } from "@/format";
 import { MascotFace } from "@/mascot/mascot";
 import { ACTIVITY, type ChainData, DATA, POOLS_BY } from "@/sample/data";
 import {
-  acct, bisect, portfolioTotals, hasMargin, LEV_CAP, LIQ_HF, lossBuffer, mAddColl, mAddDebt, mAddIdle, mbal, mPayDebt, mTake, priceOf, priceRoom, SAFE_HF, simAcct, WARN_HF,
+  acct, bisect, hasMargin, LEV_CAP, LIQ_HF, lossBuffer, mAddColl, mAddDebt, mAddIdle, mbal, mPayDebt, mTake, priceOf, priceRoom, SAFE_HF, simAcct, WARN_HF,
 } from "@/sample/model";
 import { nowT, randTx } from "@/screens/earn/model";
 import { AccountMap } from "@/screens/portfolio/trader";
@@ -24,18 +23,25 @@ import { families, font } from "@/theme/tokens";
 import { openSheet } from "@/ui/overlay";
 import { runTx } from "@/ui/tx";
 import {
+  ensureStellarMarginAccount,
   stellarBorrow,
   stellarDepositAndBorrow,
   stellarDepositCollateral,
   stellarRepay,
   stellarWithdrawCollateral,
 } from "@/chain/stellar/actions";
+import { findMarginAccount } from "@/chain/stellar/account";
+import { requireActiveRealWallet } from "@/chain/sign";
 import {
+  marginPda,
+  solanaCreateMargin,
   solanaDepositAndBorrow,
   solanaDepositMarginCollateral,
   solanaRepay,
   solanaWithdrawMarginCollateral,
 } from "@/chain/solana/actions";
+import type { FirstTime, TxStep } from "@/ui/first-time-flow";
+import { personalReady } from "@/state/personal";
 
 /* Margin (design screens/margin.js, V4: one page): hero, Leverage | Repay | Transfer in the pill, the "Your account" row (Account |
    History in a sheet), then the action's form card. Every action previews health factor before → after on a simulated account. */
@@ -49,6 +55,72 @@ const TIPS = {
   src: "Wallet deposits from your wallet. Margin borrows against collateral already in your account.",
 };
 const rateOf = (chain: Chain, s: string) => POOLS_BY[chain].find((p) => p.sym === s)?.borA;
+
+// The first-time sheet's steps (ui/first-time-flow.tsx): open the account, then deposit, then borrow. On Stellar each is its own
+// transaction. On Solana the deposit and the borrow go in one transaction (as the website does), after the account is created.
+function firstTimeSteps(chain: Chain, dl: [string, number][], borrows: { sym: string; amt: number }[]): FirstTime {
+  const dText = dl.map(([t, v]) => tokFmt(v, t)).join(" + ");
+  const bText = borrows.map((x) => tokFmt(x.amt, x.sym)).join(" + ");
+  const name = chain === "stellar" ? "Stellar" : "Solana";
+  const open: TxStep = {
+    key: "open",
+    short: "Open account",
+    title: "Open margin account",
+    desc: `Creates your account on ${name}`,
+    doing: "Opening your margin account",
+    send: async () => {
+      if (chain === "stellar") return (await ensureStellarMarginAccount()).hash ?? "";
+      return await solanaCreateMargin();
+    },
+  };
+  const steps: TxStep[] = [open];
+  if (chain === "stellar") {
+    if (dl.length) {
+      steps.push({
+        key: "deposit", short: "Deposit", title: `Deposit ${dText}`, desc: "From your wallet into the account", doing: `Depositing ${dText}`,
+        send: async () => {
+          let h = "";
+          for (const [sym, amt] of dl) h = await stellarDepositCollateral(sym, amt);
+          return h;
+        },
+      });
+    }
+    if (borrows.length) {
+      steps.push({
+        key: "borrow", short: "Borrow", title: `Borrow ${bText}`, desc: "From the lending pool, against your deposit", doing: `Borrowing ${bText}`,
+        send: async () => {
+          let h = "";
+          for (const b of borrows) h = await stellarBorrow(b.sym, b.amt);
+          return h;
+        },
+      });
+    }
+  } else if (dl.length || borrows.length) {
+    const both = dl.length > 0 && borrows.length > 0;
+    steps.push({
+      key: "both",
+      short: both ? "Deposit and borrow" : dl.length ? "Deposit" : "Borrow",
+      title: both ? `Deposit ${dText}, borrow ${bText}` : dl.length ? `Deposit ${dText}` : `Borrow ${bText}`,
+      desc: both ? "From your wallet, then from the lending pool, in one transaction" : dl.length ? "From your wallet into the account" : "From the lending pool, against your deposit",
+      doing: both ? `Depositing ${dText} and borrowing ${bText}` : dl.length ? `Depositing ${dText}` : `Borrowing ${bText}`,
+      send: async () =>
+        await solanaDepositAndBorrow({
+          deposits: dl.map(([sym, amount]) => ({ sym, amount })),
+          borrows: borrows.map((b) => ({ sym: b.sym, amount: b.amt })),
+          createIfMissing: false,
+        }),
+    });
+  }
+  return {
+    steps,
+    accountAddr: async () => {
+      const owner = requireActiveRealWallet(chain).full;
+      return chain === "stellar" ? await findMarginAccount(owner) : marginPda(owner);
+    },
+    dep: dl.length ? { label: dText } : undefined,
+    bor: borrows.length ? { label: bText } : undefined,
+  };
+}
 const num = (t: string) => parseFloat(t) || 0;
 const fmtIn = (v: number, s: string) => (v > 0 ? String(Math.floor(v * (priceOf(s) > 50 ? 1e4 : 100)) / (priceOf(s) > 50 ? 1e4 : 100)) : "");
 
@@ -63,7 +135,7 @@ export function MarginHeroBody() {
   const a = acct(chain);
   const nd = !(a.debtUsd > 0.005);
   const r = priceRoom(chain);
-  const room = r.state === "ok" ? `${(r.pct ?? 0) < 0 ? "−" : "+"}${nf(Math.abs(r.pct ?? 0), 1)}%` : r.state === "now" ? "Liquidatable now" : "—";
+  const room = r.state === "ok" ? `${(r.pct ?? 0) < 0 ? "−" : "+"}${nf(Math.abs(r.pct ?? 0), 1)}%` : r.state === "now" ? "Liquidatable now" : r.state === "none" ? "Safe" : "—";
   return (
     <View style={styles.hstats}>
       <View style={[styles.hst, { flexDirection: "row", alignItems: "flex-start", gap: 8 }]}>
@@ -77,7 +149,7 @@ export function MarginHeroBody() {
       <View style={[styles.hst, styles.sep]}>
         <Text style={styles.hl}>Room before liquidation</Text>
         <Text style={styles.hv}>{room}</Text>
-        <Text style={styles.hs} numberOfLines={1}>{r.state === "nodebt" ? "Nothing to liquidate" : "all collateral prices together"}</Text>
+        <Text style={styles.hs} numberOfLines={1}>{r.state === "nodebt" ? "Nothing to liquidate" : r.state === "none" ? "No price move liquidates it" : "all collateral prices together"}</Text>
       </View>
     </View>
   );
@@ -136,41 +208,10 @@ function AccountSheet({ onRepay }: { onRepay: (sym: string) => void }) {
   );
 }
 
-// History (design acctmap history): the account's Net P&L or health factor over time, then every margin action.
+// History: every margin action. The chain does not record the account's P&L or health factor over time, so there is no chart.
 function MarginHistory() {
   const { chain } = useChain();
-  const { colors } = useTheme();
-  const d = DATA[chain];
-  const [mode, setMode] = useState<"pnl" | "hf">("pnl");
-  const [range, setRange] = useState<"1W" | "1M" | "3M" | "All">("1M");
-  const a = acct(chain);
-  const net = portfolioTotals(chain).earnTrade - d.margin.interestPaid;
-  const since = (d.margin.created ?? "").split(",")[0];
-  const n = range === "1W" ? 28 : range === "1M" ? 31 : range === "3M" ? 46 : 52;
-  const pts = mode === "pnl" ? curve(net, 4, n, Math.round(n * 0.4)).map((v, i) => (i < n * 0.85 ? -Math.abs(net) * 0.12 + v * 0.2 : v)) : Array.from({ length: n }, (_, i) => a.hf + 0.35 * (1 - i / (n - 1)) + 0.05 * Math.sin(i * 1.4));
-  const x = range === "1W" ? ["Sep 30", "Oct 3", "Oct 7"] : [since, "Sep 28", "Oct 7"];
-  return (
-    <View style={{ gap: 12 }}>
-      <Card style={{ gap: 10 }}>
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-          <Text style={{ fontFamily: font.semibold, fontSize: 18, color: colors.text }}>Margin</Text>
-          <InfoTip text="Net P&L: trading earnings less interest paid, since the account opened. Health factor: how it moved over the range." />
-        </View>
-        <View style={{ flexDirection: "row", alignItems: "baseline", gap: 6 }}>
-          <Text style={{ fontFamily: font.semibold, fontSize: 24, color: mode === "pnl" ? (net >= 0 ? colors.positive : colors.negative) : colors.text, fontVariant: ["tabular-nums"] }}>
-            {mode === "pnl" ? sUsd(net) : hfFmt(a.hf)}
-          </Text>
-          <Text style={{ fontFamily: font.regular, fontSize: 12, color: colors.muted }}>{mode === "pnl" ? `since ${since}` : "now"}</Text>
-        </View>
-        <Seg2 items={[["pnl", "Net P&L"], ["hf", "Health factor"]]} value={mode} onChange={setMode} label="Chart" full />
-        <Seg2 items={[["1W", "1W"], ["1M", "1M"], ["3M", "3M"], ["All", "All"]]} value={range} onChange={setRange} label="Range" full />
-        <Swap k={mode + range}>
-          <Chart pts={pts} color={colors.link} height={140} zero={mode === "pnl"} x={x} label={mode === "pnl" ? "Net P&L" : "Health factor"} />
-        </Swap>
-      </Card>
-      <HistoryList rows={ACTIVITY[chain].filter((r) => r.area === "Margin")} module="margin" />
-    </View>
-  );
+  return <HistoryList rows={ACTIVITY[chain].filter((r) => r.area === "Margin")} module="margin" />;
 }
 
 export function MarginBody({ act, setAct }: { act: MarginAct; setAct: (a: MarginAct) => void }) {
@@ -240,7 +281,10 @@ function Leverage() {
     const dl: [string, number][] = src === "wb" ? deps.filter((r) => r.x > 0).map((r) => [r.sym, r.x]) : [];
     const borrows = L > 1 ? items.filter((x) => x.amt > 0) : [];
     const a = after!;
+    // No margin account yet on a real wallet: the sheet opens the account first, then runs each action as its own step.
+    const firstTime = personalReady(chain) && !hasMargin(d) ? firstTimeSteps(chain, dl, borrows) : undefined;
     runTx({
+      firstTime,
       chain, fam,
       title: borrows.length ? (dl.length ? "Review deposit and borrow" : "Review borrow") : "Review deposit",
       cta: borrows.length ? (dl.length ? "Deposit and borrow" : "Borrow") : "Deposit",
@@ -252,7 +296,11 @@ function Leverage() {
         ["Health factor", `${hfFmt(before.hf)} → ${hfFmt(a.hf)}`],
         ["Account leverage", `${levFmt(before.lev)} → ${levFmt(a.lev)}`],
       ],
-      done: { title: borrows.length ? "Borrowed into your account" : "Collateral added", line: [...dl.map(([t, v]) => "Deposited " + tokFmt(v, t)), ...borrows.map((x) => "borrowed " + tokFmt(x.amt, x.sym))].join(", ") },
+      done: {
+        // short, one line: what the whole action did, not just its last step
+        title: dl.length && borrows.length ? "Deposited and borrowed" : borrows.length ? "Borrowed" : "Collateral added",
+        line: dl.length && borrows.length ? `${dl.map(([t, v]) => tokFmt(v, t)).join(" + ")} → ${borrows.map((x) => tokFmt(x.amt, x.sym)).join(" + ")}` : (borrows.length ? borrows.map((x) => tokFmt(x.amt, x.sym)) : dl.map(([t, v]) => tokFmt(v, t))).join(" + "),
+      },
       send: async () => {
         if (chain === "stellar") {
           if (dl.length === 1 && borrows.length === 1) {

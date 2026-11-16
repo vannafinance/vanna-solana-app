@@ -14,6 +14,7 @@ import { setRewards, useRewards } from "@/sample/rewards";
 import { CHAIN_LABEL, type Chain, useChain } from "@/state/chain";
 import { markWelcomeSeen } from "@/state/session";
 import * as dynamic from "@/chain/dynamic";
+import { clearSocialPending, markSocialPending, resumeSocialSignIn } from "@/chain/social-resume";
 import { connectSolanaWallet, connectStellarWallet, CONNECT_DROPPED, dropPendingConnect } from "@/chain/external";
 import { addEmbedded, addExternalWallet, connectWallet, markAskedOther, signInWithEmail, walletState, WALLET_APPS, type WalletApp } from "@/state/wallets";
 import { BRAND_GRADIENT, font } from "@/theme/tokens";
@@ -152,15 +153,23 @@ export default function SignIn() {
       if (connecting.current) return;
       connecting.current = true;
       haptic.tap();
+      console.warn("[social] start", method);
+      markSocialPending(method);
+      void resumeSocialSignIn({ add: !!add, onDone: () => { connecting.current = false; } });
       dynamic
         .signInSocial(method)
         .then((ses) => {
+          console.warn("[social] session", !!ses.solanaAddress, !!ses.stellarAddress, ses.email);
           if (!ses.solanaAddress || !ses.stellarAddress) throw new Error("Your wallets are still being set up. Try again in a moment.");
+          clearSocialPending(); // the call answered itself: the watcher is not needed
           haptic.success();
           signInWithEmail(method, ses.email ?? label, { solana: ses.solanaAddress, stellar: ses.stellarAddress });
+          console.warn("[social] signed in, mode", mode);
           afterAuth(false);
         })
         .catch((e: Error) => {
+          console.warn("[social] failed", e.message);
+          clearSocialPending();
           haptic.error();
           toast(e.message || `${label} sign-in didn't finish`, "err");
         })

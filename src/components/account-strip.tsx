@@ -24,7 +24,7 @@ export function AccountStrip({ third, onRed }: { third: HeroStat & { sub?: strin
   const a = acct(chain);
   const nd = !(a.debtUsd > 0.005);
   const r = priceRoom(chain);
-  const room = !ready ? "—" : r.state === "ok" ? `${(r.pct ?? 0) < 0 ? "−" : "+"}${nf(Math.abs(r.pct ?? 0), 1)}%` : r.state === "now" ? "Now" : "—";
+  const room = !ready ? "—" : r.state === "ok" ? `${(r.pct ?? 0) < 0 ? "−" : "+"}${nf(Math.abs(r.pct ?? 0), 1)}%` : r.state === "now" ? "Now" : r.state === "none" ? "Safe" : "—";
   return (
     <View style={{ gap: 16, paddingBottom: 4 }}>
       <View>

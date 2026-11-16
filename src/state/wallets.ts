@@ -138,3 +138,6 @@ export function addEmbedded(c: Chain, email: string, real?: string) {
   const w: WalletEntry = { id: `vanna-${c}`, app: "Vanna wallet", logo: "VANNA", addr: short(full), full, kind: "embedded", sample: !real };
   set({ email, wallets: { ...state.wallets, [c]: capped([w, ...state.wallets[c].filter((x) => x.kind !== "embedded")]) }, inUse: { ...state.inUse, [c]: w.id } });
 }
+
+/** True when this phone holds a real Vanna (Dynamic) wallet, which needs Dynamic's own session to sign. */
+export const hasEmbeddedWallet = () => state.signedIn && [...state.wallets.solana, ...state.wallets.stellar].some((w) => w.kind === "embedded" && !w.sample);

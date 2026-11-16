@@ -30,8 +30,10 @@ export const spotValue = (s: SpotPos) => s.qty * px(s.sym);
 
 export const hasMargin = (d: ChainData) => !!d.margin.created;
 
+// While a what-if copy is being read (previews), the chain's own figures must not replace the model's result.
+let SIMMING = 0;
 export function acct(chain: Chain, scale = 1) {
-  const base = scale === 1 && Object.keys(OVR).length === 0;
+  const base = scale === 1 && Object.keys(OVR).length === 0 && SIMMING === 0;
   SCALE = scale;
   const d = DATA[chain];
   const m = d.margin;
@@ -227,10 +229,12 @@ export function simAcct(chain: Chain, fn: (d: ChainData) => void) {
   const real = DATA[chain];
   const copy: ChainData = JSON.parse(JSON.stringify(real));
   DATA[chain] = copy;
+  SIMMING++;
   try {
     fn(copy);
     return acct(chain);
   } finally {
+    SIMMING--;
     DATA[chain] = real;
   }
 }

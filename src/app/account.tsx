@@ -23,6 +23,7 @@ import { haptic } from "@/ui/haptics";
 import { hasMargin, walletUsd } from "@/sample/model";
 import { type AppearanceMode, setAppearance, useAppearance } from "@/state/appearance";
 import { type Chain, CHAIN_LABEL, useChain } from "@/state/chain";
+import { useDataVersion } from "@/state/store";
 import { openAddWallet, switchChain, WalletsCard } from "@/screens/wallets/wallets";
 import { usePersonal } from "@/state/personal";
 import { LIVE_ACCT } from "@/chain/account-live";
@@ -39,6 +40,7 @@ import { openDeposit, openTransfer, openWithdraw } from "@/screens/move/move";
 const MARGIN_ADDR: Record<Chain, string> = { solana: "AXir…V7y5", stellar: "CB4M…2KQD" };
 
 export default function Account() {
+  useDataVersion(); // balances and the margin account change as the chain is read
   const { colors } = useTheme();
   const { chain, setChain } = useChain();
   const { signedIn } = useWallets();
@@ -124,7 +126,14 @@ export default function Account() {
               <Pressable key={c} onPress={() => (w ? openSheet({ title: "Wallets", content: () => <WalletsCard sheet /> }) : openAddWallet(c))} style={styles.r} accessibilityRole="button" accessibilityLabel={w ? `${CHAIN_LABEL[c]} wallets` : `Add a ${CHAIN_LABEL[c]} wallet`}>
                 <TokenLogo sym={CHAIN_LOGO[c]} size={20} />
                 <Text style={[styles.rl, { color: colors.muted }]}>{CHAIN_LABEL[c]}</Text>
-                <Text style={[styles.rv, { color: w ? colors.text : colors.link, fontFamily: font.regular }]}>{w ? `${w.app} ${w.addr}` : "Add a wallet"}</Text>
+                <View style={{ flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "flex-end", gap: 8 }}>
+                  {w && c === chain && (
+                    <View style={{ backgroundColor: colors.tealTint, borderRadius: 10, paddingHorizontal: 7, paddingVertical: 2 }}>
+                      <Text style={{ fontFamily: font.semibold, fontSize: 10, color: colors.onTealTint }}>In use</Text>
+                    </View>
+                  )}
+                  <Text style={[styles.rv, { flex: 0, color: w ? colors.text : colors.link, fontFamily: font.regular }]}>{w ? (w.kind === "embedded" ? w.addr : `${w.app} ${w.addr}`) : "Add a wallet"}</Text>
+                </View>
                 {w && (
                   <Pressable onPress={() => void Clipboard.setStringAsync(w.full).then(() => toast("Address copied"))} accessibilityRole="button" accessibilityLabel={`Copy ${CHAIN_LABEL[c]} address`} hitSlop={8}>
                     <Icon name="content_copy" size={18} color="muted" />

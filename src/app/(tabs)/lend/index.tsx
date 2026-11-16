@@ -10,6 +10,12 @@ import { Predict, PredictHero, type PredictTab } from "@/screens/predict/predict
 import { useChain } from "@/state/chain";
 import { useDataVersion } from "@/state/store";
 
+const STELLAR_SECTIONS = [
+  { key: "vaults", label: "Vaults", family: "earn" as const },
+  { key: "positions", label: "Positions", family: "earn" as const },
+  { key: "history", label: "History", family: "earn" as const },
+];
+
 // Lend (design group 'lend'): Earn | Predict in the pill; Predict is Solana only (Stellar shows the Switch to Solana card).
 export default function Lend() {
   useDataVersion();
@@ -32,7 +38,7 @@ export default function Lend() {
 
   const T = earnTotals(chain);
   const hero =
-    section === "earn" ? (
+    section === "earn" || chain !== "solana" ? (
       <Hero
         label="Your supply"
         value={usd(T.val)}
@@ -45,6 +51,20 @@ export default function Lend() {
     ) : chain === "solana" ? (
       <PredictHero />
     ) : undefined;
+
+  // V7: on Stellar there is no Predict, so the pill itself carries Earn's three tabs (Vaults | Positions | History).
+  if (chain !== "solana")
+    return (
+      <ModulePage
+        sections={STELLAR_SECTIONS}
+        current={earnTab}
+        onSection={(k) => setEarnTab(k as EarnTab)}
+        hero={hero}
+        swapKey="earn"
+      >
+        <Earn tab={earnTab} setTab={setEarnTab} hideTabs />
+      </ModulePage>
+    );
 
   return (
     <ModulePage

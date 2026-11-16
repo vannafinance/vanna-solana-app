@@ -4,7 +4,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
 import { VannaMark } from "@/components/brand";
-import { Chart, curve } from "@/components/chart";
+import { Chart } from "@/components/chart";
 import { InfoTip } from "@/components/form";
 import { HistoryList } from "@/components/history";
 import { PillTabs, SubTabs, Swap } from "@/components/motion";
@@ -104,7 +104,7 @@ function MarginBody() {
         tone={sign(net)}
         range={`Since ${since}`}
         pairs={[]}
-        chart={<Chart pts={curve(net, 4, 41)} color={colors.link} x={[since, "Sep 28", "Oct 7"]} label="Net P&L since the account opened" />}
+        chart={<Chart pts={[]} color={colors.link} x={[since, "Sep 28", "Oct 7"]} label="Net P&L since the account opened" />}
       />
       <SubTabs items={[["cur", "Current"], ["hist", "History", hist.length]]} value={tab} onChange={setTab} fam={families.portfolio} />
       <Swap k={tab}>
@@ -253,7 +253,7 @@ function PositionsBody({ sub }: { sub: TraderSub }) {
         tone={sign(pnl)}
         range="30D"
         pairs={[{ label: sub === "farm" ? "Deposited" : "Size", value: usd(list.reduce((t, p) => t + p.size, 0)) }, { label: "Positions", value: String(list.length) }]}
-        chart={<Chart pts={curve(pnl, sub.length)} color={sub === "farm" ? colors.positive : colors.link} label={`${AREA[sub]} P&L, last 30 days`} />}
+        chart={<Chart pts={[]} color={sub === "farm" ? colors.positive : colors.link} label={`${AREA[sub]} P&L, last 30 days`} />}
       />
       <SubTabs items={[["cur", "Current", list.length], ["hist", "History", hist.length]]} value={tab} onChange={setTab} fam={families.portfolio} />
       <Swap k={tab}>

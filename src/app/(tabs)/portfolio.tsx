@@ -10,11 +10,13 @@ import { Trader } from "@/screens/portfolio/trader";
 import { useChain } from "@/state/chain";
 import { useTheme } from "@/theme/use-theme";
 import { families } from "@/theme/tokens";
+import { useDataVersion } from "@/state/store";
 
 const PAGES: [PfPage, string][] = [["overview", "Overview"], ["lender", "Lender"], ["trader", "Trader"]];
 const order = (p: PfPage) => PAGES.findIndex(([k]) => k === p);
 
 export default function Portfolio() {
+  useDataVersion(); // the hero and cards read the chain data, which arrives after sign-in
   const { colors } = useTheme();
   const { chain } = useChain();
   const [page, setPage] = useState<PfPage>("overview");

@@ -11,16 +11,30 @@ import {
 import { requireActiveRealWallet, signStellar } from "@/chain/sign";
 
 import { fetchStellarAccount, findMarginAccount, lpReserves } from "./account";
-import { CONTRACTS, EARN_POOLS, NETWORK_PASSPHRASE } from "./config";
+import { CONTRACTS, EARN_POOLS, NETWORK_PASSPHRASE, VENUES } from "./config";
 import { readContract } from "./read";
 import { rpc, sourceAccount, submitContract } from "./submit";
 
-// External router & pool constants
+// Venue constants (testnet): Blend pool and the two DEX routers the credit layer's validators allow.
 // Ported from: apps/stellar/lib/stellar-utils.ts:CONTRACT_ADDRESSES
-const BLEND_POOL = "CCEBVDYM32YNYCVNRXQKDFFPISJJCV557CDZEIRBEE4NCV4KHPQ44HGF";
-const SOROSWAP_ROUTER = "CCJUD55AG6W5HAI5LRVNKAE5WDP5XGZBUDS5WNTIVDU7O264UZZE7BRD";
-const AQUARIUS_ROUTER = "CBCFTQSPDBAIZ6R6PJQKSQWKNKWH2QIV3I4J72SHWBIK3ADRRAM5A6GD";
-const AQUARIUS_POOL_INDEX_HEX = "9ac7a9cde23ac2ada11105eeaa42e43c2ea8332ca0aa8f41f58d7160274d718e";
+const BLEND_POOL = VENUES.BLEND_POOL;
+const SOROSWAP_ROUTER = VENUES.SOROSWAP_ROUTER;
+const AQUARIUS_ROUTER = VENUES.AQUARIUS_ROUTER;
+const AQUARIUS_POOL_INDEX_HEX = VENUES.AQUARIUS_POOL_INDEX_HEX;
+
+// The four credit assets: XLM and one USDC test token per venue (Blend BLUSDC, Aquarius AQUSDC, Soroswap SOUSDC).
+const TOKEN_OF: Record<string, string> = {
+  XLM: EARN_POOLS.XLM.token,
+  BLUSDC: EARN_POOLS.BLUSDC.token,
+  AQUSDC: EARN_POOLS.AqUSDC.token,
+  SOUSDC: EARN_POOLS.SoUSDC.token,
+};
+const RESERVE_OF: Record<string, string> = {
+  XLM: EARN_POOLS.XLM.pool,
+  BLUSDC: EARN_POOLS.BLUSDC.pool,
+  AQUSDC: EARN_POOLS.AqUSDC.pool,
+  SOUSDC: EARN_POOLS.SoUSDC.pool,
+};
 
 // Faucet constants
 // Ported from: apps/stellar/lib/faucet-utils.ts
@@ -46,68 +60,71 @@ export function numberAmountToWad(n: number): bigint {
   return decimalAmountToWad(n.toFixed(7));
 }
 
-// Ported from: apps/stellar/lib/margin-utils.ts:MarginAccountService.normalizeContractTokenSymbol
+// Rounds DOWN through a 7-decimal integer step (web blend-utils humanToWad / soroswap floorAmountToStroops), so a "max" amount never
+// overshoots the real balance by a rounding unit.
+const stroops = (n: number): bigint => (Number.isFinite(n) && n > 0 ? BigInt(Math.floor(n * 1e7 + 1e-6)) : 0n);
+const wadFloor = (n: number): bigint => stroops(n) * 10n ** 11n;
+
+// UI / contract symbol -> credit asset key: XLM, BLUSDC (plain "USDC" means Blend USDC), AQUSDC, SOUSDC.
+// Ported from: apps/stellar/lib/credit-layer.ts:toCreditAsset
 export function normalizeContractTokenSymbol(tokenSymbol: string): string {
-  const normalized = tokenSymbol?.toUpperCase();
-  if (normalized === "BLUSDC" || normalized === "BLEND_USDC" || normalized === "USDC") {
-    return "USDC";
-  }
-  if (normalized === "AQUSDC" || normalized === "AQUIRESUSDC" || normalized === "AQUARIUS_USDC") {
-    return "AQUSDC";
-  }
-  if (normalized === "SOUSDC" || normalized === "SOROSWAPUSDC" || normalized === "SOROSWAP_USDC") {
-    return "SOUSDC";
-  }
-  return normalized;
+  const s = String(tokenSymbol || "").trim().toUpperCase().replace(/[\s-]/g, "_");
+  if (s === "XLM" || s === "NATIVE") return "XLM";
+  if (["USDC", "BLUSDC", "BLEND_USDC", "BLENDUSDC"].includes(s)) return "BLUSDC";
+  if (["AQUSDC", "AQUARIUS_USDC", "AQUARIUSUSDC", "AQUIRESUSDC"].includes(s)) return "AQUSDC";
+  if (["SOUSDC", "SOROSWAP_USDC", "SOROSWAPUSDC"].includes(s)) return "SOUSDC";
+  return s;
 }
 
-// Ported from: apps/stellar/lib/blend-utils.ts:buildExternalProtocolCallBytes, apps/stellar/lib/soroswap-utils.ts:buildExternalProtocolCallBytes, and apps/stellar/lib/aquarius-utils.ts:buildExternalProtocolCallBytes
-function buildExternalProtocolCallBytes(
-  routerAddress: string,
-  action: "AddLiquidity" | "RemoveLiquidity" | "Swap" | "Deposit" | "Withdraw",
-  tokensOut: string[],
-  amountsOutWad: bigint[],
-  marginAccountAddress: string,
-  venue: "Soroswap" | "Aquarius" | "Blend",
-  isTokenPair = true,
-  feeFraction = 30,
-): Buffer {
-  const makeKey = (name: string) => xdr.ScVal.scvSymbol(name);
-  const amountIn = xdr.ScVal.scvVec([]);
-  const amountOut = xdr.ScVal.scvVec(amountsOutWad.map((amt) => nativeToScVal(amt.toString(), { type: "u256" })));
-  const tokensIn = xdr.ScVal.scvVec([]);
+const tokenFor = (sym: string): string => {
+  const t = TOKEN_OF[normalizeContractTokenSymbol(sym)];
+  if (!t) throw new Error(`Unsupported asset: ${sym}`);
+  return t;
+};
+const reserveFor = (sym: string): string => {
+  const r = RESERVE_OF[normalizeContractTokenSymbol(sym)];
+  if (!r) throw new Error(`Unsupported asset: ${sym}`);
+  return r;
+};
 
-  const tokensOutVal = xdr.ScVal.scvVec(
-    tokensOut.map((t) => {
-      if (venue === "Soroswap") return xdr.ScVal.scvSymbol(t === "USDC" ? "SOUSDC" : t);
-      if (venue === "Aquarius") return xdr.ScVal.scvSymbol(t === "USDC" ? "AQUSDC" : t);
-      return xdr.ScVal.scvSymbol(t);
-    }),
+const addr = (a: string) => nativeToScVal(a, { type: "address" });
+const u256 = (v: bigint | string) => nativeToScVal(BigInt(v), { type: "u256" });
+const u128 = (v: bigint | string | number) => nativeToScVal(BigInt(v), { type: "u128" });
+
+type VenueAction = "Supply" | "Withdraw" | "Swap" | "AddLiquidity" | "RemoveLiquidity";
+
+// CreditLayer.margin_execute(margin, target, action, tokens, amounts, min_out): every venue call goes through here and the credit
+// layer's validators turn it into the venue's own call. Ported from: apps/stellar/lib/credit-layer.ts:CreditLayer.execute
+// Amounts are WAD except where noted per action (Soroswap LP and all mins are native 7-decimal units; Aquarius LP is WAD).
+async function marginExecute(
+  owner: string,
+  margin: string,
+  target: string,
+  action: VenueAction,
+  tokens: string[],
+  amounts: (bigint | number)[],
+  minOut: bigint | number = 0n,
+  feeMultiplier = 100,
+): Promise<string> {
+  return submitContract(
+    owner,
+    CONTRACTS.CREDIT_LAYER,
+    "margin_execute",
+    [
+      addr(margin),
+      addr(target),
+      xdr.ScVal.scvVec([xdr.ScVal.scvSymbol(action)]),
+      xdr.ScVal.scvVec(tokens.map(addr)),
+      xdr.ScVal.scvVec(amounts.map((a) => u128(a))),
+      u128(minOut),
+    ],
+    { feeMultiplier },
   );
-
-  const typeAction = xdr.ScVal.scvVec([xdr.ScVal.scvSymbol(action)]);
-
-  // Entries must be strictly alphabetically sorted for canonical XDR ScMap encoding
-  const scvMap = xdr.ScVal.scvMap([
-    new xdr.ScMapEntry({ key: makeKey("amount_in"), val: amountIn }),
-    new xdr.ScMapEntry({ key: makeKey("amount_out"), val: amountOut }),
-    new xdr.ScMapEntry({ key: makeKey("fee_fraction"), val: xdr.ScVal.scvU32(feeFraction) }),
-    new xdr.ScMapEntry({ key: makeKey("is_token_pair"), val: xdr.ScVal.scvBool(isTokenPair) }),
-    new xdr.ScMapEntry({ key: makeKey("margin_account"), val: nativeToScVal(marginAccountAddress, { type: "address" }) }),
-    new xdr.ScMapEntry({ key: makeKey("min_liquidity_out"), val: nativeToScVal(0n, { type: "u256" }) }),
-    new xdr.ScMapEntry({ key: makeKey("protocol_address"), val: nativeToScVal(routerAddress, { type: "address" }) }),
-    new xdr.ScMapEntry({ key: makeKey("token_pair_ratio"), val: xdr.ScVal.scvU64(xdr.Uint64.fromString("0")) }),
-    new xdr.ScMapEntry({ key: makeKey("tokens_in"), val: tokensIn }),
-    new xdr.ScMapEntry({ key: makeKey("tokens_out"), val: tokensOutVal }),
-    new xdr.ScMapEntry({ key: makeKey("type_action"), val: typeAction }),
-  ]);
-
-  return Buffer.from(scvMap.toXDR());
 }
 
 /**
- * a) Ensure the trader has a deployed margin smart account.
- * Ported from: apps/stellar/lib/margin-utils.ts:MarginAccountService.createMarginAccount / createMarginAccountAttempt
+ * a) Ensure the trader has a margin account.
+ * Ported from: apps/stellar/lib/credit-layer.ts:CreditLayer.createMargin (CreditLayer.create_margin(trader))
  */
 export async function ensureStellarMarginAccount(owner?: string): Promise<{ address: string; hash?: string }> {
   const user = owner ?? requireActiveRealWallet("stellar").full;
@@ -116,13 +133,7 @@ export async function ensureStellarMarginAccount(owner?: string): Promise<{ addr
     return { address: existing };
   }
 
-  const hash = await submitContract(
-    user,
-    CONTRACTS.ACCOUNT_MANAGER,
-    "create_account",
-    [nativeToScVal(user, { type: "address" })],
-    { feeMultiplier: 20 },
-  );
+  const hash = await submitContract(user, CONTRACTS.CREDIT_LAYER, "create_margin", [addr(user)], { feeMultiplier: 20 });
 
   for (let i = 0; i < 6; i++) {
     await new Promise((r) => setTimeout(r, 1000));
@@ -132,35 +143,31 @@ export async function ensureStellarMarginAccount(owner?: string): Promise<{ addr
     }
   }
 
-  throw new Error("Margin account created on-chain but could not be discovered via findMarginAccount");
+  throw new Error("Margin account created on-chain but could not be found with margin_of");
 }
 
 /**
- * b) Deposit collateral into margin account.
- * Ported from: apps/stellar/lib/margin-utils.ts:MarginAccountService.depositCollateralTokens
+ * b) Deposit collateral into the margin account.
+ * Ported from: apps/stellar/lib/credit-layer.ts:CreditLayer.depositCollateral (deposit_collateral(margin, token, amount WAD))
  */
 export async function stellarDepositCollateral(sym: string, amount: number): Promise<string> {
   const wallet = requireActiveRealWallet("stellar");
   const { address: marginAddr } = await ensureStellarMarginAccount(wallet.full);
-  const contractTokenSymbol = normalizeContractTokenSymbol(sym);
-  const amountWad = numberAmountToWad(amount).toString();
+  const amountWad = wadFloor(amount);
+  if (amountWad <= 0n) throw new Error("Enter a valid amount");
 
   return submitContract(
     wallet.full,
-    CONTRACTS.ACCOUNT_MANAGER,
-    "deposit_collateral_tokens",
-    [
-      nativeToScVal(marginAddr, { type: "address" }),
-      nativeToScVal(contractTokenSymbol, { type: "symbol" }),
-      nativeToScVal(amountWad, { type: "u256" }),
-    ],
+    CONTRACTS.CREDIT_LAYER,
+    "deposit_collateral",
+    [addr(marginAddr), addr(tokenFor(sym)), u256(amountWad)],
     { feeMultiplier: 20 },
   );
 }
 
 /**
- * c) Withdraw collateral from margin account.
- * Ported from: apps/stellar/lib/margin-utils.ts:MarginAccountService.withdrawCollateralBalance
+ * c) Withdraw collateral from the margin account back to the wallet.
+ * Ported from: apps/stellar/lib/credit-layer.ts:CreditLayer.withdrawCollateral
  */
 export async function stellarWithdrawCollateral(sym: string, amount: number): Promise<string> {
   const wallet = requireActiveRealWallet("stellar");
@@ -168,25 +175,21 @@ export async function stellarWithdrawCollateral(sym: string, amount: number): Pr
   if (!marginAddr) {
     throw new Error("No margin account found for this wallet. Create one or deposit collateral first.");
   }
-  const contractTokenSymbol = normalizeContractTokenSymbol(sym);
-  const amountWad = numberAmountToWad(amount).toString();
+  const amountWad = wadFloor(amount);
+  if (amountWad <= 0n) throw new Error("Enter a valid amount");
 
   return submitContract(
     wallet.full,
-    CONTRACTS.ACCOUNT_MANAGER,
-    "withdraw_collateral_balance",
-    [
-      nativeToScVal(marginAddr, { type: "address" }),
-      nativeToScVal(contractTokenSymbol, { type: "symbol" }),
-      nativeToScVal(amountWad, { type: "u256" }),
-    ],
+    CONTRACTS.CREDIT_LAYER,
+    "withdraw_collateral",
+    [addr(marginAddr), addr(tokenFor(sym)), u256(amountWad)],
     { feeMultiplier: 50 },
   );
 }
 
 /**
  * d) Borrow tokens against margin account collateral.
- * Ported from: apps/stellar/lib/margin-utils.ts:MarginAccountService.borrowTokens
+ * Ported from: apps/stellar/lib/credit-layer.ts:CreditLayer.borrow (borrow(margin, token, amount WAD))
  */
 export async function stellarBorrow(sym: string, amount: number): Promise<string> {
   const wallet = requireActiveRealWallet("stellar");
@@ -194,25 +197,21 @@ export async function stellarBorrow(sym: string, amount: number): Promise<string
   if (!marginAddr) {
     throw new Error("No margin account found. Create a margin account and deposit collateral before borrowing.");
   }
-  const contractTokenSymbol = normalizeContractTokenSymbol(sym);
-  const borrowAmountWad = numberAmountToWad(amount).toString();
+  const borrowWad = wadFloor(amount);
+  if (borrowWad <= 0n) throw new Error("Enter a valid amount");
 
   return submitContract(
     wallet.full,
-    CONTRACTS.ACCOUNT_MANAGER,
+    CONTRACTS.CREDIT_LAYER,
     "borrow",
-    [
-      nativeToScVal(marginAddr, { type: "address" }),
-      nativeToScVal(borrowAmountWad, { type: "u256" }),
-      nativeToScVal(contractTokenSymbol, { type: "symbol" }),
-    ],
+    [addr(marginAddr), addr(tokenFor(sym)), u256(borrowWad)],
     { feeMultiplier: 50 },
   );
 }
 
 /**
- * e) Deposit collateral and borrow in one atomic step (or sequential fallback).
- * Ported from: apps/stellar/lib/margin-utils.ts:MarginAccountService.depositAndBorrow and apps/stellar/components/margin/mg-leverage.tsx:handleLeverageSubmit
+ * e) Deposit collateral and borrow. The credit layer has no combined call, so this is deposit then borrow (as the web does).
+ * Ported from: apps/stellar/lib/margin-utils.ts:MarginAccountService.depositAndBorrow and apps/stellar/components/margin/mg-leverage.tsx
  */
 export async function stellarDepositAndBorrow(input: {
   depositSym: string;
@@ -222,56 +221,14 @@ export async function stellarDepositAndBorrow(input: {
   multiplier?: number;
 }): Promise<string> {
   const wallet = requireActiveRealWallet("stellar");
-  const { address: marginAddr } = await ensureStellarMarginAccount(wallet.full);
+  await ensureStellarMarginAccount(wallet.full);
 
   const depAmt = input.depositAmount;
   const borAmt = input.borrowAmount ?? (input.multiplier && input.multiplier > 1 ? depAmt * (input.multiplier - 1) : 0);
 
   if (depAmt > 0 && borAmt > 0) {
-    const depSym = normalizeContractTokenSymbol(input.depositSym);
-    const borSym = normalizeContractTokenSymbol(input.borrowSym ?? input.depositSym);
-    const isCross = depSym !== borSym;
-    const depWad = numberAmountToWad(depAmt).toString();
-    const borWad = numberAmountToWad(borAmt).toString();
-
-    try {
-      if (isCross) {
-        return await submitContract(
-          wallet.full,
-          CONTRACTS.ACCOUNT_MANAGER,
-          "deposit_and_borrow_cross",
-          [
-            nativeToScVal(marginAddr, { type: "address" }),
-            nativeToScVal(depWad, { type: "u256" }),
-            nativeToScVal(depSym, { type: "symbol" }),
-            nativeToScVal(borWad, { type: "u256" }),
-            nativeToScVal(borSym, { type: "symbol" }),
-          ],
-          { feeMultiplier: 50 },
-        );
-      } else {
-        return await submitContract(
-          wallet.full,
-          CONTRACTS.ACCOUNT_MANAGER,
-          "deposit_and_borrow",
-          [
-            nativeToScVal(marginAddr, { type: "address" }),
-            nativeToScVal(depWad, { type: "u256" }),
-            nativeToScVal(borWad, { type: "u256" }),
-            nativeToScVal(depSym, { type: "symbol" }),
-          ],
-          { feeMultiplier: 50 },
-        );
-      }
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : String(err);
-      if (/budget|exceededlimit|resource/i.test(msg)) {
-        console.warn("[depositAndBorrow] Soroban budget exceeded; falling back to sequential deposit + borrow:", msg);
-        await stellarDepositCollateral(input.depositSym, depAmt);
-        return await stellarBorrow(input.borrowSym ?? input.depositSym, borAmt);
-      }
-      throw err;
-    }
+    await stellarDepositCollateral(input.depositSym, depAmt);
+    return await stellarBorrow(input.borrowSym ?? input.depositSym, borAmt);
   } else if (depAmt > 0) {
     return stellarDepositCollateral(input.depositSym, depAmt);
   } else if (borAmt > 0) {
@@ -282,12 +239,12 @@ export async function stellarDepositAndBorrow(input: {
 }
 
 /**
- * Ported from: apps/stellar/lib/margin-utils.ts:MarginAccountService.getBorrowedTokenDebtWad
+ * Debt in one reserve, WAD: reserve.debt_of(margin).
+ * Ported from: apps/stellar/lib/credit-layer.ts:debtOf
  */
 export async function getBorrowedTokenDebtWad(marginAccountAddress: string, tokenSymbol: string): Promise<bigint> {
-  const norm = normalizeContractTokenSymbol(tokenSymbol);
   try {
-    const raw = await readContract(marginAccountAddress, "get_borrowed_token_debt", nativeToScVal(norm, { type: "symbol" }));
+    const raw = await readContract(reserveFor(tokenSymbol), "debt_of", addr(marginAccountAddress));
     return BigInt(raw?.toString?.() ?? "0");
   } catch {
     return 0n;
@@ -298,27 +255,20 @@ export async function getBorrowedTokenDebtWad(marginAccountAddress: string, toke
  * Ported from: apps/stellar/lib/margin-utils.ts:MarginAccountService.getMarginAccountTokenBalanceWad
  */
 export async function getMarginAccountTokenBalanceWad(marginAccountAddress: string, tokenSymbol: string): Promise<bigint> {
-  const norm = normalizeContractTokenSymbol(tokenSymbol);
-  const tokenIdBySymbol: Record<string, string> = {
-    XLM: EARN_POOLS.XLM.token,
-    USDC: EARN_POOLS.BLUSDC.token,
-    AQUSDC: EARN_POOLS.AqUSDC.token,
-    SOUSDC: EARN_POOLS.SoUSDC.token,
-  };
-  const tokenId = tokenIdBySymbol[norm];
+  const tokenId = TOKEN_OF[normalizeContractTokenSymbol(tokenSymbol)];
   if (!tokenId) return 0n;
   try {
-    const stroopsRaw = await readContract(tokenId, "balance", nativeToScVal(marginAccountAddress, { type: "address" }));
-    const stroops = BigInt(stroopsRaw?.toString?.() ?? "0");
-    return stroops * 100_000_000_000n; // 1e7 -> 1e18 WAD
+    const stroopsRaw = await readContract(tokenId, "balance", addr(marginAccountAddress));
+    const s = BigInt(stroopsRaw?.toString?.() ?? "0");
+    return s * 100_000_000_000n; // 1e7 -> 1e18 WAD
   } catch {
     return 0n;
   }
 }
 
 /**
- * f) Repay borrowed debt from margin account.
- * Ported from: apps/stellar/lib/margin-utils.ts:MarginAccountService.repayLoan and apps/stellar/components/margin/mg-repay.tsx:mutationFn
+ * f) Repay borrowed debt from the margin account's own balance of the token.
+ * Ported from: apps/stellar/lib/credit-layer.ts:CreditLayer.repay (repay(margin, token, amount WAD); the contract caps it at the debt)
  */
 export async function stellarRepay(sym: string, amount: number, isFullRepay?: boolean): Promise<string> {
   const wallet = requireActiveRealWallet("stellar");
@@ -326,17 +276,16 @@ export async function stellarRepay(sym: string, amount: number, isFullRepay?: bo
   if (!marginAddr) {
     throw new Error("No margin account found for this wallet");
   }
-  const contractTokenSymbol = normalizeContractTokenSymbol(sym);
 
   const [debtWad, marginBalWad] = await Promise.all([
-    getBorrowedTokenDebtWad(marginAddr, contractTokenSymbol),
-    getMarginAccountTokenBalanceWad(marginAddr, contractTokenSymbol),
+    getBorrowedTokenDebtWad(marginAddr, sym),
+    getMarginAccountTokenBalanceWad(marginAddr, sym),
   ]);
 
-  const inputRepayWad = numberAmountToWad(amount);
+  const inputRepayWad = wadFloor(amount);
   const cappedToDebt = debtWad > 0n ? (inputRepayWad > debtWad ? debtWad : inputRepayWad) : inputRepayWad;
 
-  // Accrued interest protection for 100% full repay (1% buffer, floored at 0.01 token in WAD)
+  // Accrued interest protection for 100% full repay (1% buffer, floored at 0.01 token in WAD). The contract caps at the debt.
   const REPAY_BUFFER_BPS = 100n;
   const REPAY_BUFFER_FLOOR_WAD = 10_000_000_000_000_000n; // 0.01 token in WAD
   const proportional = (debtWad * REPAY_BUFFER_BPS) / 10_000n;
@@ -358,13 +307,9 @@ export async function stellarRepay(sym: string, amount: number, isFullRepay?: bo
 
   return submitContract(
     wallet.full,
-    CONTRACTS.ACCOUNT_MANAGER,
+    CONTRACTS.CREDIT_LAYER,
     "repay",
-    [
-      nativeToScVal(finalRepayWad.toString(), { type: "u256" }),
-      nativeToScVal(contractTokenSymbol, { type: "symbol" }),
-      nativeToScVal(marginAddr, { type: "address" }),
-    ],
+    [addr(marginAddr), addr(tokenFor(sym)), u256(finalRepayWad)],
     { feeMultiplier: 50 },
   );
 }
@@ -392,7 +337,7 @@ export async function stellarFlashRepay(sym: string, debtAmount: number, collSym
 
 /**
  * h) Spot swap via Soroswap or Aquarius (direct from wallet or via margin account).
- * Ported from: apps/stellar/lib/soroswap-utils.ts:SoroswapService.swap / swapFromMargin and apps/stellar/lib/aquarius-utils.ts:AquariusService.aquariusSwap / aquariusSwapFromMargin
+ * Ported from: apps/stellar/lib/soroswap-utils.ts:SoroswapService.buildSwapArgs / swap and apps/stellar/lib/aquarius-utils.ts:AquariusService.buildSwapArgs / aquariusSwap
  */
 export async function stellarSpotSwap(input: {
   fromSym: string;
@@ -409,27 +354,28 @@ export async function stellarSpotSwap(input: {
     const marginAddr = await findMarginAccount(wallet.full);
     if (!marginAddr) throw new Error("Margin account required for margin swap");
 
-    const amountStroops = BigInt(Math.floor(input.amountIn * 1e7));
-    if (amountStroops <= 0n) throw new Error("Invalid swap amount");
+    const amountWad = wadFloor(input.amountIn);
+    if (amountWad <= 0n) throw new Error("Invalid swap amount");
 
-    const routerAddress = venue === "Soroswap" ? SOROSWAP_ROUTER : AQUARIUS_ROUTER;
-    const callBytes = buildExternalProtocolCallBytes(
-      routerAddress,
-      "Swap",
-      [normalizeContractTokenSymbol(input.fromSym), normalizeContractTokenSymbol(input.toSym)], // on-chain symbols, e.g. SOUSDC not SoUSDC
-      [amountStroops * 100_000_000_000n, 0n],
-      marginAddr,
-      venue,
-      false,
-      30,
-    );
+    // Each venue swaps its own USDC test token: Soroswap SOUSDC, Aquarius AQUSDC (XLM <-> AqUSDC only).
+    const venueUsdc = venue === "Soroswap" ? "SOUSDC" : "AQUSDC";
+    const side = (s: string) => {
+      const n = normalizeContractTokenSymbol(s);
+      return n === "XLM" ? "XLM" : venueUsdc;
+    };
+    if (venue === "Aquarius" && ![input.fromSym, input.toSym].some((s) => normalizeContractTokenSymbol(s) === "XLM")) {
+      throw new Error("Margin swaps on Aquarius are only available for XLM <-> AqUSDC.");
+    }
 
-    return submitContract(
+    return marginExecute(
       wallet.full,
-      CONTRACTS.ACCOUNT_MANAGER,
-      "execute",
-      [nativeToScVal(marginAddr, { type: "address" }), xdr.ScVal.scvBytes(callBytes)],
-      { feeMultiplier: 100 },
+      marginAddr,
+      venue === "Soroswap" ? SOROSWAP_ROUTER : AQUARIUS_ROUTER,
+      "Swap",
+      [tokenFor(side(input.fromSym)), tokenFor(side(input.toSym))],
+      [amountWad],
+      0n,
+      100,
     );
   }
 
@@ -489,8 +435,9 @@ export async function stellarSpotSwap(input: {
 }
 
 /**
- * i) Farm action: Blend lending or Soroswap / Aquarius LP via margin account.
- * Ported from: apps/stellar/lib/blend-utils.ts:BlendService.depositToBlendPool / withdrawFromBlendPool, apps/stellar/lib/soroswap-utils.ts:SoroswapService.addLiquidity / removeLiquidity, and apps/stellar/lib/aquarius-utils.ts:AquariusService.addLiquidity / removeLiquidity
+ * i) Farm action: Blend lending or Soroswap / Aquarius LP via the margin account.
+ * Ported from: apps/stellar/lib/blend-utils.ts:BlendService.buildExecuteArgs, apps/stellar/lib/soroswap-utils.ts:SoroswapService.buildAddLiquidityArgs / buildRemoveLiquidityArgs,
+ * and apps/stellar/lib/aquarius-utils.ts:AquariusService.buildAddLiquidityArgs / buildRemoveLiquidityArgs
  */
 // The amount typed for an LP farm is the USDC side; the XLM side comes from the pool's live ratio (web pool-action.tsx).
 async function lpDepositAmounts(row: "SS_XLM_USDC" | "AQ_XLM_USDC", owner: string, usdc: number): Promise<{ xlm: number; usdc: number }> {
@@ -506,10 +453,21 @@ async function lpDepositAmounts(row: "SS_XLM_USDC" | "AQ_XLM_USDC", owner: strin
 async function lpSharesForUsd(row: "SS_XLM_USDC" | "AQ_XLM_USDC", owner: string, usd: number): Promise<number> {
   const position = (await fetchStellarAccount(owner)).margin?.collateral[row];
   if (!position || !(position.amount > 0)) throw new Error("No position in this pool");
-  return usd >= position.usd * 0.9999 ? position.amount : (position.amount * usd) / position.usd;
+  // The typed / Max amount is rounded down to cents, so anything within a cent or so of the whole position removes all of it
+  // (otherwise Max leaves a sliver of LP shares behind).
+  return usd >= position.usd - 0.011 ? position.amount : (position.amount * usd) / position.usd;
 }
 
-export async function stellarFarmAction(input: {
+export async function stellarFarmAction(input: { id: string; mode: "supply" | "withdraw"; amount: number }): Promise<string> {
+  try {
+    return await stellarFarmActionInner(input);
+  } catch (e) {
+    console.warn("[farm] failed", String((e as Error)?.message).slice(0, 160), String((e as Error)?.stack).slice(0, 1200));
+    throw e;
+  }
+}
+
+async function stellarFarmActionInner(input: {
   id: string;
   mode: "supply" | "withdraw";
   amount: number;
@@ -521,114 +479,35 @@ export async function stellarFarmAction(input: {
   }
 
   if (input.id.includes("blend")) {
-    const tokenSymbol = input.id.includes("xlm") ? "XLM" : "USDC";
-    const amountWad = numberAmountToWad(input.amount);
-    const action = input.mode === "supply" ? "Deposit" : "Withdraw";
-    const callBytes = buildExternalProtocolCallBytes(
-      BLEND_POOL,
-      action,
-      [tokenSymbol],
-      [amountWad],
-      marginAddr,
-      "Blend",
-      false,
-      0,
-    );
-
-    return submitContract(
-      wallet.full,
-      CONTRACTS.ACCOUNT_MANAGER,
-      "execute",
-      [nativeToScVal(marginAddr, { type: "address" }), xdr.ScVal.scvBytes(callBytes)],
-      { feeMultiplier: 20 },
-    );
+    // Blend: tokens=[token], amounts=[amount WAD], min_out unused.
+    const token = input.id.includes("xlm") ? TOKEN_OF.XLM : TOKEN_OF.BLUSDC;
+    const amountWad = wadFloor(input.amount);
+    if (amountWad <= 0n) throw new Error("Amount must be greater than zero");
+    return marginExecute(wallet.full, marginAddr, BLEND_POOL, input.mode === "supply" ? "Supply" : "Withdraw", [token], [amountWad], 0n, 20);
   }
 
   if (input.id.includes("soroswap")) {
+    const tokens = [TOKEN_OF.XLM, TOKEN_OF.SOUSDC];
     if (input.mode === "supply") {
-      const { xlm: amtA, usdc: amtB } = await lpDepositAmounts("SS_XLM_USDC", wallet.full, input.amount);
-      const callBytes = buildExternalProtocolCallBytes(
-        SOROSWAP_ROUTER,
-        "AddLiquidity",
-        ["XLM", "SOUSDC"],
-        [numberAmountToWad(amtA), numberAmountToWad(amtB)],
-        marginAddr,
-        "Soroswap",
-        true,
-        30,
-      );
-
-      return submitContract(
-        wallet.full,
-        CONTRACTS.ACCOUNT_MANAGER,
-        "execute",
-        [nativeToScVal(marginAddr, { type: "address" }), xdr.ScVal.scvBytes(callBytes)],
-        { feeMultiplier: 100 },
-      );
-    } else {
-      const lpUnits = BigInt(Math.round((await lpSharesForUsd("SS_XLM_USDC", wallet.full, input.amount)) * 1e7));
-      const callBytes = buildExternalProtocolCallBytes(
-        SOROSWAP_ROUTER,
-        "RemoveLiquidity",
-        ["XLM", "SOUSDC"],
-        [lpUnits],
-        marginAddr,
-        "Soroswap",
-        true,
-        30,
-      );
-
-      return submitContract(
-        wallet.full,
-        CONTRACTS.ACCOUNT_MANAGER,
-        "execute",
-        [nativeToScVal(marginAddr, { type: "address" }), xdr.ScVal.scvBytes(callBytes)],
-        { feeMultiplier: 50 },
-      );
+      // tokens=[a, b], amounts=[a WAD, b WAD, min_a native, min_b native]; the validator sizes the deposit to the pool ratio.
+      const { xlm, usdc } = await lpDepositAmounts("SS_XLM_USDC", wallet.full, input.amount);
+      return marginExecute(wallet.full, marginAddr, SOROSWAP_ROUTER, "AddLiquidity", tokens, [wadFloor(xlm), wadFloor(usdc), 0n, 0n], 0n, 100);
     }
+    // RemoveLiquidity: amounts=[lp NATIVE, min_a native, min_b native]
+    const lpUnits = stroops(await lpSharesForUsd("SS_XLM_USDC", wallet.full, input.amount));
+    return marginExecute(wallet.full, marginAddr, SOROSWAP_ROUTER, "RemoveLiquidity", tokens, [lpUnits, 0n, 0n], 0n, 50);
   }
 
   if (input.id.includes("aquarius")) {
+    const tokens = [TOKEN_OF.XLM, TOKEN_OF.AQUSDC];
     if (input.mode === "supply") {
-      const { xlm: amtA, usdc: amtB } = await lpDepositAmounts("AQ_XLM_USDC", wallet.full, input.amount);
-      const callBytes = buildExternalProtocolCallBytes(
-        AQUARIUS_ROUTER,
-        "AddLiquidity",
-        ["XLM", "AQUSDC"],
-        [numberAmountToWad(amtA), numberAmountToWad(amtB)],
-        marginAddr,
-        "Aquarius",
-        true,
-        30,
-      );
-
-      return submitContract(
-        wallet.full,
-        CONTRACTS.ACCOUNT_MANAGER,
-        "execute",
-        [nativeToScVal(marginAddr, { type: "address" }), xdr.ScVal.scvBytes(callBytes)],
-        { feeMultiplier: 100 },
-      );
-    } else {
-      const callBytes = buildExternalProtocolCallBytes(
-        AQUARIUS_ROUTER,
-        "RemoveLiquidity",
-        ["XLM", "AQUSDC"],
-        [numberAmountToWad(await lpSharesForUsd("AQ_XLM_USDC", wallet.full, input.amount))],
-        marginAddr,
-        "Aquarius",
-        true,
-        30,
-      );
-
-      return submitContract(
-        wallet.full,
-        CONTRACTS.ACCOUNT_MANAGER,
-        "execute",
-        [nativeToScVal(marginAddr, { type: "address" }), xdr.ScVal.scvBytes(callBytes)],
-        { feeMultiplier: 50 },
-      );
+      // tokens=[a, b], amounts=[a WAD, b WAD], min_out = min shares (native) = 0
+      const { xlm, usdc } = await lpDepositAmounts("AQ_XLM_USDC", wallet.full, input.amount);
+      return marginExecute(wallet.full, marginAddr, AQUARIUS_ROUTER, "AddLiquidity", tokens, [wadFloor(xlm), wadFloor(usdc)], 0n, 100);
     }
+    // RemoveLiquidity: amounts=[lp WAD, min_a native, min_b native] (Aquarius LP is WAD, unlike Soroswap)
+    const lpWad = wadFloor(await lpSharesForUsd("AQ_XLM_USDC", wallet.full, input.amount));
+    return marginExecute(wallet.full, marginAddr, AQUARIUS_ROUTER, "RemoveLiquidity", tokens, [lpWad, 0n, 0n], 0n, 50);
   }
 
   throw new Error(`Unsupported farm vault: ${input.id}`);
@@ -643,6 +522,8 @@ export async function stellarTransfer(input: {
   amount: number;
   from: string;
   to: string;
+  /** Text memo for an external send (exchanges ask for one). */
+  memo?: string;
 }): Promise<string> {
   const wallet = requireActiveRealWallet("stellar");
   const marginAddr = await findMarginAccount(wallet.full);
@@ -670,7 +551,7 @@ export async function stellarTransfer(input: {
       nativeToScVal(input.to, { type: "address" }),
       nativeToScVal(amountStroops.toString(), { type: "i128" }),
     ],
-    { feeMultiplier: 1 },
+    { feeMultiplier: 1, memo: input.memo },
   );
 }
 
@@ -678,6 +559,26 @@ export async function stellarTransfer(input: {
  * k) Mint test funds from Stellar testnet faucets (XLM, Blend USDC, Soroswap USDC, Aquarius USDC).
  * Ported from: apps/stellar/lib/faucet-utils.ts:fundXlmViaFriendbot, fundBlendAssets, fundSoroswapUsdc, fundAquariusClassicAsset
  */
+// Which network a wallet signed a transaction for: the signature covers the network passphrase, so the wrong one is "bad auth".
+function signedFor(xdr: string, address: string): string {
+  try {
+    const kp = Keypair.fromPublicKey(address);
+    const nets: [string, string][] = [["Testnet", NETWORK_PASSPHRASE], ["Mainnet", "Public Global Stellar Network ; September 2015"]];
+    for (const [name, pass] of nets) {
+      const t = TransactionBuilder.fromXDR(xdr, pass);
+      if (t.signatures.some((sg) => sg.hint().equals(kp.signatureHint()) && kp.verify(t.hash(), sg.signature()))) return name;
+    }
+  } catch {}
+  return "neither";
+}
+
+// Horizon's `detail` is generic ("The transaction failed when submitted..."); the real reason is in extras.result_codes.
+function horizonReason(b: any, fallback: string): string {
+  const rc = b?.extras?.result_codes;
+  if (rc) return `${rc.transaction ?? "failed"}${rc.operations?.length ? ` (${rc.operations.join(", ")})` : ""}`;
+  return b?.detail || b?.title || fallback;
+}
+
 export async function stellarFaucet(sym?: string): Promise<string> {
   const wallet = requireActiveRealWallet("stellar");
   const address = wallet.full;
@@ -714,7 +615,8 @@ export async function stellarFaucet(sym?: string): Promise<string> {
     const isSoroban = tx.operations.some((op) => op.type === "invokeHostFunction");
 
     if (isSoroban) {
-      const sent = await rpc<{ status?: string; hash?: string }>("sendTransaction", { transaction: signedXdr });
+      const sent = await rpc<{ status?: string; hash?: string; errorResultXdr?: string }>("sendTransaction", { transaction: signedXdr });
+      if (sent.status === "ERROR") throw new Error(`Blend USDC: network rejected it${sent.errorResultXdr ? ` (${sent.errorResultXdr.slice(0, 40)})` : ""}`);
       return sent.hash || "blend_funded";
     } else {
       const hRes = await fetch("https://horizon-testnet.stellar.org/transactions", {
@@ -727,7 +629,7 @@ export async function stellarFaucet(sym?: string): Promise<string> {
         if (JSON.stringify(hBody).includes("tx_missing_operation") || JSON.stringify(hBody).includes("op_already_exists")) {
           return "already_funded";
         }
-        throw new Error(hBody.detail || "Blend faucet submission failed");
+        throw new Error(`Blend USDC: ${horizonReason(hBody, "submission failed")}`);
       }
       return hBody.hash || "blend_funded";
     }
@@ -753,6 +655,7 @@ export async function stellarFaucet(sym?: string): Promise<string> {
   if (s === "AQUSDC" || s === "AQUARIUS_USDC") {
     const faucetKeypair = Keypair.fromSecret(AQUARIUS_FAUCET_SECRET);
     const asset = new Asset(AQUARIUS_USDC_CODE, AQUARIUS_USDC_ISSUER);
+    console.warn("[faucet] Aquarius: reading account");
     const userAcc = await sourceAccount(address);
 
     // Check if user already has the classic asset trustline
@@ -779,7 +682,21 @@ export async function stellarFaucet(sym?: string): Promise<string> {
     const builtTx = txBuilder.build();
     builtTx.sign(faucetKeypair);
 
-    const userSigned = await signStellar(builtTx.toXDR());
+    console.warn("[faucet] Aquarius: asking the wallet to sign");
+    let userSigned = await signStellar(builtTx.toXDR());
+    // The faucet (issuer) must co-sign. Some wallets return only their own signature, so add it back if it is missing.
+    console.warn("[faucet] Aquarius signed for:", signedFor(userSigned, address));
+    try {
+      console.warn("[faucet] wallet network per Dynamic:", await require("@/chain/dynamic").getStellarNetwork());
+    } catch (e) {
+      console.warn("[faucet] getStellarNetwork failed:", String(e));
+    }
+    const signedTx = TransactionBuilder.fromXDR(userSigned, NETWORK_PASSPHRASE);
+    const hint = faucetKeypair.signatureHint();
+    if (!signedTx.signatures.some((sg) => sg.hint().equals(hint))) {
+      signedTx.sign(faucetKeypair);
+      userSigned = signedTx.toXDR();
+    }
     const hRes = await fetch("https://horizon-testnet.stellar.org/transactions", {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -787,7 +704,7 @@ export async function stellarFaucet(sym?: string): Promise<string> {
     });
     const hBody = (await hRes.json().catch(() => ({}))) as { hash?: string; detail?: string; title?: string };
     if (!hRes.ok && !hBody.hash) {
-      throw new Error(hBody.detail || hBody.title || `Aquarius faucet submission failed (${hRes.status})`);
+      throw new Error(`Aquarius USDC: ${horizonReason(hBody, `submission failed (${hRes.status})`)}`);
     }
     return hBody.hash || "aquarius_funded";
   }

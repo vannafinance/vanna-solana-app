@@ -2,6 +2,7 @@ import {
   Account,
   BASE_FEE,
   Contract,
+  Memo,
   nativeToScVal,
   Operation,
   scValToNative,
@@ -13,6 +14,7 @@ import {
 import { requireActiveRealWallet, signStellar } from "@/chain/sign";
 
 import { EARN_POOLS, NETWORK_PASSPHRASE, RPC_URLS } from "./config";
+import { readContract } from "./read";
 
 type SimOk = {
   error?: string;
@@ -26,6 +28,8 @@ export interface SubmitContractOpts {
   timeoutSecs?: number;
   extraWriteBytes?: number;
   extraResourceFee?: bigint;
+  /** A text memo (at most 28 bytes), e.g. for an exchange deposit. */
+  memo?: string;
 }
 
 export async function rpc<T>(method: string, params: object): Promise<T> {
@@ -56,6 +60,25 @@ export async function sourceAccount(address: string): Promise<Account> {
   const body = (await res.json()) as { sequence?: string };
   if (!body.sequence) throw new Error("Account has no sequence");
   return new Account(address, body.sequence);
+}
+
+// A reserve reads its interest curve only when time has passed since its last accrual, so a transaction simulated on the ledger that just
+// accrued misses that key and fails on chain one ledger later ("outside of the footprint"). Waiting until the network is past our last
+// transaction's ledger before simulating the next one makes chained flows (deposit -> borrow, borrow -> deploy) safe
+// (web credit-layer.ts waitPastLedger).
+let lastSubmittedLedger = 0;
+
+async function waitPastLedger(ledger: number): Promise<void> {
+  if (!ledger) return;
+  for (let i = 0; i < 12; i++) {
+    try {
+      const latest = await rpc<{ sequence: number }>("getLatestLedger", {});
+      if (latest.sequence > ledger) return;
+    } catch {
+      // keep waiting
+    }
+    await new Promise((r) => setTimeout(r, 1000));
+  }
 }
 
 // Ported from: apps/stellar/lib/stellar-utils.ts:describeSendError
@@ -149,6 +172,29 @@ export async function withFootprintRaceRetry<T>(
   }
 }
 
+// Puts the simulation's SorobanTransactionData into an unsigned transaction without decoding it. The data is [ext][resources: footprint,
+// instructions u32, diskReadBytes u32, writeBytes u32][resourceFee i64], so the last 20 bytes are fixed-size and are patched for the
+// same headroom the decoded path adds (more write bytes, more resource fee). The envelope is [type 4][source 36][fee u32][...][ext 4]
+// [signatures 4]: the fee field becomes inclusion + resource fee, and the ext (0) becomes 1 followed by the data.
+function spliceSorobanData(unsignedXdr: string, dataB64: string, inclusionFee: string, extraWrite: number, extraFee: bigint): string {
+  // plain byte arrays and DataView only: the app's Buffer polyfill lacks some of the read / write helpers
+  const data = new Uint8Array(Buffer.from(dataB64, "base64"));
+  const dv = new DataView(data.buffer, data.byteOffset, data.byteLength);
+  const n = data.length;
+  dv.setUint32(n - 12, dv.getUint32(n - 12) + extraWrite);
+  // the fee is a positive int64: two 32-bit halves
+  const resourceFee = ((BigInt(dv.getUint32(n - 8)) << 32n) | BigInt(dv.getUint32(n - 4))) + extraFee;
+  dv.setUint32(n - 8, Number(resourceFee >> 32n));
+  dv.setUint32(n - 4, Number(resourceFee & 0xffffffffn));
+  const env = new Uint8Array(Buffer.from(unsignedXdr, "base64"));
+  const headLen = env.length - 8; // drops the empty ext and the empty signature list
+  const out = new Uint8Array(headLen + 4 + n + 4);
+  out.set(env.subarray(0, headLen), 0);
+  new DataView(out.buffer).setUint32(40, Number(BigInt(inclusionFee) + resourceFee));
+  new DataView(out.buffer).setUint32(headLen, 1);
+  out.set(data, headLen + 4);
+  return Buffer.from(out).toString("base64");
+}
 // Ported from: apps/stellar/lib/stellar-utils.ts:ContractService.pollTransactionStatus and addResourceHeadroom
 export async function submitContract(
   source: string,
@@ -158,18 +204,20 @@ export async function submitContract(
   opts?: SubmitContractOpts,
 ): Promise<string> {
   return withFootprintRaceRetry(async () => {
+    await waitPastLedger(lastSubmittedLedger);
     const account = await sourceAccount(source);
     const multiplier = Math.max(1, opts?.feeMultiplier ?? 1);
     const inclusionFee = (parseInt(BASE_FEE, 10) * multiplier).toString();
     const timeout = opts?.timeoutSecs ?? 300;
 
-    const unsigned = new TransactionBuilder(new Account(account.accountId(), account.sequenceNumber()), {
+    const memo = opts?.memo?.trim();
+    if (memo && new TextEncoder().encode(memo).length > 28) throw new Error("A memo can be at most 28 characters");
+    const unsignedBuilder = new TransactionBuilder(new Account(account.accountId(), account.sequenceNumber()), {
       fee: inclusionFee,
       networkPassphrase: NETWORK_PASSPHRASE,
-    })
-      .addOperation(new Contract(contractId).call(method, ...args))
-      .setTimeout(timeout)
-      .build();
+    }).addOperation(new Contract(contractId).call(method, ...args));
+    if (memo) unsignedBuilder.addMemo(Memo.text(memo));
+    const unsigned = unsignedBuilder.setTimeout(timeout).build();
 
     const sim = await rpc<SimOk>("simulateTransaction", { transaction: unsigned.toXDR() });
     if (sim.error || !sim.transactionData || !sim.minResourceFee) {
@@ -177,31 +225,50 @@ export async function submitContract(
     }
 
     const invoke = unsigned.operations[0] as Operation.InvokeHostFunction;
-    const auth = (sim.results?.[0]?.auth ?? []).map((entry) => xdr.SorobanAuthorizationEntry.fromXDR(entry, "base64"));
-    const simData = xdr.SorobanTransactionData.fromXDR(sim.transactionData, "base64");
-    const resources = simData.resources();
-    const resourceFee = BigInt(simData.resourceFee().toString());
+    const auth = (sim.results?.[0]?.auth ?? []).map((entry, i) => {
+      try {
+        return xdr.SorobanAuthorizationEntry.fromXDR(entry, "base64");
+      } catch (e) {
+        console.warn("[submit] DECODE auth entry", i, "of", sim.results?.[0]?.auth?.length, String(e).slice(0, 120), "len", entry.length);
+        throw e;
+      }
+    });
     const extraWrite = opts?.extraWriteBytes ?? 2048;
     const extraFee = opts?.extraResourceFee ?? 5000n;
+    const build = (sorobanData?: xdr.SorobanTransactionData) => {
+      const b = new TransactionBuilder(new Account(account.accountId(), account.sequenceNumber()), {
+        fee: inclusionFee,
+        networkPassphrase: NETWORK_PASSPHRASE,
+        ...(sorobanData ? { sorobanData } : {}),
+      }).addOperation(Operation.invokeHostFunction({ func: invoke.func, auth, source }));
+      if (memo) b.addMemo(Memo.text(memo));
+      return b.setTimeout(timeout).build();
+    };
 
-    const sorobanData = new SorobanDataBuilder(simData)
-      .setResources(Number(resources.instructions()), Number(resources.diskReadBytes()), Number(resources.writeBytes()) + extraWrite)
-      .setResourceFee((resourceFee + extraFee).toString())
-      .build();
+    let preparedXdr: string;
+    let unreadable = false;
+    try {
+      const simData = xdr.SorobanTransactionData.fromXDR(sim.transactionData, "base64");
+      const resources = simData.resources();
+      const resourceFee = BigInt(simData.resourceFee().toString());
+      const sorobanData = new SorobanDataBuilder(simData)
+        .setResources(Number(resources.instructions()), Number(resources.diskReadBytes()), Number(resources.writeBytes()) + extraWrite)
+        .setResourceFee((resourceFee + extraFee).toString())
+        .build();
+      preparedXdr = build(sorobanData).toXDR();
+    } catch (e) {
+      // The network's footprint can hold ledger keys of a newer XDR type than this library knows (the Aquarius pool's, "unknown
+      // ScValType member for value 22"). Nothing here needs to read the footprint, so splice the simulation's bytes in as they are.
+      console.warn("[submit] footprint not readable, using raw transaction data:", String(e).slice(0, 80));
+      unreadable = true;
+      preparedXdr = spliceSorobanData(build().toXDR(), sim.transactionData, inclusionFee, extraWrite, extraFee);
+    }
 
-    const prepared = new TransactionBuilder(new Account(account.accountId(), account.sequenceNumber()), {
-      fee: inclusionFee,
-      networkPassphrase: NETWORK_PASSPHRASE,
-      sorobanData,
-    })
-      .addOperation(Operation.invokeHostFunction({ func: invoke.func, auth, source }))
-      .setTimeout(timeout)
-      .build();
-
-    const signed = await signStellar(prepared.toXDR());
+    const signed = await signStellar(preparedXdr, unreadable ? { byHash: true } : undefined);
     const initialSent = await rpc<{ status?: string; hash?: string; errorResultXdr?: string }>("sendTransaction", {
       transaction: signed,
     });
+    console.warn("[submit] sent", JSON.stringify(initialSent).slice(0, 400));
     const sent = await resubmitOnTryAgainLater(signed, initialSent);
 
     if (!sent.hash || sent.status === "ERROR" || sent.status === "DUPLICATE") {
@@ -214,13 +281,16 @@ export async function submitContract(
       await new Promise((r) => setTimeout(r, attempt < 15 ? 1000 : 2000));
       const tx = await rpc<{
         status?: string;
+        ledger?: number;
         resultXdr?: string;
         diagnosticEventsXdr?: string[];
         errorResultXdr?: string;
-      }>("getTransaction", { hash: sent.hash }).catch(() => ({ status: "NOT_FOUND" as const }));
+      }>("getTransaction", { hash: sent.hash }).catch(() => ({ status: "NOT_FOUND" } as { status?: string; ledger?: number; resultXdr?: string; diagnosticEventsXdr?: string[]; errorResultXdr?: string }));
 
       if (tx.status !== "NOT_FOUND") {
+        lastSubmittedLedger = Math.max(lastSubmittedLedger, Number(tx.ledger) || 0);
         if (tx.status === "SUCCESS") return sent.hash;
+        console.warn("[submit] tx", tx.status, String(tx.resultXdr).slice(0, 200));
         const detail = describeFailedTx(tx);
         throw new Error(detail ? `Transaction failed: ${detail} (Tx: ${sent.hash})` : `The transaction failed on chain (Tx: ${sent.hash})`);
       }
@@ -240,16 +310,27 @@ export async function submitStellar(
   return submitContract(wallet.full, contractId, method, args, opts);
 }
 
-// Ported from: apps/stellar/lib/utils/sanitize-amount.ts:numberAmountToWad
-const wad = (amount: number) => (BigInt(Math.floor(amount * 1e7)) * 10n ** 11n).toString();
+// Ported from: apps/stellar/lib/utils/sanitize-amount.ts:numberAmountToWad (through a 7-decimal integer step, so it stays exact)
+const wad = (amount: number) => (BigInt(Math.floor(amount * 1e7 + 1e-6)) * 10n ** 11n).toString();
 
-// Ported from: apps/stellar/components/earn/earn-form.tsx:handleSupply and handleWithdraw
+// Ported from: apps/stellar/lib/stellar-utils.ts:ContractService.deposit / withdraw. The Reserve is the lending pool and its share token:
+// supply(lender, amount WAD) mints shares; redeem(lender, shares WAD) burns them, where `amount` is a share count (7 decimals).
 export async function submitEarn(mode: "supply" | "withdraw", sym: string, amount: number): Promise<string> {
   const wallet = requireActiveRealWallet("stellar");
   const pool = EARN_POOLS[sym];
   if (!pool) throw new Error(`${sym} is not a Stellar earn pool`);
-  return submitContract(wallet.full, pool.pool, mode === "supply" ? "deposit" : "redeem_vtokens", [
+  let amountWad = wad(amount);
+  if (mode === "withdraw") {
+    // cap at the lender's live share balance; an amount at (or within a stroop of) the balance redeems everything
+    const bal = BigInt((await readContract(pool.pool, "balance", nativeToScVal(wallet.full, { type: "address" })).catch(() => 0n)) as bigint);
+    if (bal <= 0n) throw new Error("No supplied balance to withdraw");
+    let shares = BigInt(amountWad) / 10n ** 11n;
+    if (shares >= bal - 1n) shares = bal;
+    amountWad = (shares * 10n ** 11n).toString();
+  }
+  if (BigInt(amountWad) <= 0n) throw new Error("Please enter a valid amount");
+  return submitContract(wallet.full, pool.pool, mode === "supply" ? "supply" : "redeem", [
     nativeToScVal(wallet.full, { type: "address" }),
-    nativeToScVal(wad(amount), { type: "u256" }),
+    nativeToScVal(amountWad, { type: "u256" }),
   ]);
 }

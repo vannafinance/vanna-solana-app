@@ -136,7 +136,7 @@ export const ACCOUNT = {
 // Rewards total shown as the header chip (Rewards itself is parked).
 export const POINTS = available ? 0 : 10121; // rewards are not connected yet, so a real account starts at zero
 
-export type Activity = { t: string; area: string; action: string; detail: string; amt: string; usd?: number; via?: string; tx: string; sym?: string };
+export type Activity = { t: string; area: string; action: string; detail: string; amt: string; usd?: number; via?: string; tx: string; sym?: string; hash?: string; chain?: "solana" | "stellar"; ms?: number };
 
 export const ACTIVITY: Record<Chain, Activity[]> = {
   solana: [

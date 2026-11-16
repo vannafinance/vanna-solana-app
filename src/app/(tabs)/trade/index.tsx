@@ -38,7 +38,7 @@ export default function Trade() {
       current={section}
       onSection={(k) => (stellar ? setXlmSec(k as "swap" | "history") : setSolSec(k as "spot" | "perps"))}
       heroAuto
-      hero={<AccountStrip third={section === "perps" ? { label: "Perps value", value: usd(a.perpEq) } : { label: "Available", value: usd(a.availUsd) }} />}
+      hero={<AccountStrip third={section === "perps" ? { label: "Perps value", value: usd(a.perpEq) } : { label: "Available", value: usd(Math.max(a.availUsd, a.equity > 0 ? a.equity : 0)) }} />}
     >
       {stellar ? <Spot page={xlmSec} /> : solSec === "spot" ? <Spot /> : <Perps tab={perpTab} setTab={setPerpTab} />}
     </ModulePage>

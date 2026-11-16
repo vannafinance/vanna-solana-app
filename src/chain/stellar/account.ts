@@ -1,41 +1,34 @@
-import { Address, nativeToScVal, scValToNative, xdr } from "@stellar/stellar-base";
+import { nativeToScVal } from "@stellar/stellar-base";
 
-import { CONTRACTS, RPC_URLS } from "./config";
+import { CONTRACTS, EARN_POOLS, VENUES } from "./config";
+import { fetchBlendPositions } from "./farm";
 import { fetchStellarPrices } from "./prices";
 import { readContract } from "./read";
 
-// A Stellar user's own data, read from the chain with the web app's rules (apps/stellar/lib/account-snapshot.ts,
-// margin-utils.ts, margin-health.ts, analytics/stellar/farmTrackingCollateral.ts):
+// A Stellar user's own data, read from the chain with the web app's credit-layer rules (apps/stellar/lib/margin-credit-reads.ts,
+// credit-layer.ts, account-snapshot.ts):
 // - wallet: token balances of the G-address (7-decimal token contracts);
-// - margin account: found through AccountManager storage `SmartAccounts(owner)`, the last active one;
-// - debt: get_all_borrowed_tokens + get_borrowed_token_debt (WAD);
-// - collateral: the ledger rows (WAD), with the margin account's own raw token balances replacing XLM / BLUSDC /
-//   AQUSDC / SOUSDC, and Farm LP rows valued pro-rata from the pool reserves;
-// - health factor = gross collateral / debt (liquidation at 1.10), as the website's Net Health Factor.
+// - margin account: CreditLayer.margin_of(owner);
+// - debt: margin.debts() (token addresses) + reserve.debt_of(margin) (WAD);
+// - collateral: the margin account's own token balances, plus its LP share tokens valued pro-rata from the pool reserves, plus Blend
+//   supply read from the BlendValuer;
+// - health factor = collateral / debt in USD from CreditLayer.margin_value (the contract's own valuation); the borrow and liquidation
+//   limits are read from the contract (1.2 unless the admin moved them).
 export const TOKENS: Record<string, string> = {
-  XLM: "CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC",
-  BLUSDC: "CAQCFVLOBK5GIULPNZRGATJJMIZL5BSP7X5YJVMGCPTUEPFM4AVSRCJU",
-  AQUSDC: "CAZRY5GSFBFXD7H6GAFBA5YGYQTDXU4QKWKMYFWBAZFUCURN3WKX6LF5",
-  SOUSDC: "CB3TLW74NBIOT3BUWOZ3TUM6RFDF6A4GVIRUQRQZABG5KPOUL4JJOV2F",
+  XLM: EARN_POOLS.XLM.token,
+  BLUSDC: EARN_POOLS.BLUSDC.token,
+  AQUSDC: EARN_POOLS.AqUSDC.token,
+  SOUSDC: EARN_POOLS.SoUSDC.token,
 };
 // The app's symbols for the same tokens.
 export const APP_SYM: Record<string, string> = { XLM: "XLM", BLUSDC: "BLUSDC", AQUSDC: "AqUSDC", SOUSDC: "SoUSDC" };
-// Farm LP tracking rows -> their pool (Soroswap pair / Aquarius pool) and how to read reserves and total shares.
-const LP_POOLS: Record<string, { pool: string; reserves: string; shares: string; tokens: string }> = {
-  SS_XLM_USDC: { pool: "CDVAIOYHCD4RUSLQNVFI7RIZBFT2JZMJWM4RTOLQZQXL4QAVXU5RFKDB", reserves: "get_reserves", shares: "total_supply", tokens: "token_0" },
-  AQ_XLM_USDC: { pool: "CD3LFMMLBQ6RBJUD3Z2LFDFE6544WDRMWHEZYPI5YDVESYRSO2TT32BX", reserves: "get_reserves", shares: "get_total_shares", tokens: "get_tokens" },
+const KEY_OF_TOKEN = Object.fromEntries(Object.entries(TOKENS).map(([k, t]) => [t, k]));
+// Farm LP rows -> their pool (Soroswap pair / Aquarius pool), the share token the margin account holds, and how to read reserves.
+const LP_POOLS: Record<string, { pool: string; share: string; reserves: string; shares: string; tokens: string }> = {
+  SS_XLM_USDC: { pool: VENUES.SOROSWAP_XLM_USDC_PAIR, share: VENUES.SOROSWAP_XLM_USDC_PAIR, reserves: "get_reserves", shares: "total_supply", tokens: "token_0" },
+  AQ_XLM_USDC: { pool: VENUES.AQUARIUS_XLM_USDC_POOL, share: VENUES.AQUARIUS_XLM_USDC_SHARE, reserves: "get_reserves", shares: "get_total_shares", tokens: "get_tokens" },
 };
-// Registry tracking token: the Farm LP shares a margin account holds, by symbol (7 decimals).
-const TRACKING_TOKEN = "CC4P2DC4J3DTKNL7CQB42S3JSZNIVVHFJEMHZWTSDR233CT6O2KK7ZK2";
-// The contracts name Blend's USDC "USDC" (and older aliases); the web folds them into one row (account-snapshot.ts).
-const canonical = (t: string) => {
-  const n = t.toUpperCase();
-  if (n === "BLEND_USDC" || n === "USDC") return "BLUSDC";
-  if (n === "AQUIRESUSDC" || n === "AQUARIUS_USDC") return "AQUSDC";
-  if (n === "SOROSWAPUSDC" || n === "SOROSWAP_USDC") return "SOUSDC";
-  return n;
-};
-const LIQ = 1.1;
+const DEFAULT_LIMIT = 1.2;
 const DUST = 0.01;
 
 export type Bal = { amount: number; usd: number };
@@ -52,43 +45,27 @@ export type StellarAccount = {
     collateralLeftBeforeLiquidation: number;
     netAvailableCollateral: number;
     leverage: number;
+    blend: { XLM: number; USDC: number }; // what the account has supplied to Blend; counts as collateral
   };
 };
 
 const addr = (a: string) => nativeToScVal(a, { type: "address" });
-const sym = (s: string) => nativeToScVal(s, { type: "symbol" });
 const num = (v: unknown) => Number(BigInt(v as bigint));
+const wadNum = (v: unknown) => Number(BigInt(v as bigint) / 10n ** 9n) / 1e9;
 
-async function getLedgerEntry(key: xdr.LedgerKey): Promise<xdr.LedgerEntryData | null> {
-  for (const url of RPC_URLS) {
-    try {
-      const res = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "getLedgerEntries", params: { keys: [key.toXDR("base64")] } }) });
-      const body = (await res.json()) as { result?: { entries?: { xdr: string }[] } };
-      const e = body.result?.entries?.[0];
-      return e ? xdr.LedgerEntryData.fromXDR(e.xdr, "base64") : null;
-    } catch {
-      // next RPC
-    }
-  }
-  throw new Error("getLedgerEntries failed on every RPC");
+/** CreditLayer.margin_of(owner): the trader's margin account, or null when none exists yet. */
+export async function findMarginAccount(owner: string): Promise<string | null> {
+  const m = (await readContract(CONTRACTS.CREDIT_LAYER, "margin_of", addr(owner)).catch(() => null)) as string | null;
+  return m ?? null;
 }
 
-export async function findMarginAccount(owner: string): Promise<string | null> {
-  const key = xdr.LedgerKey.contractData(
-    new xdr.LedgerKeyContractData({
-      contract: new Address(CONTRACTS.ACCOUNT_MANAGER).toScAddress(),
-      key: xdr.ScVal.scvVec([xdr.ScVal.scvSymbol("SmartAccounts"), addr(owner)]),
-      durability: xdr.ContractDataDurability.persistent(),
-    }),
-  );
-  const entry = await getLedgerEntry(key);
-  if (!entry) return null;
-  const list = scValToNative(entry.contractData().val()) as string[];
-  for (let i = list.length - 1; i >= 0; i--) {
-    const active = await readContract(list[i], "is_account_active").catch(() => null);
-    if (active !== false) return list[i];
-  }
-  return null;
+/** The credit layer's live health limits (borrow_limit, liquidation_threshold), 1.2 when a read fails (a fresh deployment's value). */
+export async function healthLimits(): Promise<{ borrow: number; liquidation: number }> {
+  const [b, l] = await Promise.all([
+    readContract(CONTRACTS.CREDIT_LAYER, "borrow_limit").catch(() => null),
+    readContract(CONTRACTS.CREDIT_LAYER, "liquidation_threshold").catch(() => null),
+  ]);
+  return { borrow: b ? wadNum(b) : DEFAULT_LIMIT, liquidation: l ? wadNum(l) : DEFAULT_LIMIT };
 }
 
 /** The pool's live XLM and USDC reserves, in whole tokens (web pool-action.tsx:useLpReserves). */
@@ -112,7 +89,7 @@ async function lpUsd(row: string, shares: number, px: Record<string, number>): P
   const xlmFirst = first === TOKENS.XLM;
   const xlmAmt = (xlmFirst ? r[0] : r[1]) * (shares / t);
   const usdcAmt = (xlmFirst ? r[1] : r[0]) * (shares / t);
-  return xlmAmt * px.XLM + usdcAmt * px.BLUSDC;
+  return xlmAmt * px.XLM + usdcAmt * (row === "AQ_XLM_USDC" ? px.AQUSDC : px.SOUSDC);
 }
 
 export async function fetchStellarAccount(owner: string): Promise<StellarAccount> {
@@ -125,45 +102,43 @@ export async function fetchStellarAccount(owner: string): Promise<StellarAccount
   const wallet = Object.fromEntries(walletRaw.map(([k, v]) => [APP_SYM[k], v]));
   if (!marginAddr) return { owner, wallet, margin: null };
 
-  const [borrowedSyms, collSyms, raw] = await Promise.all([
-    readContract(marginAddr, "get_all_borrowed_tokens") as Promise<string[]>,
-    readContract(marginAddr, "get_all_collateral_tokens") as Promise<string[]>,
+  const [debtTokens, raw, value, limits] = await Promise.all([
+    (readContract(marginAddr, "debts").catch(() => [])) as Promise<string[]>,
     Promise.all(Object.entries(TOKENS).map(async ([k, c]) => [k, num(await readContract(c, "balance", addr(marginAddr)).catch(() => 0n)) / 1e7] as const)),
+    readContract(CONTRACTS.CREDIT_LAYER, "margin_value", addr(marginAddr)).catch(() => null) as Promise<[bigint, bigint] | null>,
+    healthLimits(),
   ]);
-  // debt: one row per canonical token, keeping the larger reading when aliases repeat (as the web dedupes)
+  // debt: one row per credit asset, from the reserve that lent it
   const debt: Record<string, Bal> = {};
   await Promise.all(
-    [...new Set(borrowedSyms)].map(async (s) => {
-      const a = num(await readContract(marginAddr, "get_borrowed_token_debt", sym(s))) / 1e18;
-      const k = canonical(s);
-      if (a > 0 && a > (debt[k]?.amount ?? 0)) debt[k] = { amount: a, usd: a * (px[k] ?? 0) };
+    [...new Set(debtTokens ?? [])].map(async (t) => {
+      const k = KEY_OF_TOKEN[t];
+      if (!k) return;
+      const a = wadNum(await readContract(EARN_POOLS[APP_SYM[k]].pool, "debt_of", addr(marginAddr)));
+      if (a > 0) debt[k] = { amount: a, usd: a * (px[k] ?? 0) };
     }),
   );
   const collateral: Record<string, Bal> = {};
-  // ledger rows the raw token balances don't cover (anything but XLM / BLUSDC / AQUSDC / SOUSDC and the LP rows)
-  await Promise.all(
-    [...new Set(collSyms)].map(async (s) => {
-      const k = canonical(s);
-      if (TOKENS[k] || LP_POOLS[k]) return;
-      const a = num(await readContract(marginAddr, "get_collateral_token_balance", sym(s))) / 1e18;
-      if (a > 0) collateral[k] = { amount: a, usd: 0 };
-    }),
-  );
   // the margin account's own token balances
   for (const [k, a] of raw) if (a > 0) collateral[k] = { amount: a, usd: a * (px[k] ?? 0) };
-  // Farm LP shares from the tracking token (Aquarius falls back to the pool's own share count), valued from reserves
+  // Farm LP shares: the share tokens the margin account holds directly, valued from the pool reserves
   await Promise.all(
     Object.keys(LP_POOLS).map(async (k) => {
-      let shares = num(await readContract(TRACKING_TOKEN, "balance", addr(marginAddr), sym(k)).catch(() => 0n)) / 1e7;
-      if (!(shares > 0) && k === "AQ_XLM_USDC") shares = num(await readContract(LP_POOLS[k].pool, "get_user_shares", addr(marginAddr)).catch(() => 0n)) / 1e7;
-      if (!(shares > 0) && k === "SS_XLM_USDC") shares = num(await readContract(LP_POOLS[k].pool, "balance", addr(marginAddr)).catch(() => 0n)) / 1e7;
+      const shares = num(await readContract(LP_POOLS[k].share, "balance", addr(marginAddr)).catch(() => 0n)) / 1e7;
       if (shares > 0) collateral[k] = { amount: shares, usd: await lpUsd(k, shares, px).catch(() => 0) };
     }),
   );
 
-  const debtUsd = Object.values(debt).reduce((t, b) => t + b.usd, 0);
+  // Blend supply is the account's too: it counts in the account value and in the health factor
+  const blend = await fetchBlendPositions(marginAddr).catch(() => ({ XLM: 0, USDC: 0 }));
+  const blendUsd = blend.XLM * (px.XLM ?? 0) + blend.USDC * (px.BLUSDC ?? 0);
+
+  // The contract's own valuation (Liquidation prices) wins; the sums are the fallback when that read fails.
+  const sumDebt = Object.values(debt).reduce((t, b) => t + b.usd, 0);
+  const sumColl = Object.values(collateral).reduce((t, b) => t + b.usd, 0) + blendUsd;
+  const debtUsd = value ? wadNum(value[1]) : sumDebt;
+  const gross = value ? wadNum(value[0]) : sumColl;
   const effDebt = debtUsd > DUST ? debtUsd : 0;
-  const gross = Object.values(collateral).reduce((t, b) => t + b.usd, 0);
   const equity = Math.max(0, gross - effDebt);
   return {
     owner,
@@ -175,9 +150,10 @@ export async function fetchStellarAccount(owner: string): Promise<StellarAccount
       debtUsd,
       grossCollateralUsd: gross,
       healthFactor: effDebt > 0 ? gross / effDebt : Infinity,
-      collateralLeftBeforeLiquidation: Math.max(0, gross - effDebt * LIQ),
+      collateralLeftBeforeLiquidation: Math.max(0, gross - effDebt * limits.liquidation),
       netAvailableCollateral: equity,
       leverage: equity > DUST ? 1 + effDebt / equity : 1,
+      blend,
     },
   };
 }

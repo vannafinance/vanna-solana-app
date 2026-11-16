@@ -36,6 +36,17 @@ class VannaDynamicModule : Module() {
   override fun definition() = ModuleDefinition {
     Name("VannaDynamic")
 
+    // Coming back from the browser (Google sign-in) or another app leaves the page paused; wake it again.
+    // Dynamic's browser sign-in (Google / X) ends with its WebAuthSession restarting the app's activity (NEW_TASK | CLEAR_TASK), so the
+    // activity the page was attached to is destroyed. Re-attach the page to the new activity, or it stays detached and never answers.
+    OnActivityEntersForeground {
+      if (configuredEnvId != null) runCatching {
+        val web = DynamicSDK.getInstance().webViewController.webView
+        attachPage(web)
+        keepPageAwake(web)
+      }
+    }
+
     AsyncFunction("configure") Coroutine { environmentId: String, options: ConfigureOptions? ->
       guarded { configure(environmentId, options) }
     }
@@ -65,6 +76,9 @@ class VannaDynamicModule : Module() {
           "x" -> SocialAuthModule.SocialProvider.TWITTER
           else -> throw CodedException(CODE, "Unknown sign-in provider", null)
         }
+        // A leftover token with no user makes the page treat this as "link a social account" and reject it
+        // ("User is not logged in"). Starting from a clean signed-out state makes it a normal sign-in.
+        if (sdk.auth.authenticatedUser == null) withTimeoutOrNull(5_000) { runCatching { sdk.auth.logout() } }
         sdk.auth.social.connect(social)
         withTimeoutOrNull(WALLETS_TIMEOUT_MS) {
           sdk.wallets.userWalletsChanges.first { w -> solana(w) != null && stellar(w) != null }
@@ -157,6 +171,21 @@ class VannaDynamicModule : Module() {
       }
     }
 
+    // ed25519 signature over 32 bytes (given as 64 hex chars) with the Stellar wallet; returns the signature in base64.
+    // signStellarXdr makes Dynamic's page and wallet iframe read the whole transaction, and their Stellar library rejects ledger keys
+    // of newer XDR types (e.g. Aquarius "amm.constant", ScVal type 22). A Stellar signature is just ed25519 over the transaction hash,
+    // so the app hashes the transaction itself and signs the hash here.
+    // Uses Stellar signMessage: the wallet iframe's Stellar client decodes a hex message to its bytes and signs exactly those (the
+    // same MPC call its own signTransaction makes with the hash). waas_signRawMessage (isFormatted) failed or never returned for Stellar.
+    AsyncFunction("signStellarHash") Coroutine { hashHex: String ->
+      guarded {
+        val sdk = awaitSdk()
+        val wallet = restored(sdk, ::stellar) ?: throw CodedException(CODE, "No Stellar wallet for this user. Is Stellar enabled in the Dynamic dashboard?", null)
+        val id = wallet.id ?: throw CodedException(CODE, "Stellar wallet has no id", null)
+        sdk.stellar.signMessage(walletId = id, message = hashHex.trim())
+      }
+    }
+
     AsyncFunction("signSolanaTransaction") Coroutine { base64: String ->
       guarded {
         val sdk = awaitSdk()
@@ -177,6 +206,39 @@ class VannaDynamicModule : Module() {
     AsyncFunction("signOut") Coroutine { ->
       guarded { awaitSdk().auth.logout() }
     }
+  }
+
+  // The wallet's signing runs in a hidden page; Chrome pauses a page that is not visible and focused, so a signature never came
+  // back. Mark it resumed, visible and focused. Posted so it also runs once the view has been laid out.
+  private fun keepPageAwake(web: android.webkit.WebView) {
+    val wake = Runnable {
+      runCatching {
+        web.onResume()
+        web.resumeTimers()
+        web.isFocusable = true
+        web.isFocusableInTouchMode = true
+        web.dispatchWindowVisibilityChanged(android.view.View.VISIBLE)
+        web.onWindowFocusChanged(true)
+        web.requestFocus()
+      }
+    }
+    web.post(wake)
+    web.postDelayed(wake, 1500)
+    web.postDelayed(wake, 5000)
+  }
+
+  // Hosts the page in the current activity's content area (invisible, off-screen, real size). If it sits in an older, destroyed
+  // activity's view tree it is moved here first.
+  private fun attachPage(web: android.webkit.WebView) {
+    val activity = appContext.currentActivity ?: return
+    val host = activity.findViewById<android.view.ViewGroup>(android.R.id.content) ?: return
+    val parent = web.parent as? android.view.ViewGroup
+    if (parent != null && parent.rootView === host.rootView) return // already in this activity's window
+    parent?.removeView(web)
+    val d = activity.resources.displayMetrics.density
+    web.alpha = 0f
+    web.translationX = -4000f
+    activity.addContentView(web, android.widget.FrameLayout.LayoutParams((360 * d).toInt(), (640 * d).toInt()))
   }
 
   private suspend fun configure(environmentId: String, options: ConfigureOptions?) {
@@ -200,6 +262,14 @@ class VannaDynamicModule : Module() {
         logLevel = LoggerLevel.WARN
       )
       DynamicSDK.initialize(props, activity.applicationContext, activity)
+      // The SDK loads its page with webView.post { loadUrl }, which only runs once the WebView is attached to a
+      // window. Its Compose DynamicUI() normally hosts it; this app has no Compose, so attach it ourselves, invisible.
+      // It must also count as visible: Chrome reports a tiny or hidden page as "hidden" and holds the wallet's signing
+      // (MPC) back until it is shown, so a signature never came back. Give it a real size, but park it off-screen so it
+      // cannot be seen or touched.
+      val web = DynamicSDK.getInstance().webViewController.webView
+      attachPage(web)
+      keepPageAwake(web)
     }
     configuredEnvId = environmentId
   }

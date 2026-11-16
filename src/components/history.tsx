@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Linking, Pressable, StyleSheet, Text, View } from "react-native";
 import Animated, { FadeIn, LinearTransition } from "react-native-reanimated";
 
 import type { Activity } from "@/sample/data";
@@ -19,6 +19,13 @@ const TONE: Record<string, Tone> = {
   Supply: "teal", Deposit: "grey", Withdraw: "grey", Borrow: "grey", Repay: "grey", Long: "violet", Short: "red", Close: "grey",
   Liquidated: "pink", Swap: "grey", Buy: "teal", "Test funds": "teal", "Account created": "grey",
 };
+
+// The real transaction opens in the same explorer the website uses; a row without a hash (an older sample row) has none.
+function openExplorer(r: Activity) {
+  if (!r.hash) return toast("No explorer record for this entry");
+  const url = r.chain === "solana" ? `https://explorer.solana.com/tx/${r.hash}?cluster=custom&customUrl=${encodeURIComponent("https://rpc-devnet.solana.vanna.finance")}` : `https://stellar.expert/explorer/testnet/tx/${r.hash}`;
+  Linking.openURL(url).catch(() => toast("Couldn't open the explorer"));
+}
 
 export function ActionTag({ label, tone }: { label: string; tone: Tone }) {
   const { colors } = useTheme();
@@ -81,7 +88,7 @@ function HistoryRow({ r, first }: { r: Activity; first: boolean }) {
               { label: "Transaction", value: r.tx },
             ]}
           />
-          <Pressable onPress={() => toast(`Explorer: ${r.tx}`)} style={styles.x} accessibilityRole="link">
+          <Pressable onPress={() => openExplorer(r)} style={styles.x} accessibilityRole="link">
             <Text style={{ fontFamily: font.semibold, fontSize: 13, color: colors.link }}>View on explorer</Text>
             <Icon name="open_in_new" size={16} color="link" />
           </Pressable>
