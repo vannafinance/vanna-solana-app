@@ -96,12 +96,13 @@ export function TokenBadge({ sym, size = 36 }: { sym: string; size?: number }) {
   return <TokenLogo sym={sym} size={size} />;
 }
 
-export function Tag({ label, tone }: { label: string; tone: "long" | "short" | "grey" | "teal" }) {
+export function Tag({ label, tone }: { label: string; tone: "long" | "short" | "grey" | "teal" | "neg" }) {
   const { colors } = useTheme();
   const look =
     tone === "long" ? { bg: "#703AE6", fg: "#FFFFFF" }
     : tone === "short" ? { bg: colors.negative, fg: "#FFFFFF" }
     : tone === "teal" ? { bg: colors.tealTint, fg: colors.onTealTint }
+    : tone === "neg" ? { bg: colors.pinkTint, fg: colors.onPinkTint }
     : { bg: colors.segment, fg: colors.muted };
   return (
     <View style={[styles.tag, { backgroundColor: look.bg }]}>

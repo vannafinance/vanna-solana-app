@@ -21,7 +21,7 @@ import { authenticate, lockState } from "@/state/lock";
 import { useTheme } from "@/theme/use-theme";
 import { type Family, font } from "@/theme/tokens";
 
-import { type FirstTime, FirstTimeFlow } from "./first-time-flow";
+import { type MarginFlow, MarginFlowSheet } from "./first-time-flow";
 import { openSheet, toast } from "./overlay";
 import { haptic } from "@/ui/haptics";
 
@@ -41,10 +41,10 @@ export type TxSpec = {
   send?: () => Promise<string | void>;
   // a custom review (design sheets that are their own review, e.g. Close all positions); replaces legs + rows
   body?: ReactNode;
-  // First time on a chain (no margin account yet): the account is opened first, then each action is its own transaction. When set, the
-  // sheet uses the multi-step layout (ui/first-time-flow.tsx) and runs these steps instead of `send`.
-  firstTime?: FirstTime;
-  // Called once every first-time step has confirmed, with the last transaction hash (the sheet then records the history row).
+  // Margin deposit / borrow on a real wallet: the steps (open the account when there is none, then the deposits and borrows), each its
+  // own transaction. When set, the sheet uses the margin flow layout (ui/first-time-flow.tsx) and runs these steps instead of `send`.
+  flow?: MarginFlow;
+  // Called once every flow step has confirmed, with the last transaction hash (the sheet then records the history row).
   onAllDone?: (lastHash?: string) => void;
 };
 
@@ -67,10 +67,20 @@ function recordDone(spec: TxSpec, h?: string) {
   refreshAccountSoon(spec.chain);
 }
 
+// The review's closing rows: the network fee and the paying account.
+function feeRows(chain: Chain, each = ""): TxSpec["rows"] {
+  const real = inUseWallet(chain);
+  const w = real ? { app: real.app, addr: real.addr } : ACCOUNT.wallets[chain];
+  return [["Fee", FEE[chain] + each], ["Account", w.app === "Vanna wallet" ? w.addr : `${w.app} ${w.addr}`]];
+}
+
 export function runTx(spec: TxSpec) {
-  if (spec.firstTime) {
-    const ft: TxSpec = { ...spec, onAllDone: (h) => recordDone(spec, h) };
-    openSheet({ title: spec.title, content: (close) => <FirstTimeFlow spec={ft} close={close} /> });
+  if (spec.flow) {
+    // a new account's review lists the steps instead of health factor and leverage (design)
+    const isNew = spec.flow.steps[0].key === "open";
+    const rows = [...(isNew ? [] : spec.rows), ...feeRows(spec.chain, spec.flow.steps.length > 1 ? " each" : "")];
+    const ft: TxSpec = { ...spec, rows, onAllDone: (h) => recordDone(spec, h) };
+    openSheet({ title: spec.title, content: (close) => <MarginFlowSheet spec={ft} close={close} /> });
     return;
   }
   openSheet({ title: spec.title, content: (close) => <TxFlow spec={spec} close={close} /> });
@@ -154,8 +164,6 @@ function TxFlow({ spec, close }: { spec: TxSpec; close: () => void }) {
   };
 
   if (phase === "review") {
-    const real = inUseWallet(spec.chain);
-    const w = real ? { app: real.app, addr: real.addr } : ACCOUNT.wallets[spec.chain];
     return (
       <View style={{ gap: 12, paddingBottom: 4 }}>
         {spec.body ?? (<>
@@ -174,7 +182,7 @@ function TxFlow({ spec, close }: { spec: TxSpec; close: () => void }) {
           ))}
         </View>
         <View>
-          {[...spec.rows, ["Fee", FEE[spec.chain]] as [string, string], ["Account", w.app === "Vanna wallet" ? w.addr : `${w.app} ${w.addr}`] as [string, string]].map(([l, v, t], i) => (
+          {[...spec.rows, ...feeRows(spec.chain)].map(([l, v, t], i) => (
             <View key={l} style={[styles.row, i > 0 && { borderTopWidth: 1, borderTopColor: colors.divider }]}>
               <Text style={[styles.rowL, { color: colors.muted }]}>{l}</Text>
               <Text style={[styles.rowV, { color: t === "pos" ? colors.positive : t === "neg" ? colors.negative : colors.text }]}>{v}</Text>

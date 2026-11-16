@@ -29,8 +29,9 @@ import {
   solanaDepositMarginCollateral,
   solanaRepay,
   solanaWithdrawMarginCollateral,
+  TOKENS,
 } from "@/chain/solana/actions";
-import type { FirstTime, TxStep } from "@/ui/first-time-flow";
+import type { FlowAsset, MarginFlow, TxStep } from "@/ui/first-time-flow";
 import { personalReady } from "@/state/personal";
 
 /* Margin (design screens/margin.js, V4: one page): hero, Leverage | Repay | Transfer in the pill, the "Your account" row (Account |
@@ -38,7 +39,9 @@ import { personalReady } from "@/state/personal";
 export type MarginAct = "leverage" | "repay" | "transfer";
 const fam = families.margin;
 
-const DEP: Record<Chain, string[]> = { solana: ["SOL", "USDC", "JitoSOL", "JupSOL", "JupUSD"] };
+// the assets the protocol takes as collateral; one Leverage action deposits up to three of them (each a different asset)
+const DEP: Record<Chain, string[]> = { solana: TOKENS.filter((t) => t.depositable).map((t) => t.symbol) };
+const MAX_DEP = 3;
 // design margin.js TIPS
 const TIPS = {
   lev: "Account leverage: market exposure (volatile collateral, spot positions and perp size) divided by equity.",
@@ -46,43 +49,47 @@ const TIPS = {
 };
 const rateOf = (chain: Chain, s: string) => POOLS_BY[chain].find((p) => p.sym === s)?.borA;
 
-// The first-time sheet's steps (ui/first-time-flow.tsx): open the account, then the deposit and the borrow in one transaction (as the
-// website does).
-function firstTimeSteps(chain: Chain, dl: [string, number][], borrows: { sym: string; amt: number }[]): FirstTime {
-  const dText = dl.map(([t, v]) => tokFmt(v, t)).join(" + ");
-  const bText = borrows.map((x) => tokFmt(x.amt, x.sym)).join(" + ");
-  const open: TxStep = {
-    key: "open",
-    short: "Open account",
-    title: "Open margin account",
-    desc: `Creates your account on ${CHAIN_LABEL[chain]}`,
-    doing: "Opening your margin account",
-    send: async () => await solanaCreateMargin(),
-  };
-  const steps: TxStep[] = [open];
-  if (dl.length || borrows.length) {
-    const both = dl.length > 0 && borrows.length > 0;
-    steps.push({
-      key: "both",
-      short: both ? "Deposit and borrow" : dl.length ? "Deposit" : "Borrow",
-      title: both ? `Deposit ${dText}, borrow ${bText}` : dl.length ? `Deposit ${dText}` : `Borrow ${bText}`,
-      desc: both ? "From your wallet, then from the lending pool, in one transaction" : dl.length ? "From your wallet into the account" : "From the lending pool, against your deposit",
-      doing: both ? `Depositing ${dText} and borrowing ${bText}` : dl.length ? `Depositing ${dText}` : `Borrowing ${bText}`,
-      send: async () =>
-        await solanaDepositAndBorrow({
-          deposits: dl.map(([sym, amount]) => ({ sym, amount })),
-          borrows: borrows.map((b) => ({ sym: b.sym, amount: b.amt })),
-          createIfMissing: false,
-        }),
+// The margin flow's steps (ui/first-time-flow.tsx, design/margin-account-open-flow.html). No account yet: open it, then the deposits in
+// one transaction and the borrows in another. An account already open: the deposits and borrows in one transaction (as the website does).
+function marginFlow(chain: Chain, d: ChainData, dl: [string, number][], borrows: { sym: string; amt: number }[]): MarginFlow {
+  const assets: FlowAsset[] = [...dl.map(([sym, amt]) => ({ role: "dep" as const, sym, amt })), ...borrows.map((b) => ({ role: "bor" as const, sym: b.sym, amt: b.amt }))];
+  const dIdx = dl.map((_, j) => j);
+  const bIdx = borrows.map((_, j) => dl.length + j);
+  const send = (idx: number[]) => async () =>
+    await solanaDepositAndBorrow({
+      deposits: idx.filter((j) => assets[j].role === "dep").map((j) => ({ sym: assets[j].sym, amount: assets[j].amt })),
+      borrows: idx.filter((j) => assets[j].role === "bor").map((j) => ({ sym: assets[j].sym, amount: assets[j].amt })),
+      createIfMissing: false,
     });
+  // one deposit (or borrow) transaction for all of its assets
+  const leg = (key: "deposit" | "borrow", idx: number[]): TxStep => {
+    const l = idx.map((j) => tokFmt(assets[j].amt, assets[j].sym));
+    const one = idx.length === 1;
+    const [verb, ing, from] = key === "deposit" ? ["Deposit", "Depositing", "From your wallet into the account"] : ["Borrow", "Borrowing", "From the lending pool, against your deposit"];
+    return {
+      key, short: verb, assets: idx, send: send(idx),
+      title: one ? `${verb} ${l[0]}` : `${verb} ${idx.length} assets`,
+      desc: one ? from : `${l.join(" · ")}, one transaction`,
+      doing: one ? `${ing} ${l[0]}` : `${ing} ${idx.length} assets`,
+    };
+  };
+  const open = !hasMargin(d);
+  const steps: TxStep[] = [];
+  if (open) {
+    steps.push({ key: "open", short: "Open account", title: "Open margin account", desc: `Creates your account on ${CHAIN_LABEL[chain]}`, doing: "Opening your margin account", assets: [], send: async () => await solanaCreateMargin() });
   }
+  if (!open && dl.length && borrows.length) {
+    steps.push({ key: "both", short: "Deposit and borrow", title: "Deposit and borrow", desc: "From your wallet, then from the lending pool, in one transaction", doing: "Depositing and borrowing", assets: [...dIdx, ...bIdx], send: send([...dIdx, ...bIdx]) });
+  } else {
+    if (dl.length) steps.push(leg("deposit", dIdx));
+    if (borrows.length) steps.push(leg("borrow", bIdx));
+  }
+  const held = (xs: { sym: string; amt: number }[]) => Object.fromEntries(xs.filter((x) => x.amt > 0).map((x) => [x.sym, x.amt]));
   return {
     steps,
-    accountAddr: async () => {
-      return marginPda(requireActiveRealWallet(chain).full);
-    },
-    dep: dl.length ? { label: dText } : undefined,
-    bor: borrows.length ? { label: bText } : undefined,
+    assets,
+    base: { col: held(d.margin.coll), debt: held(d.margin.debt) },
+    accountAddr: async () => marginPda(requireActiveRealWallet(chain).full),
   };
 }
 const num = (t: string) => parseFloat(t) || 0;
@@ -245,13 +252,14 @@ function Leverage() {
     const dl: [string, number][] = src === "wb" ? deps.filter((r) => r.x > 0).map((r) => [r.sym, r.x]) : [];
     const borrows = L > 1 ? items.filter((x) => x.amt > 0) : [];
     const a = after!;
-    // No margin account yet on a real wallet: the sheet opens the account first, then deposits and borrows in one step.
-    const firstTime = personalReady(chain) && !hasMargin(d) ? firstTimeSteps(chain, dl, borrows) : undefined;
+    // A real wallet runs the margin flow: with no margin account yet the sheet opens it first, then deposits, then borrows.
+    const flow = personalReady(chain) ? marginFlow(chain, d, dl, borrows) : undefined;
+    const opens = flow?.steps[0].key === "open";
     runTx({
-      firstTime,
+      flow,
       chain, fam,
       title: borrows.length ? (dl.length ? "Review deposit and borrow" : "Review borrow") : "Review deposit",
-      cta: borrows.length ? (dl.length ? "Deposit and borrow" : "Borrow") : "Deposit",
+      cta: opens ? (borrows.length ? "Open account, deposit and borrow" : "Open account and deposit") : borrows.length ? (dl.length ? "Deposit and borrow" : "Borrow") : "Deposit",
       legs: [
         ...(dl.length ? [{ l: "You deposit", v: dl.map(([t, v]) => tokFmt(v, t)).join(" + "), s: "From your wallet" }] : []),
         ...(borrows.length ? [{ l: "You borrow", v: borrows.map((x) => tokFmt(x.amt, x.sym)).join(" + "), s: borrows.map((x) => `${x.sym} ${pct(rateOf(chain, x.sym) ?? 0)} APY`).join(", ") }] : []),
@@ -309,7 +317,7 @@ function Leverage() {
             onChange={(v) => (setRow(r.id, { amt: v, pct: undefined }), resetB())}
             sym={r.sym}
             onSym={(t) => setRow(r.id, { sym: t, amt: "" })}
-            syms={depList}
+            syms={depList.filter((t) => t === r.sym || !deps.some((x) => x.id !== r.id && x.sym === t))}
             meta={(t) => nf(balOf(t), 2)}
             usdValue={r.x * priceOf(r.sym)}
             label="Collateral amount"
@@ -328,8 +336,8 @@ function Leverage() {
       {src === "wb" && (
         <Pressable
           onPress={() => setRows((rs) => [...rs, { id: Date.now(), sym: DEP[chain].find((t) => !rs.some((x) => x.sym === t)) ?? DEP[chain][0], amt: "" }])}
-          disabled={rows.length >= 3}
-          style={[styles.addc, { borderColor: colors.borderControl, opacity: rows.length >= 3 ? 0.4 : 1 }]}
+          disabled={rows.length >= MAX_DEP}
+          style={[styles.addc, { borderColor: colors.borderControl, opacity: rows.length >= MAX_DEP ? 0.4 : 1 }]}
           accessibilityRole="button"
         >
           <Icon name="add" size={18} />
