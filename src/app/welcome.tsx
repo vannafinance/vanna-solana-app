@@ -1,41 +1,48 @@
-import { router } from "expo-router";
-import { View } from "react-native";
-import Animated, { useReducedMotion } from "react-native-reanimated";
+import { type Href, router } from "expo-router";
+import { useState } from "react";
 
-import { HeroStage } from "@/components/connect/hero-stage";
-import { riseIn } from "@/components/connect/motion";
-import { PillButton } from "@/components/connect/pill-button";
-import { AppText } from "@/components/ui/app-text";
-import { Icon } from "@/components/ui/icon";
-import { useSpaceChoice } from "@/hooks/use-space-choice";
-import { palette } from "@/theme/tokens";
+import { connectAndAddWallet } from "@/chain/connect-wallet";
+import { HeroStage } from "@/components/intro/hero-stage";
+import { PillButton } from "@/components/intro/pill-button";
+import { RiseIn } from "@/components/intro/rise-in";
+import { useRewards } from "@/sample/rewards";
+import { markWelcomeSeen } from "@/state/session";
+import { useWallets } from "@/state/wallets";
 
-const CONNECT_AT = 3550;
-const EXPLORE_AT = 3650;
-const NOTE_AT = 3750;
-const SHINE_AFTER_MS = 4300;
+// Welcome: the intro plays once, then one button rises in. Connect wallet opens Android's own wallet chooser straight away
+// (every Solana wallet on the phone is listed there); Continue when this phone is already connected. A new person then picks a name.
+// The action takes its space from the first frame, so the orbit never moves when it appears.
+const START_AT = 3550;
 
 export default function Welcome() {
-  const reduceMotion = useReducedMotion();
-  const { entryRoute } = useSpaceChoice();
-  const rise = (delay: number) => (reduceMotion ? undefined : riseIn(12, 520, delay));
-
+  const { signedIn } = useWallets();
+  const me = useRewards();
+  const [waiting, setWaiting] = useState(false);
+  const enter = () => {
+    markWelcomeSeen();
+    router.replace("/portfolio" as Href);
+  };
+  const connect = async () => {
+    if (waiting) return;
+    setWaiting(true);
+    const w = await connectAndAddWallet();
+    setWaiting(false);
+    if (!w) return;
+    markWelcomeSeen();
+    // Someone who already picked a name goes straight in; a new person picks one first.
+    if (me.name !== "Maya") enter();
+    else router.replace("/sign-in" as Href);
+  };
   return (
     <HeroStage intro>
-      <Animated.View entering={rise(CONNECT_AT)}>
-        <PillButton label="Connect wallet" height={56} shineAfter={SHINE_AFTER_MS} onPress={() => router.push("/connect")} />
-      </Animated.View>
-      <Animated.View entering={rise(EXPLORE_AT)}>
-        <PillButton label="Explore first" tone="surface" onPress={() => router.replace(entryRoute)} />
-      </Animated.View>
-      <Animated.View entering={rise(NOTE_AT)}>
-        <View style={{ minHeight: 24, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6 }}>
-          <Icon name="lock" size={14} color={palette.dark.onDisabled} />
-          <AppText variant="caption" style={{ color: palette.dark.onDisabled }}>
-            Your keys stay in your wallet
-          </AppText>
-        </View>
-      </Animated.View>
+      <RiseIn delay={START_AT} distance={12} duration={520} style={{ width: "100%" }}>
+        <PillButton
+          label={signedIn ? "Continue" : waiting ? "Waiting for your wallet…" : "Connect wallet"}
+          height={56}
+          shineAfter={START_AT + 750}
+          onPress={signedIn ? enter : connect}
+        />
+      </RiseIn>
     </HeroStage>
   );
 }

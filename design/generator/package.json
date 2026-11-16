@@ -1,7 +1,0 @@
-{
-  "name": "vanna-v2-designs-generator",
-  "private": true,
-  "dependencies": {
-    "@phosphor-icons/core": "^2.1.1"
-  }
-}

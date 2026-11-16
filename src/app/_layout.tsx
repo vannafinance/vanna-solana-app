@@ -1,7 +1,6 @@
+import "@/chain/polyfills";
 import { PlusJakartaSans_400Regular, PlusJakartaSans_600SemiBold, useFonts } from "@expo-google-fonts/plus-jakarta-sans";
-import { MobileWalletProvider } from "@wallet-ui/react-native-web3js";
-import { focusManager, QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { Stack } from "expo-router";
+import { DarkTheme, DefaultTheme, Stack, ThemeProvider, router, usePathname } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { StatusBar } from "expo-status-bar";
 import { useEffect, useState } from "react";
@@ -9,64 +8,74 @@ import { AppState } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
-import { ResourceView } from "@/components/ui/resource-view";
-import { SpaceScope } from "@/components/ui/space-scope";
-import { restoreAppearance } from "@/hooks/use-appearance";
-import { useWalletSession } from "@/hooks/use-wallet-session";
-import { APP_IDENTITY, CHAIN, RPC_URL } from "@/lib/solana/config";
-import { detailMotion } from "@/navigation/stack-motion";
-import { walletCache } from "@/lib/solana/wallet-cache";
+import "@/chain/external"; // registers the external wallet signers
+import { useWallets } from "@/state/wallets";
+import { startAccountLive } from "@/chain/account-live";
+import { startLiveData } from "@/chain/live";
+import "@/state/appearance";
+import { AppLock } from "@/components/app-lock";
+import { ChainProvider } from "@/state/chain";
+import { reapplyAppearance } from "@/state/appearance";
+import { hydrateSession, isWelcomeSeen } from "@/state/session";
+import { useTheme } from "@/theme/use-theme";
+import { closeSheet, OverlayHost } from "@/ui/overlay";
+import { ThemeFadeHost } from "@/ui/theme-fade";
 
 SplashScreen.preventAutoHideAsync();
 
-focusManager.setEventListener((handleFocus) => {
-  const subscription = AppState.addEventListener("change", (state) => handleFocus(state === "active"));
-  return () => subscription.remove();
-});
-
-const queryClient = new QueryClient({ defaultOptions: { queries: { retry: 1, staleTime: 10_000 } } });
-
-function Navigation() {
-  const session = useWalletSession();
-  return (
-    <ResourceView resource={session} emptyLabel="No wallet session">
-      {() => (
-        <SpaceScope>
-          <Stack screenOptions={{ headerShown: false, ...detailMotion }}>
-            <Stack.Screen name="faucet" options={{ presentation: "transparentModal", animation: "none" }} />
-            <Stack.Screen name="margin" options={{ presentation: "transparentModal", animation: "none" }} />
-            <Stack.Screen name="swap" options={{ animation: "slide_from_bottom" }} />
-          </Stack>
-        </SpaceScope>
-      )}
-    </ResourceView>
-  );
-}
-
 export default function RootLayout() {
+  const { colors, isDark } = useTheme();
+  const pathname = usePathname();
   const [fontsLoaded, fontError] = useFonts({ PlusJakartaSans_400Regular, PlusJakartaSans_600SemiBold });
-  const [appearanceRestored, setAppearanceRestored] = useState(false);
-  const ready = (fontsLoaded || fontError !== null) && appearanceRestored;
-
+  // Wallets load before the first screen. The intro plays on every fresh open.
+  const [hydrated, setHydrated] = useState(false);
   useEffect(() => {
-    void restoreAppearance().finally(() => setAppearanceRestored(true));
+    hydrateSession().finally(() => setHydrated(true));
   }, []);
+  const ready = (fontsLoaded || !!fontError) && hydrated;
+  const { signedIn } = useWallets();
 
   useEffect(() => {
     if (ready) SplashScreen.hideAsync();
   }, [ready]);
+  // the saved light / dark choice, applied again now that the screen is up (and whenever the app comes back)
+  useEffect(() => {
+    if (!ready) return;
+    reapplyAppearance();
+    const t = setTimeout(reapplyAppearance, 600);
+    const sub = AppState.addEventListener("change", (st) => st === "active" && reapplyAppearance());
+    return () => (clearTimeout(t), sub.remove());
+  }, [ready]);
+  // A reload used to restore Portfolio. Until this open's intro is finished, stay on it.
+  useEffect(() => {
+    if (!ready || (isWelcomeSeen() && signedIn)) return;
+    if (pathname === "/welcome" || pathname.startsWith("/sign-in")) return;
+    router.replace("/welcome");
+  }, [ready, pathname, signedIn]);
+  useEffect(() => startLiveData(), []);
+  useEffect(() => startAccountLive(), []);
+  // The sheet / overlay state lives outside React, so it survives a screen rebuild (a reload) and a stale
+  // review sheet would sit on top of the intro. A fresh start begins with nothing open.
+  useEffect(() => {
+    closeSheet();
+  }, []);
 
   if (!ready) return null;
 
+  const base = isDark ? DarkTheme : DefaultTheme;
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
-        <StatusBar style="auto" />
-        <QueryClientProvider client={queryClient}>
-          <MobileWalletProvider chain={CHAIN} endpoint={RPC_URL} identity={APP_IDENTITY} cache={walletCache}>
-            <Navigation />
-          </MobileWalletProvider>
-        </QueryClientProvider>
+        <ThemeProvider value={{ ...base, colors: { ...base.colors, background: colors.bg, card: colors.surface, text: colors.text } }}>
+          <ChainProvider>
+            <StatusBar style="light" />
+            {/* pushed screens slide in from the right on both platforms, as shipped */}
+            <Stack screenOptions={{ headerShown: false, animation: "ios_from_right", contentStyle: { backgroundColor: colors.bg } }} />
+            <OverlayHost />
+            <AppLock />
+            <ThemeFadeHost />
+          </ChainProvider>
+        </ThemeProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>
   );

@@ -1,186 +1,105 @@
-import { diagonalGradient } from "./gradient";
+// Design tokens from the V7 design (design/app.html, base.css), which took them from the shipped app's src/theme/tokens.ts.
 
-export const palette = {
-  light: {
-    background: "#F7F7F7",
-    surface: "#FFFFFF",
-    text: "#1F1F1F",
-    textMuted: "#595959",
-    divider: "#F4F4F4",
-    border: "#E5E7EB",
-    borderControl: "#8F94A0",
-    // The outline of a button that has no fill, which has to read as a shape on its own.
-    borderStrong: "#E5E7EB",
-    positive: "#1C7C83",
-    negative: "#B33C3E",
-    link: "#703AE6",
-    warning: "#8C0043",
-    purpleTint: "#F1EBFD",
-    onPurpleTint: "#5029A3",
-    tealTint: "#EBFCFD",
-    onTealTint: "#155F64",
-    pinkTint: "#FFE6F2",
-    onPinkTint: "#8C0043",
-    chipActive: "#111111",
-    onChipActive: "#FFFFFF",
-    segment: "#F4F4F4",
-    segmentActive: "#FFFFFF",
-    disabled: "#DFDFDF",
-    onDisabled: "#595959",
-    scrim: "rgba(17,17,17,0.32)",
-    nav: "#111111",
-  },
-  dark: {
-    background: "#111111",
-    surface: "#1E1E1E",
-    text: "#FFFFFF",
-    textMuted: "#E2E2E2",
-    divider: "#2C2C2C",
-    border: "#2C2C2C",
-    borderControl: "#6A6A6A",
-    borderStrong: "#5A5A5A",
-    positive: "#32EEE2",
-    negative: "#FC5457",
-    link: "#CBB6FA",
-    warning: "#FFB0D6",
-    purpleTint: "#2F1B61",
-    onPurpleTint: "#E1D5FA",
-    tealTint: "#155F64",
-    onTealTint: "#BFF6FA",
-    pinkTint: "#6B0033",
-    onPinkTint: "#FFB0D6",
-    chipActive: "#FFFFFF",
-    onChipActive: "#111111",
-    segment: "#111111",
-    segmentActive: "#2C2C2C",
-    disabled: "#2C2C2C",
-    onDisabled: "#B5B5B5",
-    scrim: "rgba(0,0,0,0.56)",
-    nav: "#2C2C2C",
-  },
-} as const;
-
-export const brand = {
-  primary: "#703AE6",
-  onPrimary: "#FFFFFF",
-  long: "#32EEE2",
-  short: "#FC5457",
-  onHero: "#FFFFFF",
-  onHeroMuted: "rgba(255,255,255,0.96)",
-  onHeroSoft: "rgba(255,255,255,0.98)",
-  heroRule: "rgba(255,255,255,0.26)",
-  heroRuleSoft: "rgba(255,255,255,0.28)",
-  heroGlass: "rgba(255,255,255,0.16)",
-  heroDivider: "rgba(255,255,255,0.34)",
-  heroPositive: "#32EEE2",
-  healthWatch: "#FF8AC2",
-  watchlist: "#9F7BEE",
-  unreadDot: "#FF007A",
-  badgeNegative: "#B33C3E",
-  badgePositive: "#1C7C83",
-  badgeInfo: "#2440A9",
-  earnTab: "#11727A",
-  tradeTab: "#4B44E0",
-  engraved: "#17131F",
-  engravedRule: "rgba(255,255,255,0.10)",
-  coral: "#FC5457",
-  badge: "#FF007A",
-  farmAccent: "#FF007A",
-  snackbar: "#2C2C2C",
-  onSnackbar: "#FFFFFF",
-  walletScrim: "rgba(10,8,18,0.18)",
-} as const;
-
-export const gradients = {
-  home: diagonalGradient([["#FC5457", -0.25], ["#703AE6", 0.45], ["#2F1B61", 1.1]]),
-  perps: diagonalGradient([["#8D61EB", -0.1], ["#703AE6", 0.35], ["#2F1B61", 1.1]]),
-  swap: diagonalGradient([["#FF007A", -0.3], ["#703AE6", 0.55], ["#3E207F", 1.1]]),
-  earn: diagonalGradient([["#703AE6", -0.2], ["#3E207F", 0.5], ["#111111", 1.25]]),
-  farm: diagonalGradient([["#FC5457", -0.2], ["#FF007A", 0.4], ["#8C0043", 1.1]]),
-} as const;
-
-export const spaces = {
-  portfolio: { band: ["#1A0B2E", "#2A1150"], panel: ["#5B2BC0", "#3B1C82"] },
-  earn: { band: ["#04181A", "#0A2E31"], panel: ["#137A82", "#0A464B"] },
-  trade: { band: ["#0B0C2A", "#161A55"], panel: ["#3F3AD8", "#231F86"] },
-  farm: { band: ["#2A0618", "#4A0A2C"], panel: ["#E0006B", "#9A0049"] },
-} as const;
-
-export type Space = keyof typeof spaces;
-
-// One palette family per module, so the four never read as the same place: Portfolio is Vanna's home in the brand's
-// coral-to-violet gradient, Earn is Electric Blue (teal), Margin trade is Violet, Farm is Rose.
-export const spaceGradients = {
-  portfolio: { nav: ["#FC5457", "#703AE6"], cta: ["#8B4DF7", "#5A26C9"] },
-  earn: { nav: ["#2FC9C1", "#11838B"], cta: ["#14919A", "#0B5F66"] },
-  trade: { nav: ["#8D61EB", "#5029A3"], cta: ["#703AE6", "#5029A3"] },
-  // Rose only: the coral that used to start this gradient read as red (Short / loss) and did not match the header.
-  farm: { nav: ["#FF3395", "#E2087A"], cta: ["#E2087A", "#B0005A"] },
-} as const satisfies Record<Space, { nav: readonly [string, string]; cta: readonly [string, string] }>;
-
-// The header of each space is one surface that runs from a deep top into the space's colour, with a glow in its top right corner.
-// Portfolio, Vanna's home, wears the brand gradient itself (coral to violet to deep violet, corner to corner, as in the logo), so
-// it stays distinct from Margin trade's plain violet and never sinks into the dark page. `scrim` backs the status bar once the
-// page scrolls under it.
-type SpaceHeader = {
-  surface: readonly [string, string, string];
-  glow: string;
-  scrim: string;
-  start?: { x: number; y: number };
-  end?: { x: number; y: number };
+export const light = {
+  bg: "#F7F7F7",
+  surface: "#FFFFFF",
+  text: "#1F1F1F",
+  muted: "#595959",
+  divider: "#F4F4F4",
+  border: "#E5E7EB",
+  borderControl: "#8F94A0",
+  positive: "#1C7C83",
+  negative: "#B33C3E",
+  link: "#703AE6",
+  warning: "#8C0043",
+  purpleTint: "#F1EBFD",
+  onPurpleTint: "#5029A3",
+  tealTint: "#EBFCFD",
+  onTealTint: "#155F64",
+  pinkTint: "#FFE6F2",
+  onPinkTint: "#8C0043",
+  blueTint: "#E9EEFF",
+  onBlueTint: "#1B3290",
+  chipActive: "#111111",
+  onChipActive: "#FFFFFF",
+  segment: "#F4F4F4",
+  segmentActive: "#FFFFFF",
+  disabled: "#DFDFDF",
+  onDisabled: "#595959",
+  scrim: "rgba(17,17,17,0.32)",
 };
 
-export const spaceHeaders = {
-  portfolio: { surface: ["#FC5457", "#703AE6", "#2F1B61"], glow: "rgba(255,176,214,0.38)", scrim: "#6B3BD8", start: { x: 0, y: 0 }, end: { x: 1, y: 1 } },
-  earn: { surface: ["#07494F", "#11838B", "#0B5F66"], glow: "rgba(110,236,226,0.6)", scrim: "#07494F" },
-  trade: { surface: ["#2F1861", "#703AE6", "#5029A3"], glow: "rgba(189,164,244,0.7)", scrim: "#2F1861" },
-  farm: { surface: ["#86003F", "#E2087A", "#A3004F"], glow: "rgba(255,120,190,0.72)", scrim: "#86003F" },
-} as const satisfies Record<Space, SpaceHeader>;
+export type Palette = typeof light;
 
-export const spaceInk = { portfolio: "#703AE6", earn: "#11838B", trade: "#5029A3", farm: "#E2087A" } as const satisfies Record<Space, string>;
+export const dark: Palette = {
+  bg: "#111111",
+  surface: "#1E1E1E",
+  text: "#FFFFFF",
+  muted: "#E2E2E2",
+  divider: "#2C2C2C",
+  border: "#2C2C2C",
+  borderControl: "#6A6A6A",
+  positive: "#32EEE2",
+  negative: "#FC5457",
+  link: "#CBB6FA",
+  warning: "#FFB0D6",
+  purpleTint: "#2F1B61",
+  onPurpleTint: "#E1D5FA",
+  tealTint: "#155F64",
+  onTealTint: "#BFF6FA",
+  pinkTint: "#6B0033",
+  onPinkTint: "#FFB0D6",
+  blueTint: "#1B2A66",
+  onBlueTint: "#D3DEFF",
+  chipActive: "#FFFFFF",
+  onChipActive: "#111111",
+  segment: "#111111",
+  segmentActive: "#2C2C2C",
+  disabled: "#2C2C2C",
+  onDisabled: "#B5B5B5",
+  scrim: "rgba(0,0,0,0.56)",
+};
 
-export const brandGradient = ["#FC5457", "#703AE6"] as const;
+// Brand colours, theme independent.
+export const brand = {
+  primary: "#703AE6",
+  long: "#32EEE2",
+  short: "#FC5457",
+  coral: "#FC5457",
+  badge: "#FF007A",
+  farm: "#FF007A",
+  snackbar: "#2C2C2C",
+};
 
-export const horizontalGradient = { start: { x: 0, y: 0.5 }, end: { x: 1, y: 0.5 } } as const;
+// Module colour families (design base.css, V6 values): hero surface h0 → h1 (42%) → h2 at angle `hang`, a radial glow from the top
+// right, a contrast veil, the bottom bar / pill highlight (n0 → n1), CTA (c0 → c1), ink, accent text (light / dark) and the tab fill.
+export type Family = {
+  h: [string, string, string];
+  hang: number;
+  glow: string;
+  veil: number;
+  n: [string, string];
+  c: [string, string];
+  ink: string;
+  acc: [string, string];
+  tab: string;
+};
 
-export type Product = keyof typeof gradients;
+export const families = {
+  portfolio: { h: ["#FC5457", "#703AE6", "#2F1B61"], hang: 127.3, glow: "rgba(255,176,214,0.38)", veil: 0, n: ["#FC5457", "#703AE6"], c: ["#8B4DF7", "#5A26C9"], ink: "#703AE6", acc: ["#1F1F1F", "#FFFFFF"], tab: "#703AE6" },
+  earn: { h: ["#155F64", "#1C7C83", "#0E4A4E"], hang: 180, glow: "rgba(118,236,244,0.45)", veil: 0, n: ["#1C7C83", "#0E4A4E"], c: ["#1C7C83", "#0E4A4E"], ink: "#155F64", acc: ["#1C7C83", "#32E2EE"], tab: "#1C7C83" },
+  margin: { h: ["#6B2766", "#B6479E", "#8E3784"], hang: 180, glow: "rgba(240,160,224,0.5)", veil: 0.14, n: ["#B6479E", "#8E3784"], c: ["#B6479E", "#6B2766"], ink: "#8E3784", acc: ["#8E3784", "#E3A3D8"], tab: "#8E3784" },
+  spot: { h: ["#3E207F", "#8D61EB", "#6635D1"], hang: 180, glow: "rgba(211,194,247,0.55)", veil: 0.08, n: ["#8D61EB", "#6635D1"], c: ["#8D61EB", "#6635D1"], ink: "#6635D1", acc: ["#6635D1", "#BDA4F4"], tab: "#6635D1" },
+  perps: { h: ["#2F1861", "#5029A3", "#3E207F"], hang: 180, glow: "rgba(159,123,238,0.5)", veil: 0, n: ["#6635D1", "#3E207F"], c: ["#5029A3", "#3E207F"], ink: "#5029A3", acc: ["#5029A3", "#9F7BEE"], tab: "#5029A3" },
+  farm: { h: ["#8C0043", "#E8006F", "#B50057"], hang: 180, glow: "rgba(255,138,194,0.55)", veil: 0.02, n: ["#E8006F", "#B50057"], c: ["#E8006F", "#B50057"], ink: "#B50057", acc: ["#B50057", "#FF54A6"], tab: "#E8006F" },
+} satisfies Record<string, Family>;
 
-export const health = { liquidation: 1.1, safeFrom: 1.5 } as const;
+export type FamilyName = keyof typeof families;
 
-export const spacing = { xs: 4, sm: 8, md: 12, lg: 16, xl: 24, xxl: 32 } as const;
+// Brand gradient (logo, Margin centre button, avatar): Imperial Red 500 to Violet 500.
+export const BRAND_GRADIENT: [string, string] = ["#FC5457", "#703AE6"];
 
-export const radius = { xs: 4, tag: 6, chip: 8, sm: 12, md: 16, lg: 24, hero: 28, sheet: 28, pill: 999 } as const;
-
-export const shadows = {
-  light: {
-    card: { shadowColor: "#111111", shadowOpacity: 0.06, shadowRadius: 12, shadowOffset: { width: 0, height: 4 }, elevation: 1 },
-    menu: { shadowColor: "#111111", shadowOpacity: 0.22, shadowRadius: 20, shadowOffset: { width: 0, height: 16 }, elevation: 8 },
-    floating: { shadowColor: "#110B2E", shadowOpacity: 0.22, shadowRadius: 22, shadowOffset: { width: 0, height: 18 }, elevation: 12 },
-    pill: { shadowColor: "#110B2E", shadowOpacity: 0.3, shadowRadius: 6, shadowOffset: { width: 0, height: 4 }, elevation: 3 },
-    snackbar: { shadowColor: "#111111", shadowOpacity: 0.24, shadowRadius: 4, shadowOffset: { width: 0, height: 2 }, elevation: 6 },
-  },
-  dark: {
-    card: { elevation: 0 },
-    menu: { shadowColor: "#000000", shadowOpacity: 0.5, shadowRadius: 20, shadowOffset: { width: 0, height: 16 }, elevation: 8 },
-    floating: { shadowColor: "#000000", shadowOpacity: 0.5, shadowRadius: 22, shadowOffset: { width: 0, height: 18 }, elevation: 12 },
-    pill: { shadowColor: "#000000", shadowOpacity: 0.4, shadowRadius: 6, shadowOffset: { width: 0, height: 4 }, elevation: 3 },
-    snackbar: { shadowColor: "#000000", shadowOpacity: 0.4, shadowRadius: 4, shadowOffset: { width: 0, height: 2 }, elevation: 6 },
-  },
-} as const;
-
-export const layout = { sheetMaxWidth: 640, headerHeight: 56, handleWidth: 36, handleHeight: 4 } as const;
-
-export const motion = {
-  standard: [0.2, 0, 0, 1],
-  emphasized: [0.05, 0.7, 0.1, 1],
-  duration: { short: 180, medium: 240, long: 320 },
-} as const;
-
-export const fontSize = { caption: 12, label: 13, body: 14, bodyLg: 16, title: 18, heading: 20, display: 34 } as const;
-
-export const fontFamily = {
+export const font = {
   regular: "PlusJakartaSans_400Regular",
   semibold: "PlusJakartaSans_600SemiBold",
-} as const;
-
-export const minTouchTarget = 44;
+};

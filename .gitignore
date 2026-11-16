@@ -1,51 +1,53 @@
+# Learn more https://docs.github.com/en/get-started/getting-started-with-git/ignoring-files
+
 # dependencies
 node_modules/
 
 # Expo
 .expo/
 dist/
+web-build/
 expo-env.d.ts
 
-# native projects are generated (Continuous Native Generation)
-/android
-/ios
+# Native
 .kotlin/
-.gradle/
-*.log
-
-# build outputs and signing material
-*.apk
-*.aab
-*.keystore
+*.orig.*
 *.jks
 *.p8
 *.p12
 *.key
-*.pem
 *.mobileprovision
 
 # Metro
 .metro-health-check*
 
+# debug
+npm-debug.*
+yarn-debug.*
+yarn-error.*
+
+# macOS
+.DS_Store
+*.pem
+
+# local env files
+.env
+.env*.local
+
 # typescript
 *.tsbuildinfo
 
-# local environment (real values never enter git; ship .env.example instead)
-.env*
-!.env.example
-*.env
+example
 
-# OS and editor
-.DS_Store
-Thumbs.db
+# generated native folders
+/ios
+/android
 
-# AI agent instructions and private references (local only)
-.claude/
-CLAUDE.md
-AGENTS.md
-vanna-skill.md
-HANDOFF.md
-external-integrations.md
+# native module build output
+modules/*/android/build/
+modules/*/android/.gradle/
+modules/*/android/.cxx/
 
-# design tooling output
-design/generator/node_modules/
+# local signing material
+credentials.json
+credentials/

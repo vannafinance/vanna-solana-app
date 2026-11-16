@@ -1,22 +1,10 @@
 import { useColorScheme } from "react-native";
 
-import { brand, fontFamily, fontSize, gradients, layout, minTouchTarget, motion, palette, radius, shadows, spacing } from "./tokens";
+import { dark, light, type Palette } from "./tokens";
+
+export type ThemeColor = keyof Palette;
 
 export function useTheme() {
-  const scheme = useColorScheme() === "dark" ? "dark" : "light";
-  return {
-    scheme,
-    colors: { ...palette[scheme], ...brand },
-    shadow: shadows[scheme],
-    layout,
-    motion,
-    gradients,
-    spacing,
-    radius,
-    fontSize,
-    fontFamily,
-    minTouchTarget,
-  };
+  const isDark = useColorScheme() === "dark";
+  return { colors: isDark ? dark : light, isDark };
 }
-
-export type ThemeColor = keyof ReturnType<typeof useTheme>["colors"];

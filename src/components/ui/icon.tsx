@@ -10,22 +10,16 @@ type IconProps = {
   color?: ThemeColor | (string & {});
   filled?: boolean;
   bold?: boolean;
-  rotate?: number;
 };
 
-export function Icon({ name, size = 24, color = "text", filled, bold, rotate }: IconProps) {
+export function Icon({ name, size = 24, color = "text", filled, bold }: IconProps) {
   const { colors } = useTheme();
-  const variants: Partial<Record<"regular" | "filled" | "bold", string>> = materialSymbols[name];
-  const path = (filled && variants.filled) || (bold && variants.bold) || variants.regular;
+  const variants: Partial<Record<"regular" | "filled" | "bold" | "vb", string>> = materialSymbols[name];
+  const path = (filled && variants.filled) || (bold && variants.bold) || variants.regular || variants.bold || variants.filled;
   const fill = color in colors ? colors[color as ThemeColor] : color;
 
   return (
-    <Svg
-      width={size}
-      height={size}
-      viewBox="0 -960 960 960"
-      style={rotate ? { transform: [{ rotate: `${rotate}deg` }] } : undefined}
-    >
+    <Svg width={size} height={size} viewBox={variants.vb ?? "0 -960 960 960"}>
       <Path d={path} fill={fill} />
     </Svg>
   );
