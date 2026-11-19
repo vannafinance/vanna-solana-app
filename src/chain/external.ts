@@ -109,6 +109,17 @@ const SOLFLARE_FEES =
 
 const mwa = () => import("@solana-mobile/mobile-wallet-adapter-protocol");
 
+// The wallet no longer knows the saved approval (Backpack answers "Authorization not found" and closes the session): the connection is
+// dead, so the whole request is made again in a new session that asks to connect afresh.
+class StaleApproval extends Error {}
+const declined = (e: unknown) => /declin|reject|denied|not signed|^-3\b|ERROR_NOT_SIGNED/i.test(text(e));
+
+/** The known wallets installed on this phone (name and logo), for asking the person which one they just used. */
+export async function installedKnownWallets(): Promise<{ app: string; logo: string }[]> {
+  const found = await Promise.all(KNOWN.map(async (k) => ((await appInstalled(k.pkg).catch(() => false)) ? { app: k.app, logo: k.logo } : null)));
+  return found.filter((k): k is { app: string; logo: string } => k != null);
+}
+
 async function withWallet<T>(
   work: Parameters<Awaited<ReturnType<typeof mwa>>["transact"]>[0] extends (w: infer W) => unknown ? (wallet: W) => Promise<T> : never,
   target?: { baseUri?: string; packageName?: string },
@@ -134,9 +145,10 @@ async function withWallet<T>(
       );
     } catch (e) {
       // Cancelled in Vanna (see the signer below): passed on as is, never retried or reworded.
-      if (e instanceof WalletCancelledError) throw e;
+      if (e instanceof WalletCancelledError || e instanceof StaleApproval) throw e;
       const err = e as { code?: string; message?: string };
-      if (err.code === "ERROR_WALLET_NOT_FOUND" || /no.*wallet|not found/i.test(err.message ?? "")) {
+      // Only a wallet that is not installed: "Authorization not found" (a wallet forgetting the approval) must not land here.
+      if (err.code === "ERROR_WALLET_NOT_FOUND" || /no (solana )?wallet|wallet.*not (found|installed)/i.test(err.message ?? "")) {
         if (config.packageName) {
           delete config.packageName;
           continue;
@@ -190,7 +202,7 @@ registerExternalSolanaSigner(async (base64Txs, entry, cancel) => {
     if (cancel?.aborted) throw new WalletCancelledError();
   };
   stopIfCancelled();
-  return withWallet(
+  const run = (useToken: boolean) => withWallet(
     async (wallet) => {
       stopIfCancelled();
       // The saved approval first, so a transaction only asks to be signed. A wallet that has forgotten it (-1) asks to connect again once.
@@ -199,14 +211,24 @@ registerExternalSolanaSigner(async (base64Txs, entry, cancel) => {
       const chains: readonly (typeof CHAINS)[number][] = pkg === "com.solflare.mobile" ? CHAINS : [SOLANA_CHAIN];
       for (const chain of chains) {
         try {
-          try {
-            auth = await wallet.authorize({ identity: IDENTITY, chain, auth_token: entry.session });
-          } catch (e) {
-            const code = (e as { code?: unknown } | null)?.code;
-            if (code !== -1 && !/authorization request failed|ERROR_AUTHORIZATION_FAILED/i.test(text(e))) throw e;
-            // The wallet forgot the saved approval (phones that close apps in the background do this, and Phantom refuses it while
-            // it cannot verify the app's identity): ask once more.
+          if (!useToken || !entry.session) {
+            // A new session after a wallet rejected the saved approval: connect afresh.
             auth = await wallet.authorize({ identity: IDENTITY, chain });
+          } else {
+            try {
+              auth = await wallet.authorize({ identity: IDENTITY, chain, auth_token: entry.session });
+            } catch (e) {
+              if (wrongChain(e) || declined(e)) throw e;
+              const code = (e as { code?: unknown } | null)?.code;
+              // The wallet forgot the saved approval (phones that close apps in the background do this, and Phantom refuses it while
+              // it cannot verify the app's identity): ask once more, in this session.
+              if (code === -1 || /authorization request failed|ERROR_AUTHORIZATION_FAILED/i.test(text(e))) {
+                auth = await wallet.authorize({ identity: IDENTITY, chain });
+              } else {
+                // Any other answer (Backpack: "Authorization not found") ends that wallet's session: start again in a new one.
+                throw new StaleApproval();
+              }
+            }
           }
           break;
         } catch (e) {
@@ -239,4 +261,13 @@ registerExternalSolanaSigner(async (base64Txs, entry, cancel) => {
     },
     { baseUri: entry.baseUri, packageName: pkg },
   );
+  try {
+    return await run(true);
+  } catch (e) {
+    if (e instanceof StaleApproval) {
+      stopIfCancelled();
+      return run(false);
+    }
+    throw e;
+  }
 });
