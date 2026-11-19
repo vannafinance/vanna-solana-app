@@ -51,3 +51,7 @@ modules/*/android/.cxx/
 # local signing material
 credentials.json
 credentials/
+
+# Gradle caches (created by IDE Java extensions) and design-server runtime files
+.gradle/
+design/**/.port

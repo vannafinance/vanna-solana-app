@@ -8,6 +8,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { VannaMark, Wordmark } from "@/components/brand";
 import { setRewards, useRewards } from "@/sample/rewards";
 import { markWelcomeSeen } from "@/state/session";
+import { inUseWallet } from "@/state/wallets";
 import { BRAND_GRADIENT, font } from "@/theme/tokens";
 
 /* Display name, shown once to a new person right after the wallet connects (the wallet itself connects from the intro through
@@ -17,7 +18,7 @@ const BG = "#000000", SF = "#161618", MU = "#A9A9B2";
 export default function SignIn() {
   const insets = useSafeAreaInsets();
   const me = useRewards();
-  const [name, setName] = useState(me.name === "Maya" ? "" : me.name);
+  const [name, setName] = useState(me.name === "Maya" || me.name === inUseWallet("solana")?.addr ? "" : me.name);
 
   const finish = () => {
     markWelcomeSeen();

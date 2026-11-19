@@ -2,7 +2,8 @@ import { Buffer } from "buffer";
 
 import type { Pool } from "@/sample/data";
 
-import { RESERVES } from "./config";
+import { RESERVES, VANNA_PROGRAM_ID } from "./config";
+import { decode58, findPda } from "./pda";
 import { forkNow, rpc } from "./rpc";
 
 // Live Earn pools on Solana, read straight from the Vanna lending program's Reserve accounts on the mainnet fork, with the
@@ -16,17 +17,24 @@ const SECONDS_PER_YEAR = 31_556_952n;
 type Reserve = {
   liquidity: bigint; borrows: bigint; fees: bigint; last: bigint; reserveFactorBps: bigint;
   curve: { linear: bigint; jump: bigint; mult: bigint };
+  supplyCap: bigint; borrowCap: bigint; status: number;
 };
+const U64_MAX = 18_446_744_073_709_551_615n;
+// Reserve.status (web protocol-state.ts STATUS_LABELS).
+const STATUS_LABELS = ["Active", "Supply only", "Repay only", "Frozen"];
+export const shareMintOf = (mint: string) => findPda(["share_mint", decode58(mint)], VANNA_PROGRAM_ID);
 
 const u64 = (b: Buffer, o: number) => b.readBigUInt64LE(o);
 const i64 = (b: Buffer, o: number) => b.readBigInt64LE(o);
 
-// Reserve account (IDL vanna_credit_layer, after the 8-byte discriminator and four pubkeys).
+// Reserve account (IDL vanna_credit_layer, after the 8-byte discriminator and four pubkeys): supply_cap 136, borrow_cap 144,
+// accounted liquidity 152, borrows 160, fees 200, last update 208, rate curve 216..240, reserve factor 240, status 242.
 function decodeReserve(b: Buffer): Reserve {
   return {
+    supplyCap: u64(b, 136), borrowCap: u64(b, 144),
     liquidity: u64(b, 152), borrows: u64(b, 160), fees: u64(b, 200), last: i64(b, 208),
     curve: { linear: u64(b, 216), jump: u64(b, 224), mult: u64(b, 232) },
-    reserveFactorBps: BigInt(b.readUInt16LE(240)),
+    reserveFactorBps: BigInt(b.readUInt16LE(240)), status: b[242],
   };
 }
 
@@ -62,18 +70,31 @@ export async function readLenderTotal(sym: string): Promise<bigint> {
   return r.liquidity + r.borrows - r.fees;
 }
 
+// One batched read: every Reserve and its share mint. Share rate = lender total / share supply (web protocol-state.ts exchangeRate).
 export async function fetchSolanaPools(): Promise<Pool[]> {
   const syms = Object.keys(RESERVES);
-  const [now, accts] = await Promise.all([forkNow(), rpc<{ value: ({ data: [string, string] } | null)[] }>("getMultipleAccounts", [syms.map((s) => RESERVES[s].reserve), { encoding: "base64" }])]);
+  const keys = syms.flatMap((s) => [RESERVES[s].reserve, shareMintOf(RESERVES[s].mint)]);
+  const [now, accts] = await Promise.all([forkNow(), rpc<{ value: ({ data: [string, string] } | null)[] }>("getMultipleAccounts", [keys, { encoding: "base64" }])]);
   return syms.flatMap((sym, i) => {
-    const a = accts.value[i];
+    const a = accts.value[i * 2], m = accts.value[i * 2 + 1];
     if (!a) return [];
     const r = project(decodeReserve(Buffer.from(a.data[0], "base64")), now);
     const d = 10 ** RESERVES[sym].decimals;
     const u = utilWad(r.liquidity, r.borrows);
     const util = Number((u * 1_000_000n) / WAD) / 1e6;
     const borrowApr = annualBorrow(r.curve, u);
-    const supplyApr = borrowApr * util * (1 - Number(r.reserveFactorBps) / 10_000);
-    return [{ sym, sup: Number(r.liquidity + r.borrows - r.fees) / d, bor: Number(r.borrows) / d, util: util * 100, borA: borrowApr * 100, supA: supplyApr * 100 }];
+    const rf = Number(r.reserveFactorBps) / 10_000;
+    const supplyApr = borrowApr * util * (1 - rf);
+    const lender = r.liquidity + r.borrows - r.fees;
+    const mb = m ? Buffer.from(m.data[0], "base64") : null;
+    const shares = mb && mb.length >= 44 ? mb.readBigUInt64LE(36) : 0n;
+    const cap = (c: bigint) => (c >= U64_MAX ? null : Number(c) / d);
+    const f = (x: bigint) => Number(x) / 1e18;
+    return [{
+      sym, sup: Number(lender) / d, bor: Number(r.borrows) / d, util: util * 100, borA: borrowApr * 100, supA: supplyApr * 100,
+      live: true, rate: shares > 0n ? Number((lender * 1_000_000_000n) / shares) / 1e9 : 1, rf: rf * 100,
+      supCap: cap(r.supplyCap), borCap: cap(r.borrowCap), status: STATUS_LABELS[r.status] ?? `Status ${r.status}`,
+      curve: { l: f(r.curve.linear), j: f(r.curve.jump), m: f(r.curve.mult) },
+    }];
   });
 }

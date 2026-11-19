@@ -9,7 +9,6 @@ export const PYTH_RECEIVER = "rec5EKMGg6MxZYaMdyBfgwp4d5rB9T1VQH5pJv5LtFJ";
 // Registry tokens by mint (web apps/solana/lib/solana/tokens.ts), for naming prices.
 export const MINT_SYMBOL: Record<string, string> = {
   So11111111111111111111111111111111111111112: "SOL",
-  CASHx9KJUStyftLFWGvEVf59SGeG9sh5FfcnZMVPCASH: "CASH",
   EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v: "USDC",
   Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB: "USDT",
   J1toso1uCk3RLmjorhTtrVwY9HJ7X8V9yYac6Y7kGCPn: "JitoSOL",
@@ -19,6 +18,7 @@ export const MINT_SYMBOL: Record<string, string> = {
   XsCPL9dNWBMvFtTmwcCA5v3xWPSMEBCszbQdiLLq6aN: "GOOGLx",
   XsbEhLAtcf6HdfpFZ5xEMdqW8nfAvcsP5bdudRLJzJp: "AAPLx",
   XsDoVfqeBukxuZHWhdvWHBhgEHjGNst4MLodqsJHzoB: "TSLAx",
+  SKRbvo6Gf7GondiT3BbTfuRDPqLWei4j2Qy2NPGZhW3: "SKR", // Seeker: mobile app only (registered on the fork 2026-11-16)
 };
 
 // Earn pools that are live on the fork: their Reserve account (a program PDA, fixed) and token decimals.
@@ -26,4 +26,7 @@ export const RESERVES: Record<string, { reserve: string; mint: string; decimals:
   SOL: { reserve: "qKe68DeWMV8MHqDzMvK7W3b98eii63NkMg9CtePvEZK", mint: "So11111111111111111111111111111111111111112", decimals: 9 },
   USDC: { reserve: "A4x4ZZn134HAodwDdFdB9hquaqhwcxqbq5mVxnTXTY4t", mint: "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v", decimals: 6 },
   USDT: { reserve: "EkSogUZ3gLwFD7oeefFLjXwrnbhu3bcWuVxYxshXuk2X", mint: "Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB", decimals: 6 },
+  // SKR (Seeker): asset config BVCzBUUda7oLBVbLMnDDLPfMgJbMMG8zSFoN84rbV3dd, share mint 3z5FdQtjTFdgfUMUnsxHZZXrYxaXydkGQYKeGJeTD1ag,
+  // collateral + borrowable, LTV 40% / liquidation 55%, Pyth Crypto.SKR/USD. From Vanna_Finance_Backend commit 85c0dbc.
+  SKR: { reserve: "8YMfc1ySbvgUdn82T9DkbUnd8uAZ53D5QbFeMkSZacLu", mint: "SKRbvo6Gf7GondiT3BbTfuRDPqLWei4j2Qy2NPGZhW3", decimals: 6 },
 };

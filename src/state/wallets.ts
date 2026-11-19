@@ -21,6 +21,8 @@ export type WalletEntry = {
   session?: string;
   /** The wallet's own link (wallet_uri_base): reopens that same wallet for the next transaction. */
   baseUri?: string;
+  /** The wallet's own icon as it sent it (wallet_icon, a data: URI): shown when `logo` is not one Vanna ships. */
+  icon?: string;
 };
 
 type State = {
@@ -71,8 +73,8 @@ export const short = (a: string) => `${a.slice(0, 4)}…${a.slice(-4)}`;
 export const inUseWallet = (c: Chain) => state.wallets[c].find((w) => w.id === state.inUse[c]) ?? null;
 
 // A wallet the person just approved. `session` and `baseUri` are what open and sign with it later without a new connection.
-export function addExternalWallet(c: Chain, app: WalletApp, logo: string, full: string, session: string, baseUri?: string): WalletEntry {
-  const w: WalletEntry = { id: `${app}-${full.slice(0, 6)}`, app, logo, addr: short(full), full, kind: "external", session, baseUri };
+export function addExternalWallet(c: Chain, app: WalletApp, logo: string, full: string, session: string, baseUri?: string, icon?: string): WalletEntry {
+  const w: WalletEntry = { id: `${app}-${full.slice(0, 6)}`, app, logo, addr: short(full), full, kind: "external", session, baseUri, icon };
   set({ wallets: { ...state.wallets, [c]: capped([...state.wallets[c].filter((x) => x.full !== full), w]) }, inUse: { ...state.inUse, [c]: w.id }, signedIn: true });
   return w;
 }
@@ -80,6 +82,10 @@ export function addExternalWallet(c: Chain, app: WalletApp, logo: string, full: 
 // A wallet hands back a fresh approval token now and then; keep the newest so the next transaction only asks to sign.
 export function updateWalletSession(c: Chain, id: string, session: string) {
   set({ wallets: { ...state.wallets, [c]: state.wallets[c].map((w) => (w.id === id ? { ...w, session } : w)) } });
+}
+// A wallet saved before Vanna could tell which app it is gets its real name and logo once it answers again (the id stays the same).
+export function updateWalletIdentity(c: Chain, id: string, who: { app: WalletApp; logo: string; icon?: string }) {
+  set({ wallets: { ...state.wallets, [c]: state.wallets[c].map((w) => (w.id === id ? { ...w, app: who.app, logo: who.logo, icon: who.icon ?? w.icon } : w)) } });
 }
 export const setWalletInUse = (c: Chain, id: string) => set({ inUse: { ...state.inUse, [c]: id } });
 

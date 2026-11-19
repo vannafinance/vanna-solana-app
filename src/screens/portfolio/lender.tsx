@@ -10,6 +10,7 @@ import { pct, sign, sUsd, tokFmt, usd } from "@/format";
 import { ACTIVITY } from "@/sample/data";
 import { lendRows, lendTotals } from "@/sample/model";
 import { useChain } from "@/state/chain";
+import { useAccountRead } from "@/chain/account-live";
 import { usePersonal } from "@/state/personal";
 import { useTheme } from "@/theme/use-theme";
 import { families, font } from "@/theme/tokens";
@@ -54,7 +55,9 @@ function Pools() {
   const { colors } = useTheme();
   const C = usePfColors();
   const [tab, setTab] = useState<"cur" | "hist">("cur");
-  const ready = usePersonal(chain);
+  const personal = usePersonal(chain);
+  const read = useAccountRead(chain);
+  const ready = personal && read === "ready";
   const l = lendTotals(chain);
   const rows = ready ? lendRows(chain) : [];
   const hist = ready ? ACTIVITY[chain].filter((a) => a.area === "Earn") : [];
@@ -63,8 +66,8 @@ function Pools() {
     <>
       <SumCard
         k="Interest earned"
-        v={ready ? sUsd(l.earned) : "—"}
-        tone={ready ? sign(l.earned) : undefined}
+        v={ready && l.earnedKnown ? sUsd(l.earned) : "—"}
+        tone={ready && l.earnedKnown ? sign(l.earned) : undefined}
         range="30D"
         pairs={ready ? [{ label: "Holdings", value: usd(l.sup + l.earned) }, { label: "Avg APY", value: pct(l.apy) }] : []}
         chart={ready ? <Chart pts={[]} color={colors.positive} label="Interest earned, last 30 days" /> : null}
@@ -84,7 +87,7 @@ function Pools() {
                   <Text style={{ flex: 1, fontFamily: font.semibold, fontSize: 18, color: colors.text }}>{r.sym}</Text>
                   <View style={{ alignItems: "flex-end" }}>
                     <Text style={{ fontFamily: font.semibold, fontSize: 16, color: colors.text }}>{usd(r.value)}</Text>
-                    <Text style={{ fontFamily: font.regular, fontSize: 12, color: sign(r.earned) === "pos" ? C.pos : C.muted }}>{sUsd(r.earned)}</Text>
+                    <Text style={{ fontFamily: font.regular, fontSize: 12, color: r.earnedKnown && sign(r.earned) === "pos" ? C.pos : C.muted }}>{r.earnedKnown ? sUsd(r.earned) : "—"}</Text>
                   </View>
                 </View>
                 <Pairs items={[{ label: "Supplied", value: tokFmt(r.amt, r.sym) }, { label: "APY", value: pct(r.apy) }]} />

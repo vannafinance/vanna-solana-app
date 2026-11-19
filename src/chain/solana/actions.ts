@@ -24,15 +24,25 @@ import { decode58, findPda } from "./pda";
 import { base58 } from "./prices";
 import { fetchSolanaAccount } from "./account";
 import { fetchSolanaPools, readLenderTotal } from "./pools";
-import { rpc } from "./rpc";
+import { decodeBase64, forkNow, rpc } from "./rpc";
 import { ensureFreshForkPrices } from "./fork-prices";
 import {
   COMPUTE_BUDGET_PROGRAM_ID,
   type AccountMeta,
   type RawInstruction,
+  MAX_TX_BYTES,
+  BatchPartError,
+  type BatchPart,
+  sendSolanaBatch,
   sendSolanaInstructions,
+  simulateAsOne,
+  txSizeWithoutLookupTable,
+  walletSafeLookupTables,
+  WalletTxTooLargeError,
+  type AddressLookupTableAccount,
 } from "./submit";
 import { ALL_VAULT_MINTS } from "./tokens";
+import { fetchTitanQuote, marginTitanCall, missingAtlasAccounts, TITAN_PROGRAM_ID, TitanLimitUnsupportedError, type TitanRouteLimit, TitanUnavailableError } from "./titan";
 
 // ---------------------------------------------------------------------------------------------
 // Program IDs & Protocol Constants
@@ -111,7 +121,7 @@ export const TOKENS: TokenInfo[] = [
     isNative: false,
     faucetAmount: 1000,
     lendable: true,
-    depositable: false,
+    depositable: true, // offered as margin collateral again (backend commit 85c0dbc, 2026-11-16)
   },
   {
     symbol: "JitoSOL",
@@ -190,6 +200,17 @@ export const TOKENS: TokenInfo[] = [
     lendable: false,
     depositable: true,
   },
+  {
+    symbol: "SKR",
+    name: "Seeker",
+    mint: "SKRbvo6Gf7GondiT3BbTfuRDPqLWei4j2Qy2NPGZhW3",
+    decimals: 6,
+    tokenProgram: TOKEN_PROGRAM_ID,
+    isNative: false,
+    faucetAmount: 100_000,
+    lendable: true,
+    depositable: true,
+  },
 ];
 
 export function findToken(symbol: string | null | undefined): TokenInfo | undefined {
@@ -250,6 +271,11 @@ export function mulDivCeil(a: bigint, b: bigint, denominator: bigint): bigint {
 /**
  * Anchor 8-byte instruction discriminator: sha256("global:<name>")[0..8].
  */
+/** The program's `tokens: u8` argument (user_borrow, user_withdraw_collateral, margin_execute): 255 = scan every token (backend pdas.ts ALL_TOKENS). */
+export const ALL_TOKENS = 255;
+/** The `tokens` argument for a list of health accounts: the compact count when buildHealthRemainingAccounts made one, else ALL_TOKENS. */
+const tokensArg = (accounts: AccountMeta[] | { tokens?: number }): number => ("tokens" in accounts && typeof accounts.tokens === "number" ? accounts.tokens : ALL_TOKENS);
+
 export function anchorDiscriminator(name: string): Buffer {
   return Buffer.from(sha256(Buffer.from(`global:${name}`)).subarray(0, 8));
 }
@@ -531,6 +557,9 @@ export interface AssetConfigState {
   maxPriceAgeSecs: number;
   maxConfidenceBps: number;
   liquidationBonusBps: number;
+  /** AssetConfig.ltv_bps (offset 112) and liquidation_threshold_bps (offset 114), IDL vanna_credit_layer. */
+  ltvBps: number;
+  liquidationThresholdBps: number;
   assetIndex: number;
   decimals: number;
   collateralEnabled: boolean;
@@ -634,6 +663,8 @@ export function decodeAssetConfig(
     maxPriceAgeSecs: oracle.maxAgeSecs,
     maxConfidenceBps: oracle.maxConfidenceBps,
     liquidationBonusBps,
+    ltvBps: data.readUInt16LE(112),
+    liquidationThresholdBps: data.readUInt16LE(114),
     assetIndex,
     decimals,
     collateralEnabled,
@@ -647,7 +678,19 @@ export function decodeAssetConfig(
 // Not offered as new farms, but the program still requires them in every health check (web kamino.ts KAMINO_RECEIPTS).
 const DELISTED_KAMINO_RECEIPT_MINTS = ["9ucQp7thL38MDDTSER5ou24QnVSTZFLevDsZC1cAFkKy", "8euYpQt56z9hA2ZcFCQuWK6gAptrLcJuMZ5PtMpUwbuY"];
 
-export async function readAllAssetConfigs(): Promise<Map<number, AssetConfigState>> {
+// Cached 60 s: protocol-level data that one action reads 5 to 10 times (each read ~0.3 to 1 s on the fork RPC).
+let assetConfigCache: { at: number; map: Promise<Map<number, AssetConfigState>> } | null = null;
+export function readAllAssetConfigs(): Promise<Map<number, AssetConfigState>> {
+  if (assetConfigCache && Date.now() - assetConfigCache.at < 60_000) return assetConfigCache.map;
+  const map = readAllAssetConfigsNow().then((m) => {
+    if (!m.size) assetConfigCache = null; // a failed read is not kept
+    return m;
+  });
+  assetConfigCache = { at: Date.now(), map };
+  map.catch(() => (assetConfigCache = null));
+  return map;
+}
+async function readAllAssetConfigsNow(): Promise<Map<number, AssetConfigState>> {
   const mints: string[] = [
     ...TOKENS.map((t) => t.mint),
     ...Object.values(KAMINO_RECEIPTS).map((r) => r.collateralMint),
@@ -695,15 +738,28 @@ export async function loadBatchContext(owner: string): Promise<BatchContext> {
   return { owner, margin, assetMap };
 }
 
+/** Health accounts plus the `tokens` argument that goes with them (ALL_TOKENS, or the number of token groups listed). */
+export type HealthAccounts = AccountMeta[] & { tokens: number };
+
 // Ported from apps/solana/lib/solana/margin.ts:buildHealthRemainingAccounts
+// compact: list only the token groups the account holds (or gets earlier in this transaction) and pass their count as `tokens`
+// (IDL: "a smaller count lists only the first N held tokens"). Checked on the fork: the core then wants exactly N groups
+// (else IncompletePositionAccounts), the excluded asset is neither listed nor counted, debt groups stay required, and leaving a
+// held token out only lowers the health factor. It turns a ~60-account borrow into ~20 accounts, so the transaction fits without a
+// lookup table: wallets read lookup tables from real mainnet, where the fork's table does not exist (Phantom then never returns
+// the signature; Solflare refuses it).
 export async function buildHealthRemainingAccounts(
   margin: string,
   exclude: { collateral?: number[]; debt?: number } = {},
   pricedMints: string[] = [],
   // pendingCollateral / pendingDebt: assets an earlier instruction in this same transaction activates (web MarginIndexModel)
-  opts: { extraAssetIds?: number[]; venueScan?: boolean; pendingCollateral?: number[]; pendingDebt?: number[]; pendingVenue?: number; closedVenue?: number } = {}
-): Promise<AccountMeta[]> {
+  // onlyAssets (compact only): list just these held tokens. Leaving a held token out only lowers the health factor.
+  opts: { extraAssetIds?: number[]; venueScan?: boolean; pendingCollateral?: number[]; pendingDebt?: number[]; pendingVenue?: number; closedVenue?: number; compact?: boolean; onlyAssets?: number[] } = {}
+): Promise<HealthAccounts> {
   const protocolPda = protocolConfigPda();
+  // Phoenix's oracle accounts (step 4) depend only on the margin address: with venueScan they are always needed, so they are read
+  // alongside everything else instead of after it (the same reads, one fewer round trip of ~1 s on a phone).
+  const phoenixEarly = opts.venueScan ? fetchPhoenixOracleAccounts(margin, opts.extraAssetIds ?? []) : null;
   const [protocolInfo, marginInfo, assetMap] = await Promise.all([
     rpc<{ value: { data: [string, string] } }>("getAccountInfo", [protocolPda, { encoding: "base64" }]),
     rpc<{ value: { data: [string, string] } | null }>("getAccountInfo", [margin, { encoding: "base64" }]),
@@ -711,7 +767,10 @@ export async function buildHealthRemainingAccounts(
   ]);
 
   if (!protocolInfo?.value) throw new Error("ProtocolConfig missing");
-  await ensureFreshForkPrices(TOKENS, assetMap);
+  // Price stamps (fork writes) and the vault balance read below touch different accounts: started together, both awaited
+  // before the list is returned, as before.
+  const pricesFresh = ensureFreshForkPrices(TOKENS, assetMap);
+  pricesFresh.catch(() => {}); // awaited below
   const pBuf = Buffer.from(protocolInfo.value.data[0], "base64");
   const allowed: number[] = [];
   for (let i = 0; i < 24; i++) {
@@ -752,6 +811,7 @@ export async function buildHealthRemainingAccounts(
       if (b.length >= 72 && b.subarray(64, 72).some((x) => x !== 0)) held.add(tokenIdx[k]);
     });
   }
+  await pricesFresh;
 
   const metas: AccountMeta[] = [];
   const oracles: string[] = [];
@@ -759,6 +819,7 @@ export async function buildHealthRemainingAccounts(
 
   // 1. Collateral groups
   const skipCol = new Set(exclude.collateral ?? []);
+  const listed = new Set<number>();
   for (const idx of collateralSlots) {
     if (idx === EMPTY_ASSET_INDEX) continue;
     const asset = assetMap.get(idx);
@@ -775,6 +836,9 @@ export async function buildHealthRemainingAccounts(
 
     if (held.has(idx)) oracles.push(...asset.oracleAccounts);
     if (skipCol.has(idx)) continue;
+    if (opts.compact && (!held.has(idx) || listed.has(idx))) continue;
+    if (opts.compact && opts.onlyAssets && !opts.onlyAssets.includes(idx)) continue;
+    listed.add(idx);
     const vaultPda = marginVault(margin, asset.mint, asset.tokenProgram);
     metas.push({ pubkey: asset.address, isSigner: false, isWritable: false });
     metas.push({ pubkey: vaultPda, isSigner: false, isWritable: false });
@@ -806,7 +870,7 @@ export async function buildHealthRemainingAccounts(
 
   // 4. Phoenix Venue oracles
   if (holdsVenue || opts.venueScan) {
-    const phoenixAccs = await fetchPhoenixOracleAccounts(margin, opts.extraAssetIds ?? []);
+    const phoenixAccs = await (phoenixEarly ?? fetchPhoenixOracleAccounts(margin, opts.extraAssetIds ?? []));
     oracles.push(...phoenixAccs);
   }
 
@@ -821,8 +885,54 @@ export async function buildHealthRemainingAccounts(
     }
   }
 
-  return metas;
+  return Object.assign(metas, { tokens: opts.compact ? listed.size : ALL_TOKENS });
 }
+
+/**
+ * Held margin tokens (asset indexes), most valuable first: the order in which narrower health lists keep them. A wallet-sized
+ * transaction cannot always list every held token, and leaving one out only lowers the health factor the program computes, so a
+ * narrower list leaves out the LEAST valuable tokens first. The old narrow list kept only the tokens a call moves and so left out
+ * the account's SOL: a 20 USDC META-PERP open on an account at health factor ~26 was refused as "health factor too low" (fork,
+ * 2026-11-18: the program priced 4.66 USDC + 20 phUSD + the Phoenix venue against 52.26 USDC of debt; the 19 SOL were not listed).
+ * Values: balances x oracle prices (fetchSolanaAccount). A held token it does not price (phUSD, a Farm receipt) is not ranked and
+ * is left out of every narrow list unless the call moves it.
+ */
+export async function heldTokensByValue(owner: string, assetMap: Map<number, AssetConfigState>): Promise<number[]> {
+  const acc = await fetchSolanaAccount(owner);
+  const rows = Object.entries(acc.margin?.collateral ?? {}).flatMap(([sym, b]) => {
+    const mint = TOKENS.find((t) => t.symbol === sym)?.mint;
+    const a = mint ? [...assetMap.values()].find((x) => x.mint === mint && x.kind !== "venue") : undefined;
+    return a && b.amount > 0 ? [{ idx: a.assetIndex, usd: b.usd }] : [];
+  });
+  return rows.sort((x, y) => y.usd - x.usd).map((r) => r.idx);
+}
+
+/**
+ * A narrowed health list (`onlyAssets`): `level` 1 leaves out the least valuable ranked token, 2 the two least valuable, and so on;
+ * `keep` (what the call moves) is always listed.
+ */
+export function narrowHealthList(ranked: number[], keep: (number | undefined)[], level: number): number[] {
+  const out = new Set(ranked.slice(Math.max(0, ranked.length - level)));
+  return [...new Set([...keep.filter((x): x is number => x !== undefined), ...ranked.filter((i) => !out.has(i))])];
+}
+
+/**
+ * Health-list widths for the wallet-size fallbacks, widest first: width(0) lists every held token; width(n) leaves out the n least
+ * valuable held tokens (heldTokensByValue, read once and only when a narrow width is needed); null when there is no n-th token to
+ * leave out (that variant is skipped). Each width maps a call's `keep` (the tokens it moves) to its `onlyAssets`.
+ */
+export function healthWidths(owner: string, assetMap: Map<number, AssetConfigState>) {
+  let ranked: Promise<number[]> | null = null;
+  return async (level: number): Promise<((keep: (number | undefined)[]) => number[] | undefined) | null> => {
+    if (level === 0) return () => undefined;
+    ranked ??= heldTokensByValue(owner, assetMap).catch(() => []);
+    const r = await ranked;
+    if (level > Math.max(1, r.length)) return null;
+    return (keep) => narrowHealthList(r, keep, level);
+  };
+}
+/** How many narrowing levels the wallet-size fallbacks try (an account rarely holds more tokens than this). */
+const NARROW_LEVELS = [1, 2, 3, 4];
 
 // ---------------------------------------------------------------------------------------------
 // A) Earn: Supply & Withdraw
@@ -1029,15 +1139,16 @@ export function borrowIx(
   token: TokenInfo,
   amount: bigint,
   maxDebtShares: bigint,
-  remainingAccounts: AccountMeta[]
+  remainingAccounts: AccountMeta[] | HealthAccounts
 ): RawInstruction {
   const margin = marginPda(owner);
   const reserve = reservePda(token.mint);
-  const data = Buffer.alloc(8 + 8 + 16);
+  const data = Buffer.alloc(8 + 8 + 16 + 1);
   anchorDiscriminator("user_borrow").copy(data, 0);
   data.writeBigUInt64LE(amount, 8);
   data.writeBigUInt64LE(maxDebtShares & 0xffffffffffffffffn, 16);
   data.writeBigUInt64LE(maxDebtShares >> 64n, 24);
+  data.writeUInt8(tokensArg(remainingAccounts), 32);
 
   return {
     programId: VANNA_PROGRAM_ID,
@@ -1070,71 +1181,104 @@ export async function solanaDepositAndBorrow(params: {
   const owner = wallet.full;
   const margin = marginPda(owner);
 
-  const instructions: RawInstruction[] = [];
-  const suffix: RawInstruction[] = [];
-
   // Check if margin account exists
   const marginAccountInfo = await rpc<{ value: unknown }>("getAccountInfo", [margin, { encoding: "base64" }]);
-  if (!marginAccountInfo?.value) {
-    if (params.createIfMissing !== false) {
-      instructions.push(createMarginIx(owner));
-    } else {
-      throw new Error("Margin account does not exist. Create margin account first.");
+  const create = !marginAccountInfo?.value;
+  if (create && params.createIfMissing === false) throw new Error("Margin account does not exist. Create margin account first.");
+
+  type Leg = { sym: string; amount: number | string };
+  const positive = (l: Leg) => toRaw(l.amount, getToken(l.sym).decimals) > 0n;
+  const deposits = (params.deposits ?? []).filter(positive);
+  const borrows = (params.borrows ?? []).filter(positive);
+  const configs = await readAllAssetConfigs();
+  const indexOf = (sym: string) => [...configs.values()].find((c) => c.mint === getToken(sym).mint)?.assetIndex;
+
+  // The instructions for one transaction. `earlier`: deposits / borrows already confirmed by an earlier transaction of this
+  // action, counted as pending in case the RPC still returns the account as it was.
+  const build = async (deps: Leg[], bors: Leg[], withCreate: boolean, earlier: { deposits: Leg[]; borrows: Leg[] } = { deposits: [], borrows: [] }) => {
+    const instructions: RawInstruction[] = [];
+    const suffix: RawInstruction[] = [];
+    if (withCreate) instructions.push(createMarginIx(owner));
+
+    for (const dep of deps) {
+      const token = getToken(dep.sym);
+      const amountRaw = toRaw(dep.amount, token.decimals);
+      let source = tokenAta(owner, token.mint, token.tokenProgram);
+      if (token.isNative) {
+        const wrap = await wrapSol(owner, amountRaw);
+        instructions.push(...wrap.instructions);
+        source = wrap.ata;
+        if (!wrap.existed) suffix.push(splTokenCloseAccountIx(wrap.ata, owner, owner, TOKEN_PROGRAM_ID));
+      }
+      instructions.push(depositCollateralIx(owner, token, amountRaw, source));
     }
-  }
 
-  // Handle Deposits
-  for (const dep of params.deposits ?? []) {
-    const token = getToken(dep.sym);
-    const amountRaw = toRaw(dep.amount, token.decimals);
-    if (amountRaw <= 0n) continue;
-
-    let source = tokenAta(owner, token.mint, token.tokenProgram);
-    if (token.isNative) {
-      const wrap = await wrapSol(owner, amountRaw);
-      instructions.push(...wrap.instructions);
-      source = wrap.ata;
-      if (!wrap.existed) {
-        suffix.push(splTokenCloseAccountIx(wrap.ata, owner, owner, TOKEN_PROGRAM_ID));
+    const idx = (legs: Leg[]) => legs.flatMap((l) => (indexOf(l.sym) !== undefined ? [indexOf(l.sym)!] : []));
+    const pendingDebt: number[] = idx(earlier.borrows);
+    const pendingCollateral: number[] = idx([...earlier.deposits, ...earlier.borrows, ...deps]);
+    for (const bor of bors) {
+      const token = getToken(bor.sym);
+      const amountRaw = toRaw(bor.amount, token.decimals);
+      // max debt shares bound (1.05x buffer)
+      const maxDebtShares = (amountRaw * 105n) / 100n;
+      const assetIndex = indexOf(bor.sym);
+      const remaining = await buildHealthRemainingAccounts(
+        margin,
+        assetIndex !== undefined ? { collateral: [assetIndex], debt: assetIndex } : {},
+        [token.mint],
+        { pendingCollateral: [...pendingCollateral], pendingDebt: [...pendingDebt], compact: true }
+      );
+      instructions.push(borrowIx(owner, token, amountRaw, maxDebtShares, remaining));
+      if (assetIndex !== undefined) {
+        pendingDebt.push(assetIndex);
+        pendingCollateral.push(assetIndex);
       }
     }
-    instructions.push(depositCollateralIx(owner, token, amountRaw, source));
-  }
+    return [...instructions, ...suffix];
+  };
+  // Wallet-safe lookup tables only (MARGIN_WALLET_TABLES): a borrow lists the Phoenix venue's oracles when the account trades
+  // Perps, and without a table it no longer fit (1,330 B for a 1 USDC borrow, fork 2026-11-19), so it fell back to the fork-only
+  // table, which Phantom cannot resolve. With the mainnet tables: 933 B.
+  const send = (ixs: RawInstruction[], label: string) => sendMarginWalletSafe(owner, ixs, label);
+  const fits = async (ixs: RawInstruction[]) => (await walletTablesFor(ixs, owner, MARGIN_WALLET_TABLES)).size <= MAX_TX_BYTES;
 
-  // Handle Borrows
-  const configs = await readAllAssetConfigs();
-  const pendingDebt: number[] = [];
-  const pendingCollateral: number[] = (params.deposits ?? []).flatMap((d) => {
-    const mint = getToken(d.sym).mint;
-    const a = [...configs.values()].find((c) => c.mint === mint);
-    return a ? [a.assetIndex] : [];
-  });
-  for (const bor of params.borrows ?? []) {
-    const token = getToken(bor.sym);
-    const amountRaw = toRaw(bor.amount, token.decimals);
-    if (amountRaw <= 0n) continue;
+  // One transaction (one approval) whenever it fits (1 SOL deposit + 1 borrow: ~980 bytes).
+  const all = await build(deposits, borrows, create);
+  if ((await fits(all)) || deposits.length + borrows.length <= 1) return await send(all, "Deposit and Borrow");
 
-    // max debt shares bound (1.05x buffer)
-    const maxDebtShares = (amountRaw * 105n) / 100n;
-    const assetMap = await readAllAssetConfigs();
-    const asset = [...assetMap.values()].find((a) => a.mint === token.mint);
-    const remaining = await buildHealthRemainingAccounts(
-      margin,
-      asset ? { collateral: [asset.assetIndex], debt: asset.assetIndex } : {},
-      [token.mint],
-      { pendingCollateral: [...pendingCollateral], pendingDebt: [...pendingDebt] }
-    );
-    instructions.push(borrowIx(owner, token, amountRaw, maxDebtShares, remaining));
-    if (asset) {
-      pendingDebt.push(asset.assetIndex);
-      pendingCollateral.push(asset.assetIndex);
+  // Otherwise several transactions, each without a lookup table, built now and signed in ONE wallet request (one approval):
+  // the account and deposits first, then each borrow (built with the earlier parts counted as pending), sent in order.
+  // If a later part fails, what landed is safe on its own: an open account and deposited collateral, or fewer borrows.
+  const parts: BatchPart[] = [];
+  const done: { deposits: Leg[]; borrows: Leg[] } = { deposits: [], borrows: [] };
+  if (create || deposits.length) {
+    const first = await build(deposits, [], create);
+    if ((await fits(first)) || deposits.length <= 1) {
+      parts.push({ instructions: first, label: deposits.length ? "Deposit" : "Open margin account", before: freshenForkPrices });
+    } else {
+      if (create) parts.push({ instructions: await build([], [], true), label: "Open margin account", before: freshenForkPrices });
+      for (const dep of deposits) {
+        parts.push({ instructions: await build([dep], [], false, done), label: `Deposit ${dep.sym}`, before: freshenForkPrices });
+        done.deposits.push(dep);
+      }
     }
+    done.deposits = deposits;
   }
-
-  return sendSolanaInstructions([...instructions, ...suffix], {
-    label: "Deposit and Borrow",
-    computeUnits: EXEC_COMPUTE_UNITS,
-  });
+  for (const bor of borrows) {
+    parts.push({ instructions: await build([], [bor], false, done), label: `Borrow ${bor.sym}`, before: freshenForkPrices });
+    done.borrows.push(bor);
+  }
+  const fitted = await fitWalletParts(owner, MARGIN_WALLET_TABLES, parts);
+  if (typeof fitted === "number") throw new WalletTxTooLargeError(fitted, "Deposit and Borrow");
+  try {
+    return await sendSolanaBatch(fitted, { computeUnits: EXEC_COMPUTE_UNITS });
+  } catch (e) {
+    if (e instanceof BatchPartError) {
+      const landed = parts.slice(0, e.failedIndex).map((p) => p.label.toLowerCase()).join(", ");
+      throw new Error(`${e.failedLabel} did not go through: ${e.message}. Already done and safe in your margin account: ${landed}. Try the rest again.`);
+    }
+    throw e;
+  }
 }
 
 // Ported from C:\Users\akgam\Documents\Company Work\Vanna App\_ref\vanna-web-backend\apps\solana\lib\solana\margin.ts:repayFromMarginIx
@@ -1237,14 +1381,15 @@ export function withdrawCollateralIx(
   amount: bigint,
   minHealthFactorWad: bigint,
   destination: string,
-  remainingAccounts: AccountMeta[] = []
+  remainingAccounts: AccountMeta[] | HealthAccounts = []
 ): RawInstruction {
   const margin = marginPda(owner);
-  const data = Buffer.alloc(8 + 8 + 16);
+  const data = Buffer.alloc(8 + 8 + 16 + 1);
   anchorDiscriminator("user_withdraw_collateral").copy(data, 0);
   data.writeBigUInt64LE(amount, 8);
   data.writeBigUInt64LE(minHealthFactorWad & 0xffffffffffffffffn, 16);
   data.writeBigUInt64LE(minHealthFactorWad >> 64n, 24);
+  data.writeUInt8(tokensArg(remainingAccounts), 32);
 
   return {
     programId: VANNA_PROGRAM_ID,
@@ -1306,20 +1451,161 @@ export async function solanaWithdrawCollateral(params: {
   const mBuf = marginInfo?.value ? Buffer.from(marginInfo.value.data[0], "base64") : null;
   const hasDebt = !!mBuf && Array.from({ length: 24 }, (_, i) => mBuf.readUInt16LE(91 + 2 * i)).some((d) => d !== EMPTY_ASSET_INDEX);
   const remaining = hasDebt
-    ? await buildHealthRemainingAccounts(margin, asset ? { collateral: [asset.assetIndex] } : { collateral: [] }, [token.mint])
+    ? await buildHealthRemainingAccounts(margin, asset ? { collateral: [asset.assetIndex] } : { collateral: [] }, [token.mint], { compact: true })
     : [];
 
   const ix = withdrawCollateralIx(owner, token, amount, minHfWad, destination, remaining);
 
-  return sendSolanaInstructions([...prefix, ix, ...suffix], {
-    label: `Withdraw ${token.symbol} Collateral`,
-    computeUnits: EXEC_COMPUTE_UNITS,
-  });
+  // Wallet-safe tables only (see solanaDepositAndBorrow): 1,456 B without a table for 0.1 SOL on an account that trades Perps.
+  return sendMarginWalletSafe(owner, [...prefix, ix, ...suffix], `Withdraw ${token.symbol} Collateral`);
+}
+
+/**
+ * Sends a margin borrow / withdraw (a health-checked core instruction) with mainnet lookup tables only, so the wallet can resolve
+ * every table; never the fork-only table (Phantom takes the approval and never answers). Too large: WalletTxTooLargeError
+ * before signing.
+ */
+async function sendMarginWalletSafe(owner: string, ixs: RawInstruction[], label: string): Promise<string> {
+  const { addresses } = await walletTablesFor(ixs, owner, MARGIN_WALLET_TABLES);
+  return sendSolanaInstructions(ixs, { label, computeUnits: EXEC_COMPUTE_UNITS, walletSafe: true, lookupTableAddresses: addresses });
 }
 
 // ---------------------------------------------------------------------------------------------
 // C) margin_execute Wrapper for External Programs
 // ---------------------------------------------------------------------------------------------
+
+// Public lookup tables on REAL mainnet that hold the fixed accounts of each integration (found 2026-11-18 from mainnet
+// transactions of Kamino's main market, Perena and Ember/Phoenix). Wallets resolve tables on mainnet, so only such tables may be
+// used; walletSafeLookupTables still checks each one (the fork copy must equal the start of the mainnet table) before use.
+// They hold Kamino's reserves and vaults, Perena's vault accounts, Ember/Phoenix accounts, mints, token programs and Pyth feeds:
+// enough to bring one margin_execute (about 1,300 to 1,400 bytes alone) under 1,232. Vanna's own accounts are not in any of them.
+export const KAMINO_MAINNET_TABLES = ["284iwGtA9X9aLy3KsyV8uT2pXLARhYbiSi5SiM2g47M2", "FGMSBiyVE8TvZcdQnZETAAKw28tkQJ2ccZy6pyp95URb"];
+export const PERENA_MAINNET_TABLES = ["4ZP1hmYuePwAwmr2uHvjRL12okdG2krf4A9sacSxvHcs", "3hi1c3L11vL446LJotFZNXHp1YZSLQ867SeQJUc9b5t1", "bzdjSeDDPEdsGpK73oevQ87x4Sm6QRsnzupPLQEaFFN"];
+export const PHOENIX_MAINNET_TABLES = ["BnouXqk6UVhXXESoMY6UxHXrSzXYaqP7xokguFaCfJXu", "bzdjSeDDPEdsGpK73oevQ87x4Sm6QRsnzupPLQEaFFN", "4ZP1hmYuePwAwmr2uHvjRL12okdG2krf4A9sacSxvHcs"];
+
+/**
+ * The wallet-safe tables (up to 6, picked greedily from `candidates`) that make these instructions smallest, and the size then.
+ * Size is measured as sendSolanaInstructions builds it (compute budget and durable nonce included).
+ */
+export async function walletTablesFor(ixs: RawInstruction[], owner: string, candidates: string[]): Promise<{ addresses: string[]; size: number }> {
+  const safe = await walletSafeLookupTables(candidates, owner);
+  const chosen: AddressLookupTableAccount[] = [];
+  let size = txSizeWithoutLookupTable(ixs, owner, EXEC_COMPUTE_UNITS, chosen);
+  for (let round = 0; round < 6; round++) {
+    let pick: AddressLookupTableAccount | null = null;
+    for (const t of safe) {
+      if (chosen.includes(t)) continue;
+      const s = txSizeWithoutLookupTable(ixs, owner, EXEC_COMPUTE_UNITS, [...chosen, t]);
+      if (s < size) {
+        size = s;
+        pick = t;
+      }
+    }
+    if (!pick) break;
+    chosen.push(pick);
+  }
+  return { addresses: chosen.map((t) => t.address), size };
+}
+
+/** Only the create-account instructions whose account does not exist yet (each one saves ~70 bytes when skipped). */
+async function missingAtaIxs(owner: string, wanted: { account: string; wallet: string; mint: string; tokenProgram: string }[]): Promise<RawInstruction[]> {
+  if (!wanted.length) return [];
+  const res = await rpc<{ value: (unknown | null)[] }>("getMultipleAccounts", [wanted.map((w) => w.account), { encoding: "base64", dataSlice: { offset: 0, length: 0 } }]);
+  return wanted.filter((_, i) => !res.value[i]).map((w) => createAssociatedTokenAccountIdempotentIx(owner, w.account, w.wallet, w.mint, w.tokenProgram));
+}
+
+/** A transaction part before sizing; `tables` replaces the operation's candidate tables for this part (e.g. a swap route's own). */
+export type WalletPart = { instructions: RawInstruction[]; label: string; tables?: string[]; before?: (retry: boolean) => Promise<void> };
+
+/** FORK ONLY: re-stamps the token price accounts right before a signed transaction is sent (a slow approval ages them). */
+export const freshenForkPrices = async (retry = false): Promise<void> => ensureFreshForkPrices(TOKENS, await readAllAssetConfigs(), [], retry);
+
+/**
+ * Wallet-safe tables for each part. Returns the batch when every part fits 1,232 bytes, else the size of the first part that
+ * does not fit (nothing is signed).
+ */
+async function fitWalletParts(owner: string, candidates: string[], parts: WalletPart[]): Promise<BatchPart[] | number> {
+  const sized = await Promise.all(parts.map(async (p) => ({ ...p, ...(await walletTablesFor(p.instructions, owner, p.tables ?? candidates)) })));
+  const over = sized.find((p) => p.size > MAX_TX_BYTES);
+  if (over) return over.size;
+  return sized.map((p) => ({ instructions: p.instructions, label: p.label, lookupTableAddresses: p.addresses, before: p.before ?? freshenForkPrices }));
+}
+
+/**
+ * The parts to try for "setup + one big call": everything in one transaction, else the setup (account creation) first and the
+ * call alone, signed together. Setup that lands alone only creates empty token accounts the margin account owns: harmless.
+ */
+function setupSplits(setup: RawInstruction[], call: RawInstruction, label: string, tables?: string[]): WalletPart[][] {
+  const one: WalletPart[] = [{ instructions: [...setup, call], label, tables }];
+  if (!setup.length) return [one];
+  return [one, [{ instructions: setup, label: `${label}: prepare accounts`, tables }, { instructions: [call], label, tables }]];
+}
+
+// Mainnet tables that hold accounts every margin call lists (token programs, common mints, Pyth price feeds): extra candidates
+// for any margin_execute, on top of an integration's or a swap route's own tables.
+export const COMMON_MAINNET_TABLES = [...new Set([KAMINO_MAINNET_TABLES[0], ...PERENA_MAINNET_TABLES, ...PHOENIX_MAINNET_TABLES])];
+// Every health list names the Phoenix venue's oracle accounts once the account trades Perps; the Phoenix tables hold them. With
+// them, the full health list fits again (user's account, 4 markets open, fork 2026-11-19): Kamino deposit 1,330 -> 1,116 B,
+// Perena deposit 1,346 -> 1,194 B, borrow 1,330 -> 933 B, withdraw 0.1 SOL 1,456 -> 1,121 B.
+const KAMINO_WALLET_TABLES = [...new Set([...KAMINO_MAINNET_TABLES, ...COMMON_MAINNET_TABLES])];
+const PERENA_WALLET_TABLES = [...new Set([...PERENA_MAINNET_TABLES, ...COMMON_MAINNET_TABLES])];
+const MARGIN_WALLET_TABLES = COMMON_MAINNET_TABLES;
+
+/**
+ * The pre-send check failed on health while a narrowed health list left part of the collateral out (the full list did not fit a
+ * wallet transaction): says so instead of "reduce the amount", which may not be the cause. Anything else is returned unchanged.
+ */
+function omittedHealthError(e: unknown, label: string): unknown {
+  if (!(e instanceof BatchPartError) && e instanceof Error && /health factor to or below/.test(e.message)) {
+    return new Error(`${label}: the health check failed with part of your collateral left out (a wallet transaction cannot list all of it for this action). Nothing was signed or sent.`);
+  }
+  return e;
+}
+
+/**
+ * Sends a Farm / Perps operation with ONE wallet approval and no fork-only lookup table. `variants` builds the transaction parts
+ * from the widest health list to the narrowest (leaving a held token out of the health list only makes the check stricter); the
+ * first variant whose every part fits 1,232 bytes with wallet-safe tables is used. Several parts are signed together
+ * (sendSolanaBatch: one sign_transactions request) and sent in order.
+ */
+async function sendWalletParts(
+  owner: string,
+  candidates: string[],
+  // `check`: a whole-batch check run before the wallet is asked (see sendSolanaBatch). `omits`: this variant leaves held tokens out
+  // of the health list. A variant that resolves to null is skipped (no such narrowing for this account).
+  // `independent`: no part depends on another (Close all), so they are checked, sent and confirmed together, with `refreshAll`
+  // refreshing every part's market data in one pass (see sendSolanaBatch).
+  variants: (() => Promise<{ parts: WalletPart[]; check?: () => Promise<void>; omits?: boolean; independent?: boolean; refreshAll?: (retry: boolean) => Promise<void> } | null>)[],
+  label: string,
+): Promise<string> {
+  let biggest = 0;
+  const t0 = Date.now();
+  const mark = (what: string) => {
+    if (__DEV__) console.log(`[open-time] +${((Date.now() - t0) / 1000).toFixed(1)}s (parts) ${what}`);
+  };
+  for (const [n, build] of variants.entries()) {
+    const built = await build();
+    if (!built) continue;
+    const { parts, check, omits, independent, refreshAll } = built;
+    mark(`variant ${n + 1} built, ${parts.length} part(s)`);
+    const fit = await fitWalletParts(owner, candidates, parts);
+    mark(`variant ${n + 1} ${typeof fit === "number" ? `too large (${fit} B)` : "fits"}`);
+    if (typeof fit === "number") {
+      biggest = fit;
+      continue;
+    }
+    try {
+      return await sendSolanaBatch(fit, { computeUnits: EXEC_COMPUTE_UNITS, independent, refreshAll }, check);
+    } catch (e) {
+      // The checks before signing failed on health with part of the collateral left out of the list (see omittedHealthError).
+      throw omits ? omittedHealthError(e, label) : e;
+    }
+  }
+  throw new WalletTxTooLargeError(biggest, label);
+}
+
+// Programs whose margin_execute calls carry the validator rule book (Kamino Lend, Titan, Perena).
+const RULE_PROGRAMS = ["KLend2g3cP87fffoy8q1mQqGKjrxjC8boSyAYavgmjD", "T1TANpTeScyeqVzzgNViGDNrkQ6qHz9KrSBS4aNXvGT", "save8RQVPMWNTzU18t3GBvBkN9hT7jsGjiCQ28FpD9H"];
 
 // Ported from C:\Users\akgam\Documents\Company Work\Vanna App\_ref\vanna-web-backend\apps\solana\lib\solana\exec.ts:marginExecuteIx
 export async function marginExecuteIx(
@@ -1330,7 +1616,7 @@ export async function marginExecuteIx(
   venueAsset: string | null = null,
   validatorAccounts: AccountMeta[] = [],
   pricedMints: string[] = [],
-  healthOpts: { extraAssetIds?: number[]; venueScan?: boolean; pendingDebt?: number[]; pendingCollateral?: number[]; pendingVenue?: number; closedVenue?: number } = {}
+  healthOpts: { extraAssetIds?: number[]; venueScan?: boolean; pendingDebt?: number[]; pendingCollateral?: number[]; pendingVenue?: number; closedVenue?: number; compact?: boolean; onlyAssets?: number[] } = {}
 ): Promise<RawInstruction> {
   const margin = marginPda(owner);
   const remaining = await buildHealthRemainingAccounts(margin, {}, pricedMints, {
@@ -1339,19 +1625,27 @@ export async function marginExecuteIx(
   });
 
   // Discriminator: sha256("global:margin_execute")[0..8]
-  // Args: data (Vec<u8>: u32 LE len + bytes), call_account_count (u16 LE)
+  // Args: data (Vec<u8>: u32 LE len + bytes), call_account_count (u16 LE), tokens (u8 = ALL_TOKENS)
   const disc = anchorDiscriminator("margin_execute");
   const dataLen = cpiData.length;
-  const data = Buffer.alloc(8 + 4 + dataLen + 2);
+  const data = Buffer.alloc(8 + 4 + dataLen + 2 + 1);
   let o = 0;
   disc.copy(data, o); o += 8;
   data.writeUInt32LE(dataLen, o); o += 4;
   cpiData.copy(data, o); o += dataLen;
-  data.writeUInt16LE(cpiAccounts.length, o);
+  data.writeUInt16LE(cpiAccounts.length, o); o += 2;
+  data.writeUInt8(tokensArg(remaining), o); // ALL_TOKENS, or the compact count (healthOpts.compact)
 
   const eventAuthority = findPda(["__event_authority"], VANNA_PROGRAM_ID);
-  const validatorSegment: AccountMeta[] = validatorAccounts.length > 0
-    ? [{ pubkey: VALIDATOR_PROGRAM_ID, isSigner: false, isWritable: false }, ...validatorAccounts]
+  // Kamino Lend, Titan and Perena are reviewed from the validator's on-chain rule book, passed after the health accounts
+  // (backend exec.ts RULE_PROGRAMS / ruleBookPda, round-2 contract update). Without it the validator answers "No rules for this program".
+  const extras: AccountMeta[] = validatorAccounts.length > 0
+    ? validatorAccounts
+    : RULE_PROGRAMS.includes(targetProgram)
+      ? [{ pubkey: findPda(["rules", decode58(targetProgram)], VALIDATOR_PROGRAM_ID), isSigner: false, isWritable: false }]
+      : [];
+  const validatorSegment: AccountMeta[] = extras.length > 0
+    ? [{ pubkey: VALIDATOR_PROGRAM_ID, isSigner: false, isWritable: false }, ...extras]
     : [];
 
   return {
@@ -1432,13 +1726,33 @@ export async function solanaWalletSwap(params: {
   });
 }
 
+/** Shown when no swap route fits one transaction that an external wallet can resolve. */
+export const SWAP_TOO_LARGE_MESSAGE = "This pair is too large for the wallet right now, try a smaller route";
+
+// Jupiter routes tried for a margin swap, best price first; the next one only when the previous does not fit. `route` (not
+// shared accounts) needs 4 fewer accounts (~100 bytes); the validator allows both (backend SOLANA_CONTRACT_REFERENCE.md).
+const JUPITER_MARGIN_ROUTES: { query: string; shared: boolean }[] = [
+  { query: "maxAccounts=20", shared: false },
+  { query: "maxAccounts=16", shared: false },
+  { query: "maxAccounts=12", shared: false },
+  { query: "onlyDirectRoutes=true", shared: false },
+  { query: "maxAccounts=16", shared: true },
+];
+
 // Ported from C:\Users\akgam\Documents\Company Work\Vanna App\_ref\vanna-web-backend\apps\solana\lib\solana\exec.ts:executeMarginSwap
+// The wallet signs this, and wallets resolve lookup tables on REAL mainnet: a fork-only table (writeForkLookupTable) made Phantom
+// take the approval and never answer (2026-11-17, SOL -> USDC with table HdoyXn...). So only route tables that are identical on
+// mainnet are used (walletSafe), the health accounts are compact, and when a route does not fit, a route with fewer accounts is
+// tried; if none fits, the swap stops before signing with SWAP_TOO_LARGE_MESSAGE.
 export async function solanaMarginSwap(params: {
   fromSym: string;
   toSym: string;
   amount: number | string;
   slippageBps?: number;
+  /** Swap venue picked on the Spot screen (default Jupiter). */
+  venue?: "jupiter" | "titan";
 }): Promise<string> {
+  if (params.venue === "titan") return solanaMarginTitanSwap(params);
   const wallet = requireActiveRealWallet("solana");
   const owner = wallet.full;
   const margin = marginPda(owner);
@@ -1447,45 +1761,215 @@ export async function solanaMarginSwap(params: {
   const rawIn = toRaw(params.amount, fromToken.decimals);
   const slippage = params.slippageBps ?? 50;
 
-  const quoteUrl = `https://lite-api.jup.ag/swap/v1/quote?inputMint=${fromToken.mint}&outputMint=${toToken.mint}&amount=${rawIn}&slippageBps=${slippage}&dexes=${JUPITER_FORK_DEXES}&maxAccounts=20`;
-  // Shorter routes first; a wider search only if none fits (web exec.ts:quoteMarginSwap).
-  let quoteRes = await fetch(quoteUrl);
-  if (!quoteRes.ok) quoteRes = await fetch(quoteUrl.replace("maxAccounts=20", "maxAccounts=32"));
-  if (!quoteRes.ok) throw new Error(`Jupiter quote failed: ${quoteRes.statusText}`);
-  const quoteData = await quoteRes.json();
-
-  const swapRes = await fetch("https://lite-api.jup.ag/swap/v1/swap-instructions", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      quoteResponse: quoteData,
-      userPublicKey: margin,
-      wrapAndUnwrapSol: false,
-      useSharedAccounts: true,
-    }),
-  });
-  if (!swapRes.ok) throw new Error(`Jupiter swap instructions failed: ${swapRes.statusText}`);
-  const swapData = await swapRes.json();
-  const swapIx = swapData.swapInstruction;
-  if (!swapIx) throw new Error("Jupiter returned no swap instruction");
-
-  // Ensure receiving margin vault ATA is created
+  // The receiving margin vault: created in the same transaction only when it does not exist yet (saves ~40 bytes otherwise).
   const receivedVault = marginVault(margin, toToken.mint, toToken.tokenProgram);
-  const createAta = createAssociatedTokenAccountIdempotentIx(owner, receivedVault, margin, toToken.mint, toToken.tokenProgram);
+  const [vaultInfo, configs] = await Promise.all([
+    rpc<{ value: unknown }>("getAccountInfo", [receivedVault, { encoding: "base64", dataSlice: { offset: 0, length: 0 } }]),
+    readAllAssetConfigs(),
+  ]);
+  const setup = vaultInfo.value ? [] : [createAssociatedTokenAccountIdempotentIx(owner, receivedVault, margin, toToken.mint, toToken.tokenProgram)];
+  const received = [...configs.values()].find((c) => c.mint === toToken.mint && c.kind !== "venue");
 
-  const cpiAccounts: AccountMeta[] = swapIx.accounts.map((a: { pubkey: string; isWritable: boolean }) => ({
-    pubkey: a.pubkey,
-    isSigner: false,
-    isWritable: a.isWritable,
-  }));
+  const sent = [...configs.values()].find((c) => c.mint === fromToken.mint && c.kind !== "venue");
+  const label = `Margin Swap ${fromToken.symbol} → ${toToken.symbol}`;
 
-  const execIx = await marginExecuteIx(owner, JUPITER_V6_PROGRAM_ID, Buffer.from(swapIx.data, "base64"), cpiAccounts, null, [], [fromToken.mint, toToken.mint]);
+  // Each route is tried as one transaction, then as two signed together (create the received vault, then the swap). Tables: the
+  // route's own plus COMMON_MAINNET_TABLES, all checked wallet-safe.
+  type Candidate = { data: Buffer; accounts: AccountMeta[]; tables: string[] };
+  const candidates: Candidate[] = [];
+  const tried = new Set<string>();
+  const tryCandidate = async (c: Candidate, onlyAssets?: number[]) => {
+    const execIx = await marginExecuteIx(owner, JUPITER_V6_PROGRAM_ID, c.data, c.accounts, null, [], [fromToken.mint, toToken.mint], {
+      compact: true,
+      pendingCollateral: received ? [received.assetIndex] : [],
+      onlyAssets,
+    });
+    for (const parts of setupSplits(setup, execIx, label, c.tables)) {
+      const fit = await fitWalletParts(owner, c.tables, parts);
+      if (typeof fit !== "number") return fit;
+    }
+    return null;
+  };
+  for (const route of JUPITER_MARGIN_ROUTES) {
+    const quoteRes = await fetch(`https://lite-api.jup.ag/swap/v1/quote?inputMint=${fromToken.mint}&outputMint=${toToken.mint}&amount=${rawIn}&slippageBps=${slippage}&dexes=${JUPITER_FORK_DEXES}&${route.query}`);
+    if (!quoteRes.ok) continue;
+    const quoteData = await quoteRes.json();
+    if (!Array.isArray(quoteData?.routePlan)) continue;
+    const key = `${route.shared}:${quoteData.routePlan.map((r: { swapInfo?: { ammKey?: string } }) => r.swapInfo?.ammKey).join(">")}`;
+    if (tried.has(key)) continue; // the same route as a candidate already measured
+    tried.add(key);
 
-  return sendSolanaInstructions([createAta, execIx], {
-    label: `Margin Swap ${fromToken.symbol} → ${toToken.symbol}`,
-    computeUnits: EXEC_COMPUTE_UNITS,
-    lookupTableAddresses: swapData.addressLookupTableAddresses ?? [],
-  });
+    const swapRes = await fetch("https://lite-api.jup.ag/swap/v1/swap-instructions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ quoteResponse: quoteData, userPublicKey: margin, wrapAndUnwrapSol: false, useSharedAccounts: route.shared }),
+    });
+    if (!swapRes.ok) continue;
+    const swapData = await swapRes.json();
+    const swapIx: { data: string; accounts: { pubkey: string; isWritable: boolean }[] } | undefined = swapData.swapInstruction;
+    if (!swapIx) continue;
+    const candidate: Candidate = {
+      data: Buffer.from(swapIx.data, "base64"),
+      accounts: swapIx.accounts.map((a) => ({ pubkey: a.pubkey, isSigner: false, isWritable: a.isWritable })),
+      tables: [...new Set([...(swapData.addressLookupTableAddresses ?? []), ...COMMON_MAINNET_TABLES])],
+    };
+    candidates.push(candidate);
+    // Compact health accounts (held token groups plus the received token): checked on the fork 2026-11-17.
+    const batch = await tryCandidate(candidate);
+    if (batch) return swapBatch(batch, toToken.symbol);
+  }
+  if (!candidates.length) throw new Error("Jupiter has no route for this pair right now");
+
+  // No route fits with every held token listed: leave out the LEAST valuable held tokens first (healthWidths), always keeping the
+  // two swapped tokens (debts always stay listed). The core counts less collateral, so the check can only be stricter. The old
+  // fallback listed only the two swapped tokens and so left out the account's SOL: a 5 USDC -> USDT swap on an account at health
+  // factor ~24 failed its check with HealthFactorTooLow (fork 2026-11-19, user's account; the wider lists pass).
+  const widths = healthWidths(owner, configs);
+  for (const level of NARROW_LEVELS) {
+    const w = await widths(level);
+    if (!w) continue;
+    for (const candidate of candidates) {
+      const batch = await tryCandidate(candidate, w([sent?.assetIndex, received?.assetIndex]));
+      if (!batch) continue;
+      try {
+        return await swapBatch(batch, toToken.symbol);
+      } catch (e) {
+        throw omittedHealthError(e, label);
+      }
+    }
+  }
+  throw new Error(SWAP_TOO_LARGE_MESSAGE);
+}
+
+/** Sends a swap batch; if the swap part fails after the account-creation part landed, says that nothing was swapped. */
+async function swapBatch(batch: BatchPart[], received: string, opts: { onStatus?: (s: "simulating" | "signing" | "sending" | "confirming") => void } = {}): Promise<string> {
+  try {
+    return await sendSolanaBatch(batch, { computeUnits: EXEC_COMPUTE_UNITS, ...opts });
+  } catch (e) {
+    if (e instanceof BatchPartError) throw new Error(`Nothing was swapped: ${e.message}. Only the empty account that receives ${received} was created. Please try again.`);
+    throw e;
+  }
+}
+
+// Titan routes tried for a margin swap, in the order below; the next one only when the previous does not fit 1,232 bytes. A Titan
+// route is ONE swap_route_v3 instruction: unlimited, 3-4 hop routes have 69 to 87 accounts (43 to 53 different ones) and come to
+// 1,421 to 1,596 B inside margin_execute even with 6 wallet-safe tables, so smaller routes are asked for (the quote route passes
+// maxAccounts / onlyDirectRoutes to Titan as accountsLimitTotal / onlyDirectRoutes). A quote route that predates the limits
+// refuses them (TitanLimitUnsupportedError); then only the unlimited route is tried.
+// Measured on the live route (2026-11-18, SOL/USDC/USDT/JitoSOL/JupSOL/JupUSD/NVDAx/GOOGLx/AAPLx/TSLAx, $5 and $100): unlimited routes
+// mostly do not fit, a limit of 32 fits almost every pair, 24 gives a single-pool route that fits all; onlyDirectRoutes is not
+// reliable (still returns 2-4 hops), so it is not used. Unlimited is last: best price when it happens to fit.
+const TITAN_MARGIN_ROUTES: (TitanRouteLimit | undefined)[] = [{ maxAccounts: 32 }, { maxAccounts: 24 }, undefined];
+
+// Ported from Vanna_Finance_Backend apps/solana/lib/solana/titan.ts:executeMarginTitanSwap (and aggregator.ts:executeSwapQuote's retry).
+// Titan's swap_route_v3 runs inside margin_execute. The quote comes from the website's route (src/chain/solana/titan.ts). The health
+// accounts are compact (only held token groups, plus the received token), as for borrow and withdraw, so the transaction can fit
+// with Titan's own (real mainnet) lookup tables plus COMMON_MAINNET_TABLES and no fork-only table, which Phantom cannot resolve.
+// When it does not fit as one transaction, the atlas / vault account creation goes first and the swap second, in ONE approval.
+// When a route does not fit at all, a route with fewer accounts is asked for (TITAN_MARGIN_ROUTES); only when none fits does the
+// swap stop before signing with SWAP_TOO_LARGE_MESSAGE.
+async function solanaMarginTitanSwap(params: { fromSym: string; toSym: string; amount: number | string; slippageBps?: number }): Promise<string> {
+  const wallet = requireActiveRealWallet("solana");
+  const owner = wallet.full;
+  const margin = marginPda(owner);
+  const fromToken = getToken(params.fromSym);
+  const toToken = getToken(params.toSym);
+  if (fromToken.symbol === toToken.symbol) throw new Error("Pick two different tokens");
+  const rawIn = toRaw(params.amount, fromToken.decimals);
+  if (rawIn <= 0n) throw new Error("Enter an amount");
+  const configs = await readAllAssetConfigs();
+  const received = [...configs.values()].find((c) => c.mint === toToken.mint && c.kind !== "venue");
+  if (!received) throw new Error(`${toToken.symbol} is not on the protocol's allowed-token list`);
+
+  const sentIdx = [...configs.values()].find((c) => c.mint === fromToken.mint && c.kind !== "venue")?.assetIndex;
+  const label = `Swap ${fromToken.symbol} → ${toToken.symbol} (Titan)`;
+  const receivedVault = marginVault(margin, toToken.mint, toToken.tokenProgram);
+  const widths = healthWidths(owner, configs);
+
+  type Attempt = { signature?: string; signing: boolean; error?: unknown; route: number };
+  /** Builds and sends one quote; `null` when it does not fit the wallet (nothing signed). */
+  const sendQuote = async (limit: TitanRouteLimit | undefined, onSigning: () => void, seen: Set<string>): Promise<string | null> => {
+    const quote = await fetchTitanQuote({
+      inputMint: fromToken.mint,
+      outputMint: toToken.mint,
+      amount: rawIn,
+      userPublicKey: margin,
+      slippageBps: params.slippageBps ?? 50,
+      mode: "margin",
+      limit,
+    });
+    const call = marginTitanCall(quote, margin);
+    const key = call.accounts.map((a) => a.pubkey).join(",");
+    if (seen.has(key)) return null; // the same route as one already measured: it does not fit either
+    seen.add(key);
+    const [atlas, createVault] = await Promise.all([
+      missingAtlasAccounts(owner, call.accounts, call.mints),
+      missingAtaIxs(owner, [{ account: receivedVault, wallet: margin, mint: toToken.mint, tokenProgram: toToken.tokenProgram }]),
+    ]);
+    const tables = [...new Set([...quote.addressLookupTables, ...COMMON_MAINNET_TABLES])];
+    // The full compact health list first, then narrower lists that leave out the least valuable held tokens first and always keep
+    // the two swapped tokens (healthWidths; see solanaMarginSwap).
+    for (const level of [0, ...NARROW_LEVELS]) {
+      const w = await widths(level);
+      if (!w) continue;
+      const execIx = await marginExecuteIx(owner, TITAN_PROGRAM_ID, call.data, call.accounts, null, [], [fromToken.mint, toToken.mint], {
+        compact: true,
+        pendingCollateral: [received.assetIndex],
+        onlyAssets: w([received.assetIndex, sentIdx]),
+      });
+      for (const parts of setupSplits([...atlas, ...createVault], execIx, label, tables)) {
+        const fit = await fitWalletParts(owner, tables, parts);
+        if (typeof fit === "number") continue;
+        try {
+          return await swapBatch(fit, toToken.symbol, {
+            onStatus: (s) => {
+              if (s === "signing") onSigning();
+            },
+          });
+        } catch (e) {
+          throw level > 0 ? omittedHealthError(e, label) : e;
+        }
+      }
+    }
+    return null;
+  };
+
+  // Tries the routes from `start` on. A smaller route that fails to quote or to build (no route under that limit, a route type the
+  // margin adapter refuses) is skipped; the unlimited route's errors and anything after signing stop the swap.
+  const attempt = async (start: number): Promise<Attempt> => {
+    let signing = false;
+    let tooLarge = false;
+    let firstError: unknown;
+    const seen = new Set<string>();
+    for (let route = start; route < TITAN_MARGIN_ROUTES.length; route++) {
+      const limit = TITAN_MARGIN_ROUTES[route];
+      try {
+        const signature = await sendQuote(limit, () => {
+          signing = true;
+        }, seen);
+        if (signature) return { signature, signing, route };
+        tooLarge = true;
+      } catch (error) {
+        if (signing || error instanceof TitanUnavailableError || !limit) return { error, signing, route };
+        if (error instanceof TitanLimitUnsupportedError) continue;
+        if (/simulat|account keys|tick/i.test(String((error as Error)?.message ?? error))) return { error, signing, route };
+        if (firstError === undefined) firstError = error;
+      }
+    }
+    if (tooLarge || !firstError) return { error: new WalletTxTooLargeError(MAX_TX_BYTES + 1, label), signing, route: start };
+    return { error: firstError, signing, route: start };
+  };
+
+  const first = await attempt(0);
+  if (first.signature) return first.signature;
+  if (first.error instanceof WalletTxTooLargeError) throw new Error(SWAP_TOO_LARGE_MESSAGE);
+  // A simulation that failed before anything was signed usually means the fork's cloned pools had drifted from the ones Titan
+  // quoted; the failed attempt re-clones them, so one fresh quote is tried at the same route size (backend aggregator.ts).
+  if (first.signing || first.error instanceof TitanUnavailableError || !/simulat|account keys|tick/i.test(String((first.error as Error)?.message ?? first.error))) throw first.error;
+  const second = await attempt(first.route);
+  if (second.signature) return second.signature;
+  if (second.error instanceof WalletTxTooLargeError) throw new Error(SWAP_TOO_LARGE_MESSAGE);
+  throw second.error;
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -1556,35 +2040,39 @@ export async function solanaFarmDeposit(params: {
   const total = walletRaw + marginRaw + borrowRaw;
   if (total <= 0n) throw new Error("Enter an amount to supply to Kamino");
 
-  const instructions: RawInstruction[] = [];
-  const suffix: RawInstruction[] = [];
+  // Legs that run before the Kamino call (wallet deposit, borrow) and their cleanup.
+  const legs: RawInstruction[] = [];
+  const legSuffix: RawInstruction[] = [];
+  const configs = await readAllAssetConfigs();
+  const idxOf = (mint: string) => [...configs.values()].find((a) => a.mint === mint && a.kind !== "venue")?.assetIndex;
+  const tIdx = idxOf(token.mint);
+  const rIdx = idxOf(r.collateralMint);
 
   // 1. Wallet deposit if requested
   if (walletRaw > 0n) {
     let source = tokenAta(owner, token.mint, token.tokenProgram);
     if (token.isNative) {
       const wrap = await wrapSol(owner, walletRaw);
-      instructions.push(...wrap.instructions);
+      legs.push(...wrap.instructions);
       source = wrap.ata;
-      if (!wrap.existed) suffix.push(splTokenCloseAccountIx(wrap.ata, owner, owner, TOKEN_PROGRAM_ID));
+      if (!wrap.existed) legSuffix.push(splTokenCloseAccountIx(wrap.ata, owner, owner, TOKEN_PROGRAM_ID));
     }
-    instructions.push(depositCollateralIx(owner, token, walletRaw, source));
+    legs.push(depositCollateralIx(owner, token, walletRaw, source));
   }
 
   // 2. Borrow for leverage if requested
   const pendingDebt: number[] = [];
   if (borrowRaw > 0n) {
     const maxDebtShares = (borrowRaw * 105n) / 100n;
-    const asset = [...(await readAllAssetConfigs()).values()].find((a) => a.mint === token.mint);
     // user_borrow values the borrowed asset itself (web appendBorrows)
-    const remaining = await buildHealthRemainingAccounts(margin, asset ? { collateral: [asset.assetIndex], debt: asset.assetIndex } : {}, [token.mint]);
-    instructions.push(borrowIx(owner, token, borrowRaw, maxDebtShares, remaining));
-    if (asset) pendingDebt.push(asset.assetIndex);
+    const remaining = await buildHealthRemainingAccounts(margin, tIdx !== undefined ? { collateral: [tIdx], debt: tIdx } : {}, [token.mint], { compact: true });
+    legs.push(borrowIx(owner, token, borrowRaw, maxDebtShares, remaining));
+    if (tIdx !== undefined) pendingDebt.push(tIdx);
   }
 
-  // 3. Ensure receipt token ATA exists on margin
+  // 3. Receipt token account on the margin account (only when missing)
   const receiptVault = marginVault(margin, r.collateralMint, TOKEN_PROGRAM_ID);
-  instructions.push(createAssociatedTokenAccountIdempotentIx(owner, receiptVault, margin, r.collateralMint, TOKEN_PROGRAM_ID));
+  const createReceipt = await missingAtaIxs(owner, [{ account: receiptVault, wallet: margin, mint: r.collateralMint, tokenProgram: TOKEN_PROGRAM_ID }]);
 
   // 4. Kamino deposit CPI call
   // sha256("global:deposit_reserve_liquidity")[0..8] = [169, 201, 30, 126, 6, 205, 102, 68]
@@ -1609,19 +2097,35 @@ export async function solanaFarmDeposit(params: {
     m(INSTRUCTIONS_SYSVAR, false),
   ];
 
-  const execIx = await marginExecuteIx(owner, KLEND_PROGRAM_ID, cpiData, cpiAccounts, null, [], [token.mint, r.collateralMint], { pendingDebt });
-  instructions.push(execIx);
-
-  return sendSolanaInstructions([...instructions, ...suffix], {
-    label: `Farm ${token.symbol} on Kamino`,
-    computeUnits: EXEC_COMPUTE_UNITS,
-  });
+  // Compact health list (held tokens + the receipt this call creates); if that is too large, narrower lists that leave out the
+  // least valuable held tokens first and always keep the two tokens involved (healthWidths). The old fallback listed only those
+  // two and so left out the account's SOL: the check then counted almost no collateral (fork 2026-11-19, user's account at health
+  // factor ~24: HealthFactorTooLow with [USDC, kUSDC]; the full list passes).
+  const pending = [rIdx, ...(legs.length ? [tIdx] : [])].filter((x): x is number => x !== undefined);
+  const exec = (onlyAssets?: number[]) =>
+    marginExecuteIx(owner, KLEND_PROGRAM_ID, cpiData, cpiAccounts, null, [], [token.mint, r.collateralMint], { pendingDebt, pendingCollateral: pending, compact: true, onlyAssets });
+  const label = `Farm ${token.symbol} on Kamino`;
+  const widths = healthWidths(owner, configs);
+  const variant = (level: number) => async () => {
+    const only = await widths(level);
+    if (!only) return null;
+    const omits = level > 0;
+    const call = [...createReceipt, await exec(only([tIdx, rIdx]))];
+    if (!legs.length) return { parts: [{ instructions: call, label }], omits };
+    const one = [...legs, ...call, ...legSuffix];
+    // Wallet deposit / borrow first, then the Kamino call, signed together. If only the first lands, the funds sit in the margin
+    // account as collateral (or as borrowed USDC there): safe, and Farm can be tried again.
+    if ((await walletTablesFor(one, owner, KAMINO_WALLET_TABLES)).size <= MAX_TX_BYTES) return { parts: [{ instructions: one, label }], omits };
+    return { parts: [{ instructions: [...legs, ...legSuffix], label: `${label}: move funds` }, { instructions: call, label }], omits };
+  };
+  return sendWalletParts(owner, KAMINO_WALLET_TABLES, [0, ...NARROW_LEVELS].map(variant), label);
 }
-
 // Ported from C:\Users\akgam\Documents\Company Work\Vanna App\_ref\vanna-web-backend\apps\solana\lib\solana\exec.ts:farmWithdraw
 export async function solanaFarmWithdraw(params: {
   sym: string;
   receipts?: number | string;
+  /** Raw receipt (cToken) amount, as the Farm screen converts the typed underlying amount (website kamino-action: share of the position's receipts). */
+  receiptsRaw?: bigint;
   all?: boolean;
 }): Promise<string> {
   const wallet = requireActiveRealWallet("solana");
@@ -1636,7 +2140,7 @@ export async function solanaFarmWithdraw(params: {
   const held = BigInt(bal?.value?.amount ?? "0");
   if (held <= 0n) throw new Error(`No ${r.symbol} cTokens to withdraw`);
 
-  const amount = params.all ? held : toRaw(params.receipts ?? 0, 6);
+  const amount = params.all ? held : params.receiptsRaw ?? toRaw(params.receipts ?? 0, 6);
   if (amount <= 0n) throw new Error("Enter an amount of cTokens to redeem");
   if (amount > held) throw new Error(`Only ${fromRaw(held, 6)} ${r.symbol} available`);
 
@@ -1662,12 +2166,25 @@ export async function solanaFarmWithdraw(params: {
     m(INSTRUCTIONS_SYSVAR, false),
   ];
 
-  const execIx = await marginExecuteIx(owner, KLEND_PROGRAM_ID, cpiData, cpiAccounts, null, [], [token.mint, r.collateralMint]);
-
-  return sendSolanaInstructions([execIx], {
-    label: `Exit ${token.symbol} on Kamino`,
-    computeUnits: EXEC_COMPUTE_UNITS,
-  });
+  const configs = await readAllAssetConfigs();
+  const idxOf = (mint: string) => [...configs.values()].find((a) => a.mint === mint && a.kind !== "venue")?.assetIndex;
+  const tIdx = idxOf(token.mint);
+  const rIdx = idxOf(r.collateralMint);
+  // Compact health list (held tokens + the underlying this call pays out); if too large, narrower lists that leave out the least
+  // valuable held tokens first and keep the two tokens involved (healthWidths; see solanaFarmDeposit).
+  const widths = healthWidths(owner, configs);
+  const variant = (level: number) => async () => {
+    const only = await widths(level);
+    if (!only) return null;
+    return {
+      parts: [{
+        instructions: [await marginExecuteIx(owner, KLEND_PROGRAM_ID, cpiData, cpiAccounts, null, [], [token.mint, r.collateralMint], { compact: true, pendingCollateral: tIdx !== undefined ? [tIdx] : [], onlyAssets: only([tIdx, rIdx]) })],
+        label: `Exit ${token.symbol} on Kamino`,
+      }],
+      omits: level > 0,
+    };
+  };
+  return sendWalletParts(owner, KAMINO_WALLET_TABLES, [0, ...NARROW_LEVELS].map(variant), `Exit ${token.symbol} on Kamino`);
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -1936,26 +2453,30 @@ export async function solanaPerenaAction(
     if (rawAmount > held) rawAmount = held;
   }
 
-  const createUsdcAta = createAssociatedTokenAccountIdempotentIx(owner, marginUsdcAta, margin, USDC_MINT, TOKEN_PROGRAM_ID);
-  const createShareAta = createAssociatedTokenAccountIdempotentIx(owner, marginShareAta, margin, share.mint, TOKEN_PROGRAM_ID);
+  const createAtas = await missingAtaIxs(owner, [
+    { account: marginUsdcAta, wallet: margin, mint: USDC_MINT, tokenProgram: TOKEN_PROGRAM_ID },
+    { account: marginShareAta, wallet: margin, mint: share.mint, tokenProgram: TOKEN_PROGRAM_ID },
+  ]);
 
   const cpiData = perenaCallData(share, call, rawAmount);
   const cpiAccounts = perenaCallAccounts(share, call, margin);
-
-  const execIx = await marginExecuteIx(
-    owner,
-    PERENA_PROGRAM_ID,
-    cpiData,
-    cpiAccounts,
-    null,
-    [],
-    [USDC_MINT, share.mint]
-  );
-
-  return sendSolanaInstructions([createUsdcAta, createShareAta, execIx], {
-    label: `Perena ${call === "deposit" ? "Deposit" : "Withdraw"} ${shareKey === "usdstar" ? "USD*" : "USD* Junior"}`,
-    computeUnits: EXEC_COMPUTE_UNITS,
-  });
+  const configs = await readAllAssetConfigs();
+  const idxOf = (mint: string) => [...configs.values()].find((a) => a.mint === mint && a.kind !== "venue")?.assetIndex;
+  const usdcIdx = idxOf(USDC_MINT);
+  const shareIdx = idxOf(share.mint);
+  const gets = call === "deposit" ? shareIdx : usdcIdx;
+  const label = `Perena ${call === "deposit" ? "Deposit" : "Withdraw"} ${shareKey === "usdstar" ? "USD*" : "USD* Junior"}`;
+  // Compact health list (held tokens + the token this call pays out); if too large, narrower lists that leave out the least
+  // valuable held tokens first and keep USDC and the share token (healthWidths). The old fallback listed only those two: on the
+  // user's account (fork 2026-11-19) the check then failed with StalePrice; the full list passes.
+  const widths = healthWidths(owner, configs);
+  const variant = (level: number) => async () => {
+    const only = await widths(level);
+    if (!only) return null;
+    const call = await marginExecuteIx(owner, PERENA_PROGRAM_ID, cpiData, cpiAccounts, null, [], [USDC_MINT, share.mint], { compact: true, pendingCollateral: gets !== undefined ? [gets] : [], onlyAssets: only([usdcIdx, shareIdx]) });
+    return { parts: [{ instructions: [...createAtas, call], label }], omits: level > 0 };
+  };
+  return sendWalletParts(owner, PERENA_WALLET_TABLES, [0, ...NARROW_LEVELS].map(variant), label);
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -2030,7 +2551,15 @@ function arenaKeys(header: string, count: number, seed: string): string[] {
 }
 
 // Ported from apps/solana/lib/solana/phoenix.ts:readPhoenixExchange
-export async function readPhoenixExchange(): Promise<PhoenixExchangeState> {
+let exchangeCache: { at: number; v: Promise<PhoenixExchangeState> } | null = null;
+export function readPhoenixExchange(): Promise<PhoenixExchangeState> {
+  if (exchangeCache && Date.now() - exchangeCache.at < 60_000) return exchangeCache.v;
+  const v = readPhoenixExchangeNow();
+  exchangeCache = { at: Date.now(), v };
+  v.catch(() => (exchangeCache = null));
+  return v;
+}
+async function readPhoenixExchangeNow(): Promise<PhoenixExchangeState> {
   const info = await rpc<{ value: { data: [string, string] } | null }>("getAccountInfo", [
     PHOENIX_EXCHANGE,
     { encoding: "base64" },
@@ -2079,7 +2608,8 @@ export function decodePerpAssetMap(data: Buffer): PhoenixMarketState[] {
     const orderbook = base58(data.subarray(meta + 904, meta + 936));
     const spline = findPda([enc("spline"), decode58(orderbook)], PHOENIX_PROGRAM_ID);
     markets.push({
-      symbol: data.subarray(base, base + 16).toString("utf8").replace(/\0+$/, ""),
+      // toString(enc, start, end) on the Buffer itself: on the phone subarray() returns a plain Uint8Array, whose toString is "1,2,3"
+      symbol: data.toString("utf8", base, base + 16).replace(/\0+$/, ""),
       assetId: data.readUInt16LE(meta + 944) | (data.readUInt16LE(meta + 948) << 16),
       orderbook,
       spline,
@@ -2095,13 +2625,23 @@ export function decodePerpAssetMap(data: Buffer): PhoenixMarketState[] {
 }
 
 // Ported from apps/solana/lib/solana/phoenix.ts:fetchPerpAssetMap
+// The perp asset map is ~1.6 MB (110 markets): each read is a multi-second download and parse, on a phone more. Cached 15 s;
+// copyOntoForkTimeline puts the copy it writes here, so a read right after a refresh costs nothing.
+const perpMapCache = new Map<string, { at: number; v: PhoenixMarketState[] }>();
 export async function fetchPerpAssetMap(perpAssetMapPda: string): Promise<PhoenixMarketState[]> {
+  const hit = perpMapCache.get(perpAssetMapPda);
+  if (hit && Date.now() - hit.at < 15_000) return hit.v;
+  const v = await fetchPerpAssetMapNow(perpAssetMapPda);
+  if (v.length) perpMapCache.set(perpAssetMapPda, { at: Date.now(), v });
+  return v;
+}
+async function fetchPerpAssetMapNow(perpAssetMapPda: string): Promise<PhoenixMarketState[]> {
   const info = await rpc<{ value: { data: [string, string] } | null }>("getAccountInfo", [
     perpAssetMapPda,
     { encoding: "base64" },
   ]);
   if (!info?.value) return [];
-  return decodePerpAssetMap(Buffer.from(info.value.data[0], "base64"));
+  return decodePerpAssetMap(decodeBase64(info.value.data[0]));
 }
 
 // Ported from apps/solana/lib/solana/phoenix.ts:decodeTrader
@@ -2374,42 +2914,23 @@ export function registerTraderIx(payer: string, margin: string): RawInstruction 
 }
 
 // Ported from apps/solana/lib/solana/server/perps-keeper.ts:grantPhoenixCapabilitiesOnFork
-export async function ensurePhoenixTraderOnFork(owner: string, margin: string): Promise<string> {
+// Fork only: a fresh Phoenix trader gets the capabilities the exchange's keeper would grant on mainnet.
+export async function grantPhoenixCapabilitiesOnFork(margin: string): Promise<void> {
   const trader = phoenixTraderPda(margin);
-  const infoRes = await rpc<{ value: { data: [string, string]; lamports: number } | null }>("getAccountInfo", [
-    trader,
-    { encoding: "base64" },
-  ]);
-  if (!infoRes?.value) {
-    const ix = registerTraderIx(owner, margin);
-    await sendSolanaInstructions([ix], { label: "Register Phoenix Trader" });
-  }
-
   const traderInfo = await rpc<{ value: { data: [string, string]; lamports: number } | null }>("getAccountInfo", [
     trader,
     { encoding: "base64" },
   ]);
-  if (traderInfo?.value) {
-    const data = Buffer.from(traderInfo.value.data[0], "base64");
-    if (data.length >= TRADER_FLAGS_OFFSET + 4) {
-      const flags = data.readUInt32LE(TRADER_FLAGS_OFFSET);
-      if ((flags & FULL_TRADER_CAPABILITIES) !== FULL_TRADER_CAPABILITIES) {
-        data.writeUInt32LE(flags | FULL_TRADER_CAPABILITIES, TRADER_FLAGS_OFFSET);
-        await rpc("surfnet_setAccount", [
-          trader,
-          {
-            lamports: traderInfo.value.lamports,
-            data: data.toString("hex"),
-            owner: PHOENIX_PROGRAM_ID,
-            executable: false,
-            rentEpoch: 0,
-          },
-        ]);
-      }
-    }
-  }
-
-  return trader;
+  if (!traderInfo?.value) return;
+  const data = Buffer.from(traderInfo.value.data[0], "base64");
+  if (data.length < TRADER_FLAGS_OFFSET + 4) return;
+  const flags = data.readUInt32LE(TRADER_FLAGS_OFFSET);
+  if ((flags & FULL_TRADER_CAPABILITIES) === FULL_TRADER_CAPABILITIES) return;
+  data.writeUInt32LE(flags | FULL_TRADER_CAPABILITIES, TRADER_FLAGS_OFFSET);
+  await rpc("surfnet_setAccount", [
+    trader,
+    { lamports: traderInfo.value.lamports, data: data.toString("hex"), owner: PHOENIX_PROGRAM_ID, executable: false, rentEpoch: 0 },
+  ]);
 }
 
 // Ported from apps/solana/lib/solana/server/perps-keeper.ts:ensurePerpsLookupTable
@@ -2507,11 +3028,73 @@ export async function refreshPhoenixBookOnFork(
   ex: PhoenixExchangeState,
   splines: PhoenixMarketState[]
 ): Promise<void> {
-  const normKey = marketKey.toUpperCase().replace(/-PERP$/, "");
-  const m = splines.find((s) => s.symbol.toUpperCase() === normKey);
-  if (!m) return;
-  // The asset map holds the mark price, which the fork otherwise leaves behind the re-copied book (web liveMainnetPhoenixMark).
-  await Promise.all([rpc("surfnet_resetAccount", [m.orderbook]), rpc("surfnet_resetAccount", [m.spline]), rpc("surfnet_resetAccount", [ex.perpAssetMap])]);
+  return refreshPhoenixBooksOnFork([marketKey], ex, splines);
+}
+
+/**
+ * Several markets at once (Close all): each orderbook re-cloned, and every spline plus the perp asset map copied onto the fork's
+ * timeline in ONE copy (the asset map is 100+ KB and holds every market's mark price, so one copy serves all of them).
+ */
+async function refreshPhoenixBooksOnFork(marketKeys: string[], ex: PhoenixExchangeState, splines: PhoenixMarketState[]): Promise<void> {
+  const ms = marketKeys
+    .map((k) => k.toUpperCase().replace(/-PERP$/, ""))
+    .flatMap((k) => splines.filter((s) => s.symbol.toUpperCase() === k));
+  if (!ms.length) return;
+  // The orderbook is re-cloned as is. The spline and the perp asset map (mark price + its oracle slots/times) are copied from
+  // mainnet onto the fork's timeline: the fork runs ahead of mainnet, so a plain re-clone carries slots Phoenix rejects as stale
+  // ("Cannot get mark price, staleness or validity check failed" -> InvalidAccountData).
+  await Promise.all([...ms.map((m) => rpc("surfnet_resetAccount", [m.orderbook])), copyOntoForkTimeline([...ms.map((m) => m.spline), ex.perpAssetMap])]);
+}
+
+// Ported from apps/solana/lib/solana/server/perps-keeper.ts:copyOntoForkTimeline (backend main, round-2 update).
+const PHOENIX_MAINNET_RPC = "https://api.mainnet-beta.solana.com";
+const SLOT_REBASE_WINDOW = 5_000_000;
+const TIME_REBASE_WINDOW_S = 30 * 24 * 3600;
+const TIME_REBASE_AHEAD_S = 7 * 24 * 3600;
+// Keeps the copied price fresh through a wallet approval. The fork makes ~4.5 slots a second (measured 2026-11-18), so 150 slots
+// lasted only ~35 s: a BTC-PERP close built from a 25 s old copy failed its pre-send check. 300 slots = ~65 s (400 tested fine).
+const REBASE_LOOKAHEAD_SLOTS = 300;
+const REBASE_LOOKAHEAD_S = 60;
+async function copyOntoForkTimeline(keys: string[]): Promise<void> {
+  const mainnet = async <T,>(method: string, params: unknown[]): Promise<T> => {
+    const res = await fetch(PHOENIX_MAINNET_RPC, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }) });
+    const body = (await res.json()) as { result?: T; error?: { message?: string } };
+    if (body.error || body.result === undefined) throw new Error(body.error?.message ?? "Mainnet RPC error");
+    return body.result;
+  };
+  type Info = { lamports: number; owner: string; data: [string, string] } | null;
+  const [forkSlot, forkClock, read] = await Promise.all([
+    rpc<number>("getSlot", [{ commitment: "processed" }]),
+    forkNow(),
+    mainnet<{ context: { slot: number }; value: Info[] }>("getMultipleAccounts", [keys, { encoding: "base64", commitment: "processed" }]),
+  ]);
+  const mainSlot = read.context.slot;
+  const now = Math.floor(Date.now() / 1000);
+  const slotDelta = BigInt(Math.max(0, forkSlot - mainSlot) + REBASE_LOOKAHEAD_SLOTS);
+  const timeDelta = BigInt(Math.max(0, Number(forkClock) - now) + REBASE_LOOKAHEAD_S);
+  const slotLow = BigInt(mainSlot - SLOT_REBASE_WINDOW), slotHigh = BigInt(mainSlot + 1_000);
+  const secLow = BigInt(now - TIME_REBASE_WINDOW_S), secHigh = BigInt(now + TIME_REBASE_AHEAD_S);
+  const msLow = secLow * 1000n, msHigh = secHigh * 1000n;
+  await Promise.all(read.value.map(async (info, i) => {
+    if (!info) throw new Error(`${keys[i]} not found on mainnet`);
+    const data = decodeBase64(info.data[0]);
+    // Every window lies far below 2^53, so a word whose high half is >= 2^21 can never match: skip it without building a BigInt
+    // (the perp asset map is 100+ KB, ~13,000 words; BigInt reads of each were slow on Hermes). Matching words are unchanged.
+    const lowestWindow = Math.min(Number(slotLow), Number(secLow), Number(msLow));
+    for (let o = 0; o + 8 <= data.length; o += 8) {
+      const hi = data.readUInt32LE(o + 4);
+      if (hi >= 0x200000 || hi * 4294967296 + data.readUInt32LE(o) < lowestWindow) continue;
+      const v = data.readBigUInt64LE(o);
+      if (v >= slotLow && v <= slotHigh) data.writeBigUInt64LE(v + slotDelta, o);
+      else if (v >= secLow && v <= secHigh) data.writeBigUInt64LE(v + timeDelta, o);
+      else if (v >= msLow && v <= msHigh) data.writeBigUInt64LE(v + timeDelta * 1000n, o);
+    }
+    await rpc("surfnet_setAccount", [keys[i], { lamports: info.lamports, data: data.toString("hex"), owner: info.owner, executable: false, rentEpoch: 0 }]);
+    if (data.length > 100_000) {
+      const decoded = decodePerpAssetMap(data);
+      if (decoded.length) perpMapCache.set(keys[i], { at: Date.now(), v: decoded });
+    }
+  }));
 }
 
 // Ported from apps/solana/lib/solana/perps.ts:openPerp
@@ -2536,10 +3119,11 @@ interface PerpsContext {
   trader: PhoenixTraderState | null;
   openAssetIds: number[];
   venueIndex: number;
-  lutAddress: string;
 }
 
 // Ported from apps/solana/lib/solana/perps.ts:loadPerpsContext
+// Perps transactions use only public mainnet lookup tables (PHOENIX_MAINNET_TABLES), never the old fork-only perps table
+// (ensurePerpsLookupTableOnFork): wallets read tables from real mainnet, and Phantom hangs on one that only exists on the fork.
 async function loadPerps(owner: string): Promise<PerpsContext> {
   const margin = marginPda(owner);
   const [ex, bookInfo, assetMap, traderInfo] = await Promise.all([
@@ -2555,27 +3139,29 @@ async function loadPerps(owner: string): Promise<PerpsContext> {
   if (trader && (trader.hot || trader.withdrawQueued)) throw new Error("This Phoenix account has a queued withdrawal; try again shortly");
   const venue = [...assetMap.values()].find((a) => a.mint === PHOENIX_EXCHANGE);
   if (!venue) throw new Error("The Phoenix venue is not registered with the protocol");
-  const lutAddress = await ensurePerpsLookupTableOnFork(owner, margin, assetMap, book, ex, splines);
   return {
-    owner, margin, ex, book, splines, assetMap, trader, lutAddress,
+    owner, margin, ex, book, splines, assetMap, trader,
     openAssetIds: (trader?.positions ?? []).filter((x) => x.baseLots !== 0n).map((x) => x.assetId),
     venueIndex: venue.assetIndex,
   };
 }
 
+type HealthOpts = { pendingVenue?: number; closedVenue?: number; pendingCollateral?: number[]; onlyAssets?: number[]; venueScan?: boolean };
+
 // A call at Phoenix always names the venue and gives the validator the target market plus every open position.
+// Health accounts are compact (held tokens only), so the call fits a transaction with mainnet tables.
 function phoenixCall(
   p: PerpsContext,
   data: Buffer,
   accounts: AccountMeta[],
   targets: number[],
   pricedMints: string[],
-  health: { pendingVenue?: number } = {}
+  health: HealthOpts = {}
 ) {
   return marginExecuteIx(
     p.owner, PHOENIX_PROGRAM_ID, data, accounts, assetConfigPda(PHOENIX_EXCHANGE),
     phoenixValidatorAccounts(p.book, [...targets, ...p.openAssetIds]), pricedMints,
-    { extraAssetIds: targets, venueScan: true, ...health }
+    { extraAssetIds: targets, venueScan: true, compact: true, ...health }
   );
 }
 
@@ -2586,8 +3172,33 @@ const amountData = (selector: number[], amount: bigint) => {
   return data;
 };
 
-async function freshPerpsMarket(market: string): Promise<{ key: string; spline: PhoenixMarketState; entry: MarketBookEntry }> {
-  const key = market.toUpperCase().replace(/-PERP$/, "");
+const tokenIndex = (p: PerpsContext, mint: string) => [...p.assetMap.values()].find((a) => a.mint === mint && a.kind !== "venue")?.assetIndex;
+
+/**
+ * FORK ONLY. Puts Phoenix's market data and every price a perps call checks onto the fork's clock: the market's orderbook,
+ * spline and the perp asset map (Phoenix's mark price, rejected after ~150 slots), and Vanna's index and collateral oracles
+ * (Pyth + Scope, max age 120 s for SOL-PERP's index, 180 s for USDC). Run when building AND right before a signed perps
+ * transaction is sent: a slow wallet approval (2.5 min on 2026-11-18) left the index 3 min old ("index price is stale").
+ * `key` null: only the perp asset map (withdraw).
+ */
+// `force` (a check just failed): always refresh. Otherwise a refresh of the same market less than PERPS_FRESH_MS ago is reused:
+// the copied mark stays valid REBASE_LOOKAHEAD_SLOTS (~65 s on the fork) and the index 120 s, so a part sent seconds after the
+// previous refresh is safe. A pre-send check that still finds it stale forces a refresh and checks again (sendSolanaBatch).
+// 40 s: the second part of a batch is sent ~25 s after the first part's refresh on a slow device (a refresh costs 25-40 s there), well inside the ~65 s the copy stays valid.
+const PERPS_FRESH_MS = 40_000;
+// When each market was last refreshed (its orderbook re-cloned, the asset map copied, the prices stamped), and when anything was.
+const perpsRefreshedAt = new Map<string, number>();
+let perpsAnyAt = 0;
+// `keys` [] = the perp asset map only (withdraw).
+let perpsInflight: { keys: string[]; p: Promise<void> } | null = null;
+function refreshPerpsOnFork(key: string | null, force = false) {
+  return refreshPerpsMarketsOnFork(key === null ? [] : [key], force);
+}
+/**
+ * refreshPerpsOnFork for several markets in ONE pass (Close all): the exchange, market book and asset configs are read once, the
+ * orderbooks re-cloned together, the asset map copied once and the prices stamped once, instead of one full refresh per market.
+ */
+async function refreshPerpsMarketsOnFork(keys: string[], force = false): Promise<{ ex: PhoenixExchangeState; book: MarketBookState; splines: PhoenixMarketState[]; assetMap: Map<number, AssetConfigState> }> {
   const [ex, bookInfo, assetMap] = await Promise.all([
     readPhoenixExchange(),
     rpc<{ value: { data: [string, string] } | null }>("getAccountInfo", [phoenixMarketBook(), { encoding: "base64" }]),
@@ -2595,47 +3206,159 @@ async function freshPerpsMarket(market: string): Promise<{ key: string; spline: 
   ]);
   if (!bookInfo?.value) throw new Error("Phoenix markets aren't listed on this network yet");
   const book = decodeMarketBook(Buffer.from(bookInfo.value.data[0], "base64"));
-  await refreshPhoenixBookOnFork(key, ex, await fetchPerpAssetMap(ex.perpAssetMap));
-  const splines = await fetchPerpAssetMap(ex.perpAssetMap);
-  await ensureFreshForkPrices(
-    TOKENS,
-    assetMap,
-    book.markets.flatMap((e) => {
-      const symbol = splines.find((s) => s.assetId === e.assetId)?.symbol;
+  const before = await fetchPerpAssetMap(ex.perpAssetMap);
+  const isFresh = (k: string) => Date.now() - (perpsRefreshedAt.get(k) ?? 0) < PERPS_FRESH_MS;
+  const fresh = !force && (keys.length ? keys.every(isFresh) : Date.now() - perpsAnyAt < PERPS_FRESH_MS);
+  const inflight = perpsInflight;
+  if (!fresh && !force && inflight && (keys.length === 0 || keys.every((k) => inflight.keys.includes(k)))) {
+    // The sheet's prewarm (or another part) is refreshing these markets right now: wait for it instead of starting another.
+    await inflight.p.catch(() => {});
+  } else if (!fresh) {
+    const todo = force ? keys : keys.filter((k) => !isFresh(k));
+    const indexes = book.markets.flatMap((e) => {
+      const symbol = before.find((s) => s.assetId === e.assetId)?.symbol;
       return symbol && PERP_INDEX_PROXY[symbol] ? [{ symbol, mint: PERP_INDEX_PROXY[symbol], oracle: e.indexPrice }] : [];
-    })
-  );
+    });
+    // The market copy and the price stamps touch different accounts: in parallel.
+    const p = Promise.all([
+      todo.length ? refreshPhoenixBooksOnFork(todo, ex, before) : copyOntoForkTimeline([ex.perpAssetMap]),
+      ensureFreshForkPrices(TOKENS, assetMap, indexes, true),
+    ]).then(() => {
+      const at = Date.now();
+      perpsAnyAt = at;
+      todo.forEach((k) => perpsRefreshedAt.set(k, at));
+    });
+    perpsInflight = { keys: todo, p };
+    try {
+      await p;
+    } finally {
+      if (perpsInflight?.p === p) perpsInflight = null;
+    }
+  }
+  const splines = await fetchPerpAssetMap(ex.perpAssetMap);
+  return { ex, book, splines, assetMap };
+}
+
+/**
+ * Called when a perps order sheet OPENS (before the person taps): copies the market and stamps the prices on the fork, and
+ * loads the asset configs and the wallet-safe Phoenix tables, so the tap finds them ready (each step is 1 to 5 s on the fork RPC).
+ * Only fork writes of public market data and reads; nothing is signed. Errors are ignored (the tap does the same work again).
+ */
+export function prewarmPerps(market: string, owner?: string): void {
+  const key = market.toUpperCase().replace(/-PERP$/, "");
+  void Promise.all([
+    refreshPerpsOnFork(key),
+    walletSafeLookupTables(PHOENIX_MAINNET_TABLES, owner),
+    owner ? rpc("getAccountInfo", [phoenixTraderPda(marginPda(owner)), { encoding: "base64", dataSlice: { offset: 0, length: 0 } }]) : null,
+  ]).catch(() => {});
+}
+
+async function freshPerpsMarket(market: string): Promise<{ key: string; spline: PhoenixMarketState; entry: MarketBookEntry }> {
+  const key = market.toUpperCase().replace(/-PERP$/, "");
+  const { book, splines } = await refreshPerpsOnFork(key);
   const spline = splines.find((s) => s.symbol.toUpperCase() === key);
   const entry = spline && book.markets.find((m) => m.assetId === spline.assetId);
   if (!spline || !entry) throw new Error(`${key}-PERP is not a listed Phoenix market`);
   return { key, spline, entry };
 }
 
+/**
+ * Each Phoenix market's maximum leverage from Vanna's market book on chain (maxLeverageBps; the validator rejects an order above
+ * it and the website's order panel uses the same value), keyed by symbol ("SOL", "TSLA"...). Read only, nothing is written.
+ */
+export async function readPerpMaxLeverage(): Promise<Record<string, number>> {
+  const [ex, bookInfo] = await Promise.all([
+    readPhoenixExchange(),
+    rpc<{ value: { data: [string, string] } | null }>("getAccountInfo", [phoenixMarketBook(), { encoding: "base64" }]),
+  ]);
+  if (!bookInfo?.value) return {};
+  const book = decodeMarketBook(Buffer.from(bookInfo.value.data[0], "base64"));
+  const splines = await fetchPerpAssetMap(ex.perpAssetMap);
+  const out: Record<string, number> = {};
+  for (const e of book.markets) {
+    const symbol = splines.find((s) => s.assetId === e.assetId)?.symbol?.toUpperCase();
+    if (symbol && e.maxLeverageBps > 0) out[symbol] = e.maxLeverageBps / 10_000;
+  }
+  return out;
+}
+
+/**
+ * A perps open that stopped half way: the USDC is safe but backs no new position. `where` = "margin": converted to phUSD and still
+ * in the margin account (the deposit + order transaction did not land; opening again uses it without converting more);
+ * "phoenix": deposited in Phoenix as collateral (only the old deposit-then-order fallback can leave it there).
+ */
+export class PerpsOpenIncompleteError extends Error {
+  readonly where: "margin" | "phoenix";
+  readonly usdc: number;
+  constructor(message: string, where: "margin" | "phoenix", usdc: number) {
+    super(message);
+    this.name = "PerpsOpenIncompleteError";
+    this.where = where;
+    this.usdc = usdc;
+  }
+}
+
 // Ported from apps/solana/lib/solana/perps.ts:openPerp
+// ONE wallet approval. The USDC only enters Phoenix in the SAME transaction as the order (deposit + market order with a minimum
+// fill of one lot), so a failed or unfilled order moves nothing into Phoenix. Shapes, first that fits 1,232 bytes with wallet-safe
+// tables: [convert USDC to phUSD + deposit + order] in one transaction (fully atomic), else [convert] then [deposit + order]
+// (if the second fails, the phUSD waits in the margin account and the next open uses it), else the old deposit-then-order split.
+// Before the wallet is asked (and again before sending when the approval was slow), the whole open is simulated as one transaction
+// on the fork, so nothing is signed when the order would fail. First time only: [register the Phoenix trader] goes first.
 export async function solanaPerpsOpen(opts: {
   market: string;
   side: "long" | "short";
   collateralUsdc: number | string;
   leverage: number;
   slippageBps?: number;
+  // Size the order on this much USDC instead of the amount added (retrying an order whose USDC already reached Phoenix, with
+  // collateralUsdc 0). Default: the amount added, or all Phoenix collateral when nothing is added.
+  sizeOnUsdc?: number | string;
 }): Promise<string> {
   const owner = requireActiveRealWallet("solana").full;
   const margin = marginPda(owner);
   const amount = toRaw(opts.collateralUsdc, 6);
-  const { key, spline, entry } = await freshPerpsMarket(opts.market);
-
-  await ensurePhoenixTraderOnFork(owner, margin);
-  const p = await loadPerps(owner);
+  const sizeOn = opts.sizeOnUsdc !== undefined ? toRaw(opts.sizeOnUsdc, 6) : null;
+  // Development builds only: where the time goes before the wallet is asked (adb logcat -s ReactNativeJS).
+  const t0 = Date.now();
+  const mark = (what: string) => {
+    if (__DEV__) console.log(`[open-time] ${((Date.now() - t0) / 1000).toFixed(1)}s ${what}`);
+  };
+  mark("start");
+  // The market refresh, the Phoenix state, the trader check (+ its fork capabilities), the margin USDC balance and the phUSD vault
+  // check do not depend on each other: all at once instead of one after another (each is one or more fork RPC round trips of
+  // ~1 s from a phone). The checks below are the same as before, on the same values.
+  const usdcToken = getToken("USDC");
+  const usdcVault = marginVault(margin, usdcToken.mint, usdcToken.tokenProgram);
+  const perpsP = loadPerps(owner).then((r) => (mark("perps state loaded"), r));
+  const [{ key, spline, entry }, p, registered, marginUsdc, phVault] = await Promise.all([
+    freshPerpsMarket(opts.market).then((r) => (mark("market refreshed"), r)),
+    perpsP,
+    rpc<{ value: unknown }>("getAccountInfo", [phoenixTraderPda(margin), { encoding: "base64", dataSlice: { offset: 0, length: 0 } }]).then(async (r) => {
+      const known = Boolean(r.value);
+      if (known) await grantPhoenixCapabilitiesOnFork(margin);
+      mark("trader checked");
+      return known;
+    }),
+    rpc<{ value: { amount: string } | null }>("getTokenAccountBalance", [usdcVault]).catch(() => null).then((r) => BigInt(r?.value?.amount ?? "0")),
+    // The margin account's phUSD vault: missing = create it; a balance = phUSD left by an open whose order did not land (used first).
+    perpsP.then(async (q) => {
+      const account = marginVault(margin, q.ex.canonicalMint, TOKEN_PROGRAM_ID);
+      const bal = await rpc<{ value: { amount: string } | null }>("getTokenAccountBalance", [account]).catch(() => null);
+      return { held: BigInt(bal?.value?.amount ?? "0"), create: bal?.value ? [] : await missingAtaIxs(owner, [{ account, wallet: margin, mint: q.ex.canonicalMint, tokenProgram: TOKEN_PROGRAM_ID }]) };
+    }),
+  ]);
+  const createPh = phVault.create;
+  // Only what the phUSD already in the margin account does not cover is converted from USDC.
+  const wrapAmount = amount > phVault.held ? amount - phVault.held : 0n;
 
   const maxLev = entry.maxLeverageBps / 10_000;
   if (!entry.tradingEnabled) throw new Error(`${key}-PERP is closed for new positions`);
   if (opts.leverage < 1 || opts.leverage > maxLev) throw new Error(`Leverage must be between 1x and ${maxLev}x`);
-  const usdcToken = getToken("USDC");
-  const usdcVault = marginVault(margin, usdcToken.mint, usdcToken.tokenProgram);
-  const marginUsdc = BigInt((await rpc<{ value: { amount: string } | null }>("getTokenAccountBalance", [usdcVault]).catch(() => null))?.value?.amount ?? "0");
-  if (amount > marginUsdc) throw new Error(`Not enough USDC in your margin account (${fromRaw(marginUsdc, 6)} available)`);
+  if (wrapAmount > marginUsdc) throw new Error(`Not enough USDC in your margin account (${fromRaw(marginUsdc + phVault.held, 6)} available)`);
   const traderCollateral = (p.trader?.collateral ?? 0n) + amount;
   if (traderCollateral <= 0n) throw new Error("Add USDC to trade on Phoenix");
+  if (sizeOn !== null && (sizeOn <= 0n || sizeOn > traderCollateral)) throw new Error(`Only ${fromRaw(traderCollateral, 6)} USDC is in Phoenix`);
 
   const isLong = opts.side === "long";
   const ref = ticksToUsd(spline, spline.markTicks);
@@ -2643,7 +3366,7 @@ export async function solanaPerpsOpen(opts: {
   const slip = (opts.slippageBps ?? 100) / 10_000;
   const limit = isLong ? ref * (1 + slip) : ref * (1 - slip);
   // Size = collateral x leverage valued at the limit price, as the validator does, kept inside the market's cap.
-  const sizeUsd = (Number(amount > 0n ? amount : traderCollateral) / 1e6) * opts.leverage;
+  const sizeUsd = (Number(sizeOn ?? (amount > 0n ? amount : traderCollateral)) / 1e6) * opts.leverage;
   const current = p.trader?.positions.find((x) => x.assetId === spline.assetId)?.baseLots ?? 0n;
   const others = (p.trader?.positions ?? []).filter((x) => x.assetId !== spline.assetId && x.baseLots !== 0n).reduce((t, x) => t + Math.abs(Number(x.virtualQuoteLots)) / 1e6, 0);
   const capUsd = (Number(traderCollateral) / 1e6) * maxLev - others;
@@ -2653,28 +3376,115 @@ export async function solanaPerpsOpen(opts: {
   while (lots > 0n && after(lots) > capUsd) lots = (lots * 995n) / 1000n;
   if (lots <= 0n) throw new Error(`Over ${key}-PERP's ${maxLev}x cap. Add collateral or reduce size`);
 
-  const ixs: RawInstruction[] = [];
-  if (amount > 0n) {
-    ixs.push(createAssociatedTokenAccountIdempotentIx(owner, marginVault(margin, p.ex.canonicalMint, TOKEN_PROGRAM_ID), margin, p.ex.canonicalMint, TOKEN_PROGRAM_ID));
-    ixs.push(await marginExecuteIx(owner, EMBER_PROGRAM_ID, amountData(EMBER_DEPOSIT, amount), emberAccounts(p.ex, margin, USDC_MINT), null, [], [USDC_MINT, p.ex.canonicalMint]));
-    ixs.push(await phoenixCall(p, amountData(DEPOSIT_FUNDS, amount), depositAccounts(p.ex, margin), [], [p.ex.canonicalMint]));
-  }
-  ixs.push(
-    await phoenixCall(
-      p,
-      marketOrderData({ side: isLong ? BID : ASK, priceInTicks: usdToTicks(spline, limit), lots, reduceOnly: false }),
-      orderAccounts(p.ex, margin, spline),
-      [spline.assetId],
-      [],
-      amount > 0n ? { pendingVenue: p.venueIndex } : {}
-    )
-  );
+  const phIdx = tokenIndex(p, p.ex.canonicalMint);
+  const usdcIdx = tokenIndex(p, USDC_MINT);
+  // Parts after the first run once the earlier ones landed: grant the fresh trader its fork capabilities, and re-copy the
+  // market's price so a slow approval does not leave it stale.
+  // Every part, right before it is sent (after the approval, which can take minutes): grant the fresh trader its fork
+  // capabilities, and re-stamp Phoenix's market data and every oracle the call checks onto the fork clock.
+  const freshen = async (retry: boolean) => {
+    await Promise.all([registered ? null : grantPhoenixCapabilitiesOnFork(margin), refreshPerpsOnFork(key, retry)]);
+  };
+  // The instructions of each health-list width (0 = every held token; n = the n least valuable held tokens left out, see
+  // healthWidths), built once (each build reads the chain) and shared by every shape below. null: no such width for this account.
+  type Built = { wrap: RawInstruction[]; ember: RawInstruction | null; deposit: RawInstruction | null; order: RawInstruction };
+  const widths = healthWidths(owner, p.assetMap);
+  const builtCache = new Map<number, Promise<Built | null>>();
+  const build = (level: number): Promise<Built | null> => {
+    const hit = builtCache.get(level);
+    if (hit) return hit;
+    const made = (async () => {
+      const only = await widths(level);
+      if (!only) return null;
+      // Each call keeps listed the tokens it moves: the convert USDC and phUSD, the deposit phUSD; the order moves none.
+      const [order, ember, deposit] = await Promise.all([
+        // minBaseLotsToFill 1: an order that would fill nothing fails, and takes the deposit in its transaction with it (checked on the
+        // fork: "IOC order does not meet minimum requirements", the whole transaction reverted).
+        phoenixCall(
+          p,
+          marketOrderData({ side: isLong ? BID : ASK, priceInTicks: usdToTicks(spline, limit), lots, reduceOnly: false, minBaseLotsToFill: 1n }),
+          orderAccounts(p.ex, margin, spline),
+          [spline.assetId],
+          [],
+          { ...(amount > 0n ? { pendingVenue: p.venueIndex } : {}), onlyAssets: only([]) }
+        ),
+        wrapAmount > 0n
+          ? marginExecuteIx(owner, EMBER_PROGRAM_ID, amountData(EMBER_DEPOSIT, wrapAmount), emberAccounts(p.ex, margin, USDC_MINT), null, [], [USDC_MINT, p.ex.canonicalMint], { compact: true, pendingCollateral: phIdx !== undefined ? [phIdx] : [], onlyAssets: only([usdcIdx, phIdx]) })
+          : null,
+        // No pendingVenue here: the core expects the venue in the list only once it holds it (checked on the fork: listing it here
+        // gives IncompletePositionAccounts). The order after it does list it.
+        amount > 0n
+          ? phoenixCall(p, amountData(DEPOSIT_FUNDS, amount), depositAccounts(p.ex, margin), [], [p.ex.canonicalMint], { pendingCollateral: phIdx !== undefined ? [phIdx] : [], onlyAssets: only([phIdx]) })
+          : null,
+      ]);
+      return { wrap: [...createPh, ...(ember ? [ember] : [])], ember, deposit, order };
+    })();
+    builtCache.set(level, made);
+    return made;
+  };
+  const openLabel = `Open ${key}-PERP ${opts.side}`;
+  const register: WalletPart[] = registered ? [] : [{ instructions: [registerTraderIx(owner, margin)], label: "Set up Phoenix", before: () => freshenForkPrices() }];
+  // "one": everything in one transaction. "wrap-first": convert, then deposit + order (atomic). "deposit-first" / "split": the old
+  // fallbacks (the deposit lands before the order; a failed order then leaves the USDC in Phoenix).
+  type Shape = "one" | "wrap-first" | "deposit-first" | "split";
+  let used: WalletPart[] = [];
+  const variant = (level: number, shape: Shape) => async () => {
+    const built = await build(level);
+    if (!built) return null;
+    const { wrap, deposit, order } = built;
+    const parts: WalletPart[] = [...register];
+    if (!deposit) parts.push({ instructions: [order], label: openLabel, before: freshen });
+    else if (shape === "one") parts.push({ instructions: [...wrap, deposit, order], label: openLabel, before: freshen });
+    else if (shape === "wrap-first") {
+      if (wrap.length) parts.push({ instructions: wrap, label: `Convert USDC for ${key}-PERP`, before: freshen });
+      parts.push({ instructions: [deposit, order], label: openLabel, before: freshen });
+    } else if (shape === "deposit-first") {
+      parts.push({ instructions: [...wrap, deposit], label: `Add USDC for ${key}-PERP`, before: freshen });
+      parts.push({ instructions: [order], label: openLabel, before: freshen });
+    } else {
+      if (wrap.length) parts.push({ instructions: wrap, label: `Add USDC for ${key}-PERP`, before: freshen });
+      parts.push({ instructions: [deposit], label: `Add USDC for ${key}-PERP`, before: freshen });
+      parts.push({ instructions: [order], label: openLabel, before: freshen });
+    }
+    used = parts;
+    // The order is not in the first transaction: simulate the whole open as one transaction on the fork first (never signed).
+    // Not for a first open: the Phoenix account only exists, with its fork capabilities, once "Set up Phoenix" has landed.
+    const check = registered && parts.length > 1
+      ? () => simulateAsOne(parts.flatMap((x) => x.instructions), owner, { computeUnits: EXEC_COMPUTE_UNITS, lookupTableAddresses: PHOENIX_MAINNET_TABLES, label: openLabel, refresh: freshen })
+      : undefined;
+    return { parts, check, omits: level > 0 };
+  };
 
-  const signature = await sendSolanaInstructions(ixs, {
-    label: `Open ${key}-PERP ${opts.side}`,
-    computeUnits: EXEC_COMPUTE_UNITS,
-    lookupTableAddresses: [p.lutAddress],
-  });
+  let signature: string;
+  try {
+    mark("sending");
+    // Wide wrap-first before narrow "one": the narrow lists cost another round of chain reads to build, and wrap-first already keeps
+    // the USDC out of Phoenix unless the order lands. Measured 2026-11-18 (user's account: USDC + phUSD held, SOL and ETH open):
+    // one 1,319 B wide / 1,249 narrow (too large), wrap-first 1,066 + 1,208 wide (fits). With four markets open and a new one
+    // (META): wide wrap-first 1,074 + 1,237 B (too large), so the least valuable held token (the USDC left) is dropped first.
+    signature = await sendWalletParts(owner, PHOENIX_MAINNET_TABLES, [
+      variant(0, "one"), variant(0, "wrap-first"),
+      ...NARROW_LEVELS.flatMap((n) => [variant(n, "one"), variant(n, "wrap-first")]),
+      variant(0, "deposit-first"), variant(0, "split"),
+      ...NARROW_LEVELS.flatMap((n) => [variant(n, "deposit-first"), variant(n, "split")]),
+    ], `Open ${key}-PERP`);
+  } catch (e) {
+    if (e instanceof BatchPartError && amount > 0n) {
+      const landed = used.slice(0, e.failedIndex).flatMap((x) => x.instructions);
+      // Only the widths a variant was built from (the one sent is among them); never starts a new build.
+      const builds = await Promise.all([...builtCache.values()].map((b) => b.catch(() => null)));
+      const has = (pick: (b: Built) => RawInstruction | null) => builds.some((b) => b && pick(b) && landed.includes(pick(b)!));
+      const usdc = Number(fromRaw(amount, 6));
+      if (has((b) => b.deposit)) {
+        throw new PerpsOpenIncompleteError(`Your ${fromRaw(amount, 6)} USDC reached Phoenix, but the order did not go through: ${e.message}. Retry the order with it, or return it to your margin account.`, "phoenix", usdc);
+      }
+      if (has((b) => b.ember) || wrapAmount === 0n) {
+        throw new PerpsOpenIncompleteError(`The order did not go through, so nothing went to Phoenix: ${e.message}. Your ${fromRaw(amount, 6)} USDC waits in your margin account as phUSD: retry the order (it uses it), or turn it back into USDC.`, "margin", usdc);
+      }
+      throw new Error(`Your Phoenix account is set up, but the order did not go through: ${e.message}. Nothing else was moved.`);
+    }
+    throw e;
+  }
 
   // Phoenix market orders fill or cancel inside the transaction: a miss must not look like an open position.
   const filled = (await loadPerps(owner)).trader?.positions.find((x) => x.assetId === spline.assetId)?.baseLots ?? 0n;
@@ -2683,21 +3493,67 @@ export async function solanaPerpsOpen(opts: {
 }
 
 // Ported from apps/solana/lib/solana/perps.ts:withdrawIxs
-async function perpsWithdrawIxs(p: PerpsContext, amount: bigint, venueEmpties: boolean): Promise<RawInstruction[]> {
-  const usdcToken = getToken("USDC");
+// Phoenix withdraw (USDC comes back as phUSD) and Ember unwrap (phUSD to USDC), as one or two parts of one approval.
+// If only the first lands, the phUSD sits in the margin account (it is collateral there) and Withdraw unwraps it next time.
+// `only`: the health-list width (healthWidths).
+async function perpsWithdrawParts(p: PerpsContext, amount: bigint, venueEmpties: boolean, only: (keep: (number | undefined)[]) => number[] | undefined, split: boolean, before?: (retry: boolean) => Promise<void>) {
+  const phIdx = tokenIndex(p, p.ex.canonicalMint);
+  const usdcIdx = tokenIndex(p, USDC_MINT);
+  const atas = await missingAtaIxs(p.owner, [
+    { account: marginVault(p.margin, p.ex.canonicalMint, TOKEN_PROGRAM_ID), wallet: p.margin, mint: p.ex.canonicalMint, tokenProgram: TOKEN_PROGRAM_ID },
+    { account: marginVault(p.margin, USDC_MINT, TOKEN_PROGRAM_ID), wallet: p.margin, mint: USDC_MINT, tokenProgram: TOKEN_PROGRAM_ID },
+  ]);
+  const withdraw = amount > 0n
+    ? [await phoenixCall(p, amountData(WITHDRAW_FUNDS, amount), withdrawAccounts(p.ex, p.margin), [], [p.ex.canonicalMint], { pendingCollateral: phIdx !== undefined ? [phIdx] : [], onlyAssets: only([usdcIdx, phIdx]) })]
+    : [];
+  // No amount: Ember unwraps the whole phUSD balance.
+  const unwrap = await marginExecuteIx(
+    p.owner, EMBER_PROGRAM_ID, Buffer.concat([Buffer.from(EMBER_WITHDRAW), Buffer.from([0])]), emberAccounts(p.ex, p.margin, USDC_MINT), null, [],
+    [p.ex.canonicalMint, USDC_MINT],
+    { ...(venueEmpties ? { closedVenue: p.venueIndex, venueScan: false } : {}), compact: true, pendingCollateral: [usdcIdx, phIdx].filter((x): x is number => x !== undefined), onlyAssets: only([usdcIdx, phIdx]) }
+  );
+  if (!withdraw.length) return [{ instructions: [...atas, unwrap], label: "Withdraw from Phoenix", before }];
+  if (!split) return [{ instructions: [...atas, ...withdraw, unwrap], label: "Withdraw from Phoenix", before }];
   return [
-    createAssociatedTokenAccountIdempotentIx(p.owner, marginVault(p.margin, p.ex.canonicalMint, TOKEN_PROGRAM_ID), p.margin, p.ex.canonicalMint, TOKEN_PROGRAM_ID),
-    await phoenixCall(p, amountData(WITHDRAW_FUNDS, amount), withdrawAccounts(p.ex, p.margin), [], [p.ex.canonicalMint]),
-    createAssociatedTokenAccountIdempotentIx(p.owner, marginVault(p.margin, usdcToken.mint, usdcToken.tokenProgram), p.margin, usdcToken.mint, usdcToken.tokenProgram),
-    // No amount: Ember unwraps the whole phUSD balance.
-    await marginExecuteIx(
-      p.owner, EMBER_PROGRAM_ID, Buffer.concat([Buffer.from(EMBER_WITHDRAW), Buffer.from([0])]), emberAccounts(p.ex, p.margin, USDC_MINT), null, [],
-      [p.ex.canonicalMint, USDC_MINT], venueEmpties ? { closedVenue: p.venueIndex, venueScan: false } : {}
-    ),
+    { instructions: [...atas, ...withdraw], label: "Withdraw from Phoenix", before },
+    { instructions: [unwrap], label: "Unwrap phUSD to USDC" },
   ];
 }
 
+const perpsWithdrawVariants = (p: PerpsContext, amount: bigint, venueEmpties: boolean, before: (retry: boolean) => Promise<void> = async (retry) => void (await refreshPerpsOnFork(null, retry))) => {
+  const widths = healthWidths(p.owner, p.assetMap);
+  return [0, ...NARROW_LEVELS].flatMap((level) => [false, true].map((split) => async () => {
+    const only = await widths(level);
+    return only ? { parts: await perpsWithdrawParts(p, amount, venueEmpties, only, split, before), omits: level > 0 } : null;
+  }));
+};
+
+/** The close landed but bringing the USDC home did not (the position is closed; the USDC is still in Phoenix). */
+export class PerpsCloseWithdrawError extends Error {
+  constructor(detail: string) {
+    super(`Position closed. The USDC is still in Phoenix: ${detail}`);
+    this.name = "PerpsCloseWithdrawError";
+  }
+}
+
+/**
+ * As on the website (closePerp): when the last position is closed, the whole Phoenix balance goes back to the margin account in
+ * a second transaction (a second approval). With other positions still open it stays in Phoenix as their collateral.
+ */
+async function returnUsdcAfterClose(owner: string, signature: string): Promise<string> {
+  const after = await loadPerps(owner);
+  const open = (after.trader?.positions ?? []).some((x) => x.baseLots !== 0n);
+  if (open || (after.trader?.collateral ?? 0n) <= 0n) return signature;
+  try {
+    return await solanaPerpsWithdraw(undefined, true);
+  } catch (e) {
+    throw new PerpsCloseWithdrawError(e instanceof Error ? e.message : "the withdraw did not go through");
+  }
+}
+
 // Ported from apps/solana/lib/solana/perps.ts:closePerp
+// ONE wallet approval for the close order. As on the website, closing the LAST position then brings the USDC home to the margin
+// account in a second transaction (a second approval); with other positions open it stays in Phoenix as their collateral.
 export async function solanaPerpsClose(opts: {
   market: string;
   side?: "long" | "short";
@@ -2707,6 +3563,7 @@ export async function solanaPerpsClose(opts: {
   const owner = requireActiveRealWallet("solana").full;
   const { key, spline } = await freshPerpsMarket(opts.market);
   const p = await loadPerps(owner);
+  await grantPhoenixCapabilitiesOnFork(p.margin);
   const base = p.trader?.positions.find((x) => x.assetId === spline.assetId)?.baseLots ?? 0n;
   if (base === 0n) throw new Error(`No open ${key}-PERP position`);
   const isLong = base > 0n;
@@ -2718,40 +3575,126 @@ export async function solanaPerpsClose(opts: {
     if (lots <= 0n) throw new Error(`Size too small for ${key}-PERP`);
     if (lots > abs) lots = abs;
   }
-  // A close should go through: if nothing fills inside the requested limit, retry once with a wider one.
-  const requested = opts.slippageBps ?? 100;
-  let signature = "";
-  let filled = false;
-  for (const bps of [...new Set([requested, Math.max(requested, MAX_CLOSE_SLIPPAGE_BPS)])]) {
-    const ctx = signature ? await loadPerps(owner) : p;
-    const limit = isLong ? ref * (1 - bps / 10_000) : ref * (1 + bps / 10_000);
-    const close = await phoenixCall(
-      ctx,
-      marketOrderData({ side: isLong ? ASK : BID, priceInTicks: usdToTicks(spline, limit), lots, reduceOnly: true }),
-      orderAccounts(ctx.ex, ctx.margin, spline),
-      [spline.assetId],
-      []
-    );
-    signature = await sendSolanaInstructions([close], { label: `Close ${key}-PERP`, computeUnits: EXEC_COMPUTE_UNITS, lookupTableAddresses: [ctx.lutAddress] });
-    const now = (await loadPerps(owner)).trader?.positions.find((x) => x.assetId === spline.assetId)?.baseLots ?? 0n;
-    if (now !== base) {
-      filled = true;
-      break;
-    }
-  }
-  if (!filled) throw new Error(`No liquidity near the mark for ${key}-PERP. Try again shortly (Tx: ${signature})`);
+  // One attempt only (a second attempt would be a second approval): the limit is the wider of the requested slippage and
+  // MAX_CLOSE_SLIPPAGE_BPS, so a close goes through; Phoenix still fills at the best available price.
+  const bps = Math.max(opts.slippageBps ?? 100, MAX_CLOSE_SLIPPAGE_BPS);
+  const limit = isLong ? ref * (1 - bps / 10_000) : ref * (1 + bps / 10_000);
+  const widths = healthWidths(owner, p.assetMap);
+  const variant = (level: number) => async () => {
+    const only = await widths(level);
+    if (!only) return null;
+    return {
+      parts: [{
+        instructions: [await phoenixCall(
+          p,
+          marketOrderData({ side: isLong ? ASK : BID, priceInTicks: usdToTicks(spline, limit), lots, reduceOnly: true }),
+          orderAccounts(p.ex, p.margin, spline),
+          [spline.assetId],
+          [],
+          { onlyAssets: only([]) }
+        )],
+        label: `Close ${key}-PERP`,
+        before: async (retry: boolean) => void (await refreshPerpsOnFork(key, retry)),
+      }],
+      omits: level > 0,
+    };
+  };
+  const signature = await sendWalletParts(owner, PHOENIX_MAINNET_TABLES, [0, ...NARROW_LEVELS].map(variant), `Close ${key}-PERP`);
+  const now = (await loadPerps(owner)).trader?.positions.find((x) => x.assetId === spline.assetId)?.baseLots ?? 0n;
+  if (now === base) throw new Error(`No liquidity near the mark for ${key}-PERP. Try again shortly (Tx: ${signature})`);
+  return opts.sizeUsd === undefined ? returnUsdcAfterClose(owner, signature) : signature;
+}
 
-  // Nothing left open: bring the USDC home. If Phoenix can't pay right now it stays there, and Withdraw gets it later.
-  const after = await loadPerps(owner);
-  const collateral = after.trader?.collateral ?? 0n;
-  if (after.openAssetIds.length === 0 && collateral > 0n) {
-    try {
-      signature = await sendSolanaInstructions(await perpsWithdrawIxs(after, collateral, true), { label: "Withdraw from Phoenix", computeUnits: EXEC_COMPUTE_UNITS, lookupTableAddresses: [after.lutAddress] });
-    } catch {
-      // the position is already closed
-    }
+/**
+ * Close all finished only in part: `closed` are the markets now flat, `stillOpen` the positions the chain still shows (read after
+ * the send), so the sheet can offer to close exactly those.
+ */
+export class PerpsCloseIncompleteError extends Error {
+  readonly closed: string[];
+  readonly stillOpen: { market: string; side: "long" | "short" }[];
+  constructor(closed: string[], stillOpen: { market: string; side: "long" | "short" }[], reason: string) {
+    const open = stillOpen.map((s) => `${s.market}-PERP`).join(", ");
+    super(closed.length ? `Closed ${closed.length} of ${closed.length + stillOpen.length}. Still open: ${open}. ${reason}` : `Still open: ${open}. ${reason}`);
+    this.name = "PerpsCloseIncompleteError";
+    this.closed = closed;
+    this.stillOpen = stillOpen;
   }
-  return signature;
+}
+
+/**
+ * Closes several positions behind ONE wallet approval (Close all): each close is its own transaction, all signed in one
+ * sign_transactions request. The closes do not depend on each other (reduce-only orders on different markets, each with its own
+ * durable nonce), so every market is refreshed in one pass and all parts are checked, sent and confirmed together
+ * (sendSolanaBatch `independent`). Afterwards the chain is read: positions still open throw a PerpsCloseIncompleteError that
+ * names them. Returns the last signature.
+ */
+export async function solanaPerpsCloseMany(targets: { market: string; side?: "long" | "short" }[]): Promise<string> {
+  if (targets.length === 1) return solanaPerpsClose({ market: targets[0].market, side: targets[0].side });
+  const owner = requireActiveRealWallet("solana").full;
+  const keys = [...new Set(targets.map((t) => t.market.toUpperCase().replace(/-PERP$/, "")))];
+  const { book, splines } = await refreshPerpsMarketsOnFork(keys);
+  const markets = keys.map((key) => {
+    const spline = splines.find((s) => s.symbol.toUpperCase() === key);
+    if (!spline || !book.markets.some((m) => m.assetId === spline.assetId)) throw new Error(`${key}-PERP is not a listed Phoenix market`);
+    return { key, spline };
+  });
+  const p = await loadPerps(owner);
+  await grantPhoenixCapabilitiesOnFork(p.margin);
+  const open = markets.map((m) => ({ ...m, base: p.trader?.positions.find((x) => x.assetId === m.spline.assetId)?.baseLots ?? 0n })).filter((m) => m.base !== 0n);
+  if (!open.length) throw new Error("No open positions to close");
+  const widths = healthWidths(owner, p.assetMap);
+  const variant = (level: number) => async () => {
+    const only = await widths(level);
+    if (!only) return null;
+    return {
+      parts: await Promise.all(open.map(async ({ key, spline, base }) => {
+        const isLong = base > 0n;
+        const ref = ticksToUsd(spline, spline.markTicks);
+        const limit = isLong ? ref * (1 - MAX_CLOSE_SLIPPAGE_BPS / 10_000) : ref * (1 + MAX_CLOSE_SLIPPAGE_BPS / 10_000);
+        return {
+          instructions: [await phoenixCall(
+            p,
+            marketOrderData({ side: isLong ? ASK : BID, priceInTicks: usdToTicks(spline, limit), lots: isLong ? base : -base, reduceOnly: true }),
+            orderAccounts(p.ex, p.margin, spline),
+            [spline.assetId],
+            [],
+            { onlyAssets: only([]) }
+          )],
+          label: `Close ${key}-PERP`,
+          before: async (retry: boolean) => void (await refreshPerpsOnFork(key, retry)),
+        };
+      })),
+      omits: level > 0,
+      independent: true,
+      refreshAll,
+    };
+  };
+  const refreshAll = async (retry: boolean) => void (await refreshPerpsMarketsOnFork(open.map((m) => m.key), retry));
+  let signature: string | undefined;
+  let failure: unknown;
+  try {
+    signature = await sendWalletParts(owner, PHOENIX_MAINNET_TABLES, [0, ...NARROW_LEVELS].map(variant), "Close all positions");
+  } catch (e) {
+    failure = e;
+  }
+  // What the chain shows now decides the result, whatever the send reported (a part whose confirmation timed out may have landed).
+  let after: PhoenixTraderState["positions"];
+  try {
+    after = (await loadPerps(owner)).trader?.positions ?? [];
+  } catch (e) {
+    throw failure ?? e;
+  }
+  const now = (m: (typeof open)[number]) => after.find((x) => x.assetId === m.spline.assetId)?.baseLots ?? 0n;
+  const stillOpen = open.filter((m) => now(m) !== 0n);
+  const last = signature ?? (failure instanceof BatchPartError ? failure.landed[failure.landed.length - 1] : undefined);
+  if (stillOpen.length) {
+    const closed = open.filter((m) => now(m) === 0n).map((m) => m.key);
+    // Nothing changed on chain (the wallet said no, a check before sending failed): the original error says why.
+    if (failure && !closed.length && stillOpen.every((m) => now(m) === m.base)) throw failure;
+    const reason = failure ? (failure instanceof Error ? failure.message : String(failure)) : "No liquidity near the mark. Try again shortly.";
+    throw new PerpsCloseIncompleteError(closed, stillOpen.map((m) => ({ market: m.key, side: now(m) > 0n ? "long" : "short" })), last ? `${reason} (Tx: ${last})` : reason);
+  }
+  return returnUsdcAfterClose(owner, last ?? "");
 }
 
 // Ported from apps/solana/lib/solana/perps.ts:withdrawPerpCollateral
@@ -2760,14 +3703,31 @@ export async function solanaPerpsWithdraw(amountUi?: number | string, all?: bool
   const assetMap = await readAllAssetConfigs();
   await ensureFreshForkPrices(TOKENS, assetMap);
   const p = await loadPerps(owner);
+  await grantPhoenixCapabilitiesOnFork(p.margin);
   const collateral = p.trader?.collateral ?? 0n;
-  if (collateral <= 0n) throw new Error("No USDC in Phoenix to withdraw");
+  if (collateral <= 0n) {
+    // An earlier withdraw left phUSD in the margin account (its unwrap did not land): unwrap it now.
+    const ph = BigInt((await rpc<{ value: { amount: string } | null }>("getTokenAccountBalance", [marginVault(p.margin, p.ex.canonicalMint, TOKEN_PROGRAM_ID)]).catch(() => null))?.value?.amount ?? "0");
+    if (ph > 0n) return sendWalletParts(owner, PHOENIX_MAINNET_TABLES, perpsWithdrawVariants(p, 0n, false), "Withdraw from Phoenix");
+    throw new Error("No USDC in Phoenix to withdraw");
+  }
   const requested = all || amountUi === undefined ? collateral : toRaw(amountUi, 6);
   const amount = requested > collateral ? collateral : requested;
   if (amount <= 0n) throw new Error("Enter an amount greater than zero");
-  return sendSolanaInstructions(await perpsWithdrawIxs(p, amount, amount === collateral && p.openAssetIds.length === 0), {
-    label: "Withdraw from Phoenix",
-    computeUnits: EXEC_COMPUTE_UNITS,
-    lookupTableAddresses: [p.lutAddress],
-  });
+  try {
+    return await sendWalletParts(owner, PHOENIX_MAINNET_TABLES, perpsWithdrawVariants(p, amount, amount === collateral && p.openAssetIds.length === 0), "Withdraw from Phoenix");
+  } catch (e) {
+    if (e instanceof BatchPartError) throw new Error(`The USDC left Phoenix and is in your margin account as phUSD, but turning it back into USDC failed: ${e.message}. Tap Withdraw again to finish.`);
+    throw e;
+  }
+}
+
+/** Turns the phUSD in the margin account (left by a perps open whose order did not land) back into USDC: one approval. */
+export async function solanaPerpsUnwrap(): Promise<string> {
+  const owner = requireActiveRealWallet("solana").full;
+  await ensureFreshForkPrices(TOKENS, await readAllAssetConfigs());
+  const p = await loadPerps(owner);
+  const ph = BigInt((await rpc<{ value: { amount: string } | null }>("getTokenAccountBalance", [marginVault(p.margin, p.ex.canonicalMint, TOKEN_PROGRAM_ID)]).catch(() => null))?.value?.amount ?? "0");
+  if (ph <= 0n) throw new Error("No phUSD in your margin account to turn back into USDC");
+  return sendWalletParts(owner, PHOENIX_MAINNET_TABLES, perpsWithdrawVariants(p, 0n, false), "Turn phUSD back into USDC");
 }

@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Phoenix Perps Flow</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="tx.css">
+<link rel="stylesheet" href="perps.css">
+<script>try{var p=new URLSearchParams(location.search);document.documentElement.dataset.theme=p.get('theme')||localStorage.getItem('pfx.theme')||'light'}catch(e){}</script>
+</head><body data-page="index">
+<header class="top" id="top"></header>
+<main class="land">
+  <h1>Phoenix perps: first-time and returning flows</h1>
+  <p class="lede">One sheet that walks a trader into Phoenix, in the motion language of the margin account flow (src/ui/first-time-flow.tsx). One wallet approval covers every part; the stage only moves once the wallet has signed. Both pages autoplay and loop; pick a state by hand in the panel.</p>
+  <div class="cards">
+    <a class="ccard" href="first-time.html" data-link>
+      <h2>First time</h2>
+      <p>One action ("Opening long SOL 2x") with the normal progress bar. The motion tells the story without step labels: the Phoenix account card draws in, shimmers and fills in the centre; USDC flows in from the margin account on the left; the order fires at the market on the right and the position lands on the card. Plus the failures and the compact "Your USDC is in Phoenix" state with Retry order / Return USDC to margin.</p>
+      <span class="go">Open first-time flow →</span>
+    </a>
+    <a class="ccard" href="returning.html" data-link>
+      <h2>Returning trader</h2>
+      <p>A plain transaction sheet: review (with "Phoenix already holds N USDC of yours"), waiting for your wallet, Sent / Processed / Confirmed, done. Order only, or deposit + order as one action, and the compact failure.</p>
+      <span class="go">Open returning flow →</span>
+    </a>
+  </div>
+  <p class="lede" style="margin-top:24px">Handoff notes for the app engineer: <a href="NOTES.md">NOTES.md</a> (copy per state, data per state, components to reuse, new props, open questions).</p>
+</main>
+<script src="chameleon.js"></script>
+<script src="perps.js"></script>
+</body>
+</html>

@@ -16,7 +16,7 @@ import { IconAction, shareIcon } from "@/components/ui/kit";
 import { nf, tokFmt, usd } from "@/format";
 import { LOGO_PNG } from "@/generated/logos";
 import { ACCOUNT, ACTIVITY, DATA, PX, TOK } from "@/sample/data";
-import { nowT, randTx } from "@/screens/earn/model";
+import { nowT } from "@/screens/earn/model";
 import { MarginTransfer } from "@/screens/margin/margin";
 import { type Chain, CHAIN_LABEL } from "@/state/chain";
 import { mutate, useDataVersion } from "@/state/store";
@@ -46,6 +46,7 @@ const FAUCET: Record<Chain, [string, number][]> = {
     ["GOOGLx", 10],
     ["AAPLx", 10],
     ["TSLAx", 10],
+    ["SKR", 100000], // mobile app only (not on the website's faucet)
   ],
 };
 const RESERVE: Record<Chain, Record<string, number>> = {
@@ -154,7 +155,10 @@ function Faucet({ chain }: { chain: Chain }) {
   const [st, setSt] = useState<Record<string, "pending" | "done" | "failed">>({});
   const [msg, setMsg] = useState<{ text: string; bad?: boolean } | null>(null);
   const list = FAUCET[chain];
-  const claim = async (items: [string, number][]) => {
+  // Tokens being sent right now. A ref, not state: two quick taps land before the re-render that marks a tile "pending".
+  const inFlight = useRef(new Set<string>());
+  const claim = async (asked: [string, number][]) => {
+    const items = asked.filter(([s]) => !inFlight.current.has(s));
     if (!items.length) return;
     if (!personalReady(chain)) {
       toast(`Add a ${CHAIN_LABEL[chain]} wallet first`, "err");
@@ -162,6 +166,7 @@ function Faucet({ chain }: { chain: Chain }) {
       openAddWallet(chain);
       return;
     }
+    items.forEach(([s]) => inFlight.current.add(s));
     setMsg(null);
     setSt((p) => ({
       ...p,
@@ -183,6 +188,8 @@ function Faucet({ chain }: { chain: Chain }) {
         failed.push(sym);
         firstWhy ||= String(e?.message ?? "Faucet failed").split("\n")[0].slice(0, 120);
         setSt((p) => ({ ...p, [sym]: "failed" }));
+      } finally {
+        inFlight.current.delete(sym);
       }
     };
     // A few at a time, SOL first so the account can pay fees.
@@ -203,7 +210,7 @@ function Faucet({ chain }: { chain: Chain }) {
           detail: ok.map(([s]) => s).join(", "),
           amt: ok.map(([s, v]) => `${nf(v)} ${s}`).join(", "),
           usd: ok.reduce((t, [s, v]) => t + v * px(s), 0),
-          tx: randTx(),
+          tx: "",
           sym: ok[0][0],
         });
       });
@@ -506,7 +513,7 @@ function Withdraw({ chain }: { chain: Chain }) {
           detail: `${sym} to ${short(t)}`,
           amt: tokFmt(x, sym),
           usd: x * px(sym),
-          tx: randTx(),
+          tx: "",
           sym,
         });
         setAmt("");

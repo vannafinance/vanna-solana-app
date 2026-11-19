@@ -5,13 +5,13 @@ import { StyleSheet, Text, View, Pressable } from "react-native";
 import { TokenLogo } from "@/components/brand";
 import { AmountField, hfTone, PctChips, Preview } from "@/components/form";
 import { HistoryList } from "@/components/history";
-import { SubTabs, Swap } from "@/components/motion";
+import { SubTabs } from "@/components/motion";
 import { Button } from "@/components/ui/button";
 import { Card, EmptyCard, IconAction, Pairs, shareIcon, Tag } from "@/components/ui/kit";
 import { hfFmt, nf, pct, sUsd, tokFmt, usd } from "@/format";
 import { ACTIVITY, type ChainData, DATA, type FarmPos, PX } from "@/sample/data";
 import { acct, mAddColl, mbal, mTake, SAFE_HF, simAcct } from "@/sample/model";
-import { nowT, randTx } from "@/screens/earn/model";
+import { inDecOf, nowT } from "@/screens/earn/model";
 import { type Chain, useChain } from "@/state/chain";
 import { personalReady } from "@/state/personal";
 import { useDataVersion } from "@/state/store";
@@ -31,23 +31,34 @@ export type Vault = {
   apy: number; apyLabel: string; a: [string, string]; b: [string, string];
   // Live figures for the vault page (live.ts): lending reserves' borrow APY, totals in USD and utilisation (%).
   borrowApy?: number; supplyUsd?: number; borrowUsd?: number; util?: number;
+  // Perena (live.ts): the fork's share price and TVL (supply x share price), Perena's mainnet price and holder count (its API).
+  sharePrice?: number; tvlUsd?: number; perenaPrice?: number; holders?: number;
+  // Set once a live read gave this vault its APY; until then the APY shows "—" (no design numbers).
+  apyLive?: boolean;
 };
-export const usdC = (n: number) => (n >= 1e9 ? "$" + nf(n / 1e9, 2) + "B" : n >= 1e6 ? "$" + nf(n / 1e6, 2) + "M" : n >= 1e3 ? "$" + nf(n / 1e3, 2) + "K" : usd(n));
+/** The vault's APY for display: "—" until a live read has set it. */
+export const apyText = (v: Vault) => (v.apyLive ? pct(v.apy) : "—");
+export const usdC = (n: number) => !Number.isFinite(n) ? "—" : (n >= 1e9 ? "$" + nf(n / 1e9, 2) + "B" : n >= 1e6 ? "$" + nf(n / 1e6, 2) + "M" : n >= 1e3 ? "$" + nf(n / 1e3, 2) + "K" : usd(n));
 
 export const VAULTS: Record<Chain, Vault[]> = {
   solana: [
-    { id: "kamino-sol", group: "Single assets", name: "SOL", sym: "SOL", icon: "SOL", venue: "Kamino", venueLogo: "KMNO", apy: 4.13, apyLabel: "APY", a: ["Total deposits", usdC(270052719.73)], b: ["Utilization", "90.48%"] },
-    { id: "kamino-usdc", group: "Single assets", name: "USDC", sym: "USDC", icon: "USDC", venue: "Kamino", venueLogo: "KMNO", apy: 4.43, apyLabel: "APY", a: ["Total deposits", usdC(122289228.91)], b: ["Utilization", "91.17%"] },
-    { id: "kamino-usdt", group: "Single assets", name: "USDT", sym: "USDT", icon: "USDT", venue: "Kamino", venueLogo: "KMNO", apy: 4.13, apyLabel: "APY", a: ["Total deposits", usdC(11105247.27)], b: ["Utilization", "88.00%"] },
-    { id: "usdstar", group: "Perena vaults", name: "USD*", sym: "USDC", icon: "USDSTAR", venue: "Perena", venueLogo: "PERENA", apy: 9.46, apyLabel: "APY 7D", a: ["TVL", usdC(11472093.92)], b: ["Share price", "$1.1018"] },
-    { id: "junior", group: "Perena vaults", name: "USD* Junior", sym: "USDC", icon: "USDSTARJ", venue: "Perena", venueLogo: "PERENA", apy: 14.18, apyLabel: "APY 7D", a: ["TVL", usdC(1520887.48)], b: ["Share price", "$1.0892"] },
+    // Figures arrive from live.ts (Kamino's API; Perena's API and the fork); "—" until then.
+    { id: "kamino-sol", group: "Single assets", name: "SOL", sym: "SOL", icon: "SOL", venue: "Kamino", venueLogo: "KMNO", apy: 0, apyLabel: "APY", a: ["Total deposits", "—"], b: ["Utilization", "—"] },
+    { id: "kamino-usdc", group: "Single assets", name: "USDC", sym: "USDC", icon: "USDC", venue: "Kamino", venueLogo: "KMNO", apy: 0, apyLabel: "APY", a: ["Total deposits", "—"], b: ["Utilization", "—"] },
+    { id: "kamino-usdt", group: "Single assets", name: "USDT", sym: "USDT", icon: "USDT", venue: "Kamino", venueLogo: "KMNO", apy: 0, apyLabel: "APY", a: ["Total deposits", "—"], b: ["Utilization", "—"] },
+    { id: "usdstar", group: "Perena vaults", name: "USD*", sym: "USDC", icon: "USDSTAR", venue: "Perena", venueLogo: "PERENA", apy: 0, apyLabel: "APY 7D", a: ["TVL", "—"], b: ["Share price", "—"] },
+    { id: "junior", group: "Perena vaults", name: "USD* Junior", sym: "USDC", icon: "USDSTARJ", venue: "Perena", venueLogo: "PERENA", apy: 0, apyLabel: "APY 7D", a: ["TVL", "—"], b: ["Share price", "—"] },
   ],
 };
 
 export const px = (s: string) => PX[s] ?? 1;
 export const posOf = (d: ChainData, id: string) => d.farm.find((f) => f.id === id);
-// A position read from the chain carries no rate of its own: it earns its vault's live one.
-export const apyOf = (chain: Chain, f: FarmPos) => VAULTS[chain].find((v) => v.id === f.id)?.apy ?? f.apy;
+// A position read from the chain carries no rate of its own: it earns its vault's live one (0 until that arrives).
+export const apyOf = (chain: Chain, f: FarmPos) => {
+  const v = VAULTS[chain].find((x) => x.id === f.id);
+  return v?.apyLive ? v.apy : 0;
+};
+const apyOfText = (chain: Chain, f: FarmPos) => (VAULTS[chain].find((x) => x.id === f.id)?.apyLive ? pct(apyOf(chain, f)) : "—");
 export const valOf = (f: FarmPos) => (f.amt + f.earned) * px(f.sym);
 
 export function farmTotals(chain: Chain) {
@@ -56,18 +67,15 @@ export function farmTotals(chain: Chain) {
   return { val, apy };
 }
 
-export function Farm() {
+// The Vaults | Positions | History pill is the page pill (farm/index.tsx); this renders the chosen tab.
+export type FarmTab = "vaults" | "positions" | "history";
+export const FARM_TABS: [FarmTab, string][] = [["vaults", "Vaults"], ["positions", "Positions"], ["history", "History"]];
+
+export function Farm({ tab }: { tab: FarmTab }) {
   const { chain } = useChain();
-  const [tab, setTab] = useState<"vaults" | "positions" | "history">("vaults");
-  const f = families.farm;
   return (
     <View style={{ gap: 12 }}>
-      <SubTabs items={[["vaults", "Vaults"], ["positions", "Positions"], ["history", "History"]]} value={tab} onChange={setTab} fam={f} />
-      <Swap k={tab}>
-        <View style={{ gap: 12 }}>
-          {tab === "vaults" ? <Vaults /> : tab === "positions" ? <Positions /> : <HistoryList rows={ACTIVITY[chain].filter((r) => r.area === "Farm")} module="farm" />}
-        </View>
-      </Swap>
+      {tab === "vaults" ? <Vaults /> : tab === "positions" ? <Positions /> : <HistoryList rows={ACTIVITY[chain].filter((r) => r.area === "Farm")} module="farm" />}
     </View>
   );
 }
@@ -89,7 +97,7 @@ function Vaults() {
             .map((v) => {
               const pos = posOf(d, v.id);
               return (
-                <Pressable key={v.id} onPress={() => openVault(v.id)} accessibilityRole="button" accessibilityLabel={`${v.name} on ${v.venue}, ${pct(v.apy)} ${v.apyLabel}`}>
+                <Pressable key={v.id} onPress={() => openVault(v.id)} accessibilityRole="button" accessibilityLabel={`${v.name} on ${v.venue}, ${apyText(v)} ${v.apyLabel}`}>
                   <Card>
                     <View style={styles.vh}>
                       <VaultIcon v={v} />
@@ -98,7 +106,7 @@ function Vaults() {
                         <Text style={[styles.cap, { color: colors.muted }]}>{v.venue}</Text>
                       </View>
                       <View style={{ alignItems: "flex-end" }}>
-                        <Text style={[styles.apy, { color: colors.positive }]}>{pct(v.apy)}</Text>
+                        <Text style={[styles.apy, { color: colors.positive }]}>{apyText(v)}</Text>
                         <Text style={[styles.cap, { color: colors.muted }]}>{v.apyLabel}</Text>
                       </View>
                     </View>
@@ -146,7 +154,7 @@ function openWithdrawAll(chain: Chain) {
     c.farm = [];
   };
   const after = simAcct(chain, apply);
-  if (isFinite(before.hf) && before.hf >= SAFE_HF && after.hf < SAFE_HF) return toast(`Health factor would fall below ${nf(SAFE_HF, 2)}`);
+  if (isFinite(before.hf) && before.borrowHf >= SAFE_HF && after.borrowHf < SAFE_HF) return toast(`Health factor would fall below ${nf(SAFE_HF, 2)}`);
   const total = list.reduce((s, f) => s + valOf(f), 0);
   const earned = list.reduce((s, f) => s + f.earned * px(f.sym), 0);
   const by: Record<string, number> = {};
@@ -165,7 +173,8 @@ function openWithdrawAll(chain: Chain) {
         const v = VAULTS[chain].find((x) => x.id === f.id);
         return [v ? `${v.venue} ${v.name}` : f.name, usd(valOf(f))] as [string, string];
       }),
-      ["Exit fee", "None"],
+      // Perena charges 1% to leave USD* Junior (web lib/solana/vault-state.ts exitFeeBps); the others have none.
+      ["Exit fee", list.some((f) => f.id === "junior") ? "1% on USD* Junior" : "None"],
       ["Health factor", `${hfFmt(before.hf)} → ${hfFmt(after.hf)}`],
     ],
     done: { title: "All farm positions withdrawn", line: `${usd(total)} back in your margin account` },
@@ -184,7 +193,7 @@ function openWithdrawAll(chain: Chain) {
     },
     apply: () => {
       apply(DATA[chain]);
-      ACTIVITY[chain].unshift({ t: nowT(), area: "Farm", action: "Withdraw", detail: "All farm positions", amt: usd(total), usd: total, via: "Farm", tx: randTx(), sym: list[0]?.sym ?? "USDC" });
+      ACTIVITY[chain].unshift({ t: nowT(), area: "Farm", action: "Withdraw", detail: "All farm positions", amt: usd(total), usd: total, via: "Farm", tx: "", sym: list[0]?.sym ?? "USDC" });
     },
   });
 }
@@ -214,10 +223,10 @@ function Positions() {
               </View>
               <View style={{ alignItems: "flex-end" }}>
                 <Text style={[styles.name, { color: colors.text }]}>{usd(valOf(f))}</Text>
-                <Text style={[styles.cap, { color: colors.positive }]}>{sUsd(e)}</Text>
+                <Text style={[styles.cap, { color: f.earnedUnknown ? colors.muted : colors.positive }]}>{f.earnedUnknown ? "—" : sUsd(e)}</Text>
               </View>
             </Pressable>
-            <Pairs items={[{ label: "Deposited", value: tokFmt(f.amt, f.sym) }, { label: v.apyLabel, value: pct(apyOf(chain, f)), tone: "pos" }, { label: "Since", value: f.since || "—" }]} />
+            <Pairs items={[{ label: "Deposited", value: tokFmt(f.amt, f.sym) }, { label: v.apyLabel, value: apyOfText(chain, f), tone: "pos" }, { label: "Since", value: f.since || "—" }]} />
             <View style={{ flexDirection: "row", justifyContent: "flex-end", gap: 8 }}>
               <IconAction icon="south" label={`Deposit more in ${v.name}`} onPress={() => openFarm(chain, v, "deposit")} />
               <IconAction icon="north" label={`Withdraw from ${v.name}`} onPress={() => openFarm(chain, v, "withdraw")} />
@@ -267,6 +276,17 @@ function FarmForm({ chain, v, initial }: { chain: Chain; v: Vault; initial: "dep
   };
   const before = acct(chain);
   const after = x > 0 && !over ? simAcct(chain, apply) : null;
+  // As on the website (kamino-action): blocked when the move lowers the borrow-line health factor below SAFE_HF.
+  const overLimit = after != null && after.borrowHf < SAFE_HF && after.borrowHf < before.borrowHf;
+  // Kamino redeems receipts (cTokens), not the underlying: the typed amount's share of the position's receipts, as the website
+  // does (kamino-action: position.receipts x pct). The old code passed the underlying amount as a cToken count.
+  const receiptsFor = (v: number): bigint | undefined => {
+    const full = pos ? pos.amt + pos.earned : 0;
+    if (!pos?.receiptsRaw || full <= 0) return undefined;
+    const held = BigInt(pos.receiptsRaw);
+    const share = BigInt(Math.floor(Math.min(1, v / full) * 1e9));
+    return (held * share) / 1_000_000_000n;
+  };
   const go = () => {
     closeSheet();
     setTimeout(
@@ -278,19 +298,19 @@ function FarmForm({ chain, v, initial }: { chain: Chain; v: Vault; initial: "dep
             v: tokFmt(x, v.sym),
             s: dep ? "From your margin account" : "Back to your margin account",
           }],
-          rows: [[v.apyLabel, pct(v.apy), "pos"], ["Venue", v.venue], ["Health factor", `${hfFmt(before.hf)} → ${hfFmt(after!.hf)}`]],
-          done: { title: dep ? `Deposited ${tokFmt(x, v.sym)}` : `Withdrew ${tokFmt(x, v.sym)}`, line: dep ? `Earning ${pct(v.apy)} on ${v.venue}` : "Back in your margin account" },
+          rows: [[v.apyLabel, apyText(v), "pos"], ["Venue", v.venue], ["Health factor", `${hfFmt(before.hf)} → ${hfFmt(after!.hf)}`]],
+          done: { title: dep ? `Deposited ${tokFmt(x, v.sym)}` : `Withdrew ${tokFmt(x, v.sym)}`, line: dep ? (v.apyLive ? `Earning ${pct(v.apy)} on ${v.venue}` : `Deposited on ${v.venue}`) : "Back in your margin account" },
           send: async () => {
             if (v.id === "usdstar" || v.id === "junior" || v.venue === "Perena") {
               return await solanaPerenaAction(v.id, mode, x);
             }
             return mode === "deposit"
               ? await solanaFarmDeposit({ sym: v.sym, marginAmount: x })
-              : await solanaFarmWithdraw({ sym: v.sym, receipts: x, all: pctV === 100 });
+              : await solanaFarmWithdraw({ sym: v.sym, receiptsRaw: receiptsFor(x), all: pctV === 100 });
           },
           apply: () => {
             apply(d);
-            ACTIVITY[chain].unshift({ t: nowT(), area: "Farm", action: dep ? "Deposit" : "Withdraw", detail: `${v.name} on ${v.venue}`, amt: tokFmt(x, v.sym), usd: x * px(v.sym), via: v.venue, tx: randTx(), sym: v.sym });
+            ACTIVITY[chain].unshift({ t: nowT(), area: "Farm", action: dep ? "Deposit" : "Withdraw", detail: `${v.name} on ${v.venue}`, amt: tokFmt(x, v.sym), usd: x * px(v.sym), via: v.venue, tx: "", sym: v.sym });
           },
         }),
       300,
@@ -302,7 +322,7 @@ function FarmForm({ chain, v, initial }: { chain: Chain; v: Vault; initial: "dep
         <View style={styles.vh}>
           <VaultIcon v={v} size={36} />
           <Text style={[styles.cap, { color: colors.muted, flex: 1 }]}>{v.venue}</Text>
-          <Text style={[styles.apy, { color: colors.positive, fontSize: 20 }]}>{pct(v.apy)}</Text>
+          <Text style={[styles.apy, { color: colors.positive, fontSize: 20 }]}>{apyText(v)}</Text>
         </View>
       </Card>
       <SubTabs items={[["deposit", "Deposit"], ["withdraw", "Withdraw"]]} value={mode} onChange={(m) => (setMode(m), setAmt(""))} fam={f} />
@@ -323,7 +343,9 @@ function FarmForm({ chain, v, initial }: { chain: Chain; v: Vault; initial: "dep
         items={[25, 50, 75, 100]}
         onPick={(q) => {
           setPct(q);
-          setAmt(String(Math.floor(limit * q) / 100));
+          // like the website (balance * pct / 100 in the token's own units): 100% is the whole balance, no 2-decimal flooring
+          const dec = Math.min(inDecOf(v.sym), 9), scale = 10 ** dec;
+          setAmt(String(Math.floor((limit * q) / 100 * scale + 1e-6) / scale));
         }}
       />
       {dep && limit <= 0 && <Text style={{ fontFamily: font.regular, fontSize: 13, color: colors.muted }}>No idle {v.sym} in your margin account. Borrow or transfer on Margin first.</Text>}
@@ -331,11 +353,11 @@ function FarmForm({ chain, v, initial }: { chain: Chain; v: Vault; initial: "dep
         <Preview
           rows={[
             ["Health factor", hfFmt(before.hf), hfFmt(after.hf), hfTone(after.hf)],
-            [dep ? "Yearly earnings" : "Deposited", dep ? "—" : tokFmt(pos ? pos.amt : 0, v.sym), dep ? "+" + usd((x * px(v.sym) * v.apy) / 100) : tokFmt(Math.max(0, (pos ? pos.amt : 0) - x), v.sym), dep ? "pos" : ""],
+            [dep ? "Yearly earnings" : "Deposited", dep ? "—" : tokFmt(pos ? pos.amt : 0, v.sym), dep ? (v.apyLive ? "+" + usd((x * px(v.sym) * v.apy) / 100) : "—") : tokFmt(Math.max(0, (pos ? pos.amt : 0) - x), v.sym), dep ? "pos" : ""],
           ]}
         />
       )}
-      {x > 0 && <Button label={over ? (dep ? `Not enough ${v.sym}` : "More than deposited") : dep ? "Deposit" : "Withdraw"} fam={f} disabled={over} onPress={go} />}
+      {x > 0 && <Button label={over ? (dep ? `Not enough ${v.sym}` : "More than deposited") : overLimit ? "Over your borrow limit" : dep ? "Deposit" : "Withdraw"} fam={f} disabled={over || overLimit} onPress={go} />}
     </View>
   );
 }

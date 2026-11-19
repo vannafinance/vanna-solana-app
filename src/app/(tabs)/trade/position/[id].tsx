@@ -9,9 +9,10 @@ import { Icon } from "@/components/ui/icon";
 import { Card, EmptyCard, IconAction, shareIcon, Tag } from "@/components/ui/kit";
 import { nf, pct, sign, spct, sUsd, tokFmt, usd } from "@/format";
 import { perpMark } from "@/chain/perp-mark";
-import { DATA } from "@/sample/data";
+import { openTx } from "@/components/history";
+import { DATA, PERP_HIST } from "@/sample/data";
 import { perpPnl, perpQty } from "@/sample/model";
-import { closePosition, FUNDING, fundingOf, liqFor, openTicket, PERP_MKTS, priceFmt } from "@/screens/trade/perps";
+import { closePosition, FUNDING, fundingOf, levTag, liqFor, openTicket, PERP_MKTS, priceFmt } from "@/screens/trade/perps";
 import { useChain } from "@/state/chain";
 import { useDataVersion } from "@/state/store";
 import { useTheme } from "@/theme/use-theme";
@@ -45,15 +46,17 @@ export default function PerpPosition() {
   const liq = liqFor(chain, p), f = fundingOf(p), lev = size / Math.max(1e-9, equity);
   const now = new Date();
   const next = `${String((now.getHours() + 1) % 24).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
+  // The transaction that opened it, as saved with the History row (none for a position opened before the app kept it).
+  const openHash = PERP_HIST.find((h) => h.a === "Open / increase" && h.k === p.k && h.side === p.side && h.hash)?.hash;
   const cells: [string, string, string, string?][] = [
     ["Entry", priceFmt(p.entry), ""],
     ["Mark", priceFmt(mark), `${spct((mark / p.entry - 1) * 100)} from entry`],
     ["Size", tokFmt(qty, p.k), usd(size)],
     ["Collateral", usd(p.coll), `Equity ${usd(equity)}`],
-    ["Leverage", `${nf(lev, 1)}x`, `Opened at ${p.lev}x`],
+    ["Leverage", levTag(lev), p.pool != null ? `On ${nf(p.pool, 2)} USDC shared Phoenix collateral` : `Opened at ${levTag(p.lev)}`],
     ["Liq. price", liq ? priceFmt(liq) : "None", liq ? `${pct((liq / mark - 1) * 100, 1)} away` : ""],
     ["Funding to date", sUsd(f), f < 0 ? "Paid" : "Received", sign(f)],
-    ["Funding rate", `${m.fund >= 0 ? "+" : "−"}${nf(Math.abs(m.fund), 4)}% / 1h`, `${spct(m.fund * 24 * 365, 1)} a year, ${(m.fund >= 0) === (p.side === "long") ? "you pay" : "you earn"}`, m.fund >= 0 ? "pos" : "neg"],
+    ["Funding rate", Number.isFinite(m.fund) ? `${m.fund >= 0 ? "+" : "−"}${nf(Math.abs(m.fund), 4)}% / 1h` : "—", `${spct(m.fund * 24 * 365, 1)} a year, ${(m.fund >= 0) === (p.side === "long") ? "you pay" : "you earn"}`, m.fund >= 0 ? "pos" : "neg"],
     ["Next funding", next, "Every hour"],
     ["Opened", p.t.split(",")[0], `${p.t.split(", ")[1] ?? ""} UTC`],
   ];
@@ -69,7 +72,7 @@ export default function PerpPosition() {
               <TokenLogo sym={p.k} size={44} />
               <View style={{ flex: 1, gap: 4 }}>
                 <Text style={[styles.pair, { color: colors.text }]}>{p.k}-PERP</Text>
-                <Tag label={`${p.side === "long" ? "Long" : "Short"} ${p.lev}x`} tone={p.side} />
+                <Tag label={`${p.side === "long" ? "Long" : "Short"} ${levTag(lev)}`} tone={p.side} />
               </View>
               <View style={{ alignItems: "flex-end" }}>
                 <Text style={[styles.pnl, { color: sign(pnl) === "neg" ? colors.negative : colors.positive }]}>{sUsd(pnl)}</Text>
@@ -85,6 +88,12 @@ export default function PerpPosition() {
                 </View>
               ))}
             </View>
+            {openHash ? (
+              <Pressable onPress={() => openTx(openHash)} style={{ flexDirection: "row", alignItems: "center", gap: 4, alignSelf: "flex-start" }} accessibilityRole="link">
+                <Text style={{ fontFamily: font.semibold, fontSize: 13, color: colors.link }}>{`Opening transaction ${openHash.slice(0, 4)}…${openHash.slice(-4)}`}</Text>
+                <Icon name="open_in_new" size={16} color="link" />
+              </Pressable>
+            ) : null}
             <View style={styles.acts}>
               <IconAction icon="add" label="Add collateral" tone="surface" onPress={() => openTicket(p.k, p.side)} />
               <IconAction icon={shareIcon} label="Share this position" tone="plain" onPress={() => openShare({ kind: "perps", id: p.id })} />

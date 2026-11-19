@@ -6,7 +6,18 @@ import { base58 } from "./prices";
 // Program-derived addresses, as web3.js PublicKey.findProgramAddressSync: the first bump (255 down) whose
 // sha256(seeds, bump, program, "ProgramDerivedAddress") is NOT a point on the ed25519 curve.
 const ALPHABET = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
+// Base58 decoding is BigInt math (slow on Hermes) and the same few hundred addresses are decoded for every message compiled:
+// cached, and a copy is returned so a caller can never change the cached bytes.
+const decodeCache = new Map<string, Uint8Array>();
 export function decode58(s: string): Uint8Array {
+  const hit = decodeCache.get(s);
+  if (hit) return hit.slice();
+  const out = decode58Now(s);
+  if (decodeCache.size > 5000) decodeCache.clear();
+  decodeCache.set(s, out.slice());
+  return out;
+}
+function decode58Now(s: string): Uint8Array {
   let n = 0n;
   for (const c of s) {
     const i = ALPHABET.indexOf(c);
@@ -35,7 +46,23 @@ const onCurve = (b: Uint8Array) => {
 };
 
 const enc = new TextEncoder();
+// A PDA depends only on its seeds and program, and each derivation costs several sha256 + ed25519 point decompressions (pure-JS
+// BigInt math, slow on Hermes); the same addresses (margin, vaults, reserves, Phoenix trader...) are derived again for every
+// instruction, size attempt and refresh. Remembered for the session (bounded).
+const pdaCache = new Map<string, string>();
+const HEX = Array.from({ length: 256 }, (_, i) => i.toString(16).padStart(2, "0"));
+const seedKey = (s: string | Uint8Array) => (typeof s === "string" ? "s" + s : "b" + Array.from(s, (b) => HEX[b]).join(""));
 export function findPda(seeds: (string | Uint8Array)[], programId: string): string {
+  const key = programId + "|" + seeds.map(seedKey).join("|");
+  const hit = pdaCache.get(key);
+  if (hit !== undefined) return hit;
+  const address = derivePda(seeds, programId);
+  if (pdaCache.size > 5000) pdaCache.clear();
+  pdaCache.set(key, address);
+  return address;
+}
+
+function derivePda(seeds: (string | Uint8Array)[], programId: string): string {
   const parts = seeds.map((s) => (typeof s === "string" ? enc.encode(s) : s));
   const program = decode58(programId);
   const tail = enc.encode("ProgramDerivedAddress");

@@ -2,6 +2,40 @@ import { Buffer } from "buffer";
 
 import { SOLANA_RPC } from "./config";
 
+// Base64 to Buffer in one pass. The Buffer polyfill's Buffer.from(s, "base64") cleans the string with a regex, measures it, decodes
+// and then copies byte by byte: for 100+ KB accounts (Phoenix's perp asset map, copied on every perps refresh) that was 2 to 3 s of
+// JS time per read on Hermes. Same bytes for valid base64 (what the RPC returns); anything else falls back to the polyfill.
+const B64 = (() => {
+  const t = new Int16Array(128).fill(-1);
+  const abc = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+  for (let i = 0; i < abc.length; i++) t[abc.charCodeAt(i)] = i;
+  return t;
+})();
+export function decodeBase64(s: string): Buffer {
+  let len = s.length;
+  while (len > 0 && s.charCodeAt(len - 1) === 61) len--; // "="
+  if ((s.length & 3) !== 0 || s.length - len > 2) return Buffer.from(s, "base64");
+  const out = Buffer.allocUnsafe((len * 3) >> 2);
+  let o = 0, i = 0;
+  for (; i + 4 <= len; i += 4) {
+    const a = B64[s.charCodeAt(i)], b = B64[s.charCodeAt(i + 1)], c = B64[s.charCodeAt(i + 2)], d = B64[s.charCodeAt(i + 3)];
+    if ((a | b | c | d) < 0) return Buffer.from(s, "base64");
+    const n = (a << 18) | (b << 12) | (c << 6) | d;
+    out[o++] = n >> 16;
+    out[o++] = (n >> 8) & 255;
+    out[o++] = n & 255;
+  }
+  const rest = len - i;
+  if (rest >= 2) {
+    const a = B64[s.charCodeAt(i)], b = B64[s.charCodeAt(i + 1)], c = rest === 3 ? B64[s.charCodeAt(i + 2)] : 0;
+    if ((a | b | c) < 0) return Buffer.from(s, "base64");
+    const n = (a << 18) | (b << 12) | (c << 6);
+    out[o++] = n >> 16;
+    if (rest === 3) out[o++] = (n >> 8) & 255;
+  } else if (rest === 1) return Buffer.from(s, "base64");
+  return out;
+}
+
 // Plain JSON-RPC to the Vanna Solana fork (no web3.js in the app).
 export async function rpc<T>(method: string, params: unknown[]): Promise<T> {
   const res = await fetch(SOLANA_RPC, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }) });

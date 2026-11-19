@@ -10,7 +10,7 @@ export default function TabsLayout() {
       <Tabs.Screen name="margin" />
       <Tabs.Screen name="trade" />
       <Tabs.Screen name="farm" />
-      <Tabs.Screen name="earn" options={{ href: null }} />
+      <Tabs.Screen name="earn/pool/[id]" options={{ href: null }} />
     </Tabs>
   );
 }

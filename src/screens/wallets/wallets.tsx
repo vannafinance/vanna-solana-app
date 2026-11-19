@@ -85,7 +85,7 @@ export function WalletsCard({ sheet }: { sheet?: boolean } = {}) {
               accessibilityState={{ checked: on }}
               accessibilityLabel={`${w.app} ${w.addr}${on ? ", in use" : ""}`}
             >
-              <WalletLogo logo={w.logo} size={34} />
+              <WalletLogo logo={w.logo} icon={w.icon} size={34} />
               <View style={{ flex: 1 }}>
                 <Text style={[styles.t15, { color: colors.text }]}>{w.app}</Text>
                 <Text style={[styles.t12, { color: colors.muted }]}>{w.addr}</Text>

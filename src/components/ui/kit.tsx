@@ -4,6 +4,8 @@ import { Platform, Pressable, StyleSheet, Text, View, type ViewStyle } from "rea
 import { LinearGradient } from "expo-linear-gradient";
 
 import { TokenLogo } from "@/components/brand";
+import { InfoTip } from "@/components/form";
+import { useAccountRead } from "@/chain/account-live";
 import { MascotBody } from "@/mascot/mascot";
 import { useTheme } from "@/theme/use-theme";
 import { font } from "@/theme/tokens";
@@ -30,7 +32,8 @@ export function CardHead({ title, right }: { title: string; right?: ReactNode })
   );
 }
 
-export type Pair = { label: string; value: string; sub?: string; dot?: string; tone?: "pos" | "neg" | "warn" | ""; onPress?: () => void; chevron?: IconName };
+// tip: an info icon after the label that opens the explanation (design pairs' tip).
+export type Pair = { label: string; value: string; sub?: string; dot?: string; tone?: "pos" | "neg" | "warn" | ""; onPress?: () => void; chevron?: IconName; tip?: string };
 
 // Label / value pairs in rows of n with 1 px dividers (the shipped StatStrip rhythm).
 export function Pairs({ items, n = Math.min(3, items.length) }: { items: Pair[]; n?: number }) {
@@ -52,6 +55,7 @@ export function Pairs({ items, n = Math.min(3, items.length) }: { items: Pair[];
                     {p.label}
                   </Text>
                   {p.chevron && <Icon name={p.chevron} size={16} color="muted" />}
+                  {p.tip && <InfoTip text={p.tip} />}
                 </View>
                 <Text style={[styles.pairValue, { color: toneColor(p.tone) }, p.dot && { paddingLeft: 14 }]} numberOfLines={1}>
                   {p.value}
@@ -173,8 +177,19 @@ export const supplyMark: IconName = "add_circle";
 export const withdrawMark: IconName = "do_not_disturb_on";
 
 // Empty state (design T3): the sleeping chameleon in the module's colour, a title and its one action; no explanatory body.
-export function EmptyCard({ title, action, onAction, module }: { title: string; action?: string; onAction?: () => void; module?: string }) {
+/** An empty state. Until the account's first read for the wallet in use has finished it says so instead of claiming "nothing here"
+ *  (`always` is for messages that do not depend on the account, like "Vault not found"). */
+export function EmptyCard({ title, action, onAction, module, always }: { title: string; action?: string; onAction?: () => void; module?: string; always?: boolean }) {
   const { colors } = useTheme();
+  const read = useAccountRead("solana");
+  if (!always && read !== "ready") {
+    return (
+      <Card style={{ alignItems: "center", gap: 12, paddingVertical: 24 }}>
+        <MascotBody width={96} module={module} asleep />
+        <Text style={[styles.headTitle, { color: colors.muted, flex: 0, fontSize: 16 }]}>{read === "failed" ? "Can't read your account right now. Retrying…" : "Loading your account…"}</Text>
+      </Card>
+    );
+  }
   return (
     <Card style={{ alignItems: "center", gap: 12, paddingVertical: 24 }}>
       <MascotBody width={96} module={module} asleep />

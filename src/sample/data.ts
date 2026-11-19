@@ -5,7 +5,7 @@ import { REAL_BUILD } from "@/chain/build";
 import type { Chain } from "@/state/chain";
 
 export const PX: Record<string, number> = {
-  SOL: 116.86, ETH: 2568.27, BTC: 83445.05, TSLA: 375.59, META: 725.8, JitoSOL: 141.2, JupSOL: 131.42, USDC: 1, USDT: 1, JupUSD: 1, CASH: 1,
+  SOL: 116.86, ETH: 2568.27, BTC: 83445.05, TSLA: 375.59, META: 725.8, JitoSOL: 141.2, JupSOL: 131.42, USDC: 1, USDT: 1, JupUSD: 1,
   NVDAx: 182.4, GOOGLx: 246.1, AAPLx: 256.3, TSLAx: 375.59, ANTHROPIC: 1042.77, OPENAI: 2117.09, SKR: 0.0412,
 };
 
@@ -13,29 +13,35 @@ export const PX: Record<string, number> = {
 export const TOK: Record<string, { name: string; lt: number; stable?: boolean; dec?: number }> = {
   SOL: { name: "Solana", lt: 0.8, dec: 4 }, ETH: { name: "Ethereum", lt: 0.8, dec: 4 }, BTC: { name: "Bitcoin", lt: 0.8, dec: 4 },
   JitoSOL: { name: "Jito Staked SOL", lt: 0.75, dec: 4 }, JupSOL: { name: "Jupiter Staked SOL", lt: 0.75, dec: 4 },
-  TSLA: { name: "Tesla", lt: 0.6, dec: 4 }, META: { name: "Meta", lt: 0.6, dec: 4 }, SKR: { name: "Seeker", lt: 0.5, dec: 4 },
+  TSLA: { name: "Tesla", lt: 0.6, dec: 4 }, META: { name: "Meta", lt: 0.6, dec: 4 }, SKR: { name: "Seeker", lt: 0.55, dec: 2 },
   USDC: { name: "USD Coin", lt: 0.95, stable: true, dec: 2 }, USDT: { name: "Tether USD", lt: 0.95, stable: true, dec: 2 }, JupUSD: { name: "Jupiter USD", lt: 0.95, stable: true, dec: 2 },
   NVDAx: { name: "NVIDIA xStock", lt: 0.6, dec: 4 }, GOOGLx: { name: "Alphabet xStock", lt: 0.6, dec: 4 },
   AAPLx: { name: "Apple xStock", lt: 0.6, dec: 4 }, TSLAx: { name: "Tesla xStock", lt: 0.6, dec: 4 },
-  CASH: { name: "CASH", lt: 0, stable: true, dec: 2 },
 };
 
-export type Pool = { sym: string; sup: number; supA: number; bor: number; borA: number; util: number; vSupply?: number; rate?: number };
+// Read from the chain (chain/solana/pools.ts): `live` is set once a read succeeded, so screens show "—" before that instead of numbers.
+// rate = underlying per share (lender total / share-mint supply), rf = reserve factor (%), caps in tokens (null = no cap),
+// curve = the reserve's rate-curve coefficients (fractions), status = the reserve's status label.
+export type Pool = {
+  sym: string; sup: number; supA: number; bor: number; borA: number; util: number; vSupply?: number; rate?: number;
+  live?: boolean; rf?: number; supCap?: number | null; borCap?: number | null; status?: string; curve?: { l: number; j: number; m: number };
+};
 
+// Placeholders until the first live read (chain/live.ts) replaces them; never shown as numbers (live is unset).
 export const POOLS_BY: Record<Chain, Pool[]> = {
-  solana: [
-    { sym: "SOL", sup: 6450, supA: 3.1, bor: 2100, borA: 5.6, util: 32.6 },
-    { sym: "USDC", sup: 69750, supA: 5.4, bor: 52300, borA: 7.6, util: 75.0 },
-    { sym: "USDT", sup: 26850, supA: 4.1, bor: 15200, borA: 6.3, util: 56.6 },
-  ],
+  solana: ["SOL", "USDC", "USDT", "SKR"].map((sym) => ({ sym, sup: 0, supA: 0, bor: 0, borA: 0, util: 0 })),
 };
 
 export type Side = "long" | "short";
 export type SpotPos = { id: string; sym: string; side: Side; qty: number; entry: number; t: string };
-export type PerpPos = { id: string; k: string; side: Side; lev: number; coll: number; entry: number; t: string };
-export type FarmPos = { id: string; venue: string; name: string; sym: string; icon: string; amt: number; apy: number; earned: number; since: string };
-// shares: the vToken balance when read from the chain (a 100% withdraw redeems exactly this)
-export type LendPos = { sym: string; amt: number; earned: number; since: string; shares?: number };
+// qty: the size in tokens when read from the chain (Phoenix base lots); without it the size is coll x lev / entry.
+// lev: the position's effective leverage on Phoenix's shared (cross-margin) collateral; pool: all USDC collateral in Phoenix.
+export type PerpPos = { id: string; k: string; side: Side; lev: number; coll: number; entry: number; t: string; qty?: number; pool?: number };
+// earnedUnknown: read from the chain but the history cannot prove the cost basis, so earnings show "—" (earned stays 0, amt is
+// the full value). receiptsRaw: the receipt tokens held (raw), to check the history against.
+export type FarmPos = { id: string; venue: string; name: string; sym: string; icon: string; amt: number; apy: number; earned: number; since: string; earnedUnknown?: boolean; receiptsRaw?: string };
+// shares: the vToken balance when read from the chain (a 100% withdraw redeems exactly this); sharesRaw: the same, raw.
+export type LendPos = { sym: string; amt: number; earned: number; since: string; shares?: number; sharesRaw?: string; earnedUnknown?: boolean };
 
 export type ChainData = {
   wallet: Record<string, number>;
@@ -44,7 +50,18 @@ export type ChainData = {
     debt: { sym: string; amt: number }[];
     avail: Record<string, number>;
     interestPaid: number;
+    // a real account whose history cannot prove the interest: shown as "—"
+    interestUnknown?: boolean;
     created: string | null;
+    /** Net deposits (deposits - withdrawals) in USD at each transaction's own time; null = some cost basis is unknown ("—"). */
+    netDeposits?: number | null;
+    /** Account P&L points [ms, USD] for the chart: the account opened at 0, one after each event, then now. */
+    pnlSnaps?: [number, number][];
+    /**
+     * phUSD in the margin account (USDC converted for Phoenix: between a perps open's two transactions, or left by an open whose
+     * order did not land). Collateral for the program's health check like USDC (same price, same weights); not withdrawable as is.
+     */
+    phUsd?: number;
   };
   spot: SpotPos[];
   perps: PerpPos[];
@@ -52,6 +69,8 @@ export type ChainData = {
   farm: FarmPos[];
   lend: LendPos[];
   realized: number;
+  // a real account whose history cannot prove the realized profit: shown as "—"
+  realizedUnknown?: boolean;
 };
 
 export const DATA: Record<Chain, ChainData> = {
@@ -143,7 +162,7 @@ export const NOTES: Note[] = [
 ];
 
 // Phoenix account history (design DATA.perpHist).
-export type PerpHist = { t: string; a: "Open / increase" | "Close / reduce" | "Deposit to Phoenix" | "Account setup"; k: string; side: Side | ""; size: number | null; usdc: number | null; lev?: number; pnl?: number };
+export type PerpHist = { t: string; a: "Open / increase" | "Close / reduce" | "Deposit to Phoenix" | "Account setup"; k: string; side: Side | ""; size: number | null; usdc: number | null; lev?: number; pnl?: number; entry?: number; qty?: number; effLev?: number; pool?: number; ms?: number; hash?: string; fromChain?: boolean };
 export const PERP_HIST: PerpHist[] = [
   { t: "Oct 6, 09:41", a: "Open / increase", k: "BTC", side: "short", size: 3000, usdc: 1500, lev: 2 },
   { t: "Oct 5, 14:02", a: "Open / increase", k: "SOL", side: "long", size: 6000, usdc: 1200, lev: 5 },

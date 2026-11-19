@@ -9,7 +9,7 @@ import { Icon } from "@/components/ui/icon";
 import { hfFmt, levFmt, nf, pct, tokFmt, usd } from "@/format";
 import { ACTIVITY, type ChainData, DATA, POOLS_BY, PX, TOK } from "@/sample/data";
 import { acct, bisect, mAddDebt, mAddIdle, perpPnl, perpQty, SAFE_HF, simAcct } from "@/sample/model";
-import { nowT, randTx } from "@/screens/earn/model";
+import { nowT } from "@/screens/earn/model";
 import { openTransfer } from "@/screens/move/move";
 import type { Chain } from "@/state/chain";
 import { useDataVersion } from "@/state/store";
@@ -49,7 +49,7 @@ function Borrow({ chain }: { chain: Chain }) {
   const free = Math.max(0, pool.sup - pool.bor);
   const maxSafe = Math.min(
     free,
-    bisect((v) => simAcct(chain, (c) => borrowApply(c, v)).hf >= SAFE_HF, free),
+    bisect((v) => simAcct(chain, (c) => borrowApply(c, v)).borrowHf >= SAFE_HF, free),
   );
   const before = acct(chain);
   const levAt = (v: number) => simAcct(chain, (c) => borrowApply(c, v)).lev;
@@ -92,7 +92,7 @@ function Borrow({ chain }: { chain: Chain }) {
               detail: s,
               amt: tokFmt(x, s),
               usd: x * px(s),
-              tx: randTx(),
+              tx: "",
               sym: s,
             });
           },
@@ -108,7 +108,7 @@ function Borrow({ chain }: { chain: Chain }) {
         sym={s}
         onSym={(t) => (setSym(t), setAmt(""))}
         syms={list}
-        meta={(t) => `${pct(POOLS_BY[chain].find((p) => p.sym === t)?.borA ?? 0)} APY`}
+        meta={(t) => tokFmt(d.wallet[t] ?? 0, t)}
         usdValue={x * px(s)}
         label="Borrow amount"
         bad={over}
@@ -300,7 +300,7 @@ function FlashRepay({ chain }: { chain: Chain }) {
               detail: "Flash repay: every loan",
               amt: usd(debtUsd),
               usd: -debtUsd,
-              tx: randTx(),
+              tx: "",
               sym: stable,
             });
           },

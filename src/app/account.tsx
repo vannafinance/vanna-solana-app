@@ -14,6 +14,7 @@ import { Icon } from "@/components/ui/icon";
 import type { IconName } from "@/components/ui/material-symbols";
 import { Card, IconAction } from "@/components/ui/kit";
 import { usd } from "@/format";
+import { REAL_BUILD } from "@/chain/build";
 import { ACCOUNT, DATA, POINTS } from "@/sample/data";
 import { initialOf } from "@/components/avatar";
 import { useRewards } from "@/sample/rewards";
@@ -37,7 +38,6 @@ import { openDeposit, openTransfer, openWithdraw } from "@/screens/move/move";
 
 /* Account (design screens/account.js, compact = one scrolling page): profile, Rewards, Network, Wallets, Appearance,
    Notifications, Security, Help, Delete account, Sign out. Settings are stored locally. */
-const MARGIN_ADDR: Record<Chain, string> = { solana: "AXir…V7y5" };
 
 export default function Account() {
   useDataVersion(); // balances and the margin account change as the chain is read
@@ -81,7 +81,7 @@ export default function Account() {
         </LinearGradient>
 
         <Card style={styles.list}>
-          <NavRow icon="stars" iconColor="#FFB800" label="Rewards" value={`${POINTS.toLocaleString("en-US")} pts`} onPress={() => router.push("/rewards" as Href)} />
+          <NavRow icon="stars" iconColor="#FFB800" label="Rewards" value={REAL_BUILD ? "Coming soon" : `${POINTS.toLocaleString("en-US")} pts`} onPress={() => router.push("/rewards" as Href)} />
           <NavRow icon="badge" label="Display name" value={me.name} onPress={openEditName} />
         </Card>
 
@@ -119,7 +119,7 @@ export default function Account() {
             );
           })}
           <InfoRow icon="account_balance_wallet" label="Balance" value={mine ? usd(walletUsd(chain)) : "—"} />
-          <NavRow icon="account_balance" label="Margin account" value={!mine ? "—" : hasMargin(DATA[chain]) ? (LIVE_ACCT[chain]?.address ? short(LIVE_ACCT[chain]!.address!) : MARGIN_ADDR[chain]) : "Not created"} onPress={() => router.navigate("/margin")} />
+          <NavRow icon="account_balance" label="Margin account" value={!mine ? "—" : hasMargin(DATA[chain]) ? (LIVE_ACCT[chain]?.address ? short(LIVE_ACCT[chain]!.address!) : "—") : "Not created"} onPress={() => router.navigate("/margin")} />
         </Card>
 
         <Card style={styles.list}>

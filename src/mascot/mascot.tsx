@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { AccessibilityInfo, View, type ViewStyle } from "react-native";
 import { SvgXml } from "react-native-svg";
 
+import { useLivePaused } from "@/state/live-pause";
 import { useTheme } from "@/theme/use-theme";
 
 import { type ChameleonOpts, face, LABEL, type Look, markA, stateOf } from "./chameleon";
@@ -27,7 +28,11 @@ const lerp = (a: Look, b: Look, t: number): Look => [a[0] + (b[0] - a[0]) * t, a
 const rnd = (a: number, b: number) => a + Math.random() * (b - a);
 
 // Blink and glance state, stepped on timers (a face is a few hundred bytes of SVG, so a redraw per step is cheap).
-function useIdle(base: { near: Look; far: Look }, enabled: boolean, glanceOn = true) {
+function useIdle(base: { near: Look; far: Look }, on: boolean, glanceOn = true) {
+  // Each step re-renders the SVG of every face on every mounted screen (~6 renders a second each); while a transaction runs
+  // (live-pause.ts) the faces hold still so the JS thread is free for it.
+  const paused = useLivePaused();
+  const enabled = on && !paused;
   const [st, setSt] = useState({ lid: 0, near: base.near, far: base.far });
   const cur = useRef(st);
   useEffect(() => {

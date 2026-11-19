@@ -25,15 +25,11 @@ import { openShare } from "@/screens/share/share";
 /* Earn (design screens/earn.js): Vaults | Positions | History. */
 export type EarnTab = "vaults" | "positions" | "history";
 
+// The Vaults | Positions | History pill is the page pill (lend/index.tsx); this renders the chosen tab.
+export const EARN_TABS: [EarnTab, string][] = [["vaults", "Vaults"], ["positions", "Positions"], ["history", "History"]];
+
 export function Earn({ tab, setTab }: { tab: EarnTab; setTab: (t: EarnTab) => void }) {
-  return (
-    <View style={{ gap: 12 }}>
-      <SubTabs items={[["vaults", "Vaults"], ["positions", "Positions"], ["history", "History"]]} value={tab} onChange={setTab} fam={families.earn} />
-      <Swap k={tab}>
-        <View style={{ gap: 12 }}>{tab === "vaults" ? <Vaults /> : tab === "positions" ? <Positions onBrowse={() => setTab("vaults")} /> : <EarnHistory />}</View>
-      </Swap>
-    </View>
-  );
+  return <View style={{ gap: 12 }}>{tab === "vaults" ? <Vaults /> : tab === "positions" ? <Positions onBrowse={() => setTab("vaults")} /> : <EarnHistory />}</View>;
 }
 
 function Vaults() {
@@ -76,7 +72,7 @@ function Vaults() {
       {list.map((p) => {
         const l = lendOf(chain, p.sym), b = balTok(l), free = freeTok(p);
         return (
-          <Pressable key={p.sym} onPress={() => router.push(`/lend/vault/${p.sym}` as Href)} accessibilityRole="button" accessibilityLabel={`${p.sym} vault, supply APY ${pct(p.supA)}`}>
+          <Pressable key={p.sym} onPress={() => router.push(`/lend/vault/${p.sym}` as Href)} accessibilityRole="button" accessibilityLabel={`${p.sym} vault, supply APY ${p.live ? pct(p.supA) : "unavailable"}`}>
             <Card>
               <View style={styles.vh}>
                 <TokenLogo sym={p.sym} size={40} />
@@ -84,15 +80,16 @@ function Vaults() {
                   <Text style={[styles.sym, { color: colors.text }]}>{p.sym}</Text>
                 </View>
                 <View style={{ alignItems: "flex-end" }}>
-                  <Text style={[styles.apy, { color: colors.positive }]}>{pct(p.supA)}</Text>
+                  <Text style={[styles.apy, { color: colors.positive }]}>{p.live ? pct(p.supA) : "—"}</Text>
                   <Text style={[styles.cap, { color: colors.muted }]}>APY</Text>
                 </View>
               </View>
+              {/* "—" until the pool has been read from the chain (chain/live.ts); no sample numbers. */}
               <Pairs
                 items={[
-                  { label: "Total supply", value: cNum(p.sup), sub: cUsd(p.sup * px(p.sym)) },
-                  { label: "Available", value: cNum(free), sub: cUsd(free * px(p.sym)) },
-                  { label: "Utilization", value: pct(p.util, 1) },
+                  { label: "Total supply", value: p.live ? cNum(p.sup) : "—", sub: p.live ? cUsd(p.sup * px(p.sym)) : undefined },
+                  { label: "Available", value: p.live ? cNum(free) : "—", sub: p.live ? cUsd(free * px(p.sym)) : undefined },
+                  { label: "Utilization", value: p.live ? pct(p.util, 1) : "—" },
                 ]}
               />
               {l && personalReady(chain) && (
@@ -131,7 +128,7 @@ function Positions({ onBrowse }: { onBrowse: () => void }) {
     <>
       <Card style={{ paddingTop: 0 }}>
         <SubTabs items={[["deposit", "Deposits"], ["earnings", "Earnings"]]} value={mode} onChange={setMode} fam={families.earn} />
-        <Text style={[styles.big, { color: chg > 0.005 ? colors.positive : colors.text }]}>{sUsd(chg)}</Text>
+        <Text style={[styles.big, { color: chg > 0.005 ? colors.positive : colors.text }]}>{!pts.length && mode === "earnings" && lend.some((l) => l.earnedUnknown) ? "—" : sUsd(chg)}</Text>
         {x[0] !== "" && <Text style={[styles.cap, { color: colors.muted, marginTop: -6 }]}>Since {x[0]}</Text>}
         <Swap k={mode + range}>
           <Chart pts={pts} color={colors.positive} height={156} x={x} label={`${mode === "earnings" ? "Net earnings" : "Overall deposit"} over ${range}`} />
@@ -157,7 +154,7 @@ function Positions({ onBrowse }: { onBrowse: () => void }) {
               items={[
                 { label: "Supplied", value: `${b >= 1000 ? Math.round(b).toLocaleString("en-US") : b.toFixed(2)} ${l.sym}` },
                 { label: "APY", value: pct(p?.supA ?? 0) },
-                { label: "Earned", value: e > 0.005 ? sUsd(e) : usd(e), tone: e > 0.005 ? "pos" : "" },
+                { label: "Earned", value: l.earnedUnknown ? "—" : e > 0.005 ? sUsd(e) : usd(e), tone: !l.earnedUnknown && e > 0.005 ? "pos" : "" },
               ]}
             />
             <View style={styles.acts}>
@@ -174,6 +171,7 @@ function Positions({ onBrowse }: { onBrowse: () => void }) {
 
 function EarnHistory() {
   const { chain } = useChain();
+  useDataVersion();
   return <HistoryList rows={ACTIVITY[chain].filter((r) => r.area === "Earn")} empty="No activity yet" module="earn" />;
 }
 

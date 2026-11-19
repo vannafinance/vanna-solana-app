@@ -259,8 +259,7 @@ export function SubTabs<K extends string>({ items, value, onChange, fam }: { ite
 }
 
 const styles = StyleSheet.create({
-  ppWrap: { marginTop: -28, paddingHorizontal: 16, zIndex: 2 },
-  pp: { height: 56, padding: 6, borderRadius: 28, flexDirection: "row", maxWidth: 520, width: "100%", alignSelf: "center" },
+  ppWrap: { marginTop: -28, paddingHorizontal: 16, zIndex: 2 },  pp: { height: 56, padding: 6, borderRadius: 28, flexDirection: "row", maxWidth: 520, width: "100%", alignSelf: "center" },
   ppShadow: { shadowColor: "#110B2E", shadowOpacity: 0.22, shadowRadius: 22, shadowOffset: { width: 0, height: 18 }, elevation: 8 },
   ppDark: { shadowColor: "#000", shadowOpacity: 0.5, shadowRadius: 22, shadowOffset: { width: 0, height: 18 }, elevation: 8 },
   hl: { position: "absolute", left: 6, top: 6, bottom: 6, borderRadius: 22, shadowColor: "#110B2E", shadowOpacity: 0.3, shadowRadius: 6, shadowOffset: { width: 0, height: 4 }, elevation: 3 },

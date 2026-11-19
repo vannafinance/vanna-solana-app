@@ -1,5 +1,8 @@
+import { useIsFocused } from "expo-router";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AppState } from "react-native";
+
+import { useLivePaused } from "@/state/live-pause";
 
 import { PERP_MARK } from "./perp-mark";
 import { type Candle, fetchPhoenixCandles, fetchPhoenixFills, openMarketStream, type PhoenixBook, type PhoenixMarket, type PhoenixTimeframe, type PhoenixTrade } from "./solana/phoenix";
@@ -27,13 +30,17 @@ function applyPhoenixMarket(m: PhoenixMarket) {
   if (m.dayVolumeUsd != null) row.vol = m.dayVolumeUsd;
 }
 
+// Live while the app is in front, the screen is the one on top (not covered by a pushed screen) and no transaction is running
+// (see live-pause.ts).
 function useAppActive() {
   const [active, setActive] = useState(AppState.currentState === "active");
+  const paused = useLivePaused();
+  const focused = useIsFocused();
   useEffect(() => {
     const sub = AppState.addEventListener("change", (s) => setActive(s === "active"));
     return () => sub.remove();
   }, []);
-  return active;
+  return active && !paused && focused;
 }
 
 const INITIAL = 240; // candles fetched up front; panning back pages older ones (PAGE at a time)

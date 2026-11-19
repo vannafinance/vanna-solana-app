@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { type HostInstance, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import Animated, { Easing, useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
 
@@ -12,7 +12,7 @@ import { Card } from "@/components/ui/kit";
 import { hfFmt, nf, pct, tokFmt, usd } from "@/format";
 import { ACTIVITY, type ChainData, DATA, POOLS_BY, PX, TOK } from "@/sample/data";
 import { acct, mAddDebt, mAddIdle, mPayDebt, simAcct } from "@/sample/model";
-import { nowT, randTx } from "@/screens/earn/model";
+import { nowT } from "@/screens/earn/model";
 import { type Chain, useChain } from "@/state/chain";
 import { useTheme } from "@/theme/use-theme";
 import { families, font } from "@/theme/tokens";
@@ -20,6 +20,7 @@ import { openMenu, openSheet } from "@/ui/overlay";
 import { runTx } from "@/ui/tx";
 import { haptic } from "@/ui/haptics";
 import { solanaDepositAndBorrow, solanaMarginSwap } from "@/chain/solana/actions";
+import { onTitanAvailability, probeTitan, TITAN_UNAVAILABLE, titanAvailableCached } from "@/chain/solana/titan";
 
 /* Spot (design screens/trade.js): Swap | History. A swap runs inside the margin account: it spends idle funds, then the token's long,
    then collateral (if allowed), then borrows the rest (a borrowing swap opens a long or a short). S8: a swap is not a position. */
@@ -27,7 +28,11 @@ const fam = families.spot;
 export const SPOT_TOKS: Record<Chain, string[]> = {
   solana: ["SOL", "USDC", "USDT", "JitoSOL", "JupSOL", "JupUSD", "NVDAx", "GOOGLx", "AAPLx", "TSLAx"],
 };
+// Jupiter quotes come straight from Jupiter. Titan quotes come from the website's route, which holds the Titan key (a secret the
+// app cannot carry; src/chain/solana/titan.ts). When that route cannot serve the app (not opened for it yet, no key, offline),
+// Titan stays in the menu, greyed out with "Titan is unavailable right now", and swaps run through Jupiter.
 const VENUES: Record<Chain, [string, string][]> = { solana: [["Jupiter", "JUP"], ["Titan", "TITAN"]] };
+const isTitan = (v: [string, string]) => v[1] === "TITAN";
 const FEE = 0.0003;
 const stable = (s: string) => !!TOK[s]?.stable;
 const px = (s: string) => PX[s] ?? 0;
@@ -159,7 +164,20 @@ function SwapCard() {
   const { colors } = useTheme();
   const d = DATA[chain];
   const [venue, setVenue] = useState(0);
-  const ven = VENUES[chain][venue] ?? VENUES[chain][0];
+  // null until the first check: Titan can be picked meanwhile; a failed quote then says it is unavailable.
+  const [titanOk, setTitanOk] = useState<boolean | null>(titanAvailableCached());
+  useEffect(() => {
+    let live = true;
+    void probeTitan().then((ok) => live && setTitanOk(ok));
+    const off = onTitanAvailability((ok) => live && setTitanOk(ok));
+    return () => {
+      live = false;
+      off();
+    };
+  }, []);
+  const picked = VENUES[chain][venue] ?? VENUES[chain][0];
+  // Titan unavailable: fall back to Jupiter.
+  const ven = isTitan(picked) && titanOk === false ? VENUES[chain][0] : picked;
   const toks = SPOT_TOKS[chain];
   const [pay, setPay] = useState(toks[0]);
   const [recv, setRecv] = useState(toks[1]);
@@ -181,7 +199,8 @@ function SwapCard() {
   const borrow = Math.max(0, x - swappable);
   const before = acct(chain);
   const after = x > 0 ? simAcct(chain, (c) => applySwap(c, p, x, r, y, useColl)) : null;
-  const unsafe = after != null && after.hf < 1.15;
+  // As on the website (SwapCard): blocked only when the swap LOWERS the borrow-line health factor and ends below 1.15.
+  const unsafe = after != null && after.borrowHf < 1.15 && after.borrowHf < before.borrowHf;
   const dec = (s: string) => (stable(s) ? 2 : 4);
   const fmt = (v: number, s: string) => (v > 0 ? String(Math.floor(v * 10 ** dec(s)) / 10 ** dec(s)) : "");
 
@@ -224,12 +243,13 @@ function SwapCard() {
           toSym: r,
           amount: x,
           slippageBps: Math.round(slipPct * 100),
+          venue: isTitan(ven) ? "titan" : "jupiter",
         });
       },
       apply: () => {
         applySwap(d, p, x, r, y, useColl);
         const side = !stable(r) ? "Long" : !stable(p) && borrow > 0 ? "Short" : "Swap";
-        ACTIVITY[chain].unshift({ t: nowT(), area: "Spot", action: side, detail: `${p} to ${r}`, amt: `−${tokFmt(x, p)}, +${tokFmt(y, r)}`, usd: x * px(p), via: ven[0], tx: randTx(), sym: stable(r) ? p : r });
+        ACTIVITY[chain].unshift({ t: nowT(), area: "Spot", action: side, detail: `${p} to ${r}`, amt: `−${tokFmt(x, p)}, +${tokFmt(y, r)}`, usd: x * px(p), via: ven[0], tx: "", sym: stable(r) ? p : r });
         setAmt("");
         setPct(undefined);
       },
@@ -240,24 +260,35 @@ function SwapCard() {
       venueRef,
       (close) => (
         <>
-          {VENUES[chain].map(([nm, logo], i) => (
-            <Pressable
-              key={nm}
-              onPress={() => {
-                setVenue(i);
-                close();
-              }}
-              style={[styles.mi, i === venue && { backgroundColor: colors.purpleTint }]}
-              accessibilityRole="menuitem"
-            >
-              <TokenLogo sym={logo} size={28} />
-              <Text style={{ flex: 1, fontFamily: font.semibold, fontSize: 15, color: colors.text }}>{nm}</Text>
-              {i === venue && <Icon name="check" size={18} color="link" />}
-            </Pressable>
-          ))}
+          {VENUES[chain].map((v, i) => {
+            const [nm, logo] = v;
+            const off = isTitan(v) && titanOk === false;
+            const on = VENUES[chain][i] === ven;
+            return (
+              <Pressable
+                key={nm}
+                disabled={off}
+                onPress={() => {
+                  setVenue(i);
+                  close();
+                }}
+                style={[styles.mi, on && { backgroundColor: colors.purpleTint }, off && { opacity: 0.5 }]}
+                accessibilityRole="menuitem"
+                accessibilityState={{ disabled: off, selected: on }}
+                accessibilityHint={off ? TITAN_UNAVAILABLE : undefined}
+              >
+                <TokenLogo sym={logo} size={28} />
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontFamily: font.semibold, fontSize: 15, color: colors.text }}>{nm}</Text>
+                  {off && <Text style={{ fontFamily: font.regular, fontSize: 12, lineHeight: 16, color: colors.muted }}>{TITAN_UNAVAILABLE}</Text>}
+                </View>
+                {on && <Icon name="check" size={18} color="link" />}
+              </Pressable>
+            );
+          })}
         </>
       ),
-      { width: 220, alignLeft: true },
+      { width: 250, alignLeft: true },
     );
 
   return (
@@ -290,7 +321,7 @@ function SwapCard() {
               sym={p}
               syms={toks}
               onSym={pickPay}
-              meta={(t) => nf(held(d, t), stable(t) ? 2 : 4)}
+              meta={(t) => nf(held(d, t) + collOf(d, t), stable(t) ? 2 : 4)}
             />
             <TextInput
               value={amt}
@@ -326,7 +357,7 @@ function SwapCard() {
               sym={r}
               syms={toks}
               onSym={pickRecv}
-              meta={(t) => nf(held(d, t), stable(t) ? 2 : 4)}
+              meta={(t) => nf(held(d, t) + collOf(d, t), stable(t) ? 2 : 4)}
             />
             <Text style={[styles.amt, { color: y > 0 ? colors.text : colors.muted }]} numberOfLines={1}>
               {y > 0 ? nf(y, dec(r)) : "0"}

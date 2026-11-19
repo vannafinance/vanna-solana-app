@@ -12,9 +12,9 @@ import { hfFmt, levFmt, nf, pct, tokFmt, usd } from "@/format";
 import { MascotFace } from "@/mascot/mascot";
 import { ACTIVITY, type ChainData, DATA, POOLS_BY } from "@/sample/data";
 import {
-  acct, bisect, hasMargin, LEV_CAP, LIQ_HF, lossBuffer, mAddColl, mAddDebt, mAddIdle, mbal, mPayDebt, mTake, priceOf, priceRoom, SAFE_HF, simAcct, WARN_HF,
+  acct, bisect, hasMargin, LEV_CAP, LIQ_HF, mAddColl, mAddDebt, mAddIdle, mbal, mPayDebt, mTake, priceOf, priceRoom, SAFE_HF, simAcct, WARN_HF,
 } from "@/sample/model";
-import { nowT, randTx } from "@/screens/earn/model";
+import { nowT } from "@/screens/earn/model";
 import { AccountMap } from "@/screens/portfolio/trader";
 import { type Chain, CHAIN_LABEL, useChain } from "@/state/chain";
 import { useTheme } from "@/theme/use-theme";
@@ -31,8 +31,10 @@ import {
   solanaWithdrawMarginCollateral,
   TOKENS,
 } from "@/chain/solana/actions";
+import { lineWeight } from "@/chain/solana/risk";
 import type { FlowAsset, MarginFlow, TxStep } from "@/ui/first-time-flow";
 import { personalReady } from "@/state/personal";
+import { useDataVersion } from "@/state/store";
 
 /* Margin (design screens/margin.js, V4: one page): hero, Leverage | Repay | Transfer in the pill, the "Your account" row (Account |
    History in a sheet), then the action's form card. Every action previews health factor before → after on a simulated account. */
@@ -49,8 +51,8 @@ const TIPS = {
 };
 const rateOf = (chain: Chain, s: string) => POOLS_BY[chain].find((p) => p.sym === s)?.borA;
 
-// The margin flow's steps (ui/first-time-flow.tsx, design/margin-account-open-flow.html). No account yet: open it, then the deposits in
-// one transaction and the borrows in another. An account already open: the deposits and borrows in one transaction (as the website does).
+// The margin flow's steps (ui/first-time-flow.tsx, design/margin-account-open-flow.html). No account yet: open it and make the deposits
+// and borrows in ONE transaction (one wallet approval). An account already open: the deposits and borrows in one transaction (as the website does).
 function marginFlow(chain: Chain, d: ChainData, dl: [string, number][], borrows: { sym: string; amt: number }[]): MarginFlow {
   const assets: FlowAsset[] = [...dl.map(([sym, amt]) => ({ role: "dep" as const, sym, amt })), ...borrows.map((b) => ({ role: "bor" as const, sym: b.sym, amt: b.amt }))];
   const dIdx = dl.map((_, j) => j);
@@ -75,10 +77,19 @@ function marginFlow(chain: Chain, d: ChainData, dl: [string, number][], borrows:
   };
   const open = !hasMargin(d);
   const steps: TxStep[] = [];
-  if (open) {
+  if (open && (dl.length || borrows.length)) {
+    // One transaction (one wallet approval) opens the account and makes every deposit and borrow: the program composes them
+    // (tested on the fork with 3 deposits + 2 borrows: 760 bytes, ~670k compute units). Phantom asks for each signature separately.
+    const all = [...dIdx, ...bIdx];
+    steps.push({
+      key: "open", short: "Open account", title: "Open account and move funds", assets: all,
+      desc: `Creates your account on ${CHAIN_LABEL[chain]} with your deposit${borrows.length ? " and borrow" : ""}, in one transaction`,
+      doing: borrows.length ? "Opening your account, depositing and borrowing" : "Opening your account and depositing",
+      send: async () => await solanaDepositAndBorrow({ deposits: dl.map(([sym, amount]) => ({ sym, amount })), borrows: borrows.map((b) => ({ sym: b.sym, amount: b.amt })), createIfMissing: true }),
+    });
+  } else if (open) {
     steps.push({ key: "open", short: "Open account", title: "Open margin account", desc: `Creates your account on ${CHAIN_LABEL[chain]}`, doing: "Opening your margin account", assets: [], send: async () => await solanaCreateMargin() });
-  }
-  if (!open && dl.length && borrows.length) {
+  } else if (dl.length && borrows.length) {
     steps.push({ key: "both", short: "Deposit and borrow", title: "Deposit and borrow", desc: "From your wallet, then from the lending pool, in one transaction", doing: "Depositing and borrowing", assets: [...dIdx, ...bIdx], send: send([...dIdx, ...bIdx]) });
   } else {
     if (dl.length) steps.push(leg("deposit", dIdx));
@@ -96,7 +107,7 @@ const num = (t: string) => parseFloat(t) || 0;
 const fmtIn = (v: number, s: string) => (v > 0 ? String(Math.floor(v * (priceOf(s) > 50 ? 1e4 : 100)) / (priceOf(s) > 50 ? 1e4 : 100)) : "");
 
 function logM(chain: Chain, action: string, detail: string, sym: string, amt: number, usdV: number) {
-  ACTIVITY[chain].unshift({ t: nowT(), area: "Margin", action, detail, amt: tokFmt(amt, sym), usd: usdV, tx: randTx(), sym });
+  ACTIVITY[chain].unshift({ t: nowT(), area: "Margin", action, detail, amt: tokFmt(amt, sym), usd: usdV, tx: "", sym });
 }
 
 export function MarginHeroBody() {
@@ -120,7 +131,7 @@ export function MarginHeroBody() {
       <View style={[styles.hst, styles.sep]}>
         <Text style={styles.hl}>Room before liquidation</Text>
         <Text style={styles.hv}>{room}</Text>
-        <Text style={styles.hs} numberOfLines={1}>{r.state === "nodebt" ? "Nothing to liquidate" : r.state === "none" ? "No price move liquidates it" : "all collateral prices together"}</Text>
+        <Text style={styles.hs} numberOfLines={1}>{r.state === "nodebt" ? "Nothing to liquidate" : r.state === "none" ? "No price move liquidates it" : (r.pct ?? 0) < 0 ? "if all volatile prices fall together" : "if all volatile prices rise together"}</Text>
       </View>
     </View>
   );
@@ -182,6 +193,7 @@ function AccountSheet({ onRepay }: { onRepay: (sym: string) => void }) {
 // History: every margin action. The chain does not record the account's P&L or health factor over time, so there is no chart.
 function MarginHistory() {
   const { chain } = useChain();
+  useDataVersion(); // the sheet is outside the screen: re-render when the chain read or a confirmed step adds rows
   return <HistoryList rows={ACTIVITY[chain].filter((r) => r.area === "Margin")} module="margin" />;
 }
 
@@ -228,9 +240,12 @@ function Leverage() {
       mAddDebt(c, t, v);
       mAddIdle(c, t, v);
     });
-  const accMax = depUsd > 0 ? bisect((B) => simAcct(chain, (c) => (applyDep(c), borrowAll(c, B))).hf >= SAFE_HF, depUsd * (LEV_CAP - 1)) : 0;
+  const accMax = depUsd > 0 ? bisect((B) => simAcct(chain, (c) => (applyDep(c), borrowAll(c, B))).borrowHf >= SAFE_HF, depUsd * (LEV_CAP - 1)) : 0;
   // design FRESH_MAX: the safe ceiling shown before any deposit
-  const max = depUsd > 0 ? Math.max(1, Math.min(LEV_CAP, Math.floor((1 + accMax / depUsd) * 100) / 100)) : 7.66;
+  // (borrow-line weights: leverage <= 1 + w(deposit) / (floor - w(borrowed)), the program's rule at the 1.15 app floor)
+  const wDep = lineWeight(deps[0]?.sym ?? "USDC", "borrow"), wBor = lineWeight(toks[0] ?? "USDC", "borrow");
+  const freshMax = SAFE_HF - wBor > 1e-9 ? Math.min(LEV_CAP, Math.floor((1 + wDep / (SAFE_HF - wBor)) * 100) / 100) : LEV_CAP;
+  const max = depUsd > 0 ? Math.max(1, Math.min(LEV_CAP, Math.floor((1 + accMax / depUsd) * 100) / 100)) : freshMax;
   const L = Math.min(lev, max);
   const limitUsd = depUsd * (L - 1);
   const items = toks.map((t, i) => {
@@ -363,7 +378,7 @@ function Leverage() {
           sym={x.sym}
           onSym={(t) => (setBTok((b) => b.map((y, j) => (j === i ? t : y))), resetB())}
           syms={borList}
-          meta={(t) => `${pct(rateOf(chain, t) ?? 0)} APY`}
+          meta={(t) => tokFmt(d.wallet[t] ?? 0, t)}
           usdValue={x.usd}
           label="Borrow amount"
           bad={over && x.usd > 0}
@@ -388,7 +403,7 @@ function Leverage() {
           ]}
         />
       )}
-      {after && after.hf >= SAFE_HF && after.hf < WARN_HF && totalUsd > 0 && <Note text={`Health factor ${hfFmt(after.hf)} after this. Close to liquidation at 1.10.`} />}
+      {after && after.borrowHf >= SAFE_HF && after.hf < WARN_HF && totalUsd > 0 && <Note text={`Health factor ${hfFmt(after.hf)} after this. Close to liquidation at 1.10.`} />}
       <Button label={label} fam={fam} disabled={!any || overBal || (L > 1 && !!err)} onPress={go} />
     </>
   );
@@ -409,7 +424,9 @@ function Repay({ initial }: { initial?: string }) {
   const debt = debts.find((x) => x.sym === s)!.amt;
   const avail = src === "margin" ? mbal(d, s) : d.wallet[s] ?? 0;
   const x = Math.min(num(amt), debt);
-  const short = avail + 1e-9 < x;
+  // Paying the whole loan sends 0.2% extra for interest that accrues until it lands (solanaRepay, website margin.ts): the source
+  // must hold that much, else the repay fails on-chain.
+  const short = avail + 1e-9 < (x >= debt - 1e-12 ? debt * 1.002 : x);
   const before = acct(chain);
   const repApply = (c: ChainData) => {
     if (src === "margin") mTake(c, s, x);
@@ -505,7 +522,8 @@ export function MarginTransfer({ sheet }: { sheet?: boolean } = {}) {
   const [pctV, setPct] = useState<number | undefined>();
   const list = dir === "MB" ? DEP[chain] : [...new Set([...d.margin.coll.map((c) => c.sym), ...Object.keys(d.margin.avail).filter((k) => (d.margin.avail[k] ?? 0) > 0)])];
   const s = list.includes(sym) ? sym : list[0] ?? DEP[chain][0];
-  const maxT = dir === "MB" ? d.wallet[s] ?? 0 : mbal(d, s);
+  // Wallet SOL keeps 0.05 for the wrapped-SOL account rent and fees, as the website does.
+  const maxT = dir === "MB" ? Math.max(0, (d.wallet[s] ?? 0) - (s === "SOL" ? 0.05 : 0)) : mbal(d, s);
   const x = num(amt);
   const before = acct(chain);
   const debt = before.debtUsd > 0.005;
@@ -518,16 +536,16 @@ export function MarginTransfer({ sheet }: { sheet?: boolean } = {}) {
       c.wallet[s] = (c.wallet[s] ?? 0) + v;
     }
   };
-  const maxW = dir === "WB" && debt ? bisect((v) => simAcct(chain, (c) => trApply(c, v)).hf >= SAFE_HF, maxT) : maxT;
+  const maxW = dir === "WB" && debt ? bisect((v) => simAcct(chain, (c) => trApply(c, v)).borrowHf >= SAFE_HF, maxT) : maxT;
   const over = x > maxT + 1e-9;
   const after = x > 0 && !over ? simAcct(chain, (c) => trApply(c, x)) : null;
-  const belowSafe = dir === "WB" && debt && after != null && after.hf < SAFE_HF;
+  const belowSafe = dir === "WB" && debt && after != null && after.borrowHf < SAFE_HF;
   const buf = (a: { hf: number; weighted: number; debtUsd: number; maint: number }) => (isFinite(a.hf) && a.debtUsd > 0.005 ? usd(Math.max(0, a.weighted - LIQ_HF * (a.debtUsd + a.maint)), 0) : "No debt");
   const go = () =>
     runTx({
       chain, fam, title: "Review transfer", cta: "Move",
       legs: [{ l: "You move", v: tokFmt(x, s), s: dir === "MB" ? "Wallet to margin account" : "Margin account to wallet" }],
-      rows: [["Health factor", `${hfFmt(before.hf)} → ${hfFmt(after!.hf)}`], ["Loss buffer", `${usd(lossBuffer(chain))} → —`]],
+      rows: [["Health factor", `${hfFmt(before.hf)} → ${hfFmt(after!.hf)}`], ["Loss buffer", `${buf(before)} → ${buf(after!)}`]],
       done: { title: dir === "MB" ? "Moved to your account" : "Moved to your wallet", line: tokFmt(x, s) },
       send: async () => {
         return dir === "MB"

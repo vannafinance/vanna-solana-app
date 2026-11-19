@@ -4,7 +4,7 @@ import { useLocalSearchParams } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
-import Svg, { Circle, Line, Path, Text as SvgText } from "react-native-svg";
+import Svg, { Circle, Line, Path } from "react-native-svg";
 
 import { TokenLogo } from "@/components/brand";
 import { niceTicks } from "@/components/chart";
@@ -15,6 +15,7 @@ import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 import { Card, EmptyCard, IconAction, Pairs, shareIcon } from "@/components/ui/kit";
 import { nf, pct, usd } from "@/format";
+import { ASSET_RISK } from "@/chain/solana/risk";
 import { ACTIVITY, PX } from "@/sample/data";
 import { useChain } from "@/state/chain";
 import { useDataVersion } from "@/state/store";
@@ -23,7 +24,7 @@ import { families, font } from "@/theme/tokens";
 import { toast } from "@/ui/overlay";
 
 import { openAmount } from "@/screens/earn/amount";
-import { ADDR, balTok, cNum, COLL, cUsd, freeTok, isStable, lendOf, poolOf, px, rateCurve, shareRate, shareSym } from "@/screens/earn/model";
+import { addrsOf, balTok, cNum, collList, cUsd, freeTok, isStable, lendOf, poolOf, px, rateCurve, shareRate, shareSym } from "@/screens/earn/model";
 import { AfterTransition } from "@/ui/ready";
 import { openShare } from "@/screens/share/share";
 
@@ -54,12 +55,15 @@ export default function Vault() {
       <View style={{ flex: 1, backgroundColor: colors.bg }}>
         <ScreenHeader title="" />
         <View style={{ padding: 16 }}>
-          <EmptyCard title="Vault not found" module="earn" />
+          <EmptyCard title="Vault not found" module="earn" always />
         </View>
       </View>
     );
 
-  const free = freeTok(p), stable = isStable(p.sym);
+  // Everything below is read from the chain (chain/live.ts); "—" until the first read lands, never sample numbers.
+  const free = freeTok(p), stable = isStable(p.sym), live = !!p.live, D = "—";
+  const rate = shareRate(chain, p.sym), risk = ASSET_RISK[p.sym];
+  const sharesHeld = l?.shares ?? (rate ? pos / rate : null);
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg }}>
       <StatusBar style="auto" />
@@ -73,15 +77,15 @@ export default function Vault() {
               <Text style={[styles.sym, { color: colors.text }]}>{p.sym}</Text>
             </View>
             <View style={{ alignItems: "flex-end" }}>
-              <Text style={[styles.apy, { color: colors.positive }]}>{pct(p.supA)}</Text>
+              <Text style={[styles.apy, { color: colors.positive }]}>{live ? pct(p.supA) : D}</Text>
               <Text style={[styles.cap, { color: colors.muted }]}>Supply APY</Text>
             </View>
           </View>
           <Pairs
             items={[
-              { label: "Total supply", value: cNum(p.sup), sub: cUsd(p.sup * px(p.sym)) },
-              { label: "Available", value: cNum(free), sub: cUsd(free * px(p.sym)) },
-              { label: "Utilization", value: pct(p.util, 1) },
+              { label: "Total supply", value: live ? cNum(p.sup) : D, sub: live ? cUsd(p.sup * px(p.sym)) : undefined },
+              { label: "Available", value: live ? cNum(free) : D, sub: live ? cUsd(free * px(p.sym)) : undefined },
+              { label: "Utilization", value: live ? pct(p.util, 1) : D },
             ]}
           />
         </Card>
@@ -97,8 +101,8 @@ export default function Vault() {
                 <Pairs
                   items={[
                     { label: "Supplied", value: nf(pos, pos >= 1000 ? 0 : 2), sub: p.sym },
-                    { label: "Shares", value: nf(pos / shareRate(chain, p.sym), 2), sub: shareSym(p.sym) },
-                    { label: "Earned", value: (pos > 0 ? "+" : "") + nf(l?.earned ?? 0, stable ? 2 : 4), sub: p.sym, tone: pos > 0 ? "pos" : undefined },
+                    { label: "Shares", value: sharesHeld === null ? D : nf(sharesHeld, 2), sub: shareSym(p.sym) },
+                    { label: "Earned", value: l?.earnedUnknown ? "—" : (pos > 0 ? "+" : "") + nf(l?.earned ?? 0, stable ? 2 : 4), sub: p.sym, tone: pos > 0 && !l?.earnedUnknown ? "pos" : undefined },
                   ]}
                 />
               </Card>
@@ -119,33 +123,40 @@ export default function Vault() {
   );
 
   function Details() {
-    const s = p!.sym, cap = niceCap(p!.sup);
-    const addrs: [string, string, string?][] = ADDR[chain];
+    const s = p!.sym;
+    const addrs = addrsOf(s);
+    const capTxt = (c: number | null | undefined) => (!live || c === undefined ? D : c === null ? "No cap" : `${cNum(c)} ${s}`);
     return (
       <>
         <Card>
           <Pairs
             n={2}
             items={[
-              { label: "Borrow APY", value: pct(p!.borA) },
-              { label: "Reserve factor", value: pct(10) },
-              { label: "Liquidation bonus", value: pct(stable ? 2.5 : 5) },
-              { label: "Liquidated at", value: "Health 1.10" },
+              { label: "Borrow APY", value: live ? pct(p!.borA) : D },
+              { label: "Reserve factor", value: live && p!.rf !== undefined ? pct(p!.rf, 0) : D },
+              { label: "Max LTV", value: risk ? pct(risk.ltv, 0) : D },
+              { label: "Liquidation threshold", value: risk ? pct(risk.liqThreshold, 0) : D },
+              { label: "Liquidation bonus", value: risk ? pct(risk.liqBonus, risk.liqBonus % 1 ? 1 : 0) : D },
+              { label: "Pool status", value: live && p!.status ? p!.status : D },
             ]}
           />
         </Card>
-        <Section title="Oracle" rows={[["Price", "$" + nf(PX[s] ?? 0, (PX[s] ?? 0) < 10 ? 4 : 2)], ["Source", "Pyth"], ["Max price age", "60s"]]} />
         <Section
-          title="Limits"
-          rows={[[`1 ${shareSym(s)} is worth`, `${nf(shareRate(chain, s), 4)} ${s}`], ["Supply cap", `${cNum(cap)} ${s}`], ["Borrow cap", `${cNum(cap * 0.8)} ${s}`]]}
+          title="Oracle"
+          rows={[
+            ["Price", PX[s] ? "$" + nf(PX[s], PX[s] < 10 ? 4 : 2) : D],
+            ["Source", risk ? risk.oracle : D],
+            ["Max price age", risk && risk.maxAgeSecs > 0 ? `${risk.maxAgeSecs}s` : D],
+          ]}
         />
+        <Section title="Limits" rows={[[`1 ${shareSym(s)} is worth`, rate ? `${nf(rate, 6)} ${s}` : D], ["Supply cap", capTxt(p!.supCap)], ["Borrow cap", capTxt(p!.borCap)]]} />
         <Text style={[styles.st, { color: colors.text }]}>Contracts</Text>
         <Card style={{ paddingVertical: 4, gap: 0 }}>
           {addrs.map(([lb, a, full], i) => (
             <View key={lb} style={[styles.fr, i > 0 && { borderTopWidth: 1, borderTopColor: colors.divider }]}>
               <Text style={[styles.frl, { color: colors.muted }]}>{lb}</Text>
               <Text style={[styles.mono, { color: colors.text }]}>{a}</Text>
-              <Pressable onPress={() => (full ? Clipboard.setStringAsync(full).then(() => toast("Address copied")) : toast("Address copied"))} hitSlop={8} accessibilityRole="button" accessibilityLabel={`Copy ${lb} address`}>
+              <Pressable onPress={() => Clipboard.setStringAsync(full).then(() => toast("Address copied"))} hitSlop={8} accessibilityRole="button" accessibilityLabel={`Copy ${lb} address`}>
                 <Icon name="content_copy" size={16} color="muted" />
               </Pressable>
             </View>
@@ -156,34 +167,38 @@ export default function Vault() {
   }
 
   function Collateral() {
-    const cap = niceCap(p!.sup);
+    const rows = collList(chain);
+    const supCap = p!.supCap, borCap = p!.borCap;
     return (
       <>
-        <Card>
-          <CapUsage label="Supply cap usage" usedL="Supplied" used={p!.sup} cap={cap} s={p!.sym} />
-          <CapUsage label="Borrow cap usage" usedL="Borrowed" used={p!.bor} cap={cap * 0.8} s={p!.sym} />
-        </Card>
+        {/* Cap usage only when the reserve has a cap (on the fork every cap is unlimited). */}
+        {live && (typeof supCap === "number" || typeof borCap === "number") && (
+          <Card>
+            {typeof supCap === "number" && <CapUsage label="Supply cap usage" usedL="Supplied" used={p!.sup} cap={supCap} s={p!.sym} />}
+            {typeof borCap === "number" && <CapUsage label="Borrow cap usage" usedL="Borrowed" used={p!.bor} cap={borCap} s={p!.sym} />}
+          </Card>
+        )}
         <Text style={[styles.st, { color: colors.text }]}>Assets on a margin account</Text>
         <Card style={{ gap: 0, paddingVertical: 8 }}>
           <View style={styles.ch}>
-            {["Asset", "Collateral", "Borrow", "Liq. bonus"].map((h, i) => (
+            {["Asset", "Max LTV", "Borrow", "Liq. bonus"].map((h, i) => (
               <Text key={h} style={[styles.cap, { color: colors.muted, flex: i === 0 ? 1 : 0, width: i === 0 ? undefined : 72, textAlign: i === 0 ? "left" : "center" }]}>
                 {h}
               </Text>
             ))}
           </View>
-          {COLL[chain].map(([s, c, b, lb]) => (
+          {rows.length === 0 && <Text style={[styles.cap, { color: colors.muted, paddingVertical: 12 }]}>Collateral settings unavailable right now</Text>}
+          {rows.map(([s, c, b, lb, ltv]) => (
             <View key={s} style={styles.cr}>
               <View style={{ flex: 1, flexDirection: "row", alignItems: "center", gap: 8 }}>
                 <TokenLogo sym={s} size={28} />
                 <Text style={{ fontFamily: font.semibold, fontSize: 14, color: colors.text }}>{s}</Text>
               </View>
-              {[c, b].map((v, i) => (
-                <View key={i} style={{ width: 72, alignItems: "center" }}>
-                  {v ? <Icon name="check_circle" size={18} color={colors.positive} filled /> : <Text style={{ color: colors.muted }}>—</Text>}
-                </View>
-              ))}
-              <Text style={{ width: 72, textAlign: "center", fontFamily: font.semibold, fontSize: 14, color: colors.text }}>{pct(lb)}</Text>
+              <Text style={{ width: 72, textAlign: "center", fontFamily: font.semibold, fontSize: 14, color: c ? colors.text : colors.muted }}>{c ? pct(ltv, 0) : "—"}</Text>
+              <View style={{ width: 72, alignItems: "center" }}>
+                {b ? <Icon name="check_circle" size={18} color={colors.positive} filled /> : <Text style={{ color: colors.muted }}>—</Text>}
+              </View>
+              <Text style={{ width: 72, textAlign: "center", fontFamily: font.semibold, fontSize: 14, color: colors.text }}>{pct(lb, lb % 1 ? 1 : 0)}</Text>
             </View>
           ))}
         </Card>
@@ -194,6 +209,7 @@ export default function Vault() {
   function Rates() {
     const c = rateCurve(p!);
     const [w, setW] = useState(0);
+    if (!c) return <EmptyCard title="Rates unavailable right now" module="earn" always />;
     const H = 172, ticks = niceTicks(0, c.samples[c.samples.length - 1].b), top = ticks[ticks.length - 1];
     const X = (u: number) => u * w, Y = (v: number) => H - (v / top) * H;
     const path = (k: "b" | "l") => c.samples.map((s, i) => `${i ? "L" : "M"}${X(s.u).toFixed(1)} ${Y(s[k]).toFixed(1)}`).join("");
@@ -208,10 +224,6 @@ export default function Vault() {
                 {ticks.map((t) => (
                   <Line key={t} x1={0} x2={w} y1={Y(t)} y2={Y(t)} stroke={colors.divider} />
                 ))}
-                <Line x1={X(c.kink.u)} x2={X(c.kink.u)} y1={0} y2={H} stroke={colors.borderControl} strokeDasharray="2 3" />
-                <SvgText x={X(c.kink.u) - 4} y={14} fontSize={11} fill={colors.muted} textAnchor="end">
-                  Kink 80%
-                </SvgText>
                 <Line x1={X(c.cur.u)} x2={X(c.cur.u)} y1={0} y2={H} stroke="#FC5457" />
                 <Path d={path("l")} stroke={colors.positive} strokeWidth={2} strokeDasharray="5 4" fill="none" />
                 <Path d={path("b")} stroke={colors.link} strokeWidth={2.5} fill="none" />
@@ -243,11 +255,6 @@ export default function Vault() {
     );
   }
 }
-
-const niceCap = (x: number) => {
-  const m = Math.pow(10, Math.floor(Math.log10(x * 1.25)));
-  return [1, 2, 2.5, 5, 10].map((k) => k * m).find((v) => v >= x * 1.25) ?? 10 * m;
-};
 
 function Section({ title, rows }: { title: string; rows: [string, string][] }) {
   const { colors } = useTheme();

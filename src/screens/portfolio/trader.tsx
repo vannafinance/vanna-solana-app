@@ -1,4 +1,4 @@
-import { router } from "expo-router";
+import { type Href, router } from "expo-router";
 import { useState } from "react";
 import { LinearGradient } from "expo-linear-gradient";
 import { Pressable, StyleSheet, Text, View } from "react-native";
@@ -10,14 +10,17 @@ import { HistoryList } from "@/components/history";
 import { PillTabs, SubTabs, Swap } from "@/components/motion";
 import { Icon } from "@/components/ui/icon";
 import { Card, EmptyCard, IconAction, Pairs, shareIcon, Tag, TokenBadge } from "@/components/ui/kit";
-import { nf, pct, sign, spct, sUsd, usd } from "@/format";
-import { ACTIVITY, DATA } from "@/sample/data";
-import { acct, farmPositions, hasMargin, lossBuffer, type Position, perpPositions, portfolioTotals, priceOf, priceRoom, spotPositions } from "@/sample/model";
+import { nf, pct, sign, spct, sUsd, tokFmt, usd } from "@/format";
+import { perpMark } from "@/chain/perp-mark";
+import { ACTIVITY, DATA, PERP_HIST, type PerpPos } from "@/sample/data";
+import { acct, farmPositions, hasMargin, liqPriceOf, lossBuffer, marginPnl, type Position, perpPnl, perpQty, portfolioTotals, priceOf, priceRoom, spotPositions } from "@/sample/model";
+import { CloseAllBar, closePosition, levTag, liqFor, priceFmt } from "@/screens/trade/perps";
 import { useChain } from "@/state/chain";
+import { useAccountRead } from "@/chain/account-live";
 import { usePersonal } from "@/state/personal";
 import { useTheme } from "@/theme/use-theme";
-import { brand, families, font } from "@/theme/tokens";
-import { closeSheet, toast } from "@/ui/overlay";
+import { families, font } from "@/theme/tokens";
+import { closeSheet } from "@/ui/overlay";
 
 import { openFlash } from "@/screens/margin/sheets";
 
@@ -37,7 +40,7 @@ export function Trader({ sub, setSub }: { sub: TraderSub; setSub: (s: TraderSub)
     <View style={{ gap: 12 }}>
       <PillTabs items={items} value={current} onChange={setSub} color={families.portfolio.tab} />
       <Swap k={current}>
-        <View style={{ gap: 12 }}>{current === "margin" ? <MarginBody /> : <PositionsBody sub={current} />}</View>
+        <View style={{ gap: 12 }}>{current === "margin" ? <MarginBody /> : current === "perps" ? <PerpsBody /> : <PositionsBody sub={current} />}</View>
       </Swap>
     </View>
   );
@@ -73,7 +76,9 @@ function MarginBody() {
   const { colors } = useTheme();
   const [tab, setTab] = useState<"cur" | "hist">("cur");
   const ready = usePersonal(chain);
+  const read = useAccountRead(chain);
   const d = DATA[chain];
+  if (ready && read !== "ready") return <EmptyCard title="" module="margin" />;
   if (!ready || !hasMargin(d)) return <EmptyCard title="No margin account yet" action="Open Margin" onAction={() => router.navigate("/margin")} module="margin" />;
 
   const a = acct(chain);
@@ -81,8 +86,10 @@ function MarginBody() {
   const r = priceRoom(chain);
   const room = r.state === "ok" ? `${(r.pct ?? 0) < 0 ? "−" : "+"}${nf(Math.abs(r.pct ?? 0), 1)}%` : r.state === "now" ? "Liquidatable now" : r.state === "nodebt" ? "No debt" : "None";
   const roomTone = r.state === "now" ? "neg" : r.state === "ok" && Math.abs(r.pct ?? 0) < 10 ? "warn" : "";
-  // the design's account Net P&L: trading earnings (open P&L, realized, farm) less the interest paid
-  const net = portfolioTotals(chain).earnTrade - d.margin.interestPaid;
+  // Net P&L: account value now less net deposits at their own time's prices (trading, farm and interest are inside it); one figure, see marginPnl
+  const pnl = marginPnl(chain);
+  const net = pnl.value;
+  const netKnown = pnl.known;
   const since = (d.margin.created ?? "").split(",")[0];
   const hist = ACTIVITY[chain].filter((x) => x.area === "Margin");
 
@@ -100,11 +107,11 @@ function MarginBody() {
       </Card>
       <SumCard
         k="Net P&L"
-        v={sUsd(net)}
-        tone={sign(net)}
+        v={netKnown ? sUsd(net) : "—"}
+        tone={netKnown ? sign(net) : undefined}
         range={`Since ${since}`}
         pairs={[]}
-        chart={<Chart pts={[]} color={colors.link} x={[since, "Sep 28", "Oct 7"]} label="Net P&L since the account opened" />}
+        chart={<Chart pts={netKnown ? pnl.pts : []} color={colors.link} x={[since, "", "Now"]} label="Net P&L since the account opened" />}
       />
       <SubTabs items={[["cur", "Current"], ["hist", "History", hist.length]]} value={tab} onChange={setTab} fam={families.portfolio} />
       <Swap k={tab}>
@@ -142,7 +149,10 @@ export function AccountMap({ inSheet, onRepay }: { inSheet?: boolean; onRepay?: 
   const { colors } = useTheme();
   const d = DATA[chain];
   const a = acct(chain);
-  const net = portfolioTotals(chain).earnTrade - d.margin.interestPaid;
+  const T0 = portfolioTotals(chain);
+  const pnlNow = marginPnl(chain);
+  const net = pnlNow.value;
+  const netKnown = pnlNow.known;
   const used: [string, number, TraderSub | null][] = (
     [["Spot", a.spotUsd, "spot"], ["Perps", chain === "solana" ? a.perpEq : 0, "perps"], ["Farm", a.farmUsd, "farm"], ["Idle", a.availUsd, null]] as [string, number, TraderSub | null][]
   ).filter((p) => p[1] > 0.005);
@@ -173,9 +183,9 @@ export function AccountMap({ inSheet, onRepay }: { inSheet?: boolean; onRepay?: 
           <Text style={{ fontFamily: font.semibold, fontSize: 26, color: colors.text, fontVariant: ["tabular-nums"] }}>{usd(a.assets)}</Text>
           {(
             [
-              ["Interest accrued", usd(d.margin.interestPaid), "", "Interest the loans have built up so far."],
+              ["Interest accrued", T0.interestKnown ? usd(d.margin.interestPaid) : "—", "", "Interest the loans have built up so far."],
               ["Borrow rate", pct(a.borrowApy), "", "The yearly rate on what the account owes, weighted by loan size."],
-              ["Net P&L", sUsd(net), sign(net), "Trading earnings (open and closed positions, farm) less the interest paid."],
+              ["Net P&L", netKnown ? sUsd(net) : "—", netKnown ? sign(net) : "", "What the account is worth now less what you put in (each deposit at its own time's price). Trading, farm earnings and interest are included."],
             ] as [string, string, string, string][]
           ).map(([l, v, t, tip]) => (
             <View key={l} style={styles.vr}>
@@ -239,20 +249,23 @@ function PositionsBody({ sub }: { sub: TraderSub }) {
   const { colors } = useTheme();
   const C = usePfColors();
   const [tab, setTab] = useState<"cur" | "hist">("cur");
-  const ready = usePersonal(chain);
-  const list: Position[] = !ready ? [] : sub === "spot" ? spotPositions(chain) : sub === "perps" ? perpPositions(chain) : farmPositions(chain);
+  const personal = usePersonal(chain);
+  const read = useAccountRead(chain);
+  const ready = personal && read === "ready";
+  const list: Position[] = !ready ? [] : sub === "spot" ? spotPositions(chain) : farmPositions(chain);
   const hist = ready ? ACTIVITY[chain].filter((x) => x.area === AREA[sub]) : [];
   const pnl = list.reduce((t, p) => t + p.pnl, 0);
+  const pnlKnown = !list.some((p) => p.pnlKnown === false);
   const to = sub === "farm" ? "/farm" : "/trade";
 
   return (
     <>
       <SumCard
         k={sub === "farm" ? "Earned" : "Open P&L"}
-        v={ready ? sUsd(pnl) : "—"}
-        tone={sign(pnl)}
+        v={ready && pnlKnown ? sUsd(pnl) : "—"}
+        tone={pnlKnown ? sign(pnl) : undefined}
         range="30D"
-        pairs={[{ label: sub === "farm" ? "Deposited" : "Size", value: usd(list.reduce((t, p) => t + p.size, 0)) }, { label: "Positions", value: String(list.length) }]}
+        pairs={[{ label: sub === "farm" ? "Deposited" : "Size", value: ready ? usd(list.reduce((t, p) => t + p.size, 0)) : "—" }, { label: "Positions", value: ready ? String(list.length) : "—" }]}
         chart={<Chart pts={[]} color={sub === "farm" ? colors.positive : colors.link} label={`${AREA[sub]} P&L, last 30 days`} />}
       />
       <SubTabs items={[["cur", "Current", list.length], ["hist", "History", hist.length]]} value={tab} onChange={setTab} fam={families.portfolio} />
@@ -276,8 +289,8 @@ function PositionsBody({ sub }: { sub: TraderSub }) {
                     </View>
                   </View>
                   <View style={{ alignItems: "flex-end" }}>
-                    <Text style={{ fontFamily: font.semibold, fontSize: 16, color: sign(p.pnl) === "neg" ? C.neg : C.pos }}>{sUsd(p.pnl)}</Text>
-                    <Text style={{ fontFamily: font.regular, fontSize: 12, color: sign(p.pnl) === "neg" ? C.neg : C.pos }}>{spct(p.pct)}</Text>
+                    <Text style={{ fontFamily: font.semibold, fontSize: 16, color: p.pnlKnown === false ? C.muted : sign(p.pnl) === "neg" ? C.neg : C.pos }}>{p.pnlKnown === false ? "—" : sUsd(p.pnl)}</Text>
+                    <Text style={{ fontFamily: font.regular, fontSize: 12, color: p.pnlKnown === false ? C.muted : sign(p.pnl) === "neg" ? C.neg : C.pos }}>{p.pnlKnown === false ? "—" : spct(p.pct)}</Text>
                   </View>
                 </View>
                 <Pairs items={[{ label: sub === "farm" ? "Value" : "Size", value: usd(p.size) }]} />
@@ -291,6 +304,125 @@ function PositionsBody({ sub }: { sub: TraderSub }) {
         </View>
       </Swap>
     </>
+  );
+}
+
+// When the open positions were first opened: for each one, the oldest "Open / increase" row since that market and side last
+// closed (PERP_HIST is newest first). null when any position has no such row (its date is not known, so no "Since" chip).
+function firstOpen(ps: PerpPos[]): string | null {
+  let at = -1;
+  for (const p of ps) {
+    let i0 = -1;
+    for (let i = 0; i < PERP_HIST.length; i++) {
+      const h = PERP_HIST[i];
+      if (h.k !== p.k || h.side !== p.side) continue;
+      if (h.a === "Close / reduce" && i0 >= 0) break;
+      if (h.a === "Open / increase") i0 = i;
+    }
+    if (i0 < 0) return null;
+    at = Math.max(at, i0);
+  }
+  return at >= 0 ? PERP_HIST[at].t.split(",")[0] : null;
+}
+
+// Trader > Perps (design portfolio perpsBody): Unrealized P&L with Value, Size and Realized; Current | History; Close all; one card per
+// position with Size, Entry / Mark, Collateral / Equity and Liq. price, close and share. Whole page empty: "No perps positions".
+function PerpsBody() {
+  const { chain } = useChain();
+  const { colors } = useTheme();
+  const [tab, setTab] = useState<"cur" | "hist">("cur");
+  const personal = usePersonal(chain);
+  const read = useAccountRead(chain);
+  const ready = personal && read === "ready";
+  const d = DATA[chain];
+  const list = ready && chain === "solana" ? d.perps : [];
+  const hist = ready ? ACTIVITY[chain].filter((x) => x.area === "Perps") : [];
+  if (ready && !list.length && !hist.length) return <EmptyCard title="No perps positions" action="Open Perps" onAction={() => router.push("/trade/perp/SOL" as Href)} module="perps" />;
+
+  const upnl = list.reduce((t, p) => t + perpPnl(p), 0);
+  const value = d.phoenixIdle + list.reduce((t, p) => t + p.coll + perpPnl(p), 0);
+  const size = list.reduce((t, p) => t + perpQty(p) * perpMark(p.k), 0);
+  const realKnown = ready && !d.realizedUnknown;
+  const since = ready ? firstOpen(list) : null;
+  return (
+    <>
+      <SumCard
+        k="Unrealized P&L"
+        v={ready ? sUsd(upnl) : "—"}
+        tone={ready ? sign(upnl) : undefined}
+        range={since ? `Since ${since}` : undefined}
+        pairs={[
+          { label: "Value", value: ready ? usd(value) : "—" },
+          { label: "Size", value: ready ? usd(size) : "—" },
+          { label: "Realized", value: realKnown ? sUsd(d.realized) : "—", tone: realKnown ? sign(d.realized) : undefined },
+        ]}
+        chart={<Chart pts={[]} color={colors.link} label="Perps P&L" />}
+      />
+      <SubTabs items={[["cur", "Current", list.length], ["hist", "History", hist.length]]} value={tab} onChange={setTab} fam={families.portfolio} />
+      <Swap k={tab}>
+        <View style={{ gap: 12 }}>
+          {tab === "hist" ? (
+            <HistoryList rows={hist} module="trade" />
+          ) : !list.length ? (
+            <EmptyCard title="No open perps positions" action="Open Perps" onAction={() => router.push("/trade/perp/SOL" as Href)} module="perps" />
+          ) : (
+            <>
+              <CloseAllBar chain={chain} n={list.length} />
+              {list.map((p) => (
+                <PerpCard key={p.id} p={p} />
+              ))}
+            </>
+          )}
+        </View>
+      </Swap>
+    </>
+  );
+}
+
+// A Perps position (design pf-card): pair, side + leverage (on the shared Phoenix collateral), P&L and ROE; a 2 x 2 grid; close and share.
+// The card opens the position page.
+function PerpCard({ p }: { p: PerpPos }) {
+  const { chain } = useChain();
+  const { colors } = useTheme();
+  const mark = perpMark(p.k), qty = perpQty(p), pnl = perpPnl(p), liq = liqFor(chain, p);
+  const marked = Number.isFinite(mark) && mark > 0;
+  const name = `${p.k}-PERP`, tone = sign(pnl) === "neg" ? colors.negative : colors.positive;
+  // liqFor uses the margin account's own check (health 1.10) when it has one, else Phoenix's on the shared collateral
+  const tip = liqPriceOf(chain, p.k, p.side) != null
+    ? `If only ${p.k} moves, the price where the whole margin account reaches health factor 1.10.`
+    : `Estimate: the ${p.k} price where this position's share of the shared Phoenix collateral, plus its P&L, falls to the 5% maintenance margin.`;
+  return (
+    <Pressable onPress={() => router.push(`/trade/position/${p.id}` as Href)} accessibilityRole="button" accessibilityLabel={`${name} ${p.side}, open the position`}>
+      <Card>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+          <TokenBadge sym={p.k} size={40} />
+          <View style={{ flex: 1, gap: 4 }}>
+            <Text style={{ fontFamily: font.semibold, fontSize: 16, color: colors.text }}>{name}</Text>
+            <View style={{ flexDirection: "row" }}>
+              <Tag label={`${p.side === "long" ? "Long" : "Short"} ${levTag(p.lev)}`} tone={p.side} />
+            </View>
+            {p.pool != null && <Text style={[styles.tip, { color: colors.muted, paddingBottom: 0 }]}>{`On ${nf(p.pool, 2)} USDC shared Phoenix collateral`}</Text>}
+          </View>
+          <View style={{ alignItems: "flex-end" }}>
+            <Text style={{ fontFamily: font.semibold, fontSize: 16, color: marked ? tone : colors.muted, fontVariant: ["tabular-nums"] }}>{marked ? sUsd(pnl) : "—"}</Text>
+            <Text style={{ fontFamily: font.regular, fontSize: 12, color: marked ? tone : colors.muted, fontVariant: ["tabular-nums"] }}>{marked && p.coll > 0 ? spct((pnl / p.coll) * 100) : "—"}</Text>
+          </View>
+        </View>
+        <Pairs
+          n={2}
+          items={[
+            { label: "Size", value: marked ? usd(qty * mark) : "—", sub: tokFmt(qty, p.k) },
+            { label: "Entry", value: p.entry > 0 ? priceFmt(p.entry) : "—", sub: `Mark ${marked ? priceFmt(mark) : "—"}` },
+            { label: "Collateral", value: usd(p.coll), sub: `Equity ${marked ? usd(p.coll + pnl) : "—"}` },
+            { label: "Liq. price", value: liq ? priceFmt(liq) : "None", sub: liq && marked ? `${spct((liq / mark - 1) * 100, 1)} away` : undefined, tip },
+          ]}
+        />
+        <View style={{ flexDirection: "row", justifyContent: "flex-end", gap: 8 }}>
+          <IconAction icon="close" label={`Close ${name}`} tone="neg" onPress={() => closePosition(chain, p)} />
+          <IconAction icon={shareIcon} label={`Share ${name}`} onPress={() => openShare({ kind: "perps", id: p.id })} />
+        </View>
+      </Card>
+    </Pressable>
   );
 }
 

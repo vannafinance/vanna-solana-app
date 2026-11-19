@@ -12,7 +12,7 @@ export async function connectAndAddWallet(): Promise<WalletEntry | null> {
   haptic.tap();
   try {
     const r = await connectSolanaWallet();
-    const w = addExternalWallet("solana", r.app, r.logo, r.address, r.session, r.baseUri);
+    const w = addExternalWallet("solana", r.app, r.logo, r.address, r.session, r.baseUri, r.icon);
     haptic.success();
     return w;
   } catch (e) {

@@ -1,16 +1,18 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Linking, Platform, StyleSheet, Text, View } from "react-native";
+import { Linking, Platform, StyleSheet, Text, TextInput, View } from "react-native";
 import Animated, {
   type SharedValue,
   cancelAnimation,
   Easing,
   interpolate,
+  runOnJS,
   useAnimatedProps,
   useAnimatedStyle,
   useDerivedValue,
   useReducedMotion,
   useSharedValue,
   withRepeat,
+  withSequence,
   withTiming,
 } from "react-native-reanimated";
 import Svg, { Circle, Path } from "react-native-svg";
@@ -30,8 +32,12 @@ import { useTheme } from "@/theme/use-theme";
 import { families, font } from "@/theme/tokens";
 import { haptic } from "@/ui/haptics";
 
-import { toast } from "./overlay";
+import { pauseLiveWhile, setLivePaused } from "@/state/live-pause";
+
+import { noteTxResult } from "@/state/notes";
+import { guardSheet, toast } from "./overlay";
 import type { TxSpec } from "./tx";
+import { externalWalletName, isWalletTimeout, type TxSend, type TxStatus, useOnForeground, WALLET_TIMEOUT_TEXT, waitingLine } from "./wallet-wait";
 
 /* The margin transaction sheet (design/margin-account-open-flow.html), for up to three deposits and two borrows at once. A wallet with
    no margin account opens it first (one time), then the deposits travel together and the borrows travel together; a wallet that already
@@ -50,7 +56,8 @@ export type TxStep = {
   desc: string; // first-time review list, second line
   doing: string; // header caption while it runs
   assets: number[]; // indexes into MarginFlow.assets this transaction moves
-  send: () => Promise<string | void>;
+  // gets a status callback (waiting_for_wallet | sending | confirming) when the chain side reports one
+  send: TxSend;
 };
 
 export type MarginFlow = {
@@ -106,8 +113,16 @@ export function MarginFlowSheet({ spec, close }: { spec: TxSpec; close: () => vo
   const [docked, setDocked] = useState(!isNew);
   const [failIdx, setFailIdx] = useState(0);
   const [failMsg, setFailMsg] = useState("");
+  const [timedOut, setTimedOut] = useState(false); // the wallet never answered: nothing was sent
+  const walletApp = externalWalletName(spec.chain);
   const alive = useRef(true);
   useEffect(() => () => void (alive.current = false), []);
+  // A stray tap outside, a drag down or Back must not dismiss the sheet while the steps run (the X still can).
+  useEffect(() => guardSheet(phase === "run", sub === 0 ? undefined : "Still sending. It finishes even if you close this with the X."), [phase, sub]);
+  useEffect(() => {
+    setLivePaused(phase === "run");
+    return () => setLivePaused(false);
+  }, [phase]);
   useEffect(() => {
     if (!isNew) f.accountAddr().then(setAddr).catch(() => {});
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -116,17 +131,28 @@ export function MarginFlowSheet({ spec, close }: { spec: TxSpec; close: () => vo
     async (from: number) => {
       setPhase("run");
       setBad(false);
+      setTimedOut(false);
       setFailMsg("");
       const hs = [...hashes];
       for (let i = from; i < steps.length; i++) {
-        if (!alive.current) return;
+        if (!alive.current) {
+          toast("Stopped. The steps already approved are on chain; open it again to finish.", "info");
+          return;
+        }
         setCur(i);
         setSub(0);
         const stop = onSigned(() => setSub((s) => Math.max(s, 1)));
+        // Until the chain side says otherwise, no hash and no signature yet means the wallet has not answered: "waiting for your wallet".
+        const onStatus = (st: TxStatus) => {
+          if (!alive.current) return;
+          if (st === "waiting_for_wallet") setSub(0);
+          else setSub((s) => Math.max(s, st === "sending" ? 1 : 2));
+        };
         try {
-          const h = (await steps[i].send()) || "";
+          const h = (await pauseLiveWhile(steps[i].send(onStatus))) || "";
           hs[i] = h;
           setHashes([...hs]);
+          if (h && i < steps.length - 1) spec.onStepDone?.(i, h);
           setSub(2);
           await sleep(rm ? 0 : 450);
           if (steps[i].key === "open") setAddr((await f.accountAddr().catch(() => null)) ?? null);
@@ -141,26 +167,44 @@ export function MarginFlowSheet({ spec, close }: { spec: TxSpec; close: () => vo
           }
         } catch (e) {
           stop();
-          if (!alive.current) return;
+          if (!alive.current) {
+            const msg = e instanceof Error ? e.message : "The transaction was not sent";
+            noteTxResult(spec.chain, spec.fam, false, `${spec.title}: not finished`, `${msg} Steps already confirmed stay on chain; open it again to finish.`);
+            toast(msg, "err", { ms: 8000 });
+            if (hs.some(Boolean)) refreshAccountSoon(spec.chain);
+            return;
+          }
           setFailIdx(i);
-          setFailMsg(e instanceof Error ? e.message : "The transaction was not sent");
+          const timedOut = isWalletTimeout(e);
+          setTimedOut(timedOut);
+          setFailMsg(timedOut ? WALLET_TIMEOUT_TEXT : e instanceof Error ? e.message : "The transaction was not sent");
           setBad(true);
           haptic.error();
           // earlier steps are on chain: re-read the account so the screen (and the next attempt) sees them
           if (hs.some(Boolean)) refreshAccountSoon(spec.chain);
-          await sleep(rm ? 0 : 1000);
+          if (!timedOut) await sleep(rm ? 0 : 1000);
           setPhase("fail");
           return;
         }
         stop();
       }
       await sleep(rm ? 0 : 900);
-      if (!alive.current) return;
       spec.onAllDone?.(hs.filter(Boolean).pop());
+      if (!alive.current) {
+        noteTxResult(spec.chain, spec.fam, true, spec.done.title, spec.done.line ?? "Confirmed on chain.");
+        return void toast(spec.done.title, "ok", { ms: 5000 });
+      }
       setPhase("done");
     },
     [steps, hashes, f, spec, rm],
   );
+  // Back from the wallet: re-read the chain so the sheet and the screens behind it show what really happened.
+  const onForeground = useCallback(() => {
+    if (!alive.current) return;
+    refreshAccountSoon(spec.chain);
+    if (!isNew || done[0]) f.accountAddr().then((a) => alive.current && a && setAddr(a)).catch(() => {});
+  }, [spec.chain, f, isNew, done]);
+  useOnForeground(phase === "run" || phase === "fail", onForeground);
   // With "confirm transactions" on (Account > Security), the phone's own prompt runs before the first signature, as in tx.tsx.
   const start = () => {
     if (!lockState().confirmTx) return void runFrom(0);
@@ -246,15 +290,16 @@ export function MarginFlowSheet({ spec, close }: { spec: TxSpec; close: () => vo
             </View>
           </View>
           <View style={{ gap: 4 }}>
-            <Button label="Try again" fam={spec.fam} onPress={() => (setBad(false), setSub(0), setPhase("review"))} />
+            <Button label="Try again" fam={spec.fam} onPress={() => (timedOut ? void runFrom(failIdx) : (setBad(false), setSub(0), setPhase("review")))} />
             <Button label="Done" v="text" size="md" onPress={() => close()} />
           </View>
         </View>
       );
     }
     const s = steps[failIdx];
-    const why =
-      isNew && failIdx === 0
+    const why = timedOut
+      ? ""
+      : isNew && failIdx === 0
         ? `${s.title} didn't go through and nothing was created.`
         : `${s.title} didn't go through and nothing was sent for it. ${isNew ? "Your margin account is open and safe." : "Earlier steps are confirmed."}`;
     return (
@@ -265,7 +310,7 @@ export function MarginFlowSheet({ spec, close }: { spec: TxSpec; close: () => vo
           </View>
           <View style={{ flex: 1, minWidth: 0 }}>
             <Text style={[styles.h, { color: colors.text }]}>Not confirmed</Text>
-            <Text style={[styles.cap, { color: colors.muted }]}>{`${why} ${failMsg}`}</Text>
+            <Text style={[styles.cap, { color: colors.muted }]}>{`${why} ${failMsg}`.trim()}</Text>
           </View>
         </View>
         <View style={[styles.card, { backgroundColor: colors.bg }]}>
@@ -287,7 +332,10 @@ export function MarginFlowSheet({ spec, close }: { spec: TxSpec; close: () => vo
             );
           })}
         </View>
-        <Button label={`Try again from step ${failIdx + 1}`} fam={spec.fam} onPress={() => void runFrom(failIdx)} />
+        <View style={{ gap: 4 }}>
+          <Button label={`Try again from step ${failIdx + 1}`} fam={spec.fam} onPress={() => void runFrom(failIdx)} />
+          <Button label="Close" v="text" size="md" onPress={() => close()} />
+        </View>
       </View>
     );
   }
@@ -366,8 +414,10 @@ export function MarginFlowSheet({ spec, close }: { spec: TxSpec; close: () => vo
   /* ------------------------------------------------------------- progress */
   const last = cur === steps.length - 1;
   const finalFace = sub === 3 && last;
-  const title = bad ? "Not confirmed" : sub === 0 ? "Sending" : sub === 3 ? "Confirmed" : `Sent to ${CHAIN_LABEL[spec.chain]}`;
-  const caption = (steps.length === 1 ? "" : `Step ${cur + 1} of ${steps.length} · `) + steps[cur].doing;
+  const waiting = !bad && sub === 0 && !!walletApp;
+  const title = bad ? "Not confirmed" : waiting ? "Waiting for your wallet" : sub === 0 ? "Sending" : sub === 3 ? "Confirmed" : `Sent to ${CHAIN_LABEL[spec.chain]}`;
+  const lead = steps.length === 1 ? "" : `Step ${cur + 1} of ${steps.length} · `;
+  const caption = waiting ? lead + waitingLine(walletApp!) : lead + steps[cur].doing;
   return (
     <View style={{ gap: 20 }}>
       <Stage chain={spec.chain} flow={f} lite={lite} cur={cur} sub={sub} bad={bad} docked={docked} addr={addr} done={done} />
@@ -386,7 +436,7 @@ export function MarginFlowSheet({ spec, close }: { spec: TxSpec; close: () => vo
         )}
         <View style={{ flex: 1, minWidth: 0 }}>
           <Text style={[styles.h, { color: colors.text }]}>{title}</Text>
-          <Text style={[styles.cap, { color: colors.muted }]} numberOfLines={2}>{caption}</Text>
+          <Text style={[styles.cap, { color: colors.muted }]} numberOfLines={3}>{caption}</Text>
         </View>
       </View>
       <Bar step={sub} />
@@ -529,33 +579,29 @@ function Stage({
   const k = done.filter(Boolean).length;
   const seen = useRef(k);
   const [held, setHeld] = useState(() => holdingsAt(flow, k));
-  const [tick, setTick] = useState<{ col?: [string, number]; debt?: [string, number] }>({});
-  const [flash, setFlash] = useState(false);
+  // a single landing asset counts up on the UI thread (CountText); `tick` only says which line is counting
+  const [tick, setTick] = useState<{ col?: [string, number, number]; debt?: [string, number, number] }>({});
+  const flash = useSharedValue(0);
   useEffect(() => {
     if (k <= seen.current) return;
     const before = holdingsAt(flow, seen.current), after = holdingsAt(flow, k);
     const moved = steps.slice(seen.current, k).flatMap((s) => s.assets.map((j) => assets[j]));
     seen.current = k;
     setHeld(after);
-    setFlash(true);
-    const fl = setTimeout(() => setFlash(false), 650);
-    const ids: ReturnType<typeof setInterval>[] = [];
+    flash.value = rm ? 0 : withSequence(withTiming(1, { duration: 1 }), withTiming(1, { duration: 650 }), withTiming(0, { duration: 1 }));
     if (!rm) {
       (["col", "debt"] as const).forEach((side) => {
         const a = moved.filter((x) => (x.role === "dep") === (side === "col"));
         if (a.length !== 1 || Object.keys(after[side]).length !== 1) return;
         const sym = a[0].sym, from = before[side][sym] ?? 0, to = after[side][sym];
-        const t0 = Date.now();
-        const id = setInterval(() => {
-          const p = Math.min(1, (Date.now() - t0) / 900);
-          setTick((tk) => ({ ...tk, [side]: p >= 1 ? undefined : [sym, from + (to - from) * (1 - Math.pow(1 - p, 3))] }));
-          if (p >= 1) clearInterval(id);
-        }, 32);
-        ids.push(id);
+        setTick((tk) => ({ ...tk, [side]: [sym, from, to] }));
       });
     }
-    return () => (clearTimeout(fl), ids.forEach(clearInterval));
   }, [k]); // eslint-disable-line react-hooks/exhaustive-deps
+  const endTick = useCallback((side: "col" | "debt") => setTick((tk) => ({ ...tk, [side]: undefined })), []);
+  const flashTop = useAnimatedStyle(() => ({ color: flash.value > 0.5 ? "#BFF6FA" : "#FFFFFF" }));
+  const flashSub = useAnimatedStyle(() => ({ color: flash.value > 0.5 ? "#BFF6FA" : "rgba(255,255,255,0.82)" }));
+  const colText = lineOf(held.col, "", isNew && !assets.some((a) => a.role === "dep") ? "Open" : "No collateral yet");
 
   const cardStyle = useAnimatedStyle(() => ({
     left: interpolate(dock.value, [0, 1], [W / 2 - 116, 0]),
@@ -589,9 +635,7 @@ function Stage({
     return docked && running(s) ? "on" : "idle";
   };
   const addrText = addr ? short(addr) : "…";
-  const colLine = tick.col ? tokFmt(tick.col[1], tick.col[0]) : lineOf(held.col, "", isNew && !assets.some((a) => a.role === "dep") ? "Open" : "No collateral yet");
-  const debtLine = tick.debt ? `${tokFmt(tick.debt[1], tick.debt[0])} borrowed` : lineOf(held.debt, " borrowed", "");
-  const lineColor = flash ? "#BFF6FA" : "#FFFFFF";
+  const debtText = lineOf(held.debt, " borrowed", "");
   return (
     <View style={{ height: H }} onLayout={(e) => setW(e.nativeEvent.layout.width)}>
       {W > 0 && (
@@ -661,8 +705,16 @@ function Stage({
                 <Text style={styles.sA}>{addrText}</Text>
               </View>
               <View style={styles.sR}>
-                <Text style={[styles.sV, { color: lineColor }]} numberOfLines={1}>{colLine}</Text>
-                {!!debtLine && <Text style={[styles.sV2, flash && { color: lineColor }]} numberOfLines={1}>{debtLine}</Text>}
+                {tick.col ? (
+                  <CountText style={[styles.sV, flashTop]} sym={tick.col[0]} from={tick.col[1]} to={tick.col[2]} suffix="" onEnd={() => endTick("col")} />
+                ) : (
+                  <Animated.Text style={[styles.sV, flashTop]} numberOfLines={1}>{colText}</Animated.Text>
+                )}
+                {tick.debt ? (
+                  <CountText style={[styles.sV2, flashSub]} sym={tick.debt[0]} from={tick.debt[1]} to={tick.debt[2]} suffix=" borrowed" onEnd={() => endTick("debt")} />
+                ) : (
+                  !!debtText && <Animated.Text style={[styles.sV2, flashSub]} numberOfLines={1}>{debtText}</Animated.Text>
+                )}
               </View>
             </Animated.View>
           </Animated.View>
@@ -670,6 +722,31 @@ function Stage({
       )}
     </View>
   );
+}
+
+// "1,234.50 SOL": the same figures as tokFmt, written so it can run as a worklet on the UI thread
+const fmtTok = (n: number, sym: string) => {
+  "worklet";
+  const d = Math.abs(n) >= 0.01 ? 2 : 4;
+  const [i, f] = Math.abs(n).toFixed(d).split(".");
+  return `${n < 0 ? "−" : ""}${i.replace(/B(?=(d{3})+(?!d))/g, ",")}.${f} ${sym}`;
+};
+
+// a count-up that runs entirely on the UI thread (a TextInput whose text is an animated prop), 900 ms ease-out cubic as in the design
+const AnimatedInput = Animated.createAnimatedComponent(TextInput);
+function CountText({ sym, from, to, suffix, style, onEnd }: { sym: string; from: number; to: number; suffix: string; style: object; onEnd: () => void }) {
+  const p = useSharedValue(0);
+  useEffect(() => {
+    p.value = 0;
+    p.value = withTiming(1, { duration: 900, easing: Easing.out(Easing.cubic) }, (fin) => {
+      if (fin) runOnJS(onEnd)();
+    });
+  }, [from, to]); // eslint-disable-line react-hooks/exhaustive-deps
+  const props = useAnimatedProps(() => {
+    const t = fmtTok(from + (to - from) * p.value, sym) + suffix;
+    return { text: t, defaultValue: t } as object;
+  });
+  return <AnimatedInput editable={false} pointerEvents="none" animatedProps={props} defaultValue={fmtTok(from, sym) + suffix} style={[style, styles.count]} />;
 }
 
 function FlowLine({ d, state }: { d: string; state: "idle" | "on" | "done" | "bad" }) {
@@ -787,6 +864,7 @@ const styles = StyleSheet.create({
   sR: { flex: 1, minWidth: 0, alignItems: "flex-end" },
   sV: { fontFamily: font.semibold, fontSize: 14, lineHeight: 20, fontVariant: ["tabular-nums"], maxWidth: "100%" },
   sV2: { fontFamily: font.regular, fontSize: 11, lineHeight: 14, color: "rgba(255,255,255,0.82)", fontVariant: ["tabular-nums"], maxWidth: "100%" },
+  count: { padding: 0, margin: 0, textAlign: "right", includeFontPadding: false },
   node: { position: "absolute", alignItems: "center" },
   halo: { position: "absolute", left: -5, top: -5, right: -5, bottom: -5 },
   nc: { borderWidth: 1, alignItems: "center", justifyContent: "center" },

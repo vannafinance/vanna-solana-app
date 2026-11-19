@@ -1,8 +1,9 @@
-import { type ReactNode, useEffect, useRef, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import { Linking, Platform, Pressable, StyleSheet, Text, View } from "react-native";
 
-import { ACTIVITY } from "@/sample/data";
-import { rememberActivity } from "@/state/activity-store";
+import { ACTIVITY, type Activity } from "@/sample/data";
+import { recordConfirmed, rememberActivity } from "@/state/activity-store";
+import { tokFmt } from "@/format";
 import Animated, { Easing, useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
 
 import { Button } from "@/components/ui/button";
@@ -22,8 +23,12 @@ import { useTheme } from "@/theme/use-theme";
 import { type Family, font } from "@/theme/tokens";
 
 import { type MarginFlow, MarginFlowSheet } from "./first-time-flow";
-import { openSheet, toast } from "./overlay";
+import { pauseLiveWhile, setLivePaused } from "@/state/live-pause";
+
+import { noteTxResult } from "@/state/notes";
+import { guardSheet, openSheet, sheetOpen, toast } from "./overlay";
 import { haptic } from "@/ui/haptics";
+import { externalWalletName, isWalletTimeout, type TxSend, type TxStatus, useOnForeground, WALLET_TIMEOUT_TEXT, waitingLine } from "./wallet-wait";
 
 /* The one transaction sheet every money action uses (design core.js TX): review → sign → progress (Sent, Processed, Confirmed) → done
    or fail. Signing here is the embedded-wallet stand-in (Android passkey / fingerprint, iOS Face ID); real signers (Dynamic embedded
@@ -36,9 +41,9 @@ export type TxSpec = {
   legs: { l: string; v: string; s?: string }[];
   rows: [string, string, ("pos" | "neg" | "")?][];
   done: { title: string; line?: string; action?: [string, () => void] };
-  apply: () => void;
+  apply: (hash?: string) => void;
   // When set, confirm signs and submits this before apply. Omit only for actions that are not on chain yet.
-  send?: () => Promise<string | void>;
+  send?: TxSend;
   // a custom review (design sheets that are their own review, e.g. Close all positions); replaces legs + rows
   body?: ReactNode;
   // Margin deposit / borrow on a real wallet: the steps (open the account when there is none, then the deposits and borrows), each its
@@ -46,14 +51,24 @@ export type TxSpec = {
   flow?: MarginFlow;
   // Called once every flow step has confirmed, with the last transaction hash (the sheet then records the history row).
   onAllDone?: (lastHash?: string) => void;
+  // Called right after each flow step confirms (the real signature), so its history rows show at once, even if a later step fails.
+  onStepDone?: (stepIndex: number, hash: string) => void;
+  // Ways to finish what a failure left half done (e.g. a perps open whose USDC moved but whose order failed): offered on the failed
+  // screen in place of "Try again", each sent as its own transaction in this sheet. Nothing to offer = undefined or [].
+  recover?: (error: unknown) => TxRecover[] | undefined;
 };
+export type TxRecover = { label: string; send: TxSend; done: TxSpec["done"]; apply?: (hash?: string) => void };
 
+const nowLabel = () => {
+  const d = new Date();
+  return `${d.toLocaleDateString("en-US", { month: "short", day: "numeric" })}, ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+};
 const FEE: Record<Chain, string> = { solana: "~0.000005 SOL" };
 
 // The history row the action adds carries the chain's transaction hash, so its explorer link is real (shared by both layouts).
 function recordDone(spec: TxSpec, h?: string) {
   mutate(() => {
-    spec.apply();
+    spec.apply(h);
     const row = h && ACTIVITY[spec.chain][0];
     if (h && row) {
       row.hash = h;
@@ -79,7 +94,24 @@ export function runTx(spec: TxSpec) {
     // a new account's review lists the steps instead of health factor and leverage (design)
     const isNew = spec.flow.steps[0].key === "open";
     const rows = [...(isNew ? [] : spec.rows), ...feeRows(spec.chain, spec.flow.steps.length > 1 ? " each" : "")];
-    const ft: TxSpec = { ...spec, rows, onAllDone: (h) => recordDone(spec, h) };
+    const flow = spec.flow;
+    const onStepDone = (i: number, h: string) => {
+      const owner = inUseWallet(spec.chain)?.full;
+      const step = flow.steps[i];
+      if (!owner || !step) return;
+      const base = { t: nowLabel(), ms: Date.now(), hash: h, chain: spec.chain, tx: `${h.slice(0, 4)}…${h.slice(-4)}`, area: "Margin" };
+      const rows: Activity[] =
+        step.key === "open"
+          ? [{ ...base, action: "Account created", detail: "Margin account opened", amt: "", sym: "SOL" }]
+          : step.assets.map((j) => {
+              const a = flow.assets[j];
+              return a.role === "dep"
+                ? { ...base, action: "Deposit", detail: "Collateral into the margin account", amt: tokFmt(a.amt, a.sym), sym: a.sym }
+                : { ...base, action: "Borrow", detail: `${a.sym} borrowed`, amt: tokFmt(a.amt, a.sym), sym: a.sym };
+            });
+      recordConfirmed(spec.chain, owner, rows);
+    };
+    const ft: TxSpec = { ...spec, rows, onStepDone, onAllDone: (h) => recordDone(spec, h) };
     openSheet({ title: spec.title, content: (close) => <MarginFlowSheet spec={ft} close={close} /> });
     return;
   }
@@ -87,6 +119,20 @@ export function runTx(spec: TxSpec) {
 }
 
 type Phase = "review" | "sign" | "progress" | "done" | "fail";
+
+// The final screen of a transaction, kept so it can be shown again after its sheet was closed while it ran.
+type TxResult = { phase: "done" | "fail"; fail: string; hash: string | null; recover: TxRecover[]; done: TxSpec["done"]; timedOut: boolean };
+
+// The sheet was closed (X) while the transaction ran; it carried on and has now finished. The result goes to Notifications, and is
+// shown: a failure re-opens its sheet on the failed screen (with any recovery buttons) when no other sheet is open; otherwise a
+// toast says what happened with "View", which re-opens it.
+function announceHidden(spec: TxSpec, r: TxResult) {
+  const ok = r.phase === "done";
+  noteTxResult(spec.chain, spec.fam, ok, ok ? r.done.title : `${spec.title}: not finished`, ok ? r.done.line ?? "Confirmed on chain." : r.fail);
+  const reopen = () => openSheet({ title: spec.title, content: (close) => <TxFlow spec={spec} close={close} initial={r} /> });
+  if (!ok && !sheetOpen()) return reopen();
+  toast(ok ? r.done.title : r.fail, ok ? "ok" : "err", { action: ["View", reopen], ms: ok ? 5000 : 10000 });
+}
 
 // With "confirm transactions" on (Account > Security), the phone's own prompt (fingerprint, face unlock, Face ID) opens
 // as soon as the sign step shows; otherwise the step is the tap-to-confirm stand-in.
@@ -100,16 +146,48 @@ function SignWithBiometrics({ onConfirm }: { onConfirm: () => void }) {
   return null;
 }
 
-function TxFlow({ spec, close }: { spec: TxSpec; close: () => void }) {
+// `initial`: shown again on its final screen (announceHidden) instead of starting at the review.
+function TxFlow({ spec, close, initial }: { spec: TxSpec; close: () => void; initial?: TxResult }) {
   const { colors } = useTheme();
-  const [phase, setPhase] = useState<Phase>("review");
-  const [step, setStep] = useState(0);
-  const [fail, setFail] = useState("Nothing was sent.");
-  const [hash, setHash] = useState<string | null>(null);
+  const [phase, setPhase] = useState<Phase>(initial?.phase ?? "review");
+  const [step, setStep] = useState(initial?.phase === "done" ? 3 : 0);
+  const [fail, setFail] = useState(initial?.fail ?? "Nothing was sent.");
+  const [hash, setHash] = useState<string | null>(initial?.hash ?? null);
   const [authFailed, setAuthFailed] = useState(false);
+  // What the last failure offers to finish (spec.recover), and the done text of the recovery that ran.
+  const [recover, setRecover] = useState<TxRecover[]>(initial?.recover ?? []);
+  const [done, setDone] = useState(initial?.done ?? spec.done);
+  const lastAlt = useRef<TxRecover | undefined>(undefined);
   // The phone's own prompt, which also offers its PIN or passcode.
-  const wallet = inUseWallet(spec.chain);
-  const waitLabel = wallet && !wallet.sample && wallet.kind === "external" ? `Waiting for ${wallet.app}` : "Sending";
+  const walletApp = externalWalletName(spec.chain);
+  const [timedOut, setTimedOut] = useState(initial?.timedOut ?? false);
+  // Hiding the sheet (X) does not cancel the transaction: it carries on, and its result is announced (announceHidden).
+  const alive = useRef(true);
+  const phaseNow = useRef(phase);
+  useEffect(() => {
+    phaseNow.current = phase;
+  }, [phase]);
+  useEffect(
+    () => () => {
+      alive.current = false;
+      if (phaseNow.current === "progress") toast("It carries on in the background. The result will show here and in Notifications.", "info", { ms: 4000 });
+    },
+    [],
+  );
+  // The whole run is guarded, not only the wait for the wallet: sending and confirming several parts can take a minute or more,
+  // and a stray tap on the dimmed screen, a drag down or Back used to close the sheet then. Only the X hides it.
+  useEffect(
+    () => guardSheet(phase === "progress", step === 0 ? undefined : "Still sending. It finishes even if you close this with the X."),
+    [phase, step],
+  );
+  // The live market sockets stand still from the tap until the transaction has finished (see live-pause.ts).
+  useEffect(() => {
+    setLivePaused(phase === "progress");
+    return () => setLivePaused(false);
+  }, [phase]);
+  // Back from the wallet: re-read the chain so the screens behind the sheet show what really happened.
+  const onForeground = useCallback(() => refreshAccountSoon(spec.chain), [spec.chain]);
+  useOnForeground(phase === "progress" || phase === "fail", onForeground);
   const confirmIdentity = () => {
     setAuthFailed(false);
     authenticate("Confirm transaction")
@@ -117,23 +195,31 @@ function TxFlow({ spec, close }: { spec: TxSpec; close: () => void }) {
       .catch(() => setAuthFailed(true));
   };
 
-  const approve = async () => {
+  // `alt`: a recovery from the failed screen, sent instead of spec.send (its own done text and apply).
+  const approve = async (alt?: TxRecover) => {
     setPhase("progress");
     setStep(0);
+    setTimedOut(false);
+    setDone(alt?.done ?? spec.done);
+    lastAlt.current = alt;
+    const send = alt ? alt.send : spec.send;
+    const apply = alt ? alt.apply ?? (() => {}) : spec.apply;
+    const onStatus = (st: TxStatus) => setStep((s) => (st === "waiting_for_wallet" ? 0 : Math.max(s, st === "sending" ? 1 : 2)));
     // "Sent" only once the wallet has really signed.
     const stopSigned = onSigned(() => setStep((s) => Math.max(s, 1)));
     try {
       // A real wallet must never see a pretend success: actions without an on-chain path stop here.
-      if (!spec.send && personalReady(spec.chain)) throw new Error("This action is not connected to the chain yet. Nothing was sent.");
+      if (!send && personalReady(spec.chain)) throw new Error("This action is not connected to the chain yet. Nothing was sent.");
       let h: string | undefined;
-      if (spec.send) {
-        h = (await spec.send()) || undefined;
+      if (send) {
+        // paused until the transaction settles, even if the sheet is hidden meanwhile
+        h = (await pauseLiveWhile(send(onStatus))) || undefined;
         if (h) setHash(h);
         setStep(2);
       }
       setStep(3);
       mutate(() => {
-        spec.apply();
+        apply(h);
         // the history row the action just added carries the chain's own transaction hash, so its explorer link is real
         const row = h && ACTIVITY[spec.chain][0];
         if (h && row) {
@@ -146,13 +232,22 @@ function TxFlow({ spec, close }: { spec: TxSpec; close: () => void }) {
         }
       });
       // re-read the real account so every screen shows the chain's figures
-      if (spec.send) refreshAccountSoon(spec.chain);
+      if (send) refreshAccountSoon(spec.chain);
       setPhase("done");
       haptic.success();
+      if (!alive.current) announceHidden(spec, { phase: "done", fail: "", hash: h ?? null, recover: [], done: alt?.done ?? spec.done, timedOut: false });
     } catch (e) {
-      setFail(e instanceof Error ? e.message : "The transaction was not sent");
+      const to = isWalletTimeout(e);
+      const msg = to ? WALLET_TIMEOUT_TEXT : e instanceof Error ? e.message : "The transaction was not sent";
+      const rec = (!to && spec.recover?.(e)) || [];
+      setTimedOut(to);
+      setRecover(rec);
+      setFail(msg);
       setPhase("fail");
       haptic.error();
+      // Something may have landed before the failure: re-read the chain so the screens show it.
+      if (send) refreshAccountSoon(spec.chain);
+      if (!alive.current) announceHidden(spec, { phase: "fail", fail: msg, hash: null, recover: rec, done: alt?.done ?? spec.done, timedOut: to });
     } finally {
       stopSigned();
     }
@@ -160,7 +255,7 @@ function TxFlow({ spec, close }: { spec: TxSpec; close: () => void }) {
   const finish = (action?: () => void) => {
     close();
     if (action) action();
-    else toast(spec.done.title);
+    else toast(done.title);
   };
 
   if (phase === "review") {
@@ -183,7 +278,7 @@ function TxFlow({ spec, close }: { spec: TxSpec; close: () => void }) {
         </View>
         <View>
           {[...spec.rows, ...feeRows(spec.chain)].map(([l, v, t], i) => (
-            <View key={l} style={[styles.row, i > 0 && { borderTopWidth: 1, borderTopColor: colors.divider }]}>
+            <View key={l + i} style={[styles.row, i > 0 && { borderTopWidth: 1, borderTopColor: colors.divider }]}>
               <Text style={[styles.rowL, { color: colors.muted }]}>{l}</Text>
               <Text style={[styles.rowV, { color: t === "pos" ? colors.positive : t === "neg" ? colors.negative : colors.text }]}>{v}</Text>
             </View>
@@ -223,8 +318,12 @@ function TxFlow({ spec, close }: { spec: TxSpec; close: () => void }) {
             <Text style={[styles.cap, { color: colors.muted }]}>{fail}</Text>
           </View>
         </View>
-        <Button label="Try again" fam={spec.fam} onPress={() => setPhase("review")} />
-        <Button label="Done" v="text" size="md" onPress={() => close()} />
+        {recover.length ? (
+          recover.map((r, i) => <Button key={r.label} label={r.label} fam={spec.fam} v={i === 0 ? undefined : "outline"} size={i === 0 ? undefined : "md"} onPress={() => void approve(r)} />)
+        ) : (
+          <Button label="Try again" fam={spec.fam} onPress={() => (timedOut ? void approve(lastAlt.current) : setPhase("review"))} />
+        )}
+        <Button label={timedOut ? "Close" : "Done"} v="text" size="md" onPress={() => close()} />
       </View>
     );
   }
@@ -235,8 +334,9 @@ function TxFlow({ spec, close }: { spec: TxSpec; close: () => void }) {
       <View style={styles.hd}>
         {phase === "done" ? <MascotDone size={56} /> : <TailLoader size={48} />}
         <View style={{ flex: 1, minWidth: 0 }}>
-          <Text style={[styles.h, { color: colors.text }]}>{phase === "done" ? spec.done.title : step === 0 ? waitLabel : `Sent to ${CHAIN_LABEL[spec.chain]}`}</Text>
-          {phase === "done" && spec.done.line && <Text style={[styles.cap, { color: colors.muted }]}>{spec.done.line}</Text>}
+          <Text style={[styles.h, { color: colors.text }]}>{phase === "done" ? done.title : step === 0 ? (walletApp ? "Waiting for your wallet" : "Sending") : `Sent to ${CHAIN_LABEL[spec.chain]}`}</Text>
+          {phase === "done" && done.line && <Text style={[styles.cap, { color: colors.muted }]}>{done.line}</Text>}
+          {phase === "progress" && step === 0 && !!walletApp && <Text style={[styles.cap, { color: colors.muted }]}>{waitingLine(walletApp)}</Text>}
         </View>
         {/* Only once the chain has the transaction and there is a link to open */}
         {phase === "done" && hash && (

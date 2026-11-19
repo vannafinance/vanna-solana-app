@@ -21,7 +21,10 @@ const TONE: Record<string, Tone> = {
 };
 
 // The real transaction opens in the same explorer the website uses; a row without a hash (an older sample row) has none.
-function openExplorer(r: Activity) {
+/** Opens a transaction by its hash in the explorer. */
+export const openTx = (hash?: string) => openExplorer({ hash } as Activity);
+
+export function openExplorer(r: Activity) {
   if (!r.hash) return toast("No explorer record for this entry");
   const url = `https://explorer.solana.com/tx/${r.hash}?cluster=custom&customUrl=${encodeURIComponent("https://rpc-devnet.solana.vanna.finance")}`;
   Linking.openURL(url).catch(() => toast("Couldn't open the explorer"));
@@ -85,7 +88,8 @@ function HistoryRow({ r, first }: { r: Activity; first: boolean }) {
               { label: "Detail", value: r.detail },
               ...legs.slice(0, 2).map((l, i) => ({ label: i === 0 && legs.length > 1 ? "Paid" : legs.length > 1 ? "Received" : "Amount", value: l })),
               ...(r.via ? [{ label: "Route", value: r.via }] : []),
-              { label: "Transaction", value: r.tx },
+              // only a signature the chain returned is shown; a row without one has no transaction to show
+              { label: "Transaction", value: r.hash ? `${r.hash.slice(0, 4)}…${r.hash.slice(-4)}` : "—" },
             ]}
           />
           <Pressable onPress={() => openExplorer(r)} style={styles.x} accessibilityRole="link">

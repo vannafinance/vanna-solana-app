@@ -5,6 +5,7 @@ import { StatusBar } from "expo-status-bar";
 import { useRef, useState } from "react";
 import { type HostInstance, Platform, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from "react-native";
 
+import { REAL_BUILD } from "@/chain/build";
 import { AnonPic, MeAvatar, XGlyph, XPic } from "@/components/avatar";
 import { PagePill, PillTabs, Swap } from "@/components/motion";
 import { ScreenHeader } from "@/components/screen-header";
@@ -35,6 +36,9 @@ export default function Rewards() {
   const { colors } = useTheme();
   const [t, setT] = useState<T>("overview");
   const go = (k: T) => setT(k);
+  // Rewards is not live: the Vanna backend has no points, referral or leaderboard API yet (the website shows "Coming soon" too),
+  // so a real build shows that instead of the design's sample quests, friends and leaderboard.
+  if (REAL_BUILD) return <ComingSoon />;
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg }}>
       <StatusBar style="auto" />
@@ -56,6 +60,26 @@ export default function Rewards() {
           </Swap>
         </ScrollView>
       </AfterTransition>
+    </View>
+  );
+}
+
+// The website's Rewards page (packages/shared/ui/rewards-coming-soon.tsx), in the app's card style.
+function ComingSoon() {
+  const { colors } = useTheme();
+  return (
+    <View style={{ flex: 1, backgroundColor: colors.bg }}>
+      <StatusBar style="auto" />
+      <ScreenHeader title="Rewards" />
+      <ScrollView contentContainerStyle={styles.body}>
+        <Card style={{ alignItems: "center", gap: 12, paddingVertical: 28, marginTop: 12 }}>
+          <Pill label="Coming soon" tone="purple" />
+          <Text style={[styles.title, { color: colors.text, textAlign: "center" }]}>Rewards</Text>
+          <Text style={{ fontFamily: font.regular, fontSize: 15, lineHeight: 22, color: colors.muted, textAlign: "center" }}>
+            Points for lending, trading and farming, referrals and a leaderboard are on the way. Keep using Vanna in the meantime.
+          </Text>
+        </Card>
+      </ScrollView>
     </View>
   );
 }

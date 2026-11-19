@@ -7,6 +7,7 @@ import QRCode from "react-native-qrcode-svg";
 import { captureRef } from "react-native-view-shot";
 
 import * as native from "@/chain/native";
+import { perpMark } from "@/chain/perp-mark";
 import { Seg2 } from "@/components/form";
 import { Button } from "@/components/ui/button";
 import { shareIcon } from "@/components/ui/kit";
@@ -47,7 +48,7 @@ function cardOf(chain: Chain, s: ShareSpec): Card | null {
       const p = d.perps.find((x) => x.id === s.id);
       if (!p) return null;
       const pl = perpPnl(p), r = (pl / p.coll) * 100, lv = `${p.lev}x`, pos = `${an(lv)} ${lv} ${p.k} ${p.side}`;
-      return { title: `${p.k}-PERP ${p.side === "long" ? "Long" : "Short"} ${p.lev}x`, big: sPct(r), profit: pl >= 0, hf, row: [["Entry", price(p.entry)], ["Mark", price(px(p.k))], ["PnL", sUsd2(pl)]],
+      return { title: `${p.k}-PERP ${p.side === "long" ? "Long" : "Short"} ${p.lev}x`, big: sPct(r), profit: pl >= 0, hf, row: [["Entry", price(p.entry)], ["Mark", price(perpMark(p.k))], ["PnL", sUsd2(pl)]],
         post: pl >= 0 ? `Up ${pct(Math.abs(r))} on ${pos}, opened ${credit}. ${tryIt}` : `Down ${pct(Math.abs(r))} on ${pos} on Vanna testnet. Same account, one health factor. ${REF}` };
     }
     case "spot": {
@@ -67,14 +68,14 @@ function cardOf(chain: Chain, s: ShareSpec): Card | null {
       const l = d.lend.find((x) => x.sym === s.id);
       if (!l) return null;
       const apy = poolOf(chain, l.sym)?.supA ?? 0;
-      return { title: `${l.sym} Earn`, big: "+" + usd(l.earned * px(l.sym)), unit: "earned", profit: true, hf, row: [["APY", pct(apy)], ["Supplied", tokFmt(l.amt, l.sym)], ["Since", l.since]],
+      return { title: `${l.sym} Earn`, big: l.earnedUnknown ? "—" : "+" + usd(l.earned * px(l.sym)), unit: "earned", profit: true, hf, row: [["APY", pct(apy)], ["Supplied", tokFmt(l.amt, l.sym)], ["Since", l.since]],
         post: `Earning ${pct(apy)} on ${l.sym} by lending to traders on Vanna testnet. ${REF}` };
     }
     case "farm": {
       const f = d.farm.find((x) => x.id === s.id);
       if (!f) return null;
       const e = f.earned * px(f.sym);
-      return { title: `${f.venue} ${f.name.replace(/\s*Lending$/, "")} Farm`, big: sUsd2(e), profit: e >= 0, hf, row: [["APY", pct(f.apy)], ["Deposited", usd(f.amt * px(f.sym))], ["Since", f.since]],
+      return { title: `${f.venue} ${f.name.replace(/\s*Lending$/, "")} Farm`, big: f.earnedUnknown ? "—" : sUsd2(e), profit: e >= 0, hf, row: [["APY", pct(f.apy)], ["Deposited", usd(f.amt * px(f.sym))], ["Since", f.since]],
         post: `Earning ${pct(f.apy)} on ${f.sym} in ${f.venue}, funded ${credit}. ${tryIt}` };
     }
     case "health":

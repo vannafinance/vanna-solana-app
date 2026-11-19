@@ -153,10 +153,6 @@ export const PHOENIX_MARKETS: Record<number, { sym: string; lotDecimals: number;
   49: { sym: "META", lotDecimals: 3, maxLev: 3 },
 };
 
-export const VAULT_CATALOGUE_APYS: Record<string, number> = {
-  "kamino-sol": 4.13,
-  "kamino-usdc": 4.43,
-  "kamino-usdt": 4.13,
-  usdstar: 9.46,
-  junior: 14.18,
-};
+// Each Farm vault's live APY by vault id, filled by chain/live.ts from Kamino's and Perena's APIs (no fixed numbers): a position
+// read before the first live read carries 0, and live.ts updates held positions when the rates arrive.
+export const VAULT_CATALOGUE_APYS: Record<string, number> = {};

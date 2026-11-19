@@ -17,7 +17,7 @@ import { solanaEarnSupply, solanaEarnWithdraw } from "@/chain/solana/actions";
 import { bioIcon } from "@/state/lock";
 import { runTx } from "@/ui/tx";
 
-import { applyEarn, balTok, decOf, freeTok, fullAmt, lendOf, poolOf, px, shareRate, shareSym } from "./model";
+import { applyEarn, balTok, freeTok, fullAmt, inDecOf, lendOf, poolOf, px, shareRate, shareSym, sharesFor } from "./model";
 
 type Mode = "supply" | "withdraw";
 
@@ -44,17 +44,18 @@ function AmountForm({ chain, sym, initial }: { chain: Chain; sym: string; initia
   const mode: Mode = hasPos ? pick : "supply";
   const [text, setText] = useState("");
   if (!p) return null;
-  const s = p.sym, l = lendOf(chain, s), bal = balTok(l), wal = DATA[chain].wallet[s] ?? 0, d = decOf(s), price = px(s);
-  const sup = mode === "supply", limit = sup ? wal : bal, x = parseFloat(text) || 0, free = freeTok(p);
+  const s = p.sym, l = lendOf(chain, s), bal = balTok(l), wal = DATA[chain].wallet[s] ?? 0, d = inDecOf(s), price = px(s);
+  // Max supply keeps 0.01 SOL in the wallet for fees and account rent
+  const sup = mode === "supply", limit = sup ? (s === "SOL" ? Math.max(0, wal - 0.01) : wal) : bal, x = parseFloat(text) || 0, free = freeTok(p);
   const problem = !(x > 0) ? "empty" : x > limit + 1e-9 ? "over" : !sup && x > free + 1e-9 ? "pool" : null;
-  const after = sup ? bal + x : Math.max(0, bal - x), shares = x / shareRate(chain, s), yearly = (after * price * p.supA) / 100;
+  const after = sup ? bal + x : Math.max(0, bal - x), rate = shareRate(chain, s), shares = rate ? sharesFor(x, rate, !sup) : null, yearly = (after * price * p.supA) / 100;
   const fillOf = (f: number) => Math.floor(limit * f * Math.pow(10, d)) / Math.pow(10, d);
   const cta = problem === "over" ? (sup ? `Not enough ${s}` : "More than you supplied") : problem === "pool" ? `Vault has ${fullAmt(free, s)} free now` : `${sup ? "Supply" : "Withdraw"} ${s}`;
   const size = text.length > 12 ? 24 : text.length > 9 ? 28 : 32;
 
   const submit = () => {
     if (problem) return;
-    const amt = fullAmt(x, s), sh = `${nf(shares, 2)} ${shareSym(s)}`;
+    const amt = fullAmt(x, s), sh = shares === null ? "—" : `${nf(shares, 4)} ${shareSym(s)}`;
     closeSheet();
     setTimeout(
       () =>
@@ -65,7 +66,7 @@ function AmountForm({ chain, sym, initial }: { chain: Chain; sym: string; initia
           cta: sup ? "Confirm supply" : "Confirm withdrawal",
           legs: [
             { l: sup ? "You supply" : "You withdraw", v: amt, s: "~" + usd(x * price) },
-            { l: sup ? "You receive" : "Shares redeemed", v: sh, s: `1 ${shareSym(s)} = ${nf(shareRate(chain, s), 4)} ${s}` },
+            { l: sup ? "You receive" : "Shares redeemed", v: sh, s: rate ? `1 ${shareSym(s)} = ${nf(rate, 6)} ${s}` : "Share rate unavailable" },
           ],
           rows: [
             ["Supply APY", pct(p.supA), "pos"],
@@ -76,7 +77,7 @@ function AmountForm({ chain, sym, initial }: { chain: Chain; sym: string; initia
           send: async () => {
             return mode === "supply"
               ? await solanaEarnSupply(s, x)
-              : await solanaEarnWithdraw(s, x, !sup && x >= bal - 1e-7);
+              : await solanaEarnWithdraw(s, x, !sup && x >= bal - 2 * 10 ** -d);
           },
           apply: () => applyEarn(chain, s, x, mode),
         }),
@@ -133,10 +134,10 @@ function AmountForm({ chain, sym, initial }: { chain: Chain; sym: string; initia
       <Card style={{ backgroundColor: colors.bg, paddingVertical: 4, gap: 0 }}>
         {(
           [
-            ["Supply APY", pct(p.supA), "pos"],
-            [sup ? "You receive" : "Shares redeemed", `${nf(shares, 2)} ${shareSym(s)}`],
+            ["Supply APY", p.live ? pct(p.supA) : "—", "pos"],
+            [sup ? "You receive" : "Shares redeemed", shares === null ? "—" : `${nf(shares, 4)} ${shareSym(s)}`],
             ["Supplied", `${fullAmt(bal, s)} → ${fullAmt(after, s)}`],
-            sup ? ["Yearly earnings", "+" + usd(yearly), "pos"] : ["Free in vault", fullAmt(free, s)],
+            sup ? ["Yearly earnings", p.live ? "+" + usd(yearly) : "—", "pos"] : ["Free in vault", fullAmt(free, s)],
           ] as [string, string, string?][]
         ).map(([lb, v, t], i) => (
           <View key={lb} style={[styles.dr, i > 0 && { borderTopWidth: 1, borderTopColor: colors.divider }]}>

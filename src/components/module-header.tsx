@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { REAL_BUILD } from "@/chain/build";
 import { POINTS } from "@/sample/data";
 import { useRewards } from "@/sample/rewards";
 import { useChain } from "@/state/chain";
@@ -49,9 +50,10 @@ export function HeaderRow() {
           </View>
         )}
       </Pressable>
-      <Pressable style={styles.pts} onPress={() => router.push("/rewards" as Href)} accessibilityRole="button" accessibilityLabel={`Rewards, ${POINTS.toLocaleString("en-US")} points`}>
+      <Pressable style={styles.pts} onPress={() => router.push("/rewards" as Href)} accessibilityRole="button" accessibilityLabel={REAL_BUILD ? "Rewards, coming soon" : `Rewards, ${POINTS.toLocaleString("en-US")} points`}>
         <Icon name="stars" size={16} color="#FFD66B" filled />
-        <Text style={styles.ptsText}>{ptsShort(POINTS)}</Text>
+        {/* rewards are not live (no points API yet): "Soon", never a made-up 0 */}
+        <Text style={styles.ptsText}>{REAL_BUILD ? "Soon" : ptsShort(POINTS)}</Text>
       </Pressable>
       <Pressable style={styles.hbtn} onPress={() => router.push("/notifications")} accessibilityRole="button" accessibilityLabel={`Notifications${unread ? `, ${unread} unread` : ""}`}>
         <Icon name="notifications" size={24} color="#FFFFFF" />

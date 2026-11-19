@@ -18,6 +18,8 @@ export type SolanaPositions = {
   lend: LendPos[];
   perps: PerpPos[];
   phoenixIdle: number;
+  /** Phoenix collateral plus unsettled balance, USD; null when the trader account could not be read. */
+  phoenixCash: number | null;
   farm: FarmPos[];
 };
 
@@ -75,6 +77,7 @@ export async function fetchLenderPositions(owner: string): Promise<LendPos[]> {
       sym,
       amt,
       shares,
+      sharesRaw: sharesRaw.toString(),
       earned: 0,
       since: today(),
     });
@@ -84,20 +87,25 @@ export async function fetchLenderPositions(owner: string): Promise<LendPos[]> {
 }
 
 // # Ported from: apps/solana/lib/solana/phoenix-state.ts:decodeTrader
-export async function fetchPhoenixPositions(marginPda: string): Promise<{ perps: PerpPos[]; idleUsd: number }> {
+// Phoenix is cross-margined: one trader account holds the phUSD collateral (6 decimals, 1:1 USD) for every position, so a
+// position has no collateral of its own. Read from the trader account: collateral, and per position its size (base lots)
+// and entry (virtual quote lots = entry notional). The collateral is split across the open positions by entry notional, and
+// each position's leverage is all open entry notional / collateral (the account's leverage at entry). P&L % = P&L / that
+// share of the collateral. A position entry with zero size but a quote balance is unsettled profit or loss: it counts as cash.
+// cashUsd: collateral plus that unsettled balance (what the venue holds besides open positions).
+export async function fetchPhoenixPositions(marginPda: string): Promise<{ perps: PerpPos[]; idleUsd: number; cashUsd: number }> {
   const traderPda = findPda(["trader", decode58(marginPda), Uint8Array.of(0, 0)], PHOENIX_PROGRAM_ID);
-  const acc = await rpc<{ value: { data: [string, string] } | null }>("getAccountInfo", [traderPda, { encoding: "base64" }]).catch(() => null);
+  const acc = await rpc<{ value: { data: [string, string] } | null }>("getAccountInfo", [traderPda, { encoding: "base64" }]);
 
-  if (!acc?.value) return { perps: [], idleUsd: 0 };
+  if (!acc?.value) return { perps: [], idleUsd: 0, cashUsd: 0 };
   const buf = Buffer.from(acc.value.data[0], "base64");
-  if (buf.length < 240) return { perps: [], idleUsd: 0 };
+  if (buf.length < 240) return { perps: [], idleUsd: 0, cashUsd: 0 };
 
-  const collateral = buf.readBigInt64LE(88);
-  const idleUsd = Number(collateral) / 1e6;
+  let cashUsd = Number(buf.readBigInt64LE(88)) / 1e6;
   const len = Number(buf.readBigUInt64LE(224));
   const EXTENSION_KEY = 0xff000000n;
 
-  const perps: PerpPos[] = [];
+  const open: { sym: string; side: "long" | "short"; qty: number; notional: number }[] = [];
   for (let j = 0; j < len; j++) {
     const at = 240 + 40 * j;
     if (buf.length < at + 40) break;
@@ -108,28 +116,37 @@ export async function fetchPhoenixPositions(marginPda: string): Promise<{ perps:
     const virtualQuoteLots = buf.readBigInt64LE(at + 16);
 
     if (baseLots === 0n && virtualQuoteLots === 0n) continue;
+    if (baseLots === 0n) {
+      cashUsd += Number(virtualQuoteLots) / 1e6;
+      continue;
+    }
     const mkt = PHOENIX_MARKETS[assetId];
     if (!mkt) continue;
-
-    const sizeTokens = Math.abs(Number(baseLots)) / 10 ** mkt.lotDecimals;
-    const entry = sizeTokens > 0 ? Math.abs(Number(virtualQuoteLots) / 1e6) / sizeTokens : 0;
-    const notional = Math.abs(Number(virtualQuoteLots) / 1e6);
-    const lev = mkt.maxLev ?? 2;
-    const coll = lev > 0 ? notional / lev : notional;
-    const side = baseLots > 0n ? "long" : "short";
-
-    perps.push({
-      id: `p-${mkt.sym.toLowerCase()}`,
-      k: mkt.sym,
-      side,
-      lev,
-      coll,
-      entry,
-      t: today(),
+    open.push({
+      sym: mkt.sym,
+      side: baseLots > 0n ? "long" : "short",
+      qty: Math.abs(Number(baseLots)) / 10 ** mkt.lotDecimals,
+      notional: Math.abs(Number(virtualQuoteLots)) / 1e6,
     });
   }
 
-  return { perps, idleUsd };
+  if (!open.length) return { perps: [], idleUsd: Math.max(0, cashUsd), cashUsd };
+  const total = open.reduce((t, o) => t + o.notional, 0);
+  const cash = Math.max(0, cashUsd);
+  const lev = cash > 0 ? total / cash : 0;
+  const perps: PerpPos[] = open.map((o) => ({
+    id: `p-${o.sym.toLowerCase()}`,
+    k: o.sym,
+    side: o.side,
+    lev: Number(lev.toFixed(2)),
+    coll: total > 0 ? (cash * o.notional) / total : 0,
+    entry: o.qty > 0 ? o.notional / o.qty : 0,
+    qty: o.qty,
+    pool: cash,
+    t: today(),
+  }));
+  // the whole collateral is assigned to the open positions, so none of it is idle
+  return { perps, idleUsd: 0, cashUsd };
 }
 
 // # Ported from: apps/solana/lib/solana/kamino.ts:readReserveRate
@@ -186,6 +203,7 @@ export async function fetchKaminoPositions(marginPda: string): Promise<FarmPos[]
       apy,
       earned: 0,
       since: today(),
+      receiptsRaw: receiptsRaw.toString(),
     });
   }
 
@@ -238,6 +256,7 @@ export async function fetchVaultPositions(marginPda: string): Promise<FarmPos[]>
       apy,
       earned: 0,
       since: today(),
+      receiptsRaw: sharesRaw.toString(),
     });
   }
 
@@ -257,6 +276,7 @@ export async function fetchSolanaPositions(owner: string, marginPda: string | nu
       lend,
       perps: [],
       phoenixIdle: 0,
+      phoenixCash: 0,
       farm: [],
     };
   }
@@ -265,7 +285,7 @@ export async function fetchSolanaPositions(owner: string, marginPda: string | nu
     lendPromise,
     fetchPhoenixPositions(marginPda).catch((e) => {
       console.warn("[positions] phoenix read failed:", e);
-      return { perps: [], idleUsd: 0 };
+      return { perps: [], idleUsd: 0, cashUsd: null };
     }),
     fetchKaminoPositions(marginPda).catch((e) => {
       console.warn("[positions] kamino read failed:", e);
@@ -281,6 +301,7 @@ export async function fetchSolanaPositions(owner: string, marginPda: string | nu
     lend,
     perps: phoenix.perps,
     phoenixIdle: phoenix.idleUsd,
+    phoenixCash: phoenix.cashUsd,
     farm: [...kamino, ...vaults],
   };
 }

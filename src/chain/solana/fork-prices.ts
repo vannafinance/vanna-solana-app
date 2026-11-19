@@ -121,8 +121,8 @@ async function refresh(tokens: readonly Priced[], assets: Map<number, AssetConfi
     }),
     ...perps.map((p) => ({ token: p as Priced, oracle: p.oracle })),
   ];
-  if (perps.length) await alignPhoenix();
-  await refreshScope(configs.map((c) => c.oracle), now);
+  const scope = refreshScope(configs.map((c) => c.oracle), now);
+  const align = perps.length ? alignPhoenix() : null;
 
   const usdOf = (sym: string) => live[sym] ?? REFERENCE_USD[sym];
   const byPyth = new Map(configs.filter((c) => isSet(c.oracle.pythPrice)).map((c) => [c.oracle.pythPrice, c.token.symbol]));
@@ -160,16 +160,19 @@ async function refresh(tokens: readonly Priced[], assets: Map<number, AssetConfi
     data.writeBigUInt64LE(conf, EMA_CONF_OFFSET);
     writes.push(() => rpc("surfnet_setAccount", [address, { lamports: current.lamports, data: data.toString("hex"), owner: PYTH_RECEIVER, executable: false, rentEpoch: 0 }]));
   }
-  for (let i = 0; i < writes.length; i += 4) await Promise.all(writes.slice(i, i + 4).map((w) => w()));
+  await Promise.all([...writes.map((w) => w()), scope, align]);
 }
 
 let inflight: Promise<void> | null = null;
 let lastAt = 0;
 
-/** Refreshes at most once a minute; concurrent callers share one refresh. A failure is rethrown so a borrow stops here. */
-export async function ensureFreshForkPrices(tokens: readonly Priced[], assets: Map<number, AssetConfigState>, perps: PerpIndex[] = []): Promise<void> {
+/**
+ * Refreshes at most once a minute; concurrent callers share one refresh. A failure is rethrown so a borrow stops here.
+ * `force`: refresh now (a signed transaction is about to be sent after a slow wallet approval and its check failed).
+ */
+export async function ensureFreshForkPrices(tokens: readonly Priced[], assets: Map<number, AssetConfigState>, perps: PerpIndex[] = [], force = false): Promise<void> {
   // A trade also needs its market's index price, which a token-only refresh doesn't touch.
-  if (!perps.length && Date.now() - lastAt < MIN_INTERVAL_MS) return;
+  if (!force && !perps.length && Date.now() - lastAt < MIN_INTERVAL_MS) return;
   inflight ??= refresh(tokens, assets, perps)
     .then(() => {
       lastAt = Date.now();

@@ -4,8 +4,9 @@ import { useState } from "react";
 import { Hero } from "@/components/hero";
 import { ModulePage } from "@/components/module-page";
 import { pct, sUsd, usd } from "@/format";
+import { lendTotals } from "@/sample/model";
 import { earnTotals } from "@/screens/earn/model";
-import { Earn, type EarnTab } from "@/screens/earn/views";
+import { EARN_TABS, Earn, type EarnTab } from "@/screens/earn/views";
 import { useChain } from "@/state/chain";
 import { useDataVersion } from "@/state/store";
 
@@ -32,13 +33,19 @@ export default function Lend() {
       stats={[
         { label: "Assets", value: String(T.n) },
         { label: "Avg APY", value: T.n ? pct(T.apy) : "—" },
-        T.earned > 0.005 ? { label: "Earned", value: sUsd(T.earned), tone: "pos" } : { label: "Earned", value: usd(T.earned) },
+        // "—" when the chain's history cannot prove what a position earned (never a made-up 0)
+        !lendTotals(chain).earnedKnown ? { label: "Earned", value: "—" } : T.earned > 0.005 ? { label: "Earned", value: sUsd(T.earned), tone: "pos" } : { label: "Earned", value: usd(T.earned) },
       ]}
     />
   );
 
   return (
-    <ModulePage sections={[{ key: "earn", label: "Earn", family: "earn" }]} current="earn" hero={hero}>
+    <ModulePage
+      sections={EARN_TABS.map(([key, label]) => ({ key, label, family: "earn" as const }))}
+      current={earnTab}
+      onSection={(k) => setEarnTab(k as EarnTab)}
+      hero={hero}
+    >
       <Earn tab={earnTab} setTab={setEarnTab} />
     </ModulePage>
   );

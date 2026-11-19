@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tx Sheet Motion</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="tx.css">
+<link rel="stylesheet" href="concepts.css">
+<script>try{var p=new URLSearchParams(location.search);document.documentElement.dataset.theme=p.get('theme')||localStorage.getItem('txm.theme')||'light'}catch(e){}</script>
+</head>
+<body data-page="index">
+<header class="top" id="top"></header>
+<main class="land">
+  <h1>Transaction sheet motion, three directions</h1>
+  <p class="lede">The bottom sheet that rises after Confirm (Review long SOLUSDC, Review swap, Review deposit and borrow, Review withdrawal). Each concept keeps today's layout and information (title, one-line help, progress bar, Sent / Processed / Confirmed, Done / Try again / Close, explorer icon), the Vanna chameleon in every state, and the gradient tail loader. Pick a theme, a device and reduce motion above; the links carry your choice.</p>
+  <div class="cards">
+    <a class="ccard" href="concept-a.html" data-link>
+      <div class="pv" id="pa"></div>
+      <h2>A · Calm <span class="rec">Recommended</span></h2>
+      <p>Mascot face in the left slot in every state with the loader riding on it as a status badge. Slow breathing while waiting, a glint on the progress line, one ripple and a drawn check on success, a single shake and a concerned face on failure.</p>
+      <span class="go">Open concept A →</span>
+    </a>
+    <a class="ccard" href="concept-b.html" data-link>
+      <div class="pv" id="pb"></div>
+      <h2>B · Playful</h2>
+      <p>The full chameleon acts it out: its own tail runs the loader's draw cycle, it hops on each step, does a happy hop with the tongue strike on success, and droops with pale skin and sad eyes on failure.</p>
+      <span class="go">Open concept B →</span>
+    </a>
+    <a class="ccard" href="concept-c.html" data-link>
+      <div class="pv" id="pc"></div>
+      <h2>C · Data-led</h2>
+      <p>Today's 48 px loader untouched, with the mascot as a small watching badge. Elapsed timer, per-step times on a ticked track, a receipt line on success, and the track shows where a failure stopped.</p>
+      <span class="go">Open concept C →</span>
+    </a>
+  </div>
+  <div class="facts">
+    <div><b>States in every concept:</b> waiting for wallet, waiting 60 s+ (visual only: heavier lids, slower breathing), sent, processed, confirmed, failed, partial failure. Use the chips, the slider or the arrow keys; Play runs the success, failure and partial paths.</div>
+    <div><b>Devices:</b> Redmi K50i (6.6", 1080 x 2400, 20:9, 412 x 915 dp) and a Galaxy S Ultra class phone (19.5:9, 412 x 892 dp). Android status bar, punch hole and gesture bar.</div>
+    <div><b>Porting:</b> see NOTES.md next to these files for properties, durations, easings and the Reanimated plan per concept.</div>
+  </div>
+</main>
+<script src="chameleon.js"></script>
+<script src="tx.js"></script>
+</body>
+</html>

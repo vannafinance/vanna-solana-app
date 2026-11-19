@@ -7,6 +7,7 @@ import { levFmt, pct, sign, spct, sUsd, usd } from "@/format";
 import { DATA } from "@/sample/data";
 import { hasMargin, lendRows, openPositions, portfolioTotals } from "@/sample/model";
 import { useChain } from "@/state/chain";
+import { useAccountRead } from "@/chain/account-live";
 import { usePersonal } from "@/state/personal";
 import { useTheme } from "@/theme/use-theme";
 import { brand, font } from "@/theme/tokens";
@@ -18,9 +19,10 @@ import { openShare } from "@/screens/share/share";
 export function Overview({ openLender, openTrader }: { openLender: () => void; openTrader: (sub?: TraderSub) => void }) {
   const { chain } = useChain();
   const ready = usePersonal(chain);
+  const read = useAccountRead(chain);
   const T = portfolioTotals(chain);
-  const C = usePfColors();
 
+  if (ready && read !== "ready") return <EmptyCard title="" />;
   if (!ready || (T.net < 0.005 && !DATA[chain].lend.length && !hasMargin(DATA[chain]))) {
     return <EmptyCard title="Nothing here yet" action="Browse pools" onAction={() => router.navigate("/lend")} />;
   }
@@ -39,14 +41,16 @@ function EarnCard() {
   const { chain } = useChain();
   const T = portfolioTotals(chain);
   const C = usePfColors();
-  const parts: [string, number, string][] = [["Lending", T.earnLend, C.l], ["Trading", T.earnTrade, C.m]];
+  const parts: [string, number, string, boolean][] = [["Lending", T.earnLend, C.l, T.earnLendKnown], ["Trading", T.earnTrade, C.m, T.earnTradeKnown]];
   const net = parts.reduce((t, p) => t + p[1], 0);
+  // a part the chain's history cannot back shows "—", and so does the total
+  const known = T.netEarnKnown;
   return (
     <Card>
       <Text style={[text.muted, { color: C.muted }]}>Net earnings</Text>
-      <Text style={[text.big, { color: sign(net) === "neg" ? C.neg : sign(net) === "pos" ? C.pos : C.text }]}>{sUsd(net)}</Text>
-      <SplitBar parts={parts.map((p) => [p[1], p[2]])} />
-      <Pairs items={parts.map(([label, v, dot]) => ({ label, value: sUsd(v), dot, tone: sign(v) }))} />
+      <Text style={[text.big, { color: known && sign(net) === "neg" ? C.neg : known && sign(net) === "pos" ? C.pos : C.text }]}>{known ? sUsd(net) : "—"}</Text>
+      <SplitBar parts={parts.map((p) => [p[3] ? p[1] : 0, p[2]])} />
+      <Pairs items={parts.map(([label, v, dot, k]) => ({ label, value: k ? sUsd(v) : "—", dot, tone: k ? sign(v) : undefined }))} />
     </Card>
   );
 }
@@ -84,7 +88,7 @@ function MarginCard({ openTrader }: { openTrader: (sub?: TraderSub) => void }) {
         items={[
           { label: "Borrowed", value: usd(a.debtUsd) },
           { label: "Leverage", value: levFmt(a.lev) },
-          { label: "Interest", value: usd(interest) },
+          { label: "Interest", value: T.interestKnown || !d.margin.debt.some((x) => x.amt > 0) ? usd(interest) : "—" },
         ]}
       />
       <Text style={{ fontFamily: font.semibold, fontSize: 12, color: C.text, marginTop: 4 }}>Used in</Text>
@@ -118,8 +122,8 @@ function LendCard({ openLender }: { openLender: () => void }) {
           title={r.sym}
           sub={`${pct(r.apy)} APY`}
           value={usd(r.value)}
-          subValue={sUsd(r.earned)}
-          subTone={sign(r.earned)}
+          subValue={r.earnedKnown ? sUsd(r.earned) : "—"}
+          subTone={r.earnedKnown ? sign(r.earned) : undefined}
           onPress={openLender}
         />
       ))}
@@ -147,10 +151,10 @@ function PositionsCard({ openTrader }: { openTrader: (sub?: TraderSub) => void }
               ))}
             </View>
           }
-          value={sUsd(p.pnl)}
-          valueTone={sign(p.pnl)}
-          subValue={spct(p.pct)}
-          subTone={sign(p.pnl)}
+          value={p.pnlKnown === false ? "—" : sUsd(p.pnl)}
+          valueTone={p.pnlKnown === false ? undefined : sign(p.pnl)}
+          subValue={p.pnlKnown === false ? "—" : spct(p.pct)}
+          subTone={p.pnlKnown === false ? undefined : sign(p.pnl)}
           onPress={() => openTrader(p.sub)}
         />
       ))}

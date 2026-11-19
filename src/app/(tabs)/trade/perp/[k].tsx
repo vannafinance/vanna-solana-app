@@ -38,6 +38,17 @@ const cdTxt = () => {
   return String(Math.floor(v / 60)).padStart(2, "0") + ":" + String(v % 60).padStart(2, "0");
 };
 
+// The funding countdown ticks every second on its own: when the page held this state, every tick re-rendered the whole market page
+// (chart, book, header; ~180 ms each on a Hermes dev build), which kept the JS thread busy while a transaction was being prepared.
+function FundingCountdown({ color }: { color: string }) {
+  const [cd, setCd] = useState(cdTxt);
+  useEffect(() => {
+    const id = setInterval(() => setCd(cdTxt()), 1000);
+    return () => clearInterval(id);
+  }, []);
+  return <Text style={[styles.statSub, { color }]}>{cd}</Text>;
+}
+
 export default function PerpMarket() {
   useDataVersion();
   const { k } = useLocalSearchParams<{ k: string }>();
@@ -54,13 +65,7 @@ export default function PerpMarket() {
   const [book, setBook] = useState<"book" | "trades">("book");
   const [fullScreen, setFullScreen] = useState(false);
   const [fsTicketSide, setFsTicketSide] = useState<Side | null>(null);
-  const [cd, setCd] = useState(cdTxt);
   const mktBtnRef = useRef<HostInstance>(null);
-
-  useEffect(() => {
-    const id = setInterval(() => setCd(cdTxt()), 1000);
-    return () => clearInterval(id);
-  }, []);
 
   const has = ready && hasMargin(DATA[chain]);
   const a = acct(chain);
@@ -230,7 +235,7 @@ export default function PerpMarket() {
                   </Text>
                   <View style={styles.cdRow}>
                     <Icon name="schedule" size={11} color="muted" />
-                    <Text style={[styles.statSub, { color: colors.muted }]}>{cd}</Text>
+                    <FundingCountdown color={colors.muted} />
                   </View>
                 </View>
                 <View style={[styles.statCol, styles.statSep, { borderLeftColor: colors.divider }]}>

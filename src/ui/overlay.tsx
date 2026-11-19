@@ -32,7 +32,8 @@ type MenuSpec = {
   kind: "menu" | "tip";
 };
 export type ToastTone = "ok" | "info" | "err";
-type State = { sheet: SheetSpec | null; sheetKey: number; menu: MenuSpec | null; menuKey: number; toast: { text: string; tone: ToastTone; key: number } | null };
+export type ToastAction = [label: string, run: () => void];
+type State = { sheet: SheetSpec | null; sheetKey: number; menu: MenuSpec | null; menuKey: number; toast: { text: string; tone: ToastTone; key: number; action?: ToastAction } | null };
 
 let state: State = { sheet: null, sheetKey: 0, menu: null, menuKey: 0, toast: null };
 const subs = new Set<() => void>();
@@ -49,6 +50,14 @@ const useOverlay = () =>
 export function openSheet(spec: SheetSpec) {
   set({ sheet: spec, sheetKey: state.sheetKey + 1, menu: null });
 }
+/** Whether a sheet is on screen now. */
+export const sheetOpen = () => state.sheet !== null;
+// While a transaction runs (waiting on the wallet, sending, confirming), a stray tap outside the sheet, a drag down or the back
+// button must not dismiss it (the X still does): `msg` is what the tap shows instead.
+let guarded: string | null = null;
+export const guardSheet = (on: boolean, msg = "Waiting for your wallet. Approve or reject it there.") => {
+  guarded = on ? msg : null;
+};
 let closing: (() => void) | null = null;
 // Animated close (the host plays the exit, then clears the sheet).
 export function closeSheet() {
@@ -90,11 +99,16 @@ export const closeMenu = () => set({ menu: null });
 
 let toastTimer: ReturnType<typeof setTimeout> | undefined;
 // Toast (option C): a short pill above the tab bar, inverse of the theme so it stands out, with an icon for the kind of message.
-export function toast(text: string, tone: ToastTone = "ok") {
+// `action`: one tappable word on the toast (e.g. "View"); such a toast stays longer. `ms`: how long it shows.
+export function toast(text: string, tone: ToastTone = "ok", opts: { action?: ToastAction; ms?: number } = {}) {
   clearTimeout(toastTimer);
-  set({ toast: { text, tone, key: Date.now() } });
-  toastTimer = setTimeout(() => set({ toast: null }), 2200);
+  set({ toast: { text, tone, key: Date.now(), action: opts.action } });
+  toastTimer = setTimeout(() => set({ toast: null }), opts.ms ?? (opts.action ? 6000 : 2200));
 }
+const hideToast = () => {
+  clearTimeout(toastTimer);
+  set({ toast: null });
+};
 
 const OUT = Easing.bezier(0.4, 0, 1, 1);
 const SPRING = { damping: 30, stiffness: 300, mass: 0.9, overshootClamping: true };
@@ -120,7 +134,7 @@ export function OverlayHost() {
           <MenuView key={menuKey} spec={menu} />
         </View>
       )}
-      {t && <Toast key={t.key} text={t.text} tone={t.tone} />}
+      {t && <Toast key={t.key} text={t.text} tone={t.tone} action={t.action} />}
     </>
   );
 }
@@ -150,6 +164,11 @@ function SheetView({ spec }: { spec: SheetSpec }) {
     setTimeout(finish, 240);
   };
 
+  const dismiss = () => {
+    if (!guarded) return close();
+    toast(guarded, "info");
+  };
+
   // open once the sheet has its size, so the spring travels exactly its own height (no jump, no long slide)
   const onLayout = (h: number) => {
     if (opened.current) return;
@@ -161,9 +180,10 @@ function SheetView({ spec }: { spec: SheetSpec }) {
 
   useEffect(() => {
     closing = close;
-    const sub = BackHandler.addEventListener("hardwareBackPress", () => (close(), true));
+    const sub = BackHandler.addEventListener("hardwareBackPress", () => (dismiss(), true));
     return () => {
       sub.remove();
+      guarded = null;
       if (closing === close) closing = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -181,7 +201,7 @@ function SheetView({ spec }: { spec: SheetSpec }) {
     })
     .onEnd((e) => {
       const rest = spec.detents ? mediumY : 0;
-      if (y.value > rest + 110 || e.velocityY > 1100) runOnJS(close)();
+      if (y.value > rest + 110 || e.velocityY > 1100) runOnJS(dismiss)();
       else if (!spec.detents) snap(0);
       else if (e.velocityY < -600 || y.value < mediumY / 2) snap(0);
       else snap(mediumY);
@@ -230,7 +250,7 @@ function SheetView({ spec }: { spec: SheetSpec }) {
   return (
     <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
       <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: colors.scrim }, scrimStyle]}>
-        <Pressable style={StyleSheet.absoluteFill} onPress={close} accessibilityLabel="Close" />
+        <Pressable style={StyleSheet.absoluteFill} onPress={dismiss} accessibilityLabel="Close" />
       </Animated.View>
       <Animated.View
         onLayout={(e) => onLayout(e.nativeEvent.layout.height)}
@@ -394,7 +414,7 @@ const TOAST_ICON: Record<ToastTone, { icon: IconName; bg: string }> = {
   info: { icon: "info", bg: "#703AE6" },
   err: { icon: "error", bg: "#D23F42" },
 };
-function Toast({ text, tone }: { text: string; tone: ToastTone }) {
+function Toast({ text, tone, action }: { text: string; tone: ToastTone; action?: ToastAction }) {
   const insets = useSafeAreaInsets();
   const { isDark } = useTheme();
   const o = useSharedValue(0);
@@ -404,7 +424,7 @@ function Toast({ text, tone }: { text: string; tone: ToastTone }) {
   const st = useAnimatedStyle(() => ({ opacity: Math.min(1, o.value * 1.6), transform: [{ translateY: (1 - o.value) * 24 }, { scale: 0.96 + o.value * 0.04 }] }));
   const ic = TOAST_ICON[tone];
   return (
-    <View pointerEvents="none" style={[styles.toastWrap, { bottom: insets.bottom + 68 }]}>
+    <View pointerEvents={action ? "box-none" : "none"} style={[styles.toastWrap, { bottom: insets.bottom + 68 }]}>
       <Animated.View
         style={[styles.toast, { backgroundColor: isDark ? "#F2F1F6" : "#1E1D24" }, isDark ? styles.toastShDark : styles.toastShLight, st]}
         accessibilityLiveRegion="polite"
@@ -413,9 +433,14 @@ function Toast({ text, tone }: { text: string; tone: ToastTone }) {
         <View style={[styles.toastDot, { backgroundColor: ic.bg }]}>
           <Icon name={ic.icon} size={16} color="#FFFFFF" bold />
         </View>
-        <Text style={[styles.toastText, { color: isDark ? "#111111" : "#FFFFFF" }]} numberOfLines={2}>
+        <Text style={[styles.toastText, { color: isDark ? "#111111" : "#FFFFFF" }]} numberOfLines={action ? 3 : 2}>
           {text}
         </Text>
+        {action && (
+          <Pressable onPress={() => (hideToast(), action[1]())} hitSlop={10} accessibilityRole="button" accessibilityLabel={action[0]} style={styles.toastAct}>
+            <Text style={[styles.toastActText, { color: isDark ? "#5029A3" : "#BDA4F4" }]}>{action[0]}</Text>
+          </Pressable>
+        )}
       </Animated.View>
     </View>
   );
@@ -442,4 +467,6 @@ const styles = StyleSheet.create({
   toastShLight: { shadowColor: "#110B2E", shadowOpacity: 0.28, shadowRadius: 16, shadowOffset: { width: 0, height: 10 }, elevation: 10 },
   toastDot: { width: 26, height: 26, borderRadius: 13, alignItems: "center", justifyContent: "center" },
   toastText: { flexShrink: 1, fontFamily: font.semibold, fontSize: 14, lineHeight: 20 },
+  toastAct: { minHeight: 32, justifyContent: "center", paddingLeft: 4 },
+  toastActText: { fontFamily: font.semibold, fontSize: 14, lineHeight: 20 },
 });

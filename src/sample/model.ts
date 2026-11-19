@@ -2,7 +2,8 @@
 // when the chain adapters land, so screens read only the shapes returned here.
 
 import { perpMark } from "@/chain/perp-mark";
-import { LIVE_ACCT } from "@/chain/account-live";
+import { LIVE_ACCT, setPnlProbe } from "@/chain/account-live";
+import { lineBps, lineWeight } from "@/chain/solana/risk";
 import type { Chain } from "@/state/chain";
 
 import { type ChainData, DATA, type PerpPos, POOLS_BY, PX, type Side, type SpotPos, TOK } from "./data";
@@ -19,11 +20,14 @@ const pxAt = (s: string) => OVR[s] ?? (isStable(s) ? px(s) : px(s) * SCALE);
 // a perp is priced from Phoenix's mark (falls back to PX); price-room scale and a single-token override apply as for any volatile asset
 const pxPerp = (s: string) => OVR[s] ?? perpMark(s) * SCALE;
 const isStable = (s: string) => !!TOK[s]?.stable;
-const ltOf = (s: string) => TOK[s]?.lt ?? 0.5;
+
+// Farm receipts (Kamino / Perena share tokens) are configured at LTV 50% / liquidation 60% on the fork.
+const FARM_W = { liq: lineBps(6000), borrow: lineBps(5000) };
 const sgn = (side: Side) => (side === "long" ? 1 : -1);
 
 export const poolOf = (chain: Chain, sym: string) => POOLS_BY[chain].find((p) => p.sym === sym);
-export const perpQty = (p: PerpPos) => (p.coll * p.lev) / p.entry;
+// a position read from Phoenix carries its real size; a sample or just-opened one is collateral x leverage / entry
+export const perpQty = (p: PerpPos) => p.qty ?? (p.coll * p.lev) / p.entry;
 export const perpPnl = (p: PerpPos) => sgn(p.side) * perpQty(p) * (perpMark(p.k) - p.entry);
 export const spotPnl = (s: SpotPos) => sgn(s.side) * s.qty * (px(s.sym) - s.entry);
 export const spotValue = (s: SpotPos) => s.qty * px(s.sym);
@@ -37,13 +41,22 @@ export function acct(chain: Chain, scale = 1) {
   SCALE = scale;
   const d = DATA[chain];
   const m = d.margin;
-  const collUsd = m.coll.reduce((t, c) => t + c.amt * pxAt(c.sym), 0);
+  // phUSD waiting in the margin account (a perps open between its two transactions) counts like USDC, as the program counts it.
+  const phUsd = (m.phUsd ?? 0) * pxAt("USDC");
+  const collUsd = m.coll.reduce((t, c) => t + c.amt * pxAt(c.sym), 0) + phUsd;
   const availUsd = Object.entries(m.avail).reduce((t, [s, v]) => t + v * pxAt(s), 0);
-  let spotUsd = 0, spotPnlV = 0;
+  // the same holdings at each token's liquidation / borrow weight (tokens only: venues and Phoenix count at 100%)
+  const wTok = (line: "liq" | "borrow") =>
+    m.coll.reduce((t, c) => t + c.amt * pxAt(c.sym) * lineWeight(c.sym, line), 0) + Object.entries(m.avail).reduce((t, [s, v]) => t + v * pxAt(s) * lineWeight(s, line), 0) +
+    phUsd * lineWeight("phUSD", line);
+  let spotUsd = 0, spotPnlV = 0, spotLiq = 0, spotBor = 0;
   d.spot.forEach((s) => {
     const v = s.qty * pxAt(s.sym);
     spotPnlV += sgn(s.side) * s.qty * (pxAt(s.sym) - s.entry);
-    spotUsd += s.side === "long" ? v : s.qty * s.entry;
+    const u = s.side === "long" ? v : s.qty * s.entry;
+    spotUsd += u;
+    spotLiq += u * lineWeight(s.sym, "liq");
+    spotBor += u * lineWeight(s.sym, "borrow");
   });
   let perpEq = d.phoenixIdle, perpNotional = 0, perpPnlV = 0;
   d.perps.forEach((p) => {
@@ -56,32 +69,30 @@ export function acct(chain: Chain, scale = 1) {
   const assets = collUsd + availUsd + spotUsd + perpEq + farmUsd;
   const debtUsd = m.debt.reduce((t, x) => t + x.amt * pxAt(x.sym), 0);
   const equity = assets - debtUsd;
-  // The website's rule: health = everything held / debt (Solana margin.ts).
-  // Borrowed tokens land in the account, so a borrow raises both sides.
-  const weighted = assets;
+  // The program's health (risk_engine, since the 2026-11 audit): sum of collateral x line weight / debt. Liquidation line = the
+  // shown health factor (liquidatable at <= 1.10); the borrow line (LTV weights) is what borrow / withdraw / trades must keep above 1.10.
+  // The Phoenix balance counts at 100% on both lines.
+  const weighted = wTok("liq") + spotLiq + perpEq + farmUsd * FARM_W.liq;
+  const weightedBorrow = wTok("borrow") + spotBor + perpEq + farmUsd * FARM_W.borrow;
   const maint = 0;
-  const hf = debtUsd > 1e-9 ? assets / debtUsd : Infinity;
+  const hf = debtUsd > 1e-9 ? weighted / debtUsd : Infinity;
+  const borrowHf = debtUsd > 1e-9 ? weightedBorrow / debtUsd : Infinity;
   // Gross position value / equity: every token held, plus the larger of the Phoenix balance and its open notional.
   const exposure = assets - perpEq + Math.max(perpEq, perpNotional);
   const lev = equity > 0 ? exposure / equity : Infinity;
-  // A real signed-in account: health, debt, equity and leverage are the chain readers' figures (same as the website).
-  // Price-room searches (scaled prices) keep the model's shape, calibrated so scale 1 equals the chain's health factor.
+  // A real signed-in account: debt and the collateral total come from the chain reader (same prices as PX); health, equity and
+  // leverage are the model's own, which also counts Phoenix and Farm like the website does.
   const L = LIVE_ACCT[chain];
-  let hfOut = hf, debtOut = debtUsd, eqOut = equity, levOut = lev, collOut = collUsd;
-  if (L) {
-    if (base) {
-      L.k = isFinite(L.hf) && isFinite(hf) && hf > 0 ? L.hf / hf : 1;
-      hfOut = L.hf;
-      debtOut = L.debtUsd;
-      eqOut = L.equity;
-      levOut = L.lev;
-      collOut = L.collUsd;
-    } else hfOut = hf * (L.k ?? 1);
+  let debtOut = debtUsd, collOut = collUsd;
+  if (L && base) {
+    debtOut = L.debtUsd;
+    collOut = L.collUsd + availUsd + perpEq + farmUsd;
   }
+  const hfOut = hf, eqOut = equity, levOut = lev;
   const borrowApy = debtUsd ? m.debt.reduce((t, x) => t + x.amt * pxAt(x.sym) * (poolOf(chain, x.sym)?.borA ?? 0), 0) / debtUsd : 0;
   SCALE = 1;
   return {
-    collUsd: collOut, weighted, maint, availUsd, spotUsd, perpEq, farmUsd, assets, debtUsd: debtOut, equity: eqOut, hf: hfOut, lev: levOut, exposure, borrowApy,
+    collUsd: collOut, weighted, weightedBorrow, borrowHf, maint, availUsd, spotUsd, perpEq, farmUsd, assets, debtUsd: debtOut, equity: eqOut, hf: hfOut, lev: levOut, exposure, borrowApy,
     interestDay: (debtUsd * borrowApy) / 100 / 365,
     openPnl: spotPnlV + perpPnlV,
   };
@@ -89,12 +100,34 @@ export function acct(chain: Chain, scale = 1) {
 
 export type Account = ReturnType<typeof acct>;
 
+/**
+ * The margin account's Net P&L: what it is worth now (everything it holds, incl. Perps and Farm, less its loans, at live prices)
+ * minus the net deposits (each deposit and withdrawal at its own time's price). Trading profit, farm earnings and interest paid
+ * are all inside that figure. `known` is false when some deposit has no recorded price (shown as "—").
+ */
+export function marginPnl(chain: Chain): { known: boolean; value: number; pts: number[] } {
+  const d = DATA[chain];
+  const nd = d.margin.netDeposits;
+  if (!hasMargin(d) || nd == null) return { known: false, value: 0, pts: [] };
+  const a = acct(chain);
+  const debt = d.margin.debt.reduce((t, x) => t + x.amt * px(x.sym), 0);
+  const value = a.assets - debt - nd;
+  const snaps = d.margin.pnlSnaps ?? [];
+  return { known: true, value, pts: snaps.length ? [...snaps.map((s) => s[1]), Math.round(value * 100) / 100] : [] };
+}
+setPnlProbe((chain) => {
+  const p = marginPnl(chain);
+  return p.known ? p.value : null;
+});
+
 export function lendTotals(chain: Chain) {
   const lend = DATA[chain].lend;
   const sup = lend.reduce((t, l) => t + l.amt * px(l.sym), 0);
   const earned = lend.reduce((t, l) => t + l.earned * px(l.sym), 0);
   const apy = sup ? lend.reduce((t, l) => t + l.amt * px(l.sym) * (poolOf(chain, l.sym)?.supA ?? 0), 0) / sup : 0;
-  return { sup, earned, apy };
+  // false when any position's earnings could not be proven from the chain's history (screens show "—", never 0)
+  const earnedKnown = !lend.some((l) => l.earnedUnknown);
+  return { sup, earned, apy, earnedKnown };
 }
 
 export const walletUsd = (chain: Chain) => Object.entries(DATA[chain].wallet).reduce((t, [s, v]) => t + v * px(s), 0);
@@ -108,9 +141,14 @@ export function portfolioTotals(chain: Chain) {
   const lending = l.sup + l.earned;
   const earnLend = l.earned;
   const earnTrade = (hasMargin(d) ? a.openPnl : 0) + d.realized + farmEarned;
+  // which of these figures the chain's history can back (a real account); unknown ones show "—"
+  const earnLendKnown = l.earnedKnown;
+  const earnTradeKnown = !d.realizedUnknown && !d.farm.some((f) => f.earnedUnknown);
+  const interestKnown = !d.margin.interestUnknown;
   return {
     net: wallet + lending + margin, wallet, lending, margin, earnLend, earnTrade,
     netEarn: earnLend + earnTrade, interestPaid: d.margin.interestPaid, a, l,
+    earnLendKnown, earnTradeKnown, interestKnown, netEarnKnown: earnLendKnown && earnTradeKnown,
   };
 }
 
@@ -127,6 +165,8 @@ export type Position = {
   pnl: number;
   pct: number;
   size: number;
+  // false: a farm position whose earnings the chain's history cannot prove ("—")
+  pnlKnown?: boolean;
   tags: { label: string; tone: "long" | "short" | "grey" | "teal" }[];
 };
 
@@ -155,6 +195,7 @@ export function farmPositions(chain: Chain): Position[] {
   return DATA[chain].farm.map((f) => {
     const pnl = f.earned * px(f.sym), base = f.amt * px(f.sym);
     return {
+      pnlKnown: !f.earnedUnknown,
       sub: "farm", id: f.id, sym: f.icon, name: f.name, pnl, pct: base ? (pnl / base) * 100 : 0, size: (f.amt + f.earned) * px(f.sym),
       tags: [{ label: "Farm", tone: "teal" }],
     };
@@ -167,7 +208,7 @@ export const openPositions = (chain: Chain) => [...perpPositions(chain), ...farm
 export function lendRows(chain: Chain) {
   return DATA[chain].lend.map((l) => {
     const p = poolOf(chain, l.sym);
-    return { sym: l.sym, amt: l.amt, apy: p?.supA ?? 0, value: (l.amt + l.earned) * px(l.sym), earned: l.earned * px(l.sym), since: l.since };
+    return { sym: l.sym, amt: l.amt, apy: p?.supA ?? 0, value: (l.amt + l.earned) * px(l.sym), earned: l.earned * px(l.sym), earnedKnown: !l.earnedUnknown, since: l.since };
   });
 }
 

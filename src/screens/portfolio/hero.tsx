@@ -10,6 +10,7 @@ import { MascotFace } from "@/mascot/mascot";
 import { DATA } from "@/sample/data";
 import { hasMargin, hfWord, portfolioTotals, priceOf } from "@/sample/model";
 import { useChain } from "@/state/chain";
+import { useAccountRead } from "@/chain/account-live";
 import { usePersonal } from "@/state/personal";
 import { useTheme } from "@/theme/use-theme";
 import { families, font } from "@/theme/tokens";
@@ -20,7 +21,10 @@ import { openDeposit, openTransfer, openWithdraw } from "@/screens/move/move";
 // Transfer, then Wallet / Lending / Margin equity.
 export function PortfolioHero() {
   const { chain } = useChain();
-  const ready = usePersonal(chain);
+  // "—" until the first account read for this wallet has finished (never a misleading $0.00)
+  const personal = usePersonal(chain);
+  const read = useAccountRead(chain);
+  const ready = personal && read === "ready";
   const T = portfolioTotals(chain);
   const margin = ready && hasMargin(DATA[chain]);
 
