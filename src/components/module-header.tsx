@@ -4,8 +4,6 @@ import type { ReactNode } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { REAL_BUILD } from "@/chain/build";
-import { POINTS } from "@/sample/data";
 import { useRewards } from "@/sample/rewards";
 import { useChain } from "@/state/chain";
 import { useNotes } from "@/state/notes";
@@ -15,8 +13,6 @@ import { BrandLockup } from "./brand";
 import { initialOf } from "./avatar";
 import { HeroSurface } from "./hero-surface";
 import { Icon } from "./ui/icon";
-
-const ptsShort = (n: number) => (n >= 1000 ? (Math.floor(n / 100) / 10).toFixed(1).replace(/\.0$/, "") + "K" : String(n));
 
 /* The module header (design core.js .mh): the family's surface, the header row (brand, Copilot, points, bell, avatar), then the
    module's hero in a 234 px body whose last 48 px sit under the page pill. heroHeight = null lets the hero take its own height. */
@@ -50,11 +46,6 @@ export function HeaderRow() {
           </View>
         )}
       </Pressable>
-      <Pressable style={styles.pts} onPress={() => router.push("/rewards" as Href)} accessibilityRole="button" accessibilityLabel={REAL_BUILD ? "Rewards, coming soon" : `Rewards, ${POINTS.toLocaleString("en-US")} points`}>
-        <Icon name="stars" size={16} color="#FFD66B" filled />
-        {/* rewards are not live (no points API yet): "Soon", never a made-up 0 */}
-        <Text style={styles.ptsText}>{REAL_BUILD ? "Soon" : ptsShort(POINTS)}</Text>
-      </Pressable>
       <Pressable style={styles.hbtn} onPress={() => router.push("/notifications")} accessibilityRole="button" accessibilityLabel={`Notifications${unread ? `, ${unread} unread` : ""}`}>
         <Icon name="notifications" size={24} color="#FFFFFF" />
         {unread > 0 && (
@@ -83,8 +74,6 @@ const styles = StyleSheet.create({
     position: "absolute", right: 5, bottom: 6, width: 16, height: 16, borderRadius: 8, backgroundColor: "#FFFFFF", alignItems: "center", justifyContent: "center",
     shadowColor: "#000", shadowOpacity: 0.25, shadowRadius: 2, shadowOffset: { width: 0, height: 1 }, elevation: 2,
   },
-  pts: { flexDirection: "row", alignItems: "center", gap: 4, height: 32, paddingLeft: 8, paddingRight: 10, marginRight: 4, borderRadius: 16, backgroundColor: "rgba(255,255,255,0.16)" },
-  ptsText: { color: "#FFFFFF", fontFamily: font.semibold, fontSize: 13, lineHeight: 16 },
   count: { position: "absolute", top: 4, right: 2, minWidth: 18, height: 18, paddingHorizontal: 4, borderRadius: 9, backgroundColor: "#FF007A", alignItems: "center", justifyContent: "center" },
   countText: { color: "#FFFFFF", fontFamily: font.semibold, fontSize: 11, lineHeight: 18 },
   av: { width: 44, height: 44 },

@@ -25,7 +25,7 @@ import { base58 } from "./prices";
 import { fetchSolanaAccount } from "./account";
 import { fetchSolanaPools, readLenderTotal } from "./pools";
 import { decodeBase64, forkNow, rpc } from "./rpc";
-import { ensureFreshForkPrices } from "./fork-prices";
+import { alignKaminoReserveOnFork, ensureFreshForkPrices } from "./fork-prices";
 import {
   COMPUTE_BUDGET_PROGRAM_ID,
   type AccountMeta,
@@ -2051,7 +2051,8 @@ export async function solanaFarmDeposit(params: {
   // Legs that run before the Kamino call (wallet deposit, borrow) and their cleanup.
   const legs: RawInstruction[] = [];
   const legSuffix: RawInstruction[] = [];
-  const configs = await readAllAssetConfigs();
+  // FORK: the reserve and its vault must agree or Kamino's own check fails (alignKaminoReserveOnFork).
+  const [configs] = await Promise.all([readAllAssetConfigs(), alignKaminoReserveOnFork(r.reserve, r.liquidityVault, r.collateralMint)]);
   const idxOf = (mint: string) => [...configs.values()].find((a) => a.mint === mint && a.kind !== "venue")?.assetIndex;
   const tIdx = idxOf(token.mint);
   const rIdx = idxOf(r.collateralMint);
@@ -2176,7 +2177,7 @@ export async function solanaFarmWithdraw(params: {
     m(INSTRUCTIONS_SYSVAR, false),
   ];
 
-  const configs = await readAllAssetConfigs();
+  const [configs] = await Promise.all([readAllAssetConfigs(), alignKaminoReserveOnFork(r.reserve, r.liquidityVault, r.collateralMint)]);
   const idxOf = (mint: string) => [...configs.values()].find((a) => a.mint === mint && a.kind !== "venue")?.assetIndex;
   const tIdx = idxOf(token.mint);
   const rIdx = idxOf(r.collateralMint);
@@ -2384,7 +2385,7 @@ export async function buildFlashFarmExit(owner: string, sym: string, receiptsRaw
     m(margin, true), m(r.market, false), m(r.reserve, true), m(r.marketAuthority, false), m(token.mint, false), m(r.collateralMint, true),
     m(r.liquidityVault, true), m(receiptVault, true), m(underlyingVault, true), m(TOKEN_PROGRAM_ID, false), m(token.tokenProgram, false), m(INSTRUCTIONS_SYSVAR, false),
   ];
-  const configs = await readAllAssetConfigs();
+  const [configs] = await Promise.all([readAllAssetConfigs(), alignKaminoReserveOnFork(r.reserve, r.liquidityVault, r.collateralMint)]);
   const { idxOf, received, closedVenue } = projectionIndexes(configs, proj);
   const tIdx = idxOf(token.mint);
   const rIdx = idxOf(r.collateralMint);

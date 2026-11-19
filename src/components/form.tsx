@@ -351,7 +351,7 @@ const styles = StyleSheet.create({
   segI: { height: 32, alignItems: "center", justifyContent: "center", paddingHorizontal: 16 },
   prev: { borderRadius: 12, paddingHorizontal: 12 },
   pr: { flexDirection: "row", alignItems: "center", gap: 6, minHeight: 44 },
-  prv: { fontFamily: font.semibold, fontSize: 14, fontVariant: ["tabular-nums", "no-contextual"] },
+  prv: { fontFamily: font.semibold, fontSize: 14, lineHeight: 20, includeFontPadding: false, textAlignVertical: "center", fontVariant: ["tabular-nums", "no-contextual"] },
   lvh: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 },
   eb: { fontFamily: font.semibold, fontSize: 12, letterSpacing: 0.6 },
   step: { flexDirection: "row", alignItems: "center", gap: 4 },

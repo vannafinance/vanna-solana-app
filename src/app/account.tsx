@@ -14,8 +14,7 @@ import { Icon } from "@/components/ui/icon";
 import type { IconName } from "@/components/ui/material-symbols";
 import { Card, IconAction } from "@/components/ui/kit";
 import { usd } from "@/format";
-import { REAL_BUILD } from "@/chain/build";
-import { ACCOUNT, DATA, POINTS } from "@/sample/data";
+import { ACCOUNT, DATA } from "@/sample/data";
 import { initialOf } from "@/components/avatar";
 import { useRewards } from "@/sample/rewards";
 import { openEditName } from "@/screens/rewards/edit";
@@ -47,7 +46,7 @@ export default function Account() {
   const mine = usePersonal(chain);
   const me = useRewards();
   const appearance = useAppearance();
-  const [notif, setNotif] = useState({ health: true, trades: true, earn: true, rewards: false });
+  const [notif, setNotif] = useState({ health: true, trades: true, earn: true });
   const lock = useLock();
   const bioLabel = useBiometricLabel();
   const ios = Platform.OS === "ios";
@@ -81,7 +80,6 @@ export default function Account() {
         </LinearGradient>
 
         <Card style={styles.list}>
-          <NavRow icon="stars" iconColor="#FFB800" label="Rewards" value={REAL_BUILD ? "Coming soon" : `${POINTS.toLocaleString("en-US")} pts`} onPress={() => router.push("/rewards" as Href)} />
           <NavRow icon="badge" label="Display name" value={me.name} onPress={openEditName} />
         </Card>
 
@@ -145,7 +143,6 @@ export default function Account() {
           <ToggleRow icon="monitor_heart" label="Health" value={notif.health} onChange={(v) => setNotif({ ...notif, health: v })} />
           <ToggleRow icon="candlestick_chart" label="Trades" value={notif.trades} onChange={(v) => setNotif({ ...notif, trades: v })} />
           <ToggleRow icon="savings" label="Earn" value={notif.earn} onChange={(v) => setNotif({ ...notif, earn: v })} />
-          <ToggleRow icon="stars" label="Points drop" value={notif.rewards} onChange={(v) => setNotif({ ...notif, rewards: v })} />
           <NavRow icon="notifications" label="All" onPress={() => router.push("/notifications")} />
         </Card>
 
@@ -253,7 +250,7 @@ function DeleteBody({ close }: { close: () => void }) {
       <View style={[styles.dcard, { backgroundColor: colors.pinkTint }]}>
         <Icon name="person_remove" size={22} color={colors.onPinkTint} />
         <Text style={[styles.dt, { color: colors.onPinkTint }]}>
-          <Text style={{ fontFamily: font.semibold }}>Deleted for good:</Text> your sign-in, the name {me.name}, {POINTS.toLocaleString("en-US")} points and your referrals.
+          <Text style={{ fontFamily: font.semibold }}>Deleted for good:</Text> your sign-in and the name {me.name}.
         </Text>
       </View>
       <View style={[styles.dcard, { backgroundColor: colors.bg }]}>

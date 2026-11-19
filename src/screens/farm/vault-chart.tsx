@@ -1,6 +1,6 @@
 import { memo, useCallback, useMemo, useState } from "react";
 import { type GestureResponderEvent, Pressable, StyleSheet, Text, View } from "react-native";
-import Svg, { Circle, Line, Path } from "react-native-svg";
+import Svg, { Circle, G, Line, Path } from "react-native-svg";
 
 import { useTheme } from "@/theme/use-theme";
 import { font } from "@/theme/tokens";
@@ -92,11 +92,11 @@ export const FarmChart = memo(function FarmChart({ data, cmp, dates, axis, read,
               {g.ticks.map((t) => (
                 <Line key={t} x1={YW} x2={w} y1={g.Y(t)} y2={g.Y(t)} stroke={colors.divider} strokeWidth={1} />
               ))}
-              <Svg x={YW} width={g.pw} height={h}>
+              <G x={YW}>
                 <Path d={g.area} fill={area} />
                 {g.cmp && <Path d={g.cmp} fill="none" stroke={colors.muted} strokeWidth={1.5} strokeDasharray="5 4" />}
                 <Path d={g.main} fill="none" stroke={line} strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
-              </Svg>
+              </G>
               {sel != null && <Line x1={YW + g.X(sel)} x2={YW + g.X(sel)} y1={0} y2={h} stroke={colors.borderControl} strokeWidth={1} />}
               <Circle cx={YW + g.X(cur)} cy={g.Y(g.d[cur])} r={sel != null ? 5 : 4} fill={sel != null ? colors.surface : line} stroke={line} strokeWidth={sel != null ? 2 : 0} />
             </Svg>

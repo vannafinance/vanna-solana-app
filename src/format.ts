@@ -32,7 +32,9 @@ export const sUsd = (n: number, d = 2) => !Number.isFinite(n) ? "—" : (n >= 0 
 export const pct = (n: number, d = 2) => !Number.isFinite(n) ? "—" : (n < 0 ? "−" : "") + nf(Math.abs(n), d) + "%";
 export const spct = (n: number, d = 2) => !Number.isFinite(n) ? "—" : (n >= 0 ? "+" : "−") + nf(Math.abs(n), d) + "%";
 export const levFmt = (l: number) => (isFinite(l) ? nf(l, 2) + "x" : "None");
-export const hfFmt = (h: number) => (isFinite(h) && h < 100 ? nf(h, 2) : "No debt");
+// As the website's Margin pages (components/v3/format.ts): Infinity is "no debt"; a finite factor of 100 or more still has a loan
+// (a small one against large collateral), shown as ">100".
+export const hfFmt = (h: number) => (!isFinite(h) ? "No debt" : h < 100 ? nf(h, 2) : ">100");
 // Token amounts: stable coins to the cent; every other token shows up to 4 digits (6 for dust) so a review never rounds 0.1234 SOL to 0.12.
 const STABLE_SYM = new Set(["USDC", "USDT", "JupUSD", "PYUSD", "phUSD", "USDS", "USDG"]);
 export const tokFmt = (n: number, sym: string) => {

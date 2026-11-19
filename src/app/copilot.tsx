@@ -178,7 +178,7 @@ function ChatView({ turns, setTurns }: { turns: Turn[]; setTurns: (f: (t: Turn[]
   const asked = turns.filter((t) => t.who === "me").map((t) => (t as { text: string }).text);
   const last = turns[turns.length - 1];
   const sugg: string[] = (last?.who === "ai" && "chips" in last.r && last.r.chips) || [...INTENTS(chain).map((x) => x[1]), explainQ(chain)].filter((x) => !asked.includes(x));
-  const h = acct(chain).hf, noDebt = !isFinite(h) || h >= 100;
+  const h = acct(chain).hf, noDebt = !isFinite(h);
 
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : "height"}>

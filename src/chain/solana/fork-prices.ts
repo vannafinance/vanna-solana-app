@@ -5,6 +5,7 @@
 import { Buffer } from "buffer";
 
 import type { AssetConfigState, OracleConfigState } from "./actions";
+import { decode58 } from "./pda";
 import { forkNow, rpc } from "./rpc";
 
 const PYTH_RECEIVER = "rec5EKMGg6MxZYaMdyBfgwp4d5rB9T1VQH5pJv5LtFJ";
@@ -161,6 +162,55 @@ async function refresh(tokens: readonly Priced[], assets: Map<number, AssetConfi
     writes.push(() => rpc("surfnet_setAccount", [address, { lamports: current.lamports, data: data.toString("hex"), owner: PYTH_RECEIVER, executable: false, rentEpoch: 0 }]));
   }
   await Promise.all([...writes.map((w) => w()), scope, align]);
+}
+
+// Kamino Reserve (klend) offsets: last_update.slot, liquidity.supply_vault, liquidity.available_amount.
+const KAMINO_RESERVE_SLOT_OFFSET = 16;
+const KAMINO_SUPPLY_VAULT_OFFSET = 160;
+const KAMINO_AVAILABLE_OFFSET = 224;
+const TOKEN_AMOUNT_OFFSET = 64;
+
+/**
+ * Kamino checks after every deposit and redeem that its liquidity vault minus the reserve's available_amount did not change, and
+ * computes that difference without a guard (lending_checks.rs). The fork clones the reserve and its vault separately, each on first
+ * use, so the two copies can be months apart: on 2026-11-19 the fork's USDT reserve was a copy from slot 451.6 M (1,840,151 USDT
+ * available) next to a newer vault holding 763,450 USDT, and every Kamino USDT deposit failed its check with "attempt to subtract
+ * with overflow" (ProgramFailedToComplete), whatever the health list. When the vault holds less than the reserve says is available,
+ * the reserve, its vault and its receipt mint are copied from mainnet together (one read, so one slot). A consistent pair, fork
+ * deposits included, is left alone. Never throws: returns whether it copied.
+ */
+export async function alignKaminoReserveOnFork(reserve: string, liquidityVault: string, collateralMint: string): Promise<boolean> {
+  try {
+    const { value } = await rpc<{ value: (Acc | null)[] }>("getMultipleAccounts", [[reserve, liquidityVault], { encoding: "base64", dataSlice: { offset: 0, length: KAMINO_AVAILABLE_OFFSET + 8 } }]);
+    if (!value[0] || !value[1]) return false;
+    const r = Buffer.from(value[0].data[0], "base64");
+    const v = Buffer.from(value[1].data[0], "base64");
+    if (r.length < KAMINO_AVAILABLE_OFFSET + 8 || v.length < TOKEN_AMOUNT_OFFSET + 8) return false;
+    if (v.readBigUInt64LE(TOKEN_AMOUNT_OFFSET) >= r.readBigUInt64LE(KAMINO_AVAILABLE_OFFSET)) return false;
+    const keys = [reserve, liquidityVault, collateralMint];
+    const ctl = new AbortController();
+    const timer = setTimeout(() => ctl.abort(), 6000);
+    const [slot, res] = await Promise.all([
+      rpc<number>("getSlot", [{ commitment: "processed" }]),
+      fetch(MAINNET_RPC, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "getMultipleAccounts", params: [keys, { encoding: "base64" }] }),
+        signal: ctl.signal,
+      }).finally(() => clearTimeout(timer)),
+    ]);
+    const main = ((await res.json()) as { result?: { value: (Acc | null)[] } }).result?.value;
+    if (!main || main.some((a) => !a)) return false;
+    const datas = main.map((a) => Buffer.from(a!.data[0], "base64"));
+    if (!datas[0].subarray(KAMINO_SUPPLY_VAULT_OFFSET, KAMINO_SUPPLY_VAULT_OFFSET + 32).equals(Buffer.from(decode58(liquidityVault)))) return false;
+    // Interest accrues from last_update.slot to the fork's slot: a copy stamped after the fork's slot would not compute.
+    if (datas[0].readBigUInt64LE(KAMINO_RESERVE_SLOT_OFFSET) > BigInt(slot)) datas[0].writeBigUInt64LE(BigInt(slot), KAMINO_RESERVE_SLOT_OFFSET);
+    await Promise.all(keys.map((k, i) => rpc("surfnet_setAccount", [k, { lamports: main[i]!.lamports, data: datas[i].toString("hex"), owner: main[i]!.owner, executable: false, rentEpoch: 0 }])));
+    if (__DEV__) console.log(`[fork] Kamino reserve ${reserve} was out of step with its vault: copied reserve, vault and receipt mint from mainnet`);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 let inflight: Promise<void> | null = null;

@@ -197,7 +197,7 @@ export function farmPositions(chain: Chain): Position[] {
     return {
       pnlKnown: !f.earnedUnknown,
       sub: "farm", id: f.id, sym: f.icon, name: f.name, pnl, pct: base ? (pnl / base) * 100 : 0, size: (f.amt + f.earned) * px(f.sym),
-      tags: [{ label: "Farm", tone: "teal" }],
+      tags: [{ label: f.venue || "Farm", tone: "teal" }],
     };
   });
 }

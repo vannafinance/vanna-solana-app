@@ -70,7 +70,7 @@ export function PortfolioHero() {
 
 // The screen's one health factor: the face on the left looking at the number (none at or below 1.10).
 function HeroHealth({ hf }: { hf: number }) {
-  const live = isFinite(hf) && hf < 100;
+  const live = isFinite(hf);
   return (
     <Pressable
       style={styles.hf}

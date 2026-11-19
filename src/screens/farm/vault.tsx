@@ -55,7 +55,7 @@ export default function FarmVaultScreen({ id }: { id: string }) {
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg }}>
       <StatusBar style="auto" />
-      <ScreenHeader title={LAB[k](v)} />
+      <ScreenHeader title={LAB[k](v)} home="/farm" />
       <AfterTransition>
         <ScrollView contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled">
           <View style={styles.pph}>

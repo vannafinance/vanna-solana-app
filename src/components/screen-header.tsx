@@ -1,4 +1,4 @@
-import { router } from "expo-router";
+import { type Href, router, useNavigation } from "expo-router";
 import type { ReactNode } from "react";
 import { Platform, Pressable, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -9,14 +9,21 @@ import { font } from "@/theme/tokens";
 import { Icon } from "./ui/icon";
 
 // Plain header for pushed screens (design .phd): back, a 20 px left title (no large title on either OS), trailing actions.
-export function ScreenHeader({ title, trail }: { title: string; trail?: ReactNode }) {
+// `home`: where Back goes when this screen is the first of its own stack (opened from another tab), instead of the previous tab.
+export function ScreenHeader({ title, trail, home }: { title: string; trail?: ReactNode; home?: Href }) {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
+  const nav = useNavigation();
   const ios = Platform.OS === "ios";
+  const back = () => {
+    if (home && (nav.getState()?.routes.length ?? 0) <= 1) router.replace(home);
+    else if (router.canGoBack()) router.back();
+    else router.replace("/portfolio");
+  };
   return (
     <View style={[styles.phd, { paddingTop: insets.top, height: 56 + insets.top, backgroundColor: colors.bg }]}>
       <Pressable
-        onPress={() => (router.canGoBack() ? router.back() : router.replace("/portfolio"))}
+        onPress={back}
         accessibilityRole="button"
         accessibilityLabel="Back"
         android_ripple={{ color: colors.divider, borderless: true, radius: 24 }}
