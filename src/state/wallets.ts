@@ -23,6 +23,8 @@ export type WalletEntry = {
   baseUri?: string;
   /** The wallet's own icon as it sent it (wallet_icon, a data: URI): shown when `logo` is not one Vanna ships. */
   icon?: string;
+  /** The wallet dropped the session when asked to sign with the saved approval (Backpack): connect afresh each time instead. */
+  noToken?: boolean;
 };
 
 type State = {
@@ -82,6 +84,9 @@ export function addExternalWallet(c: Chain, app: WalletApp, logo: string, full: 
 // A wallet hands back a fresh approval token now and then; keep the newest so the next transaction only asks to sign.
 export function updateWalletSession(c: Chain, id: string, session: string) {
   set({ wallets: { ...state.wallets, [c]: state.wallets[c].map((w) => (w.id === id ? { ...w, session } : w)) } });
+}
+export function setWalletNoToken(c: Chain, id: string) {
+  set({ wallets: { ...state.wallets, [c]: state.wallets[c].map((w) => (w.id === id ? { ...w, noToken: true } : w)) } });
 }
 // A wallet saved before Vanna could tell which app it is gets its real name and logo once it answers again (the id stays the same).
 export function updateWalletIdentity(c: Chain, id: string, who: { app: WalletApp; logo: string; icon?: string }) {

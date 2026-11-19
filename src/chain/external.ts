@@ -13,7 +13,7 @@ import { AppState } from "react-native";
 import { appInstalled, nativeAvailable } from "@/chain/native";
 import { registerExternalSolanaSigner, WALLET_NO_ANSWER, WalletCancelledError } from "@/chain/sign";
 import { base58 } from "@/chain/solana/prices";
-import { short, updateWalletIdentity, updateWalletSession } from "@/state/wallets";
+import { setWalletNoToken, short, updateWalletIdentity, updateWalletSession } from "@/state/wallets";
 
 export type WalletIdentity = { app: string; logo: string; icon?: string };
 export type ExternalConnection = WalletIdentity & { address: string; session: string; baseUri?: string };
@@ -248,12 +248,16 @@ registerExternalSolanaSigner(async (base64Txs, entry, cancel) => {
       }
       let signed_payloads: string[];
       stopIfCancelled();
+      const askedAt = Date.now();
       try {
         // Several transactions go in ONE request, so the wallet shows one approval for all of them.
         ({ signed_payloads } = await wallet.signTransactions({ payloads: base64Txs }));
       } catch (e) {
         // Solflare's "Insufficient SOL" screen only lets the person cancel, which reaches Vanna as a decline: say what to change.
         if (pkg === "com.solflare.mobile" && /declin|reject|denied|not signed|ERROR_NOT_SIGNED/i.test(text(e))) throw new Error(SOLFLARE_FEES);
+        // The wallet accepted the saved approval, then dropped the session within seconds of the sign request (Backpack: "Authorization
+        // not found"): not a person's answer. Once, in a new session, connect afresh and sign in it.
+        if (useToken && entry.session && !declined(e) && Date.now() - askedAt < 20_000 && /authorization|websocket|ConnectionFailed|not connected|closed|SessionTimeout|CancellationException/i.test(text(e))) throw new StaleApproval();
         throw e;
       }
       if (!signed_payloads?.length || signed_payloads.some((p) => !p)) throw new Error("The wallet didn't sign the transaction");
@@ -262,10 +266,12 @@ registerExternalSolanaSigner(async (base64Txs, entry, cancel) => {
     { baseUri: entry.baseUri, packageName: pkg },
   );
   try {
-    return await run(true);
+    return await run(!entry.noToken);
   } catch (e) {
     if (e instanceof StaleApproval) {
       stopIfCancelled();
+      // Remembered: this wallet is asked to connect afresh from now on, instead of failing first with the saved approval.
+      setWalletNoToken("solana", entry.id);
       return run(false);
     }
     throw e;
