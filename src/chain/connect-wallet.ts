@@ -1,31 +1,30 @@
-import { connectSolanaWallet, installedKnownWallets } from "@/chain/external";
-import { addExternalWallet, updateWalletIdentity, type WalletEntry } from "@/state/wallets";
+import { connectSolanaWallet, installedKnownWallets, type InstalledWallet } from "@/chain/external";
+import { addExternalWallet, type WalletEntry } from "@/state/wallets";
 import { haptic } from "@/ui/haptics";
 import { toast } from "@/ui/overlay";
 import { pickWallet } from "@/ui/pick-wallet";
 
-// One tap: Android's own wallet chooser opens (Mobile Wallet Adapter), the person picks a wallet installed on the phone, and it joins the
-// list as the wallet in use. Returns it, or null when the person backed out or the wallet didn't answer (the reason is shown as a toast).
+// One tap: the wallets installed on the phone are listed (Phantom, Solflare, Backpack, Seed Vault) and the person taps theirs; it opens
+// directly through Mobile Wallet Adapter, with no Android chooser, and joins the list as the wallet in use. Only one installed: it
+// connects at once, no list. A wallet not in the list is reached by "Other wallet" (Android's own chooser). Returns the wallet, or null
+// when the person backed out or the wallet didn't answer (the reason is shown as a toast).
+const OTHER = { app: "Other wallet", logo: "VANNA", pkg: "" };
 let busy = false;
 export async function connectAndAddWallet(): Promise<WalletEntry | null> {
   if (busy) return null;
   busy = true;
   haptic.tap();
   try {
-    const r = await connectSolanaWallet();
-    let w = addExternalWallet("solana", r.app, r.logo, r.address, r.session, r.baseUri, r.icon);
-    // A wallet that sends neither a link nor an icon (Backpack) can't be told apart from the others installed on the phone. Ask once,
-    // so its package is remembered and Android's chooser doesn't open again on every transaction.
-    if (r.app === "Wallet") {
-      const installed = await installedKnownWallets();
-      if (installed.length > 1) {
-        const pick = await pickWallet(installed);
-        if (pick) {
-          updateWalletIdentity("solana", w.id, { app: pick.app, logo: pick.logo, icon: r.icon });
-          w = { ...w, app: pick.app, logo: pick.logo };
-        }
-      }
+    const installed = await installedKnownWallets();
+    let target: InstalledWallet | undefined;
+    if (installed.length === 1) target = installed[0];
+    else if (installed.length > 1) {
+      const pick = await pickWallet([...installed, OTHER]);
+      if (!pick) return null;
+      target = pick.pkg ? pick : undefined;
     }
+    const r = await connectSolanaWallet(target);
+    const w = addExternalWallet("solana", r.app, r.logo, r.address, r.session, r.baseUri, r.icon);
     haptic.success();
     return w;
   } catch (e) {

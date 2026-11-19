@@ -114,10 +114,11 @@ const mwa = () => import("@solana-mobile/mobile-wallet-adapter-protocol");
 class StaleApproval extends Error {}
 const declined = (e: unknown) => /declin|reject|denied|not signed|^-3\b|ERROR_NOT_SIGNED/i.test(text(e));
 
-/** The known wallets installed on this phone (name and logo), for asking the person which one they just used. */
-export async function installedKnownWallets(): Promise<{ app: string; logo: string }[]> {
-  const found = await Promise.all(KNOWN.map(async (k) => ((await appInstalled(k.pkg).catch(() => false)) ? { app: k.app, logo: k.logo } : null)));
-  return found.filter((k): k is { app: string; logo: string } => k != null);
+/** The known wallets installed on this phone, for the wallet list shown when connecting. */
+export type InstalledWallet = { app: string; logo: string; pkg: string };
+export async function installedKnownWallets(): Promise<InstalledWallet[]> {
+  const found = await Promise.all(KNOWN.map(async (k) => ((await appInstalled(k.pkg).catch(() => false)) ? { app: k.app, logo: k.logo, pkg: k.pkg } : null)));
+  return found.filter((k): k is InstalledWallet => k != null);
 }
 
 async function withWallet<T>(
@@ -170,7 +171,9 @@ async function withWallet<T>(
   }
 }
 
-export function connectSolanaWallet(): Promise<ExternalConnection> {
+// `target`: the wallet the person chose in Vanna's list; it opens directly (no Android chooser) and is known by name. Without one,
+// Android's chooser shows and the wallet is told apart by what it sends.
+export function connectSolanaWallet(target?: InstalledWallet): Promise<ExternalConnection> {
   return withWallet(async (wallet) => {
     let auth;
     for (const chain of CHAINS) {
@@ -184,9 +187,10 @@ export function connectSolanaWallet(): Promise<ExternalConnection> {
     if (!auth) throw new Error("Your wallet didn't answer");
     const account = auth.accounts[0];
     if (!account) throw new Error("The wallet didn't share an account");
-    const who = await identifyWallet(auth as AuthLike);
+    const sent = await identifyWallet(auth as AuthLike);
+    const who = target ? { app: target.app, logo: target.logo, icon: sent.icon } : sent;
     return { address: base58(Buffer.from(account.address, "base64")), session: auth.auth_token, baseUri: auth.wallet_uri_base || undefined, ...who };
-  });
+  }, target ? { packageName: target.pkg } : undefined);
 }
 
 // CANCEL (sign.ts signSolanaBatch `cancel`): sign.ts rejects at once with WalletCancelledError and ignores this request's answer. Here

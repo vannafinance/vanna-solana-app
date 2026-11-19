@@ -11,9 +11,6 @@ function Choices({ options, onPick }: { options: WalletChoice[]; onPick: (o: Wal
   const { colors } = useTheme();
   return (
     <View style={{ gap: 12, paddingBottom: 8 }}>
-      <Text style={{ fontFamily: font.regular, fontSize: 15, lineHeight: 21, color: colors.muted }}>
-        {"Your wallet didn't say which app it is. Pick the one you just used, so later requests open it straight away instead of asking Android."}
-      </Text>
       {options.map((o) => (
         <Pressable
           key={o.app}
@@ -30,23 +27,23 @@ function Choices({ options, onPick }: { options: WalletChoice[]; onPick: (o: Wal
   );
 }
 
-/** Asks which of these wallets was just used. Resolves with the pick, or null when the sheet is dismissed. */
-export function pickWallet(options: WalletChoice[]): Promise<WalletChoice | null> {
+/** The wallets to connect with, as a list. Resolves with the one tapped, or null when the sheet is dismissed. */
+export function pickWallet<T extends WalletChoice>(options: T[]): Promise<T | null> {
   return new Promise((resolve) => {
     let done = false;
-    const finish = (v: WalletChoice | null) => {
+    const finish = (v: T | null) => {
       if (done) return;
       done = true;
       resolve(v);
     };
     openSheet({
-      title: "Which wallet did you use?",
+      title: "Connect a wallet",
       onClose: () => finish(null),
       content: (close) => (
         <Choices
           options={options}
           onPick={(o) => {
-            finish(o);
+            finish(o as T);
             close();
           }}
         />
