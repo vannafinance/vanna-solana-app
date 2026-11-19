@@ -11,7 +11,7 @@ import { Icon } from "@/components/ui/icon";
 import { Card, EmptyCard, IconAction, Pairs, shareIcon, Tag } from "@/components/ui/kit";
 import { type PriceMove, usePerpMarketsTicker } from "@/chain/markets-ticker";
 import { perpMark } from "@/chain/perp-mark";
-import { PerpsCloseIncompleteError, PerpsCloseWithdrawError, PerpsOpenIncompleteError, prewarmPerps, solanaPerpsClose, solanaPerpsCloseMany, solanaPerpsOpen, solanaPerpsUnwrap, solanaPerpsWithdraw } from "@/chain/solana/actions";
+import { marginPda, PerpsCloseIncompleteError, PerpsCloseWithdrawError, PerpsOpenIncompleteError, phoenixTraderPda, prewarmPerps, solanaPerpsClose, solanaPerpsCloseMany, solanaPerpsOpen, solanaPerpsUnwrap, solanaPerpsWithdraw } from "@/chain/solana/actions";
 import { PHOENIX_MARKETS } from "@/chain/solana/tokens";
 import { hfFmt, levFmt, nf, pct, sign, spct, sUsd, tokFmt, usd } from "@/format";
 import { ACTIVITY, DATA, PERP_HIST, type PerpHist, type PerpPos, type Side } from "@/sample/data";
@@ -27,6 +27,9 @@ import { useDataVersion } from "@/state/store";
 import { useTheme } from "@/theme/use-theme";
 import { families, font } from "@/theme/tokens";
 import { closeSheet, openSheet } from "@/ui/overlay";
+import { isAre, type Leg, type LegRun, names, partsToLegs, shortReason } from "@/ui/legs";
+import type { BatchControl } from "@/chain/solana/submit";
+import { rpc } from "@/chain/solana/rpc";
 import { runTx, type TxRecover } from "@/ui/tx";
 
 /* Perps on Phoenix (design screens/perps.js, Solana only): Markets | Positions | History | Account; a market page with the candles,
@@ -45,6 +48,14 @@ export const PERP_MKTS: Mkt[] = [
   { k: "TSLA", pair: "TSLAUSDC", name: "Tesla", max: 3, ch: NaN, fund: NaN, oi: NaN, vol: NaN },
   { k: "META", pair: "METAUSDC", name: "Meta", max: 3, ch: NaN, fund: NaN, oi: NaN, vol: NaN },
 ];
+// Whether the wallet's Phoenix trading account exists (a first trade sets it up in the same approval).
+async function traderRegistered(): Promise<boolean> {
+  const owner = inUseWallet("solana")?.full;
+  if (!owner) return true;
+  const r = await rpc<{ value: unknown }>("getAccountInfo", [phoenixTraderPda(marginPda(owner)), { encoding: "base64", dataSlice: { offset: 0, length: 0 } }]);
+  return !!r.value;
+}
+
 export const perpPair = (k: string) => PERP_MKTS.find((m) => m.k === k)?.pair ?? `${k}USDC`;
 export const perpName = (k: string) => PERP_MKTS.find((m) => m.k === k)?.name ?? k;
 const MAINT = 0.05, TAKER = 0.00035;
@@ -191,81 +202,122 @@ export function PositionCard({ p }: { p: PerpPos }) {
   );
 }
 
+// The controls every Perps send gets from the sheet (ui/legs.ts): its parts mapped onto the rows, Cancel and Stop.
+const ctl = (r: LegRun, map: (i: number, total: number) => string | string[], stop = true): BatchControl => ({ onLeg: partsToLegs(r.onLeg, map), cancel: r.cancel, ...(stop ? { stop: r.stop } : null) });
+// The USDC return after the last close: its own approval (the rows read "Approve once more"), one row however many parts.
+const retCtl = (r: LegRun): BatchControl => ctl(r, () => "ret", false);
+
 export function closePosition(chain: Chain, p: PerpPos) {
   const last = DATA[chain].perps.length === 1; // the last position: the USDC then goes home to the margin account (second approval), as on the website
   const pnl = perpPnl(p), back = p.coll + pnl - perpQty(p) * px(p.k) * TAKER;
+  const real = personalReady(chain);
+  const pair = perpPair(p.k);
+  const close = (r: LegRun) => solanaPerpsClose({ market: p.k, side: p.side, control: ctl(r, () => "close", false), returnControl: retCtl(r) });
   runTx({
-    chain, fam, title: `Close ${perpPair(p.k)}`, cta: "Close position",
+    chain, fam, title: `Close ${pair}`, cta: "Close position",
     legs: [{ l: "You close", v: `${p.side === "long" ? "Long" : "Short"} ${Number(p.lev.toFixed(1))}x ${p.k}`, s: `${tokFmt(perpQty(p), p.k)} at ${priceFmt(px(p.k))}` }, { l: last ? "Back to your margin account" : "Stays in Phoenix as collateral", v: `${nf(Math.max(0, back), 2)} USDC`, s: last ? "A second approval moves it home" : undefined }],
     rows: [["P&L", sUsd(pnl), pnl >= 0 ? "pos" : "neg"], ["Taker fee", usd(perpQty(p) * px(p.k) * TAKER)]],
-    done: { title: `Closed ${perpPair(p.k)}`, line: last ? `${sUsd(pnl)} P&L, ${nf(Math.max(0, back), 2)} USDC back in your margin account` : `${sUsd(pnl)} P&L, the USDC stays in Phoenix` },
-    recover: (e) => (e instanceof PerpsCloseWithdrawError ? [{ label: "Return USDC to margin", send: () => solanaPerpsWithdraw(undefined, true), done: { title: "Back in margin" } }] : undefined),
-    send: async () => {
-      return await solanaPerpsClose({ market: p.k, side: p.side });
+    done: { title: `Closed ${p.k} ${p.side}`, line: last ? `${sUsd(pnl)} P&L. ${nf(Math.max(0, back), 2)} USDC is back in your margin account` : `${sUsd(pnl)} P&L, the USDC stays in Phoenix` },
+    // the last position: close, then the USDC home (its own approval); otherwise one transaction
+    plan: last
+      ? [{ id: "close", label: `Close ${p.k} ${p.side}`, noun: `${p.k} ${p.side}`, stage: 0 }, { id: "ret", label: `Return ${nf(Math.max(0, back), 2)} USDC to margin`, noun: `${nf(Math.max(0, back), 2)} USDC`, stage: 1, approval: 1 }]
+      : [{ id: "close", label: `Close ${p.k} ${p.side}`, stage: 0 }],
+    copy: {
+      doing: `Closing ${p.k} ${p.side}`,
+      part: (ok: Leg[]): [string, string] => (ok.length ? [`Closed ${p.k} ${p.side}`, `${sUsd(pnl)} P&L. Your ${nf(Math.max(0, back), 2)} USDC stays in Phoenix for now.`] : ["Not closed", `${p.k} ${p.side} is still open.`]),
     },
+    cancelable: true,
+    run: close,
+    // the close again if it is still open, else only the USDC return
+    retryLegs: (only, r) => (only.includes("close") ? close(r) : solanaPerpsWithdraw(undefined, true, retCtl(r))),
     apply: (hash) => {
-      const d = DATA[chain];
-      d.perps = d.perps.filter((q) => q.id !== p.id);
-      if (last) d.margin.avail.USDC = (d.margin.avail.USDC ?? 0) + Math.max(0, back);
-      else d.phoenixIdle += Math.max(0, back);
-      d.realized += pnl;
+      // a real account is read again from the chain after the run; only the sample account is rewritten here
+      if (!real) {
+        const d = DATA[chain];
+        d.perps = d.perps.filter((q) => q.id !== p.id);
+        if (last) d.margin.avail.USDC = (d.margin.avail.USDC ?? 0) + Math.max(0, back);
+        else d.phoenixIdle += Math.max(0, back);
+        d.realized += pnl;
+      }
       logPerp(chain, { t: nowT(), a: "Close / reduce", k: p.k, side: p.side, size: perpQty(p) * px(p.k), usdc: back, lev: p.lev, pnl }, hash);
-      ACTIVITY[chain].unshift({ t: nowT(), area: "Perps", action: "Close", detail: `${perpPair(p.k)} ${Number(p.lev.toFixed(1))}x on Phoenix`, amt: `${nf(Math.max(0, back), 2)} USDC`, usd: back, tx: "", sym: p.k });
+      ACTIVITY[chain].unshift({ t: nowT(), area: "Perps", action: "Close", detail: `${pair} ${Number(p.lev.toFixed(1))}x on Phoenix`, amt: `${nf(Math.max(0, back), 2)} USDC`, usd: back, tx: "", sym: p.k });
     },
   });
 }
 
 // Close all positions / Withdraw from Phoenix (design px-closeall): the sheet is the review; every position closes at market on
-// Phoenix, one transaction each, then everything (with the free collateral) goes back to the margin account.
+// Phoenix, one transaction each, all sent together under one approval (so there is nothing to Stop), then everything (with the free
+// collateral) goes back to the margin account in its own approval.
 export function closeAll(chain: Chain) {
   const d = DATA[chain], ps = [...d.perps], idle = d.phoenixIdle;
+  const real = personalReady(chain);
   const cs = ps.map((p) => {
     const pnl = perpPnl(p), fee = perpQty(p) * px(p.k) * TAKER;
     return { p, pnl, fee, back: p.coll + pnl - fee };
   });
   const fee = cs.reduce((t, c) => t + c.fee, 0), pnl = cs.reduce((t, c) => t + c.pnl - c.fee, 0), back = cs.reduce((t, c) => t + Math.max(0, c.back), 0) + idle;
   const n = ps.length;
+  const s = n === 1 ? "" : "s";
+  // closes these (part i = position i of the batch), then the return; the chain read after the send places any close that did not land
+  const closeMany = async (r: LegRun, list: PerpPos[]) => {
+    try {
+      return await solanaPerpsCloseMany(list.map((p) => ({ market: p.k, side: p.side })), ctl(r, (i) => list[i]?.id ?? list[list.length - 1].id, false), retCtl(r));
+    } catch (e) {
+      if (e instanceof PerpsCloseIncompleteError) {
+        list.forEach((p) => (e.stillOpen.some((x) => x.market === p.k) ? r.onLeg(p.id, "failed", { reason: "Still open on Phoenix." }) : r.onLeg(p.id, "done")));
+        r.onLeg("ret", "not-sent");
+      } else if (e instanceof PerpsCloseWithdrawError) {
+        list.forEach((p) => r.onLeg(p.id, "done"));
+        r.onLeg("ret", "failed", { reason: shortReason(e.message.replace(/^.*?Phoenix: /, "")) });
+      }
+      throw e;
+    }
+  };
+  const withdrawAll = (r: LegRun) => solanaPerpsWithdraw(undefined, true, ctl(r, () => (n ? "ret" : "wd"), false));
   runTx({
     chain, fam, title: n ? "Close all positions" : "Withdraw from Phoenix", cta: n ? "Close all" : "Withdraw to margin",
     legs: [], rows: [],
     body: <CloseAllBody cs={cs} fee={fee} pnl={pnl} idle={idle} back={back} />,
-    done: n ? { title: `Closed ${n} position${n === 1 ? "" : "s"}`, line: `${sUsd(pnl)} realized, ${nf(back, 2)} USDC back in your margin account` } : { title: "Back in margin", line: `${nf(back, 2)} USDC from Phoenix` },
-    recover: closeAllRecover,
-    send: async () => {
-      // No positions: this is "Withdraw from Phoenix" (closes no longer bring the USDC home), so withdraw all of it.
-      if (!ps.length) return solanaPerpsWithdraw(undefined, true);
-      // ONE approval for all of them (each close is its own transaction, signed together).
-      return solanaPerpsCloseMany(ps.map((p) => ({ market: p.k, side: p.side })));
+    done: n
+      ? { title: `Closed ${n} position${s}`, line: `${names(ps.map((p) => ({ id: p.id, label: p.k, phase: "done" as const })))} closed. ${nf(back, 2)} USDC is back in your margin account` }
+      : { title: "Back in your margin account", line: `${nf(back, 2)} USDC moved from Phoenix to your margin account` },
+    // One row per close (sent together), then the USDC home (its own approval).
+    plan: n
+      ? [...ps.map((p) => ({ id: p.id, label: `Close ${p.k} ${p.side}`, noun: p.k, stage: 0 })), { id: "ret", label: `Return ${nf(back, 2)} USDC to margin`, noun: `${nf(back, 2)} USDC`, stage: 1, approval: 1 }]
+      : [{ id: "wd", label: `Move ${nf(back, 2)} USDC out of Phoenix`, stage: 0 }],
+    copy: {
+      doing: n ? `Closing ${n} position${s}` : `Moving ${nf(back, 2)} USDC out of Phoenix`,
+      sentNoun: "Closes",
+      part: (_ok: Leg[], left: Leg[]): [string, string] => {
+        const lc = left.filter((l) => l.id !== "ret");
+        if (!lc.length) return [`Closed ${n} position${s}`, "All closed. Your USDC stays in Phoenix for now."];
+        if (lc.length === n) return ["Nothing was closed", `${names(lc)} ${isAre(lc)} still open.`];
+        return [`Closed ${n - lc.length} of ${n}`, `${names(lc)} ${isAre(lc)} still open`];
+      },
+    },
+    cancelable: true,
+    run: (r) => (n ? closeMany(r, ps) : withdrawAll(r)),
+    // only what did not land: the positions still open (then the return), or only the return
+    retryLegs: (only, r) => {
+      const list = ps.filter((p) => only.includes(p.id));
+      return list.length ? closeMany(r, list) : withdrawAll(r);
     },
     apply: (hash) => {
-      const x = DATA[chain];
       cs.forEach((c) => {
         logPerp(chain, { t: nowT(), a: "Close / reduce", k: c.p.k, side: c.p.side, size: perpQty(c.p) * px(c.p.k), usdc: c.back, lev: c.p.lev, pnl: c.pnl }, hash);
         ACTIVITY[chain].unshift({ t: nowT(), area: "Perps", action: "Close", detail: `${perpPair(c.p.k)} ${Number(c.p.lev.toFixed(1))}x on Phoenix`, amt: `${nf(Math.max(0, c.back), 2)} USDC`, usd: c.back, tx: "", sym: c.p.k });
       });
-      x.perps = x.perps.filter((q) => !ps.some((p) => p.id === q.id));
-      x.margin.avail.USDC = (x.margin.avail.USDC ?? 0) + back;
-      x.phoenixIdle = 0;
-      x.realized += pnl;
+      // a real account is read again from the chain after the run; only the sample account is rewritten here
+      if (!real) {
+        const x = DATA[chain];
+        x.perps = x.perps.filter((q) => !ps.some((p) => p.id === q.id));
+        x.margin.avail.USDC = (x.margin.avail.USDC ?? 0) + back;
+        x.phoenixIdle = 0;
+        x.realized += pnl;
+      }
       if (idle > 0.004) logPerp(chain, { t: nowT(), a: "Deposit to Phoenix", k: "", side: "", size: null, usdc: -idle }, hash);
     },
   });
-}
-
-// What a failed Close all offers: the positions the chain still shows closed with one more approval (the list is read after the
-// send, so it names exactly what is left), or the USDC brought home when every close landed but that last step did not.
-function closeAllRecover(e: unknown): TxRecover[] | undefined {
-  if (e instanceof PerpsCloseWithdrawError) return [{ label: "Return USDC to margin", send: () => solanaPerpsWithdraw(undefined, true), done: { title: "Back in margin" } }];
-  if (e instanceof PerpsCloseIncompleteError && e.stillOpen.length) {
-    const left = e.stillOpen;
-    const names = left.map((s) => perpPair(s.market)).join(", ");
-    return [{
-      label: left.length === 1 ? `Close ${perpPair(left[0].market)}` : `Close the remaining ${left.length}`,
-      send: () => solanaPerpsCloseMany(left),
-      done: { title: left.length === 1 ? `Closed ${perpPair(left[0].market)}` : `Closed ${names}` },
-    }];
-  }
-  return undefined;
 }
 
 function CloseAllBody({ cs, fee, pnl, idle, back }: { cs: { p: PerpPos; pnl: number }[]; fee: number; pnl: number; idle: number; back: number }) {
@@ -516,40 +568,105 @@ export function Ticket({ k, initial, onDone }: { k: string; initial: Side; onDon
     if (onDone) onDone();
     else closeSheet();
     const openOpts = { market: m.k, side, collateralUsdc: c, leverage: lev, slippageBps: Math.round(slip * 100) };
-    const applyOpen = (hash?: string) => {
-      mTake(d, "USDC", c);
-      d.perps.push({ id: "p" + Date.now(), k, side, lev: effLev, coll: c - fee, entry: px(k), qty, pool: poolAfter, t: nowT() });
+    const logOpen = (hash?: string) => {
       logPerp(chain, { t: nowT(), a: "Open / increase", k, side, size: sizeUsd, usdc: c, lev, entry: px(k), qty, effLev, pool: poolAfter }, hash);
       ACTIVITY[chain].unshift({ t: nowT(), area: "Perps", action: side === "long" ? "Long" : "Short", detail: `${perpPair(k)} ${levLabel} on Phoenix`, amt: `${nf(c, 2)} USDC`, usd: c, tx: "", sym: k });
     };
+    // the sample account only (a real one is read again from the chain after the run)
+    const applyOpen = (hash?: string) => {
+      mTake(d, "USDC", c);
+      d.perps.push({ id: "p" + Date.now(), k, side, lev: effLev, coll: c - fee, entry: px(k), qty, pool: poolAfter, t: nowT() });
+      logOpen(hash);
+    };
+    const returnUsdc = (e: PerpsOpenIncompleteError): TxRecover => ({
+      label: "Return USDC to margin",
+      done: { title: "Back in your margin account", line: `${nf(e.usdc, 2)} USDC` },
+      send: () => (e.where === "phoenix" ? solanaPerpsWithdraw(e.usdc) : solanaPerpsUnwrap()),
+    });
     const opened = { title: `${side === "long" ? "Long" : "Short"} ${k} ${levLabel} opened`, line: `${tokFmt(qty, k)} on Phoenix` };
-    setTimeout(
-      () =>
-        runTx({
-          chain, fam, title: `Review ${side} ${perpPair(k)}`, cta: `${side === "long" ? "Long" : "Short"} ${k} ${levLabel}`,
-          legs: [
-            { l: "Collateral", v: `${nf(c, 2)} USDC`, s: pool0 > 0.01 ? `From your margin account, plus ${nf(pool0, 2)} USDC already in Phoenix` : "From your margin account" },
-            { l: "Position", v: `${tokFmt(qty, k)} ${side}`, s: `${usd(sizeUsd)} at ${levLabel} on ${nf(base, 2)} USDC` },
-          ],
-          rows: [
-            ["Entry", "~" + priceFmt(px(k))], [limLabel, priceFmt(maxEntry)], ["Phoenix collateral after", `${nf(poolAfter, 2)} USDC`], ["Position leverage", levTag(effLev)],
-            ["Liq. price (est.)", liq ? priceFmt(liq) : "None"], ["Zero-equity price", zeroEq > 0 ? priceFmt(zeroEq) : "None"], ["Taker fee", usd(fee)], ...marginRows,
-          ],
-          done: opened,
-          send: () => solanaPerpsOpen(openOpts),
-          apply: applyOpen,
-          // The order failed after the USDC moved (phUSD in the margin account, or USDC in Phoenix on the old fallback): retry only
-          // the order with that USDC (no second deposit), or bring it back to the margin account as USDC.
-          recover: (e) =>
-            e instanceof PerpsOpenIncompleteError
-              ? [
-                  { label: "Retry order", done: opened, apply: applyOpen, send: () => solanaPerpsOpen(e.where === "phoenix" ? { ...openOpts, collateralUsdc: 0, sizeOnUsdc: e.usdc } : openOpts) },
-                  { label: "Return USDC to margin", done: { title: "Back in margin", line: `${nf(e.usdc, 2)} USDC` }, send: () => (e.where === "phoenix" ? solanaPerpsWithdraw(e.usdc) : solanaPerpsUnwrap()) },
-                ]
-              : undefined,
-        }),
-      300,
-    );
+    const real = personalReady(chain);
+    const sideW = side === "long" ? "Long" : "Short";
+    const usdcT = `${nf(c, 2)} USDC`;
+    // The last unfinished open (PerpsOpenIncompleteError): where its USDC waits, so a retry sends only the order with it.
+    let lastErr: PerpsOpenIncompleteError | null = null;
+    const open = async (r: LegRun, o: typeof openOpts & { sizeOnUsdc?: number }, setup: boolean, add: boolean) => {
+      // parts: [set up Phoenix] + the USDC parts (one or two) + the order; the order can carry the deposit in the same transaction
+      const map = (i: number, total: number): string | string[] => {
+        const base = setup ? 1 : 0;
+        if (i < base) return "setup";
+        if (i === total - 1) return add && total - base === 1 ? ["add", "order"] : "order";
+        return "add";
+      };
+      try {
+        const h = await solanaPerpsOpen({ ...o, control: ctl(r, map) });
+        lastErr = null;
+        return h;
+      } catch (e) {
+        if (e instanceof PerpsOpenIncompleteError) lastErr = e;
+        throw e;
+      }
+    };
+    setTimeout(async () => {
+      // A first trade on Phoenix sets the trading account up in the same approval: that run shows the Phoenix stage.
+      const setup = real ? !(await traderRegistered().catch(() => true)) : false;
+      const add = c > 0;
+      runTx({
+        chain, fam, title: `Review ${side} ${perpPair(k)}`, cta: `${sideW} ${k} ${levLabel}`,
+        legs: [
+          { l: "Collateral", v: usdcT, s: pool0 > 0.01 ? `From your margin account, plus ${nf(pool0, 2)} USDC already in Phoenix` : "From your margin account" },
+          { l: "Position", v: `${tokFmt(qty, k)} ${side}`, s: `${usd(sizeUsd)} at ${levLabel} on ${nf(base, 2)} USDC` },
+        ],
+        rows: [
+          ["Entry", "~" + priceFmt(px(k))], [limLabel, priceFmt(maxEntry)], ["Phoenix collateral after", `${nf(poolAfter, 2)} USDC`], ["Position leverage", levTag(effLev)],
+          ["Liq. price (est.)", liq ? priceFmt(liq) : "None"], ["Zero-equity price", zeroEq > 0 ? priceFmt(zeroEq) : "None"], ["Taker fee", usd(fee)], ...marginRows,
+          ...(setup ? [["First trade on Phoenix", "Account set up in the same approval"] as [string, string]] : []),
+        ],
+        done: {
+          title: opened.title,
+          line: setup ? `Phoenix account set up, ${usdcT} moved there as collateral, ${tokFmt(qty, k)} ${side}` : add ? `${usdcT} moved to Phoenix as collateral, ${tokFmt(qty, k)} ${side} on Phoenix` : opened.line,
+        },
+        plan: [
+          ...(setup ? [{ id: "setup", label: "Set up your Phoenix account", noun: "the Phoenix account" }] : []),
+          ...(add ? [{ id: "add", label: `Add ${usdcT} to Phoenix`, noun: usdcT }] : []),
+          { id: "order", label: `Open ${k} ${side}`, noun: `${k} ${side}` },
+        ].map((l, i) => ({ ...l, stage: i })),
+        copy: {
+          doing: `Opening ${side} ${k} ${levLabel}`,
+          part: (ok: Leg[], left: Leg[]): [string, string] => {
+            const f = left[0]?.id;
+            if (f === "order")
+              return lastErr?.where === "margin"
+                ? ["Order not placed", `${usdcT} is converted and waits in your margin account. Opening ${k} ${side} didn't go through.`]
+                : ["Order not placed", `Your ${usdcT} is in Phoenix. The order did not go through.`];
+            if (f === "add") return ["Not confirmed", "Your Phoenix account is ready. Adding USDC didn't go through, so nothing moved."];
+            return ["Not confirmed", ok.length ? `${names(left)} didn't go through.` : "Setting up your Phoenix account didn't go through. Nothing moved."];
+          },
+          stopped: (ok: Leg[]): [string, string] =>
+            ok.some((l) => l.id === "add")
+              ? lastErr?.where === "phoenix"
+                ? ["USDC added, order not placed", `Your ${usdcT} is in Phoenix.`]
+                : ["USDC converted, order not placed", `${usdcT} is converted and waits in your margin account.`]
+              : ok.length
+                ? ["Phoenix account set up, order not placed", "Nothing else was sent."]
+                : ["Stopped", "Nothing was sent."],
+        },
+        cancelable: true,
+        stoppable: true,
+        phoenix: setup && add ? { market: k, position: `${sideW} ${k} ${levLabel}`, positionLine: `${sideW} ${k} ${levLabel} · ${tokFmt(qty, k)}`, mark: priceFmt(px(k)), usdc: c, margin: avail, phoenix: pool0 } : undefined,
+        run: (r) => open(r, openOpts, setup, add),
+        // Only what is left: the order with the USDC that already moved (no second deposit), or the add and the order (the account
+        // set up already), never a leg that landed.
+        retryLegs: (only, r) => {
+          const e = lastErr;
+          if (only.includes("order") && !only.includes("add") && e) return open(r, e.where === "phoenix" ? { ...openOpts, collateralUsdc: 0, sizeOnUsdc: e.usdc } : openOpts, false, false);
+          return open(r, openOpts, only.includes("setup"), only.includes("add"));
+        },
+        apply: (hash) => (real ? logOpen(hash) : applyOpen(hash)),
+        // what the stopped or failed open left in a half-way place: bring the USDC back to the margin account (its own transaction)
+        recover: (e) => (e instanceof PerpsOpenIncompleteError ? [returnUsdc(e)] : undefined),
+        stopExtra: () => (lastErr ? [returnUsdc(lastErr)] : undefined),
+      });
+    }, 300);
   };
   return (
     <View style={{ gap: 14, paddingBottom: 4 }}>

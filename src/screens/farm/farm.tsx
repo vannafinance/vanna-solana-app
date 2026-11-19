@@ -1,14 +1,14 @@
 import { type Href, router } from "expo-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { StyleSheet, Text, View, Pressable } from "react-native";
 
 import { TokenLogo } from "@/components/brand";
-import { AmountField, hfTone, PctChips, Preview } from "@/components/form";
+import { AmountField, PctChips, Preview } from "@/components/form";
 import { HistoryList } from "@/components/history";
 import { SubTabs } from "@/components/motion";
 import { Button } from "@/components/ui/button";
 import { Card, EmptyCard, IconAction, Pairs, shareIcon, Tag } from "@/components/ui/kit";
-import { hfFmt, nf, pct, sUsd, tokFmt, usd } from "@/format";
+import { nf, pct, sUsd, tokFmt, usd } from "@/format";
 import { ACTIVITY, type ChainData, DATA, type FarmPos, PX } from "@/sample/data";
 import { acct, mAddColl, mbal, mTake, SAFE_HF, simAcct } from "@/sample/model";
 import { inDecOf, nowT } from "@/screens/earn/model";
@@ -19,9 +19,14 @@ import { useTheme } from "@/theme/use-theme";
 import { families, font } from "@/theme/tokens";
 import { closeSheet, openSheet, toast } from "@/ui/overlay";
 import { runTx } from "@/ui/tx";
+import { type LegRun, partsToLegs } from "@/ui/legs";
 import { openShare } from "@/screens/share/share";
 import { solanaFarmDeposit, solanaFarmWithdraw } from "@/chain/solana/actions";
 import * as solanaActions from "@/chain/solana/actions";
+import { fetchKaminoRate, type KaminoRate } from "@/chain/solana/positions";
+import { KAMINO_RECEIPTS } from "@/chain/solana/tokens";
+
+import { PER_X } from "./vault-model";
 const solanaPerenaAction: (vaultId: string, call: "deposit" | "withdraw", amountUi: number | string) => Promise<string> = (solanaActions as any).solanaPerenaAction;
 
 /* Farm (design screens/farm.js): Vaults | Positions | History. Deposits come from the margin account (borrowed or idle funds),
@@ -175,7 +180,6 @@ function openWithdrawAll(chain: Chain) {
       }),
       // Perena charges 1% to leave USD* Junior (web lib/solana/vault-state.ts exitFeeBps); the others have none.
       ["Exit fee", list.some((f) => f.id === "junior") ? "1% on USD* Junior" : "None"],
-      ["Health factor", `${hfFmt(before.hf)} → ${hfFmt(after.hf)}`],
     ],
     done: { title: "All farm positions withdrawn", line: `${usd(total)} back in your margin account` },
     send: async () => {
@@ -246,6 +250,17 @@ export function openFarm(chain: Chain, v: Vault, mode: "deposit" | "withdraw") {
   openSheet({ title: v.name, content: () => <FarmForm chain={chain} v={v} initial={mode} /> });
 }
 
+// Exact decimal text <-> raw units (the website's toRaw / fromRaw): no float rounding, trailing zeros trimmed.
+function rawOf(text: string, d: number): bigint {
+  const m = /^(\d*)(?:\.(\d*))?$/.exec(text.trim());
+  if (!m) return 0n;
+  return BigInt((m[1] || "0") + (m[2] ?? "").slice(0, d).padEnd(d, "0"));
+}
+function fromRaw(raw: bigint, d: number): string {
+  const scale = 10n ** BigInt(d), frac = (raw % scale).toString().padStart(d, "0").replace(/0+$/, "");
+  return `${raw / scale}${frac ? "." + frac : ""}`;
+}
+
 function FarmForm({ chain, v, initial }: { chain: Chain; v: Vault; initial: "deposit" | "withdraw" }) {
   const { colors } = useTheme();
   const d = DATA[chain];
@@ -287,6 +302,41 @@ function FarmForm({ chain, v, initial }: { chain: Chain; v: Vault; initial: "dep
     const share = BigInt(Math.floor(Math.min(1, v / full) * 1e9));
     return (held * share) / 1_000_000_000n;
   };
+  // Review row: the receipt tokens this deposit should mint, or the exact count the withdraw redeems (as the website's review).
+  // Kamino's rate is read from the reserve on the fork when the sheet opens; Perena uses the fork share price the app shows.
+  const [rate, setRate] = useState<KaminoRate | null>(null);
+  useEffect(() => {
+    if (v.venue !== "Kamino") return;
+    let on = true;
+    fetchKaminoRate(v.sym).then((r) => on && setRate(r), () => {});
+    return () => {
+      on = false;
+    };
+  }, [v.venue, v.sym]);
+  const receiptRow = (): [string, string] => {
+    const label = dep ? "Est. receipt" : "Receipt redeemed";
+    const xRaw = (d: number) => rawOf(amt, d);
+    if (v.venue === "Kamino") {
+      const meta = KAMINO_RECEIPTS.find((r) => r.underlying === v.sym);
+      if (!meta) return [label, "—"];
+      if (!dep) {
+        const r = receiptsFor(x);
+        return [label, r === undefined ? "—" : `${fromRaw(pctV === 100 && pos?.receiptsRaw ? BigInt(pos.receiptsRaw) : r, meta.decimals)} ${meta.symbol}`];
+      }
+      if (!rate) return [label, "—"];
+      return [label, `≈${fromRaw((xRaw(rate.liquidityDecimals) * rate.collateralSupply) / rate.totalLiquidity, rate.receiptDecimals)} ${rate.symbol}`];
+    }
+    // Perena withdraw (actions.ts solanaPerenaAction): shares at 6 decimals, price in micro-USD per share; within 0.01% of the
+    // whole position it redeems every share, otherwise ceil(amount / price).
+    const rc = PER_X[v.id === "junior" ? "junior" : "usdstar"].rc, price = v.sharePrice ? BigInt(Math.round(v.sharePrice * 1e6)) : 0n;
+    if (price <= 0n) return [label, "—"];
+    // Deposit, as the website's review: the USDC's dollar value (oracle price) over the share price.
+    if (dep) return [label, PX.USDC ? `≈${nf((x * PX.USDC) / v.sharePrice!, 6)} ${rc}` : "—"];
+    if (!pos?.receiptsRaw) return [label, "—"];
+    const u = xRaw(6), held = BigInt(pos.receiptsRaw), worth = (held * price) / 1_000_000n;
+    const shares = u * 10_000n >= worth * 9_999n ? held : (u * 1_000_000n + price - 1n) / price;
+    return [label, `${fromRaw(shares, 6)} ${rc}`];
+  };
   const go = () => {
     closeSheet();
     setTimeout(
@@ -298,8 +348,25 @@ function FarmForm({ chain, v, initial }: { chain: Chain; v: Vault; initial: "dep
             v: tokFmt(x, v.sym),
             s: dep ? "From your margin account" : "Back to your margin account",
           }],
-          rows: [[v.apyLabel, apyText(v), "pos"], ["Venue", v.venue], ["Health factor", `${hfFmt(before.hf)} → ${hfFmt(after!.hf)}`]],
+          // As the website's review: the receipt and the projected monthly earnings (a deposit only; a withdrawal earns nothing more).
+          rows: [
+            receiptRow(),
+            ...(dep ? [["Projected monthly earnings", v.apyLive ? usd((x * px(v.sym) * v.apy) / 100 / 12) : "—"]] as [string, string][] : []),
+            ["Venue", v.venue],
+          ],
           done: { title: dep ? `Deposited ${tokFmt(x, v.sym)}` : `Withdrew ${tokFmt(x, v.sym)}`, line: dep ? (v.apyLive ? `Earning ${pct(v.apy)} on ${v.venue}` : `Deposited on ${v.venue}`) : "Back in your margin account" },
+          // Kamino: one transaction (the receipt account is made inside it), however many parts the wallet needs; Cancel while the
+          // wallet waits. Perena has no cancel handle on the chain side yet, so it keeps the plain send.
+          ...(v.id === "usdstar" || v.id === "junior" || v.venue === "Perena"
+            ? null
+            : {
+                plan: [{ id: "k", label: dep ? `Supply ${tokFmt(x, v.sym)} to Kamino` : `Exit ${v.sym} on Kamino` }],
+                cancelable: true,
+                run: (r: LegRun) => {
+                  const control = { cancel: r.cancel, onLeg: partsToLegs(r.onLeg, () => "k") };
+                  return dep ? solanaFarmDeposit({ sym: v.sym, marginAmount: x, control }) : solanaFarmWithdraw({ sym: v.sym, receiptsRaw: receiptsFor(x), all: pctV === 100, control });
+                },
+              }),
           send: async () => {
             if (v.id === "usdstar" || v.id === "junior" || v.venue === "Perena") {
               return await solanaPerenaAction(v.id, mode, x);
@@ -309,7 +376,8 @@ function FarmForm({ chain, v, initial }: { chain: Chain; v: Vault; initial: "dep
               : await solanaFarmWithdraw({ sym: v.sym, receiptsRaw: receiptsFor(x), all: pctV === 100 });
           },
           apply: () => {
-            apply(d);
+            // a real account is read again from the chain after the run; only the sample account is rewritten here
+            if (!personalReady(chain)) apply(d);
             ACTIVITY[chain].unshift({ t: nowT(), area: "Farm", action: dep ? "Deposit" : "Withdraw", detail: `${v.name} on ${v.venue}`, amt: tokFmt(x, v.sym), usd: x * px(v.sym), via: v.venue, tx: "", sym: v.sym });
           },
         }),
@@ -352,7 +420,6 @@ function FarmForm({ chain, v, initial }: { chain: Chain; v: Vault; initial: "dep
       {after && (
         <Preview
           rows={[
-            ["Health factor", hfFmt(before.hf), hfFmt(after.hf), hfTone(after.hf)],
             [dep ? "Yearly earnings" : "Deposited", dep ? "—" : tokFmt(pos ? pos.amt : 0, v.sym), dep ? (v.apyLive ? "+" + usd((x * px(v.sym) * v.apy) / 100) : "—") : tokFmt(Math.max(0, (pos ? pos.amt : 0) - x), v.sym), dep ? "pos" : ""],
           ]}
         />

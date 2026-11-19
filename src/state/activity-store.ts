@@ -61,6 +61,12 @@ export function addPerpHist(owner: string | undefined, row: Omit<PerpHist, "ms">
 
 /** This wallet's saved Perps rows, together with any added since the app started (newest first). */
 /** One order is one transaction: when two rows carry the same hash, keep the one with the order's own numbers (leverage), drop the chain copy. */
+// Newest first. The phone and the chain keep two clocks (the test network's runs ahead of the phone's), so rows are ordered by the chain's
+// time (cms) once they have it; a trade just made on this phone and not read back from the chain yet is the newest of all.
+const RECENT_MS = 20 * 60_000;
+const perpKey = (r: PerpHist) => r.cms ?? ((r.ms ?? Number.MAX_SAFE_INTEGER) > Date.now() - RECENT_MS ? Number.MAX_SAFE_INTEGER : (r.ms ?? 0));
+const byPerpNewest = (a: PerpHist, b: PerpHist) => perpKey(b) - perpKey(a);
+
 function dedupePerpHist() {
   // One order is one transaction: two rows for the same hash AND the same market / side / kind are one order seen twice (a saved row
   // and the chain's copy): keep the one with the order's own numbers. Rows of different markets may share a hash (Close all signs
@@ -80,7 +86,7 @@ export async function loadPerpHist(owner: string) {
   mutate(() => {
     const merged = [...PERP_HIST];
     for (const r of mine) if (!merged.some((m) => samePerp(m, r))) merged.push(r);
-    merged.sort((a, b) => (b.ms ?? Number.MAX_SAFE_INTEGER) - (a.ms ?? Number.MAX_SAFE_INTEGER));
+    merged.sort(byPerpNewest);
     PERP_HIST.length = 0;
     PERP_HIST.push(...merged);
     dedupePerpHist();
@@ -97,12 +103,15 @@ export function mergeChainPerpHist(owner: string, chain: PerpHist[]) {
   mutate(() => {
     for (let i = PERP_HIST.length - 1; i >= 0; i--) if (PERP_HIST[i].fromChain) PERP_HIST.splice(i, 1);
     const group = (r: PerpHist) => `${r.a}|${r.k}|${r.side}`;
-    const rows = chain.map((c) => ({ ...c, fromChain: true }));
+    const rows = chain.map((c) => ({ ...c, fromChain: true, cms: c.ms }));
     const claimed = new Set<PerpHist>();
     // A saved row already carrying the hash of a chain order of its group is settled.
     for (const r of PERP_HIST) {
       const c = r.hash ? rows.find((x) => x.hash === r.hash && group(x) === group(r)) : undefined;
-      if (c) claimed.add(c);
+      if (c) {
+        claimed.add(c);
+        r.cms = c.ms;
+      }
     }
     const saved = PERP_HIST.filter((r) => r.lev != null && !(r.hash && rows.some((x) => x.hash === r.hash && group(x) === group(r))));
     const byNewest = (x: PerpHist, y: PerpHist) => (y.ms ?? 0) - (x.ms ?? 0);
@@ -114,12 +123,13 @@ export function mergeChainPerpHist(owner: string, chain: PerpHist[]) {
         if (!c) continue;
         claimed.add(c);
         r.hash = c.hash;
+        r.cms = c.ms;
         void rememberPerpHist(owner, r);
       }
     }
     for (const c of rows) if (!claimed.has(c)) PERP_HIST.push(c);
     dedupePerpHist();
-    PERP_HIST.sort((a, b) => (b.ms ?? Number.MAX_SAFE_INTEGER) - (a.ms ?? Number.MAX_SAFE_INTEGER));
+    PERP_HIST.sort(byPerpNewest);
   });
 }
 

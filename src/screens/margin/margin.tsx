@@ -35,6 +35,7 @@ import { lineWeight } from "@/chain/solana/risk";
 import type { FlowAsset, MarginFlow, TxStep } from "@/ui/first-time-flow";
 import { personalReady } from "@/state/personal";
 import { useDataVersion } from "@/state/store";
+import { useAccountRead } from "@/chain/account-live";
 
 /* Margin (design screens/margin.js, V4: one page): hero, Leverage | Repay | Transfer in the pill, the "Your account" row (Account |
    History in a sheet), then the action's form card. Every action previews health factor before → after on a simulated account. */
@@ -112,19 +113,23 @@ function logM(chain: Chain, action: string, detail: string, sym: string, amt: nu
 
 export function MarginHeroBody() {
   const { chain } = useChain();
+  // The first paint shows the margin account before Phoenix and Farm are read: health and room stay "—" until the full read, so a
+  // figure missing those pieces never shows.
+  const read = useAccountRead(chain);
   const d = DATA[chain];
   if (!hasMargin(d)) return null;
   const a = acct(chain);
-  const nd = !(a.debtUsd > 0.005);
+  const known = read === "ready";
+  const nd = known && !(a.debtUsd > 0.005);
   const r = priceRoom(chain);
-  const room = r.state === "ok" ? `${(r.pct ?? 0) < 0 ? "−" : "+"}${nf(Math.abs(r.pct ?? 0), 1)}%` : r.state === "now" ? "Liquidatable now" : r.state === "none" ? "Safe" : "—";
+  const room = !known ? "—" : r.state === "ok" ? `${(r.pct ?? 0) < 0 ? "−" : "+"}${nf(Math.abs(r.pct ?? 0), 1)}%` : r.state === "now" ? "Liquidatable now" : r.state === "none" ? "Safe" : "—";
   return (
     <View style={styles.hstats}>
       <View style={[styles.hst, { flexDirection: "row", alignItems: "flex-start", gap: 8 }]}>
-        {!nd && <MascotFace hf={a.hf} size={40} />}
+        {known && !nd && <MascotFace hf={a.hf} size={40} />}
         <View style={{ flex: 1, minWidth: 0 }}>
           <Text style={styles.hl}>Health factor</Text>
-          <Text style={[styles.hv, nd && { color: "#32EEE2" }]}>{nd ? "No debt" : hfFmt(a.hf)}</Text>
+          <Text style={[styles.hv, nd && { color: "#32EEE2" }]}>{!known ? "—" : nd ? "No debt" : hfFmt(a.hf)}</Text>
           <Text style={styles.hs}>Liquidation at {nf(LIQ_HF, 2)}</Text>
         </View>
       </View>

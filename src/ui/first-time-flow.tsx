@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import { Linking, Platform, StyleSheet, Text, TextInput, View } from "react-native";
 import Animated, {
   type SharedValue,
@@ -20,8 +20,8 @@ import { LinearGradient } from "expo-linear-gradient";
 
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
-import { IconAction, Tag } from "@/components/ui/kit";
-import { MascotDone } from "@/mascot/mascot";
+import { IconAction } from "@/components/ui/kit";
+import { MascotDone, MascotRest } from "@/mascot/mascot";
 import { TailLoader } from "@/mascot/tail-loader";
 import { refreshAccountSoon } from "@/chain/account-live";
 import { onSigned } from "@/chain/sign";
@@ -35,7 +35,9 @@ import { haptic } from "@/ui/haptics";
 import { pauseLiveWhile, setLivePaused } from "@/state/live-pause";
 
 import { noteTxResult } from "@/state/notes";
-import { guardSheet, toast } from "./overlay";
+import { LegBar, LegList, QuietButton, StopConfirm } from "./leg-rows";
+import { cancelledLine, initLegs, isCancelled, type Leg, type LegPhase, type LegSend, type LegsState, names, shortReason, wasWere } from "./legs";
+import { guardSheet, interceptClose, SheetFooter, toast } from "./overlay";
 import type { TxSpec } from "./tx";
 import { externalWalletName, isWalletTimeout, type TxSend, type TxStatus, useOnForeground, WALLET_TIMEOUT_TEXT, waitingLine } from "./wallet-wait";
 
@@ -58,6 +60,9 @@ export type TxStep = {
   assets: number[]; // indexes into MarginFlow.assets this transaction moves
   // gets a status callback (waiting_for_wallet | sending | confirming) when the chain side reports one
   send: TxSend;
+  // The same send with the sheet's controls (ui/legs.ts LegRun: onStatus, onLeg, the cancel signal); used instead of `send` when set,
+  // so Cancel (and the X while the wallet waits) can end the wallet request when the spec is `cancelable`.
+  run?: LegSend;
 };
 
 export type MarginFlow = {
@@ -90,10 +95,29 @@ const lineOf = (side: Record<string, number>, suffix: string, empty: string) => 
   const k = Object.keys(side);
   return k.length === 0 ? empty : k.length === 1 ? `${tokFmt(side[k[0]], k[0])}${suffix}` : `${k.length} assets${suffix}`;
 };
-const listOf = (side: Record<string, number>) => Object.keys(side).map((t) => tokFmt(side[t], t)).join(" · ");
-const subOf = (f: MarginFlow, s: TxStep) => (s.assets.length > 1 ? s.assets.map((j) => tokFmt(f.assets[j].amt, f.assets[j].sym)).join(" · ") : "");
 
 type Phase = "review" | "run" | "done" | "fail";
+
+// The steps as leg rows (design MULTI-LEG.md v3: the compact rows under the stage), each placed from what the sheet really saw.
+function stepLegs(
+  steps: TxStep[],
+  o: { phase: Phase; cur: number; sub: number; bad: boolean; done: boolean[]; hashes: string[]; failIdx: number; failMsg: string; halted: boolean; walletApp: string | null },
+): LegsState {
+  const s = initLegs(steps.map((x, i) => ({ id: String(i), label: x.title, noun: x.title, stage: i })));
+  const phaseOf = (i: number): LegPhase => {
+    if (o.done[i]) return "done";
+    if (o.phase === "fail") return i === o.failIdx && !o.halted ? "failed" : "skipped";
+    if (i > o.cur) return o.cur > 0 || o.sub > 0 ? "queued" : "wait";
+    if (i < o.cur) return "done";
+    if (o.bad) return "failed";
+    return o.sub === 0 ? (o.walletApp ? "wait" : "check") : o.sub === 1 ? "send" : o.sub === 2 ? "confirm" : "done";
+  };
+  const legs: Leg[] = s.legs.map((l, i) => {
+    const phase = phaseOf(i);
+    return { ...l, phase, signature: o.hashes[i] || undefined, reason: phase === "failed" && o.failMsg ? shortReason(o.failMsg) : undefined };
+  });
+  return { ...s, legs, asking: o.phase === "run" && o.sub === 0 && !o.bad && !!o.walletApp, signed: o.sub > 0 || o.cur > 0, heard: true };
+}
 
 export function MarginFlowSheet({ spec, close }: { spec: TxSpec; close: () => void }) {
   const f = spec.flow!;
@@ -114,6 +138,12 @@ export function MarginFlowSheet({ spec, close }: { spec: TxSpec; close: () => vo
   const [failIdx, setFailIdx] = useState(0);
   const [failMsg, setFailMsg] = useState("");
   const [timedOut, setTimedOut] = useState(false); // the wallet never answered: nothing was sent
+  // How a halted run ended: the person cancelled the wallet request, or stopped before the next step was asked for.
+  const [halt, setHalt] = useState<null | "cancelled" | "stopped">(null);
+  const [stopAsk, setStopAsk] = useState(false);
+  const [stopping, setStopping] = useState(false);
+  const stopRef = useRef(false);
+  const cancelCtl = useRef<AbortController | null>(null);
   const walletApp = externalWalletName(spec.chain);
   const alive = useRef(true);
   useEffect(() => () => void (alive.current = false), []);
@@ -133,10 +163,22 @@ export function MarginFlowSheet({ spec, close }: { spec: TxSpec; close: () => vo
       setBad(false);
       setTimedOut(false);
       setFailMsg("");
+      setHalt(null);
+      setStopAsk(false);
+      setStopping(false);
+      stopRef.current = false;
       const hs = [...hashes];
       for (let i = from; i < steps.length; i++) {
         if (!alive.current) {
           toast("Stopped. The steps already approved are on chain; open it again to finish.", "info");
+          return;
+        }
+        // Stop: the next step is never asked for; what landed stays
+        if (stopRef.current && i > from) {
+          setFailIdx(i);
+          setHalt("stopped");
+          if (hs.some(Boolean)) refreshAccountSoon(spec.chain);
+          setPhase("fail");
           return;
         }
         setCur(i);
@@ -148,8 +190,10 @@ export function MarginFlowSheet({ spec, close }: { spec: TxSpec; close: () => vo
           if (st === "waiting_for_wallet") setSub(0);
           else setSub((s) => Math.max(s, st === "sending" ? 1 : 2));
         };
+        const cc = (cancelCtl.current = new AbortController());
+        const run = steps[i].run;
         try {
-          const h = (await pauseLiveWhile(steps[i].send(onStatus))) || "";
+          const h = (await pauseLiveWhile(run ? run({ onStatus, onLeg: () => {}, cancel: cc.signal, stop: new AbortController().signal }) : steps[i].send(onStatus))) || "";
           hs[i] = h;
           setHashes([...hs]);
           if (h && i < steps.length - 1) spec.onStepDone?.(i, h);
@@ -175,6 +219,14 @@ export function MarginFlowSheet({ spec, close }: { spec: TxSpec; close: () => vo
             return;
           }
           setFailIdx(i);
+          if (isCancelled(e) || cc.signal.aborted) {
+            // cancelled before the wallet answered: nothing of this step was sent
+            setHalt("cancelled");
+            setFailMsg(cancelledLine(walletApp));
+            if (hs.some(Boolean)) refreshAccountSoon(spec.chain);
+            setPhase("fail");
+            return;
+          }
           const timedOut = isWalletTimeout(e);
           setTimedOut(timedOut);
           setFailMsg(timedOut ? WALLET_TIMEOUT_TEXT : e instanceof Error ? e.message : "The transaction was not sent");
@@ -196,7 +248,7 @@ export function MarginFlowSheet({ spec, close }: { spec: TxSpec; close: () => vo
       }
       setPhase("done");
     },
-    [steps, hashes, f, spec, rm],
+    [steps, hashes, f, spec, rm, walletApp],
   );
   // Back from the wallet: re-read the chain so the sheet and the screens behind it show what really happened.
   const onForeground = useCallback(() => {
@@ -211,6 +263,27 @@ export function MarginFlowSheet({ spec, close }: { spec: TxSpec; close: () => vo
     authenticate("Confirm transaction")
       .then((ok) => (ok ? void runFrom(0) : toast("Not confirmed")))
       .catch(() => toast("Not confirmed"));
+  };
+
+  // Cancel before the wallet answered (a step whose `run` ends the wallet request); the X acts as Cancel then.
+  const canCancel = phase === "run" && !bad && sub === 0 && !!walletApp && !!spec.cancelable && !!steps[cur]?.run;
+  const cancel = useCallback(() => {
+    const c = cancelCtl.current;
+    if (!c || c.signal.aborted) return;
+    haptic.tap();
+    c.abort();
+  }, []);
+  useEffect(() => {
+    interceptClose(canCancel ? () => (cancel(), true) : null);
+    return () => interceptClose(null);
+  }, [canCancel, cancel]);
+  // Stop: only while a later step is still held back (each step is its own approval, asked for only after the previous one landed).
+  // On the last step there is nothing left to hold back, so there is no Stop.
+  const canStop = phase === "run" && steps.length > 1 && !bad && sub >= 1 && cur < steps.length - 1 && !stopping;
+  const stopHere = () => {
+    setStopAsk(false);
+    stopRef.current = true;
+    setStopping(true);
   };
 
   /* ------------------------------------------------------------- review */
@@ -274,154 +347,139 @@ export function MarginFlowSheet({ spec, close }: { spec: TxSpec; close: () => vo
     );
   }
 
-  /* ------------------------------------------------------------- failure */
-  if (phase === "fail") {
-    // one transaction: the app's own failure layout
-    if (steps.length === 1) {
-      return (
-        <View style={{ gap: 16 }}>
-          <View style={styles.hd}>
-            <View style={[styles.ring, { backgroundColor: colors.pinkTint }]}>
-              <Icon name="close" size={24} color={colors.onPinkTint} />
-            </View>
-            <View style={{ flex: 1, minWidth: 0 }}>
-              <Text style={[styles.h, { color: colors.text }]}>Not confirmed</Text>
-              <Text style={[styles.cap, { color: colors.muted }]}>{failMsg}</Text>
-            </View>
-          </View>
-          <View style={{ gap: 4 }}>
-            <Button label="Try again" fam={spec.fam} onPress={() => (timedOut ? void runFrom(failIdx) : (setBad(false), setSub(0), setPhase("review")))} />
-            <Button label="Done" v="text" size="md" onPress={() => close()} />
-          </View>
+  const last = cur === steps.length - 1;
+  const finalFace = sub === 3 && last;
+  const waiting = !bad && sub === 0 && !!walletApp;
+
+  /* ------------------------------------------------------------- several steps: stage, header, bar and one row per step (v3) */
+  if (steps.length > 1) {
+    const ls = stepLegs(steps, { phase, cur, sub, bad, done, hashes, failIdx, failMsg, halted: !!halt, walletApp });
+    const ok = ls.legs.filter((l) => l.phase === "done");
+    const left = ls.legs.filter((l) => l.phase !== "done");
+    const failed = phase === "fail" && !halt;
+    let title: string;
+    let caption: string;
+    if (phase === "done") [title, caption] = [spec.done.title, spec.done.line ?? ""];
+    else if (halt === "cancelled" && !ok.length) [title, caption] = ["Cancelled", cancelledLine(walletApp)];
+    else if (halt)
+      [title, caption] =
+        isNew && ok.length === 1
+          ? ["Account opened, nothing deposited yet", "Your margin account is open. The deposits and the borrow were not sent."]
+          : [`Stopped: ${ok.length} of ${steps.length} done`, `${names(left)} ${wasWere(left)} not sent.`];
+    else if (failed) {
+      const s = steps[failIdx];
+      const why = timedOut
+        ? ""
+        : isNew && failIdx === 0
+          ? `${s.title} didn't go through and nothing was created.`
+          : `${s.title} didn't go through and nothing was sent for it. ${isNew ? "Your margin account is open and safe." : "Earlier steps are confirmed."}`;
+      [title, caption] = ["Not confirmed", `${why} ${timedOut ? failMsg : ""}`.trim()];
+    } else {
+      title = bad ? "Not confirmed" : waiting ? "Waiting for your wallet" : sub === 0 ? "Sending" : sub === 3 ? "Confirmed" : `Sent to ${CHAIN_LABEL[spec.chain]}`;
+      caption = stopping ? "Stopping. Steps already sent will still finish." : waiting ? waitingLine(walletApp!) : steps[cur].doing;
+    }
+    const later = steps.length - 1 - cur;
+    let buttons: ReactNode = null;
+    if (phase === "run") {
+      buttons =
+        stopAsk && canStop ? (
+          <StopConfirm body={`Steps already sent will finish. The remaining ${later} will not be sent.`} fam={spec.fam} onStop={stopHere} onKeep={() => setStopAsk(false)} />
+        ) : canStop ? (
+          <QuietButton label="Stop" onPress={() => setStopAsk(true)} />
+        ) : null;
+    } else if (phase === "done") buttons = <Button label="Done" fam={spec.fam} onPress={() => close()} />;
+    else
+      buttons = (
+        <View style={{ gap: 4 }}>
+          <Button
+            label={halt === "cancelled" && !ok.length ? "Try again" : halt ? "Continue" : timedOut ? "Try again" : `Retry failed (${left.length})`}
+            fam={spec.fam}
+            onPress={() => void runFrom(failIdx)}
+          />
+          <Button label={halt && ok.length ? "Done" : "Close"} v="text" size="md" onPress={() => close()} />
         </View>
       );
-    }
-    const s = steps[failIdx];
-    const why = timedOut
-      ? ""
-      : isNew && failIdx === 0
-        ? `${s.title} didn't go through and nothing was created.`
-        : `${s.title} didn't go through and nothing was sent for it. ${isNew ? "Your margin account is open and safe." : "Earlier steps are confirmed."}`;
+    const finished = phase === "done" || phase === "fail";
+    return (
+      <View style={{ gap: 20 }}>
+        <Stage chain={spec.chain} flow={f} lite={lite} cur={phase === "done" ? steps.length - 1 : cur} sub={phase === "done" ? 3 : sub} bad={failed || bad} docked={docked} addr={addr} done={done} />
+        <View style={styles.hd}>
+          {phase === "done" || (!finished && finalFace) ? (
+            <MascotDone size={56} />
+          ) : halt ? (
+            <MascotRest size={56} mood="calm" />
+          ) : failed || bad ? (
+            <View style={styles.tl}>
+              <View style={[styles.tlBad, { backgroundColor: colors.pinkTint }]}>
+                <Icon name="close" size={24} color={colors.onPinkTint} />
+              </View>
+            </View>
+          ) : (
+            <TailLoader size={48} />
+          )}
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <Text style={[styles.h, { color: colors.text }]}>{title}</Text>
+            {!!caption && <Text style={[styles.cap, { color: colors.muted }]} numberOfLines={3}>{caption}</Text>}
+          </View>
+        </View>
+        {canCancel && <QuietButton label="Cancel" onPress={cancel} />}
+        <LegBar s={ls} />
+        <LegList s={ls} multi onRetry={failed ? () => void runFrom(failIdx) : undefined} />
+        <SheetFooter>{buttons}</SheetFooter>
+      </View>
+    );
+  }
+
+  /* ------------------------------------------------------------- one transaction: failure */
+  if (phase === "fail") {
+    const calm = halt === "cancelled";
     return (
       <View style={{ gap: 16 }}>
         <View style={styles.hd}>
-          <View style={[styles.ring, { backgroundColor: colors.pinkTint }]}>
-            <Icon name="close" size={24} color={colors.onPinkTint} />
-          </View>
+          {calm ? (
+            <MascotRest size={52} mood="calm" />
+          ) : (
+            <View style={[styles.ring, { backgroundColor: colors.pinkTint }]}>
+              <Icon name="close" size={24} color={colors.onPinkTint} />
+            </View>
+          )}
           <View style={{ flex: 1, minWidth: 0 }}>
-            <Text style={[styles.h, { color: colors.text }]}>Not confirmed</Text>
-            <Text style={[styles.cap, { color: colors.muted }]}>{`${why} ${failMsg}`.trim()}</Text>
+            <Text style={[styles.h, { color: colors.text }]}>{calm ? "Cancelled" : "Not confirmed"}</Text>
+            <Text style={[styles.cap, { color: colors.muted }]}>{failMsg}</Text>
           </View>
-        </View>
-        <View style={[styles.card, { backgroundColor: colors.bg }]}>
-          {steps.map((x, j) => {
-            const pre = subOf(f, x) ? `${subOf(f, x)} · ` : "";
-            return (
-              <View key={x.key} style={[styles.trow, j > 0 && { borderTopWidth: 1, borderTopColor: colors.divider }]}>
-                <View style={[styles.ck, j < failIdx ? { backgroundColor: "#703AE6" } : j === failIdx ? { backgroundColor: colors.pinkTint } : { borderWidth: 1, borderColor: colors.borderControl }]}>
-                  {j < failIdx ? <Icon name="check" size={16} color="#FFFFFF" /> : j === failIdx ? <Icon name="close" size={14} color={colors.onPinkTint} /> : <Text style={[styles.numT, { color: colors.muted }]}>{j + 1}</Text>}
-                </View>
-                <View style={{ flex: 1, minWidth: 0 }}>
-                  <Text style={[styles.stT, { color: colors.text }]}>{j < failIdx && x.key === "open" ? "Account opened" : x.title}</Text>
-                  <Text style={[styles.stD, { color: colors.muted }]}>
-                    {j < failIdx ? (x.key === "open" ? short(addr ?? "") : pre + short(hashes[j] || "")) : pre + (j === failIdx ? "Didn't go through" : `Runs after step ${failIdx + 1}`)}
-                  </Text>
-                </View>
-                <Tag label={j < failIdx ? "Confirmed" : j === failIdx ? "Not confirmed" : "Waiting"} tone={j < failIdx ? "teal" : j === failIdx ? "neg" : "grey"} />
-              </View>
-            );
-          })}
         </View>
         <View style={{ gap: 4 }}>
-          <Button label={`Try again from step ${failIdx + 1}`} fam={spec.fam} onPress={() => void runFrom(failIdx)} />
-          <Button label="Close" v="text" size="md" onPress={() => close()} />
+          <Button label="Try again" fam={spec.fam} onPress={() => (timedOut || calm ? void runFrom(failIdx) : (setBad(false), setSub(0), setPhase("review")))} />
+          <Button label={calm || timedOut ? "Close" : "Done"} v="text" size="md" onPress={() => close()} />
         </View>
       </View>
     );
   }
 
-  /* ------------------------------------------------------------- done */
+  /* ------------------------------------------------------------- one transaction: done (face, title, line, explorer action; the bar; Done) */
   if (phase === "done") {
-    // one transaction: the app's own done layout (face, title, line, explorer action; the bar; Done)
-    if (steps.length === 1) {
-      return (
-        <View style={{ gap: 20 }}>
-          <View style={styles.hd}>
-            <MascotDone size={56} />
-            <View style={{ flex: 1, minWidth: 0 }}>
-              <Text style={[styles.h, { color: colors.text }]}>{spec.done.title}</Text>
-              {!!spec.done.line && <Text style={[styles.cap, { color: colors.muted }]}>{spec.done.line}</Text>}
-            </View>
-            {!!hashes[0] && <IconAction icon="open_in_new" label="View on Solana Explorer" onPress={() => Linking.openURL(explorer(hashes[0])).catch(() => toast("Couldn't open the explorer"))} />}
-          </View>
-          <Bar step={3} />
-          <Button label="Done" fam={spec.fam} onPress={() => close()} />
-        </View>
-      );
-    }
-    const h = holdingsAt(f, steps.length);
     return (
       <View style={{ gap: 20 }}>
         <View style={styles.hd}>
           <MascotDone size={56} />
           <View style={{ flex: 1, minWidth: 0 }}>
             <Text style={[styles.h, { color: colors.text }]}>{spec.done.title}</Text>
-            {!!spec.done.line && <Text style={[styles.cap, { color: colors.muted }]} numberOfLines={2}>{spec.done.line}</Text>}
+            {!!spec.done.line && <Text style={[styles.cap, { color: colors.muted }]}>{spec.done.line}</Text>}
           </View>
+          {!!hashes[0] && <IconAction icon="open_in_new" label="View on Solana Explorer" onPress={() => Linking.openURL(explorer(hashes[0])).catch(() => toast("Couldn't open the explorer"))} />}
         </View>
         <Bar step={3} />
-        <View style={[styles.card, { backgroundColor: colors.bg }]}>
-          <View style={styles.accRow}>
-            <View style={[styles.tile, { overflow: "hidden" }]}>
-              <LinearGradient colors={families.margin.c} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
-              <Icon name="account_balance" size={18} color="#FFFFFF" />
-            </View>
-            <View style={{ flex: 1, minWidth: 0 }}>
-              <Text style={[styles.stT, { color: colors.text }]}>Margin account</Text>
-              <Text style={[styles.stD, { color: colors.muted }]} numberOfLines={1}>{CHAIN_LABEL[spec.chain]}{addr ? ` · ${short(addr)}` : ""}</Text>
-            </View>
-            <Tag label="Open" tone="teal" />
-          </View>
-          {([["Collateral", h.col], ["Borrowed", h.debt]] as const).map(([l, side]) =>
-            Object.keys(side).length ? (
-              <View key={l} style={[styles.row, { borderTopWidth: 1, borderTopColor: colors.divider }]}>
-                <Text style={[styles.rowL, { color: colors.muted }]}>{l}</Text>
-                <Text style={[styles.rowV, styles.multi, { color: colors.text }]}>{listOf(side)}</Text>
-              </View>
-            ) : null,
-          )}
-        </View>
-        <View>
-          <Text style={[styles.sec, { color: colors.muted }]}>{`${steps.length} transactions`}</Text>
-          {steps.map((s, i) => (
-            <View key={s.key} style={[styles.trow, i > 0 && { borderTopWidth: 1, borderTopColor: colors.divider }]}>
-              <View style={[styles.ck, { backgroundColor: "#703AE6" }]}>
-                <Icon name="check" size={16} color="#FFFFFF" />
-              </View>
-              <View style={{ flex: 1, minWidth: 0 }}>
-                <Text style={[styles.stT, { color: colors.text }]}>{s.title}</Text>
-                <Text style={[styles.stD, { color: colors.muted }]}>{(subOf(f, s) ? `${subOf(f, s)} · ` : "") + short(hashes[i] || "")}</Text>
-              </View>
-              {!!hashes[i] && <IconAction icon="open_in_new" label="View on Solana Explorer" onPress={() => Linking.openURL(explorer(hashes[i])).catch(() => toast("Couldn't open the explorer"))} />}
-            </View>
-          ))}
-        </View>
         <Button label="Done" fam={spec.fam} onPress={() => close()} />
       </View>
     );
   }
 
-  /* ------------------------------------------------------------- progress */
-  const last = cur === steps.length - 1;
-  const finalFace = sub === 3 && last;
-  const waiting = !bad && sub === 0 && !!walletApp;
+  /* ------------------------------------------------------------- one transaction: progress */
   const title = bad ? "Not confirmed" : waiting ? "Waiting for your wallet" : sub === 0 ? "Sending" : sub === 3 ? "Confirmed" : `Sent to ${CHAIN_LABEL[spec.chain]}`;
-  const lead = steps.length === 1 ? "" : `Step ${cur + 1} of ${steps.length} · `;
-  const caption = waiting ? lead + waitingLine(walletApp!) : lead + steps[cur].doing;
+  const caption = waiting ? waitingLine(walletApp!) : steps[cur].doing;
   return (
     <View style={{ gap: 20 }}>
       <Stage chain={spec.chain} flow={f} lite={lite} cur={cur} sub={sub} bad={bad} docked={docked} addr={addr} done={done} />
-      {isNew && steps.length > 1 && <Stepper steps={steps} done={done} cur={cur} bad={bad} />}
       <View style={styles.hd}>
         {finalFace ? (
           <MascotDone size={56} />
@@ -439,6 +497,7 @@ export function MarginFlowSheet({ spec, close }: { spec: TxSpec; close: () => vo
           <Text style={[styles.cap, { color: colors.muted }]} numberOfLines={3}>{caption}</Text>
         </View>
       </View>
+      {canCancel && <QuietButton label="Cancel" onPress={cancel} />}
       <Bar step={sub} />
     </View>
   );
@@ -466,34 +525,6 @@ function Bar({ step }: { step: number }) {
           </View>
         ))}
       </View>
-    </View>
-  );
-}
-
-/* ---------------------------------------------------------------------- stepper: a circle per transaction, joined by a line */
-function Stepper({ steps, done, cur, bad }: { steps: TxStep[]; done: boolean[]; cur: number; bad: boolean }) {
-  const { colors } = useTheme();
-  const lit = (i: number) => done[i] || (i === cur && !bad);
-  const line = (i: number, show: boolean) => (
-    <View style={[styles.spLine, !show ? { opacity: 0 } : { backgroundColor: lit(i) ? "#703AE6" : colors.borderControl, opacity: lit(i) ? 1 : 0.5 }]} />
-  );
-  return (
-    <View style={styles.stepper}>
-      {steps.map((s, i) => {
-        const d = done[i], isBad = bad && i === cur, on = i === cur && !d && !bad;
-        return (
-          <View key={s.key} style={styles.sp}>
-            <View style={styles.spRow}>
-              {line(i, i > 0)}
-              <View style={[styles.spc, isBad ? { backgroundColor: colors.pinkTint, borderColor: "transparent" } : d ? { backgroundColor: "#703AE6", borderColor: "#703AE6" } : on ? { borderWidth: 2, borderColor: "#703AE6" } : { borderColor: colors.borderControl }]}>
-                {isBad ? <Icon name="close" size={14} color={colors.onPinkTint} /> : d ? <Icon name="check" size={16} color="#FFFFFF" /> : <Text style={[styles.numT, { color: on ? colors.text : colors.muted }]}>{i + 1}</Text>}
-              </View>
-              {line(i + 1, i < steps.length - 1)}
-            </View>
-            <Text style={{ fontFamily: on ? font.semibold : font.regular, fontSize: 13, lineHeight: 18, color: on || d ? colors.text : colors.muted }} numberOfLines={1}>{s.short}</Text>
-          </View>
-        );
-      })}
     </View>
   );
 }

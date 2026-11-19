@@ -1,4 +1,4 @@
-import { type ReactNode, type RefObject, useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { type ReactNode, type RefObject, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
 import { BackHandler, type HostInstance, Keyboard, Platform, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, { Easing, KeyboardState, runOnJS, useAnimatedKeyboard, useAnimatedStyle, useSharedValue, withSpring, withTiming } from "react-native-reanimated";
@@ -58,11 +58,45 @@ let guarded: string | null = null;
 export const guardSheet = (on: boolean, msg = "Waiting for your wallet. Approve or reject it there.") => {
   guarded = on ? msg : null;
 };
+// While a transaction waits for the wallet, the sheet's X acts as Cancel instead of hiding it (a request left in the wallet could
+// still be approved after the sheet closed): `fn` returns true when it handled the tap and the sheet must stay.
+let xIntercept: (() => boolean) | null = null;
+export const interceptClose = (fn: (() => boolean) | null) => {
+  xIntercept = fn;
+};
+
+// Buttons that stick to the bottom of the open sheet while its body scrolls (the multi-leg transaction sheet): the content renders
+// <SheetFooter>…</SheetFooter> and the sheet draws it below its scroll view. Only the slot re-renders when it changes.
+let footerNode: ReactNode = null;
+const footerSubs = new Set<() => void>();
+const setFooter = (n: ReactNode) => {
+  footerNode = n;
+  footerSubs.forEach((f) => f());
+};
+export function SheetFooter({ children }: { children: ReactNode }) {
+  useLayoutEffect(() => setFooter(children ?? null));
+  useLayoutEffect(() => () => setFooter(null), []);
+  return null;
+}
+function FooterSlot() {
+  const node = useSyncExternalStore(
+    (cb) => (footerSubs.add(cb), () => footerSubs.delete(cb)),
+    () => footerNode,
+  );
+  return node ? <View style={styles.footer}>{node}</View> : null;
+}
+
 let closing: (() => void) | null = null;
 // Animated close (the host plays the exit, then clears the sheet).
 export function closeSheet() {
   if (closing) closing();
   else set({ sheet: null });
+}
+
+/** Called when the screen changes (tab or page): a sheet opened on the screen before must not stay over the new one. A sheet whose transaction is running keeps its guard and stays. */
+export function closeSheetOnNavigate() {
+  if (state.sheet && !guarded) closeSheet();
+  if (state.menu) closeMenu();
 }
 
 // Dropdown menu anchored to a view (design core anchor menus): below it, or above when there is no room.
@@ -98,7 +132,7 @@ export function openTip(anchor: RefObject<HostInstance | null>, text: string) {
 export const closeMenu = () => set({ menu: null });
 
 let toastTimer: ReturnType<typeof setTimeout> | undefined;
-// Toast (option C): a short pill above the tab bar, inverse of the theme so it stands out, with an icon for the kind of message.
+// Toast (option C): a short pill under the status bar, inverse of the theme so it stands out, with an icon for the kind of message.
 // `action`: one tappable word on the toast (e.g. "View"); such a toast stays longer. `ms`: how long it shows.
 export function toast(text: string, tone: ToastTone = "ok", opts: { action?: ToastAction; ms?: number } = {}) {
   clearTimeout(toastTimer);
@@ -184,6 +218,7 @@ function SheetView({ spec }: { spec: SheetSpec }) {
     return () => {
       sub.remove();
       guarded = null;
+      xIntercept = null;
       if (closing === close) closing = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -239,7 +274,7 @@ function SheetView({ spec }: { spec: SheetSpec }) {
           <Text style={[styles.title, { color: colors.text }]} accessibilityRole="header">
             {spec.title}
           </Text>
-          <Pressable onPress={close} accessibilityRole="button" accessibilityLabel="Close" style={[styles.close, { backgroundColor: colors.segment }]}>
+          <Pressable onPress={() => (xIntercept?.() ? undefined : close())} accessibilityRole="button" accessibilityLabel="Close" style={[styles.close, { backgroundColor: colors.segment }]}>
             <Icon name="close" size={22} />
           </Pressable>
         </View>
@@ -278,6 +313,7 @@ function SheetView({ spec }: { spec: SheetSpec }) {
           </ScrollView>
         </GestureDetector>
         {spec.footer && <View style={styles.footer}>{spec.footer(close)}</View>}
+        <FooterSlot />
       </Animated.View>
     </View>
   );
@@ -421,10 +457,10 @@ function Toast({ text, tone, action }: { text: string; tone: ToastTone; action?:
   useEffect(() => {
     o.value = withTiming(1, { duration: 320, easing: Easing.bezier(0.23, 1, 0.32, 1) });
   }, [o]);
-  const st = useAnimatedStyle(() => ({ opacity: Math.min(1, o.value * 1.6), transform: [{ translateY: (1 - o.value) * 24 }, { scale: 0.96 + o.value * 0.04 }] }));
+  const st = useAnimatedStyle(() => ({ opacity: Math.min(1, o.value * 1.6), transform: [{ translateY: (o.value - 1) * 24 }, { scale: 0.96 + o.value * 0.04 }] }));
   const ic = TOAST_ICON[tone];
   return (
-    <View pointerEvents={action ? "box-none" : "none"} style={[styles.toastWrap, { bottom: insets.bottom + 68 }]}>
+    <View pointerEvents={action ? "box-none" : "none"} style={[styles.toastWrap, { top: insets.top + 12 }]}>
       <Animated.View
         style={[styles.toast, { backgroundColor: isDark ? "#F2F1F6" : "#1E1D24" }, isDark ? styles.toastShDark : styles.toastShLight, st]}
         accessibilityLiveRegion="polite"

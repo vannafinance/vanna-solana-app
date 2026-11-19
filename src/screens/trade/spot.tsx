@@ -18,8 +18,10 @@ import { useTheme } from "@/theme/use-theme";
 import { families, font } from "@/theme/tokens";
 import { openMenu, openSheet } from "@/ui/overlay";
 import { runTx } from "@/ui/tx";
+import { type Leg, type LegRun, partsToLegs } from "@/ui/legs";
+import { personalReady } from "@/state/personal";
 import { haptic } from "@/ui/haptics";
-import { solanaDepositAndBorrow, solanaMarginSwap } from "@/chain/solana/actions";
+import { solanaDepositAndBorrow, solanaMarginSwap, solanaRepay } from "@/chain/solana/actions";
 import { onTitanAvailability, probeTitan, TITAN_UNAVAILABLE, titanAvailableCached } from "@/chain/solana/titan";
 
 /* Spot (design screens/trade.js): Swap | History. A swap runs inside the margin account: it spends idle funds, then the token's long,
@@ -224,6 +226,25 @@ function SwapCard() {
     setRecv(t);
   };
 
+  const swapOnly = (rr: LegRun) =>
+    solanaMarginSwap({ fromSym: p, toSym: r, amount: x, slippageBps: Math.round(slippage() * 100), venue: isTitan(ven) ? "titan" : "jupiter", control: { cancel: rr.cancel, onLeg: partsToLegs(rr.onLeg, () => "swap") } });
+  const borrowThenSwap = async (rr: LegRun) => {
+    if (borrow > 0) {
+      try {
+        const sig = await solanaDepositAndBorrow({ borrows: [{ sym: p, amount: borrow }] });
+        rr.onLeg("bor", "done", { signature: sig || undefined });
+      } catch (e) {
+        rr.onLeg("bor", "failed", { reason: e instanceof Error ? e.message : String(e) });
+        rr.onLeg("swap", "not-sent");
+        throw e;
+      }
+      if (rr.stop.aborted) {
+        rr.onLeg("swap", "not-sent");
+        throw Object.assign(new Error("Stopped before the swap."), { name: "StoppedError" });
+      }
+    }
+    return swapOnly(rr);
+  };
   const go = () =>
     runTx({
       chain, fam, title: "Review swap", cta: borrow > 0 ? "Borrow and swap" : "Swap",
@@ -232,7 +253,25 @@ function SwapCard() {
         { l: "You receive", v: tokFmt(y, r), s: `via ${ven[0]}` },
       ],
       rows: [["Rate", `1 ${p} = ${nf(px(p) / px(r), px(p) / px(r) < 1 ? 4 : 2)} ${r}`], ["Minimum received", tokFmt(y * (1 - slippage() / 100), r)], ["Route fee", pct(FEE * 100)], ["Health factor", `${hfFmt(before.hf)} → ${hfFmt(after!.hf)}`]],
-      done: { title: `Swapped ${tokFmt(x, p)}`, line: `Received ${tokFmt(y, r)}` },
+      done: borrow > 0
+        ? { title: `Swapped ${tokFmt(x, p)} to ${tokFmt(y, r)}`, line: `${tokFmt(borrow, p)} borrowed, then swapped to ${tokFmt(y, r)}. It's in your margin account.` }
+        : { title: `Swapped ${tokFmt(x, p)} for ${tokFmt(y, r)}`, line: `${r} is in your margin account` },
+      // A swap is one row (an account it needs is set up in the same approval); a borrow first is its own approval and row, and Stop
+      // can hold the swap back once the borrow is approved.
+      plan: borrow > 0
+        ? [{ id: "bor", label: `Borrow ${tokFmt(borrow, p)}`, noun: tokFmt(borrow, p), stage: 0 }, { id: "swap", label: `Swap ${p} to ${r}`, stage: 1 }]
+        : [{ id: "swap", label: `Swap ${tokFmt(x, p)} for ${r}` }],
+      copy: {
+        doing: borrow > 0 ? "Borrowing and swapping" : `Swapping ${tokFmt(x, p)} for ${r}`,
+        part: (ok: Leg[]): [string, string] => (ok.length ? ["Borrowed, not swapped", `${tokFmt(borrow, p)} is borrowed and sits in your margin account. The swap didn't go through.`] : ["Not confirmed", "Nothing moved."]),
+        stopped: (ok: Leg[]): [string, string] => (ok.length ? [`Borrowed ${tokFmt(borrow, p)}, swap not done`, `${tokFmt(borrow, p)} is borrowed and sits in your margin account.`] : ["Stopped", "Nothing was sent."]),
+      },
+      // the borrow has no cancel handle on the chain side: Cancel is offered for a swap on its own
+      cancelable: borrow === 0,
+      stoppable: borrow > 0,
+      run: borrowThenSwap,
+      retryLegs: (only, rr) => (only.includes("bor") ? borrowThenSwap(rr) : swapOnly(rr)),
+      stopExtra: () => [{ label: `Repay ${tokFmt(borrow, p)}`, done: { title: `Repaid ${tokFmt(borrow, p)}` }, send: () => solanaRepay({ sym: p, amount: borrow, source: "margin" }) }],
       send: async () => {
         const slipPct = slippage();
         if (borrow > 0) {
@@ -247,7 +286,8 @@ function SwapCard() {
         });
       },
       apply: () => {
-        applySwap(d, p, x, r, y, useColl);
+        // a real account is read again from the chain after the run; only the sample account is rewritten here
+        if (!personalReady(chain)) applySwap(d, p, x, r, y, useColl);
         const side = !stable(r) ? "Long" : !stable(p) && borrow > 0 ? "Short" : "Swap";
         ACTIVITY[chain].unshift({ t: nowT(), area: "Spot", action: side, detail: `${p} to ${r}`, amt: `−${tokFmt(x, p)}, +${tokFmt(y, r)}`, usd: x * px(p), via: ven[0], tx: "", sym: stable(r) ? p : r });
         setAmt("");

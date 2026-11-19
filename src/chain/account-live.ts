@@ -16,6 +16,7 @@ import { addSnap, loadLedger, observeRows, type PxLedger, saveLedger } from "@/s
 import { applyHistoryFigures, type ChainHistory, type ChainRow, fetchSolanaHistory, historyCacheFor, netDepositsUsd, seedHistoryCache, toActivity } from "./solana/history";
 import { VANNA_PROGRAM_ID } from "./solana/config";
 import { decode58, findPda } from "./solana/pda";
+import { READ_AT, rpc } from "./solana/rpc";
 import { fetchSolanaPositions } from "./solana/positions";
 
 /* The signed-in wallet's own figures, read from the chain and written into DATA[chain] (the shape every screen reads):
@@ -112,6 +113,11 @@ async function loadSolana(owner: string, onFast?: (d: ChainData, live: LiveAcct 
   // The margin account is a PDA of the wallet, so everything can start at once: balances and margin, positions and the transaction
   // history are read in parallel instead of one after another.
   const marginAddr = findPda(["margin", decode58(owner)], VANNA_PROGRAM_ID);
+  // The pieces below are separate RPC reads that finish seconds apart (on the phone the history decode keeps the JS thread busy). A
+  // transaction that lands in between (Phoenix -> margin return, farm deposit, ...) would be seen by some pieces and not others and
+  // count the moved money twice or not at all. The confirmed slot now, and after the read the newest transaction of the wallet and
+  // the margin account: if one landed at or after this slot, the snapshot is mixed and the caller reads again instead of showing it.
+  const startSlotP = rpc<number>("getSlot", [READ_AT]).catch(() => null);
   const accP = fetchSolanaAccount(owner);
   const posP = fetchSolanaPositions(owner, marginAddr);
   const histP = seedTxCache(owner)
@@ -139,6 +145,7 @@ async function loadSolana(owner: string, onFast?: (d: ChainData, live: LiveAcct 
   }
   const [positions, hist] = await Promise.all([posP, histP]);
   void margin;
+  const mixed = await movedSince(await startSlotP, [owner, ...(acc.margin ? [acc.margin.address] : [])]);
   const d = empty();
   d.wallet = acc.wallet;
   d.lend = positions.lend;
@@ -177,7 +184,17 @@ async function loadSolana(owner: string, onFast?: (d: ChainData, live: LiveAcct 
     }
   } else d.margin.netDeposits = null;
   if (ledger) d.margin.pnlSnaps = pnlPoints(ledger, hist!);
-  return { d, live, hist, ledger, added, firstRead };
+  return { d, live, hist, ledger, added, firstRead, mixed };
+}
+
+// Did a transaction touching any of `addrs` land at or after `slot` (confirmed)? Unknown (a failed read) counts as no: the check only
+// guards against mixed snapshots and must never block the account from showing.
+async function movedSince(slot: number | null, addrs: string[]): Promise<boolean> {
+  if (slot == null) return false;
+  const newest = await Promise.all(
+    addrs.map((a) => rpc<{ slot: number }[]>("getSignaturesForAddress", [a, { limit: 1, ...READ_AT }]).then((r) => r[0]?.slot ?? 0, () => 0)),
+  );
+  return newest.some((s) => s >= slot);
 }
 
 /** A real build never shows the design's sample user: positions, history, notifications and the sample profile all start empty. */
@@ -210,12 +227,20 @@ async function readOnce(chain: Chain) {
     return;
   }
   try {
-    const { d, live, hist, ledger, added, firstRead } = await loadSolana(w.full, (qd, ql) => {
+    const { d, live, hist, ledger, added, firstRead, mixed } = await loadSolana(w.full, (qd, ql) => {
       // only for the first read of this wallet, and only if it is still the one in use: later refreshes keep the fuller data on screen
       if (loadedFor[chain] !== w.full && inUseWallet(chain)?.full === w.full) replace(chain, qd, ql);
     });
     // the wallet may have changed while reading
     if (inUseWallet(chain)?.full !== w.full) return;
+    // A transaction landed while the pieces were read: they may mix the state before and after it. Not shown; read again right away
+    // (twice at most in a row, so an account that changes all the time still shows).
+    if (mixed && (dropped[chain] ?? 0) < 2) {
+      dropped[chain] = (dropped[chain] ?? 0) + 1;
+      again[chain] = true;
+      return;
+    }
+    dropped[chain] = 0;
     replace(chain, d, live);
     if (hist) snapshotPnl(chain, w.full, hist, ledger, added, firstRead);
     // this wallet's transaction history: what the chain shows (every refresh: only new signatures are read), plus rows the
@@ -256,6 +281,8 @@ function snapshotPnl(chain: Chain, owner: string, hist: ChainHistory, ledger: Px
 // started before the tokens landed. Now it queues one more read right after, so new balances show as soon as the chain has them.
 const running: Partial<Record<Chain, Promise<void>>> = {};
 const again: Partial<Record<Chain, boolean>> = {};
+// reads in a row not shown because a transaction landed during them (readOnce)
+const dropped: Partial<Record<Chain, number>> = {};
 export function refreshAccount(chain: Chain): Promise<void> {
   const busy = running[chain];
   if (busy) {

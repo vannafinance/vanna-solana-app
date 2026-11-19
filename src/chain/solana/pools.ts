@@ -4,7 +4,7 @@ import type { Pool } from "@/sample/data";
 
 import { RESERVES, VANNA_PROGRAM_ID } from "./config";
 import { decode58, findPda } from "./pda";
-import { forkNow, rpc } from "./rpc";
+import { forkNow, READ_AT, rpc } from "./rpc";
 
 // Live Earn pools on Solana, read straight from the Vanna lending program's Reserve accounts on the mainnet fork, with the
 // exact maths of the web app (apps/solana/lib/solana/math.ts, ports of the on-chain interest.rs / shares.rs):
@@ -74,7 +74,7 @@ export async function readLenderTotal(sym: string): Promise<bigint> {
 export async function fetchSolanaPools(): Promise<Pool[]> {
   const syms = Object.keys(RESERVES);
   const keys = syms.flatMap((s) => [RESERVES[s].reserve, shareMintOf(RESERVES[s].mint)]);
-  const [now, accts] = await Promise.all([forkNow(), rpc<{ value: ({ data: [string, string] } | null)[] }>("getMultipleAccounts", [keys, { encoding: "base64" }])]);
+  const [now, accts] = await Promise.all([forkNow(), rpc<{ value: ({ data: [string, string] } | null)[] }>("getMultipleAccounts", [keys, { encoding: "base64", ...READ_AT }])]);
   return syms.flatMap((sym, i) => {
     const a = accts.value[i * 2], m = accts.value[i * 2 + 1];
     if (!a) return [];

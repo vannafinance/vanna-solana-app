@@ -18,7 +18,7 @@ import { ChainProvider } from "@/state/chain";
 import { reapplyAppearance } from "@/state/appearance";
 import { hydrateSession, isWelcomeSeen } from "@/state/session";
 import { useTheme } from "@/theme/use-theme";
-import { closeSheet, OverlayHost } from "@/ui/overlay";
+import { closeSheet, closeSheetOnNavigate, OverlayHost } from "@/ui/overlay";
 import { ThemeFadeHost } from "@/ui/theme-fade";
 
 SplashScreen.preventAutoHideAsync();
@@ -59,6 +59,10 @@ export default function RootLayout() {
   useEffect(() => {
     closeSheet();
   }, []);
+  // Going to another tab or page closes whatever sheet or menu was open on the one left.
+  useEffect(() => {
+    closeSheetOnNavigate();
+  }, [pathname]);
 
   if (!ready) return null;
 

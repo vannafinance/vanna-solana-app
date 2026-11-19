@@ -6,7 +6,7 @@
 import { sha256 } from "@noble/hashes/sha256";
 import { Buffer } from "buffer";
 
-import { emitTxStatus, signSolana, signSolanaBatch, requireActiveRealWallet } from "@/chain/sign";
+import { emitTxStatus, signSolana, signSolanaBatch, requireActiveRealWallet, WalletCancelledError } from "@/chain/sign";
 import { VANNA_PROGRAM_ID } from "./config";
 import { cosign, forkFeePayer, type FeePayer } from "./fee-payer";
 import { decode58 } from "./pda";
@@ -86,6 +86,8 @@ export type SendOptions = {
    */
   walletSafe?: boolean;
   onStatus?: (status: "simulating" | "signing" | "sending" | "confirming") => void;
+  /** Aborted while the wallet has not answered: nothing is sent (WalletCancelledError). */
+  cancel?: AbortSignal;
 };
 
 // ---------------------------------------------------------------------------------------------
@@ -323,6 +325,36 @@ async function walletSafeLookupTablesNow(wanted: string[]): Promise<AddressLooku
     }
   }
   return (await fetchLookupTables(wanted.filter((a) => safe.has(a))));
+}
+
+/** A simulation that failed because a lookup table the transaction names could not be loaded on the fork. */
+const LOOKUP_TABLE_ERROR = /AddressLookupTable/;
+const lookupTableError = (err: unknown) => !!err && LOOKUP_TABLE_ERROR.test(JSON.stringify(err));
+
+/**
+ * FORK: a simulation failed with AddressLookupTableNotFound (seen 2026-11-19 12:46 on the withdraw right after Close all, with
+ * tables that exist on both the fork and mainnet minutes later). Forgets the wallet-safe check of these tables, reads them on the
+ * fork again (the fork loads an account it does not hold yet from mainnet on a read) and re-clones any that is still missing.
+ * The wallet's own fork-only table is never re-cloned (it does not exist on mainnet). Returns the tables still missing.
+ */
+async function healLookupTables(addresses: string[], wallet?: string): Promise<string[]> {
+  const own = wallet ? forkLookupTableAddress(wallet) : null;
+  const tables = [...new Set(addresses)];
+  if (!tables.length) return [];
+  for (const a of tables) {
+    safeTableCache.delete(a);
+    mainnetChecked.delete(a);
+  }
+  const missingNow = async () => {
+    const res = await rpc<{ value: ({ owner: string } | null)[] }>("getMultipleAccounts", [tables, { encoding: "base64", dataSlice: { offset: 0, length: 0 } }]).catch(() => null);
+    return tables.filter((_, i) => !res || res.value[i]?.owner !== LOOKUP_TABLE_PROGRAM);
+  };
+  const before = await missingNow();
+  const clonable = before.filter((a) => a !== own);
+  if (clonable.length) await Promise.all(clonable.map((a) => rpc("surfnet_resetAccount", [a]).catch(() => undefined)));
+  const after = clonable.length ? await missingNow() : before;
+  if (__DEV__) console.log(`[tx-time] lookup tables re-read after AddressLookupTableNotFound: ${tables.join(", ")}; missing on the fork: ${before.join(", ") || "none"}; still missing: ${after.join(", ") || "none"}`);
+  return after;
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -983,7 +1015,8 @@ export async function pollSignatureStatus(signature: string, timeoutMs = 60_000)
 // The Unified Send Pipeline
 // ---------------------------------------------------------------------------------------------
 
-type PreparedTx = { unsignedBase64: string; sponsor: FeePayer | null; label?: string; opts: SendOptions };
+// `tables`: the lookup tables the message names (for the error message and the fork repair when one cannot be loaded).
+type PreparedTx = { unsignedBase64: string; sponsor: FeePayer | null; label?: string; opts: SendOptions; tables: string[] };
 
 /**
  * Builds one transaction ready for the wallet: compute budget, the durable nonce of `slot` (each transaction of a batch has its
@@ -1047,11 +1080,20 @@ async function prepareTransaction(
         simRes = await run();
       }
     }
+    // A lookup table the fork could not load: read / re-clone the tables, take them again (a table still missing on the fork is
+    // left out by the wallet-safe check) and check once more. Still too large without it: WalletTxTooLargeError, nothing signed.
+    if (simRes.value.err && lookupTableError(simRes.value.err)) {
+      const routeTables = opts.lookupTableAddresses ?? [];
+      await healLookupTables(lookupTables.map((t) => t.address), wallet);
+      lookupTables = [...(await loadTables(routeTables)), ...lookupTables.filter((t) => !routeTables.includes(t.address))];
+      if (opts.walletSafe && size() > MAX_TX_BYTES) throw new WalletTxTooLargeError(size(), opts.label);
+      simRes = await run();
+    }
     if (simRes.value.err && refresh && refreshable(simRes.value.logs)) {
       await refresh(true);
       simRes = await run();
     }
-    if (simRes.value.err) throw new Error(simulationMessage(simRes.value, opts.label));
+    if (simRes.value.err) throw new Error(simulationMessage(simRes.value, opts.label, lookupTables.map((t) => t.address)));
   }
 
   // The nonce value, else a fresh blockhash
@@ -1061,7 +1103,7 @@ async function prepareTransaction(
       : (await rpc<{ value: { blockhash: string; lastValidBlockHeight: number } }>("getLatestBlockhash", [{ commitment: "confirmed" }])).value.blockhash;
   const { serialized: finalMsgBytes, message: finalMsg } = compileV0Message(payer, ixs, recentBlockhash, lookupTables);
   const unsignedTxBytes = serializeTransaction(finalMsgBytes, Array.from({ length: finalMsg.header.numRequiredSignatures }, () => new Uint8Array(64)));
-  return { unsignedBase64: Buffer.from(unsignedTxBytes).toString("base64"), sponsor, label: opts.label, opts };
+  return { unsignedBase64: Buffer.from(unsignedTxBytes).toString("base64"), sponsor, label: opts.label, opts, tables: lookupTables.map((t) => t.address) };
 }
 
 /**
@@ -1083,8 +1125,10 @@ const refreshable = (logs: string[] | null) => {
   return STALE_LOGS.test(text) || BOOK_DESYNC_LOGS.test(text);
 };
 
-function simulationMessage(value: { err: unknown; logs: string[] | null }, label?: string): string {
-  const raw = `${label ? label + ": " : ""}simulation failed: ${JSON.stringify(value.err)}\n${(value.logs ?? []).join("\n")}`;
+// `tables`: the message's lookup tables, named when the failure is a table the fork could not load.
+function simulationMessage(value: { err: unknown; logs: string[] | null }, label?: string, tables?: string[]): string {
+  const named = tables?.length && lookupTableError(value.err) ? ` (lookup tables: ${tables.join(", ")})` : "";
+  const raw = `${label ? label + ": " : ""}simulation failed: ${JSON.stringify(value.err)}${named}\n${(value.logs ?? []).join("\n")}`;
   const decoded = decodeProgramError(raw);
   return decoded ? `${label ? label + ": " : ""}${decoded.message}` : raw.split("\n")[0];
 }
@@ -1104,35 +1148,47 @@ export async function simulateAsOne(
 ): Promise<void> {
   const ixs = withComputeBudget(instructions, opts.computeUnits);
   const blank = "11111111111111111111111111111111";
-  let tables = await walletSafeLookupTables(opts.lookupTableAddresses ?? [], payer);
+  let tables: AddressLookupTableAccount[] = [];
   const build = () => {
     const { serialized, message } = compileV0Message(payer, ixs, blank, tables);
     return serializeTransaction(serialized, Array.from({ length: message.header.numRequiredSignatures }, () => new Uint8Array(64)));
   };
   let tx = build();
-  if (tx.length > MAX_TX_BYTES) {
-    tables = [...tables, ...(await fetchLookupTables([await writeForkLookupTable(payer, ixs, tables)]))];
+  // The wallet-safe tables, plus the fork-only table (written again) when they are not enough.
+  const takeTables = async () => {
+    tables = await walletSafeLookupTables(opts.lookupTableAddresses ?? [], payer);
     tx = build();
-  }
+    if (tx.length > MAX_TX_BYTES) {
+      tables = [...tables, ...(await fetchLookupTables([await writeForkLookupTable(payer, ixs, tables)]))];
+      tx = build();
+    }
+  };
+  await takeTables();
   const run = () =>
     rpc<{ value: { err: unknown; logs: string[] | null } }>("simulateTransaction", [
       Buffer.from(tx).toString("base64"),
       { encoding: "base64", sigVerify: false, replaceRecentBlockhash: true, commitment: "confirmed" },
     ]);
   let sim = await run();
+  if (sim.value.err && lookupTableError(sim.value.err)) {
+    await healLookupTables(tables.map((t) => t.address), payer);
+    await takeTables();
+    sim = await run();
+  }
   if (sim.value.err && opts.refresh && refreshable(sim.value.logs)) {
     await opts.refresh(true);
     sim = await run();
   }
-  if (sim.value.err) throw new Error(simulationMessage(sim.value, opts.label));
+  if (sim.value.err) throw new Error(simulationMessage(sim.value, opts.label, tables.map((t) => t.address)));
 }
 
-/** Sends a signed transaction and waits for confirmation. */
-async function broadcastAndConfirm(prepared: PreparedTx, walletSigned: string): Promise<string> {
+/** Sends a signed transaction and waits for confirmation. `onLeg`: this part's sending / confirming moments. */
+async function broadcastAndConfirm(prepared: PreparedTx, walletSigned: string, onLeg?: (phase: "sending" | "confirming", signature: string) => void): Promise<string> {
   const { opts, sponsor } = prepared;
   const signedBase64 = sponsor ? cosign(walletSigned, sponsor) : walletSigned;
   const fallbackSignature = base58(Buffer.from(signedBase64, "base64").subarray(1, 65));
   opts.onStatus?.("sending");
+  onLeg?.("sending", fallbackSignature);
   emitTxStatus("sending");
   let sentSignature = fallbackSignature;
   try {
@@ -1148,6 +1204,7 @@ async function broadcastAndConfirm(prepared: PreparedTx, walletSigned: string): 
     }
   }
   opts.onStatus?.("confirming");
+  onLeg?.("confirming", sentSignature);
   emitTxStatus("confirming");
   await pollSignatureStatus(sentSignature, opts.timeoutMs ?? 60_000);
   return sentSignature;
@@ -1161,7 +1218,8 @@ export async function sendSolanaInstructions(instructions: RawInstruction[], opt
   const prepared = await prepareTransaction(instructions, opts, 0, true);
   opts.onStatus?.("signing");
   emitTxStatus("waiting_for_wallet");
-  const walletSigned = await signSolana(prepared.unsignedBase64);
+  if (opts.cancel?.aborted) throw new WalletCancelledError();
+  const walletSigned = await signSolana(prepared.unsignedBase64, opts.cancel);
   return broadcastAndConfirm(prepared, walletSigned);
 }
 
@@ -1183,17 +1241,66 @@ export class BatchPartError extends Error {
   readonly failedLabel: string;
   // An independent batch: every part that failed (the first is failedIndex / failedLabel).
   readonly failed: { index: number; label: string; message: string }[];
-  constructor(message: string, landed: string[], failedIndex: number, failedLabel: string, failed?: { index: number; label: string; message: string }[]) {
+  /** Indexes of the parts that landed (same order as `landed`). */
+  readonly landedIndex: number[];
+  /** Indexes of the parts that were never sent (their signed copies were dropped). */
+  readonly notSent: number[];
+  constructor(
+    message: string,
+    landed: string[],
+    failedIndex: number,
+    failedLabel: string,
+    failed?: { index: number; label: string; message: string }[],
+    extra: { landedIndex?: number[]; notSent?: number[] } = {},
+  ) {
     super(message);
     this.failedLabel = failedLabel;
     this.name = "BatchPartError";
     this.landed = landed;
     this.failedIndex = failedIndex;
-    this.failed = failed ?? [{ index: failedIndex, label: failedLabel, message }];
+    this.failed = failed ?? (failedIndex >= 0 ? [{ index: failedIndex, label: failedLabel, message }] : []);
+    this.landedIndex = extra.landedIndex ?? [];
+    this.notSent = extra.notSent ?? [];
   }
 }
 
-export type BatchOptions = Omit<SendOptions, "label"> & {
+/**
+ * The person stopped a batch after approving it (BatchOptions.stop): the parts already sent finished (`landed`, or `failed` when one
+ * of them failed on its own), the parts not yet sent were never sent (`notSent`) and their signed copies were dropped. A retry
+ * builds and signs the not-sent parts again (fresh durable nonces): the dropped copies can never land.
+ */
+export class StoppedError extends BatchPartError {
+  constructor(landed: string[], failed: { index: number; label: string; message: string }[], extra: { landedIndex: number[]; notSent: number[] }) {
+    const n = extra.notSent.length;
+    super(`Stopped. ${landed.length} sent, ${n} not sent.`, landed, failed[0]?.index ?? -1, failed[0]?.label ?? "", failed, extra);
+    this.name = "StoppedError";
+  }
+}
+
+/** Where one part of a batch is (BatchOptions.onLeg). The chain side reports each moment as it really happens. */
+export type LegPhase = "waiting" | "checking" | "sending" | "confirming" | "done" | "failed" | "not-sent";
+export type LegInfo = { reason?: string; signature?: string };
+/** `index`: the part's index in the batch (sendSolanaBatch) or in the whole run (sendSolanaStages). */
+export type OnLeg = (index: number, phase: LegPhase, info?: LegInfo) => void;
+/**
+ * Whether a Stop can still hold anything back: true while some part has not left the phone (phase waiting, or checking: a part is
+ * stopped right after its check). A single-stage batch sent all at once (Close all) goes from waiting to sending together, so there
+ * is nothing to stop once it is approved. Pure.
+ */
+export const canStop = (phases: (LegPhase | undefined)[]): boolean => phases.some((p) => p === "waiting" || p === "checking");
+
+/** Optional controls every multi-part send accepts (all backward compatible). */
+export type BatchControl = {
+  /** Per-part progress: waiting (signed, its turn not come), checking, sending, confirming, done, failed, not-sent. */
+  onLeg?: OnLeg;
+  /** Aborted while the wallet has not answered: the wallet request is abandoned and the send rejects with WalletCancelledError
+   *  ("Cancelled. Nothing was sent."). Nothing is sent, even if the wallet answers later. */
+  cancel?: AbortSignal;
+  /** Aborted after the wallet approved: parts already sent finish and confirm, parts not yet sent are never sent (StoppedError). */
+  stop?: AbortSignal;
+};
+
+export type BatchOptions = Omit<SendOptions, "label"> & BatchControl & {
   // No part depends on another (e.g. Close all: reduce-only orders on different markets, each with its own durable nonce): every
   // part is simulated before the wallet is asked, and after signing all are re-checked, sent and confirmed together.
   independent?: boolean;
@@ -1201,6 +1308,8 @@ export type BatchOptions = Omit<SendOptions, "label"> & {
   // each part's `before` separately. Concurrent forced refreshes from several failing checks share one run.
   refreshAll?: (retry: boolean) => Promise<void>;
 };
+
+const errText = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
 /** One shared run per `retry` value while it is in flight: parts that fail their check at the same time trigger ONE refresh. */
 function sharedRefresh(fn: (retry: boolean) => Promise<void>): (retry: boolean) => Promise<void> {
@@ -1215,23 +1324,105 @@ function sharedRefresh(fn: (retry: boolean) => Promise<void>): (retry: boolean) 
   };
 }
 
+/** How many transactions one wallet approval may carry (sendSolanaStages splits a longer run into the fewest approvals). Phantom has
+ *  been tested with 4 in one request; 8 is the planned ceiling. */
+export const MAX_TX_PER_APPROVAL = 8;
+
+/**
+ * Splits `count` transactions into the fewest approvals of at most `max` each, as even as possible, keeping the order:
+ * chunkIndexes(10, 8) = [[0..4], [5..9]]. Pure (unit-tested offline).
+ */
+export function chunkIndexes(count: number, max: number = MAX_TX_PER_APPROVAL): number[][] {
+  if (count <= 0) return [];
+  const m = Math.max(1, Math.floor(max));
+  const n = Math.ceil(count / m);
+  const base = Math.floor(count / n);
+  const extra = count % n;
+  const out: number[][] = [];
+  let at = 0;
+  for (let c = 0; c < n; c++) {
+    const size = base + (c < extra ? 1 : 0);
+    out.push(Array.from({ length: size }, (_, k) => at + k));
+    at += size;
+  }
+  return out;
+}
+
+/**
+ * The check of one signed part right before it is sent (its fork data refreshed by the caller first): simulation of the exact signed
+ * bytes, with the fork repairs (stale DEX pools, lookup tables) and up to two forced refreshes for a stale price. Throws the decoded
+ * error. A signed part that failed its check was never sent, so its durable nonce is unchanged.
+ */
+async function checkSignedPart(
+  part: BatchPart,
+  prepared: PreparedTx,
+  signed: string,
+  refresh: ((retry: boolean) => Promise<void>) | undefined,
+  mark: (what: string) => void,
+  n: number,
+): Promise<void> {
+  const signedBase64 = prepared.sponsor ? cosign(signed, prepared.sponsor) : signed;
+  const simulate = () =>
+    rpc<{ value: { err: unknown; logs: string[] | null } }>("simulateTransaction", [
+      signedBase64,
+      { encoding: "base64", sigVerify: false, replaceRecentBlockhash: false, commitment: "confirmed" },
+    ]);
+  let sim = await simulate();
+  // The fork's copy of a swap pool can drift from mainnet (the route was quoted on mainnet): re-clone and check again.
+  if (sim.value.err && (await healStaleDexPools(part.instructions, part.lookupTableAddresses ?? [])) > 0) sim = await simulate();
+  // A lookup table the fork could not load (the signed message keeps its tables): read / re-clone them and check again.
+  if (sim.value.err && lookupTableError(sim.value.err)) {
+    await healLookupTables(prepared.tables, prepared.opts.payer);
+    sim = await simulate();
+    mark(`part ${n} re-checked after re-reading its lookup tables (${sim.value.err ? "still failing" : "ok"})`);
+  }
+  // A price that went stale between the refresh and the check: refresh once more (forced) and check again; a second try only for a
+  // price/oracle that is still stale (the fork's refresh can take 15 s).
+  for (let tries = 0; sim.value.err && refresh && tries < 2; tries++) {
+    if (tries === 1 && !refreshable(sim.value.logs)) break;
+    await refresh(true);
+    sim = await simulate();
+    mark(`part ${n} re-checked after a forced refresh (${sim.value.err ? "still failing" : "ok"})`);
+  }
+  if (sim.value.err) throw new Error(simulationMessage(sim.value, part.label, prepared.tables));
+  mark(`part ${n} simulated`);
+}
+
+/** Signs in one wallet request; `cancel` abandons the request (WalletCancelledError from sign.ts, nothing is sent). */
+function signAll(unsigned: string[], cancel?: AbortSignal): Promise<string[]> {
+  return unsigned.length === 1 ? signSolana(unsigned[0], cancel).then((s) => [s]) : signSolanaBatch(unsigned, cancel);
+}
+
+/** Calls a progress listener; a listener that throws never breaks the send. */
+const safeLeg = (onLeg: OnLeg | undefined) => (i: number, phase: LegPhase, info?: LegInfo) => {
+  try {
+    onLeg?.(i, phase, info);
+  } catch {
+    // ignored
+  }
+};
+
 /**
  * Several transactions behind ONE wallet approval: all are built (each with its own durable nonce, wallet-safe lookup tables
  * only, so the wallet can read every one), signed in one sign_transactions request, then sent in order, each confirmed before
  * the next. Only the first can be simulated before signing; every part is simulated again right before it is sent (after its
  * `before` refresh), and a failure there stops the batch with a BatchPartError (nothing after it is sent). Returns the last signature.
+ *
+ * Controls (BatchControl, all optional): `onLeg` reports each part's moments; `cancel` abandons the wallet request (nothing sent,
+ * WalletCancelledError); `stop` after the approval sends nothing more (parts in flight finish; StoppedError lists what landed).
  */
 // `check` (optional): a whole-batch check (e.g. simulateAsOne of every part's instructions together). It runs while the parts are
 // built, before the wallet is asked, and again right before the first part is sent when the approval was slow; when it throws,
 // nothing is signed or sent.
 export async function sendSolanaBatch(parts: BatchPart[], batchOpts: BatchOptions = {}, check?: () => Promise<void>): Promise<string> {
-  const { independent: indep, refreshAll: refreshAllRaw, ...opts } = batchOpts;
+  const { independent: indep, refreshAll: refreshAllRaw, onLeg, cancel, stop, ...opts } = batchOpts;
   const independent = !!indep && parts.length > 1;
   // Development builds only: where the time goes, from the tap to the last confirmation (read with `adb logcat -s ReactNativeJS`).
   const t0 = Date.now();
   const mark = (what: string) => {
     if (__DEV__) console.log(`[tx-time] ${((Date.now() - t0) / 1000).toFixed(1)}s ${what}`);
   };
+  const leg = safeLeg(onLeg);
   const refreshAll = refreshAllRaw ? sharedRefresh(refreshAllRaw) : undefined;
   // The refresh a part's check uses: the batch-wide one for an independent batch that has it, else the part's own.
   const refreshFor = (i: number) => (independent && refreshAll ? refreshAll : parts[i].before);
@@ -1251,7 +1442,8 @@ export async function sendSolanaBatch(parts: BatchPart[], batchOpts: BatchOption
     ),
     check?.().then(() => mark("whole batch checked")),
   ]);
-  mark(`built ${parts.length} part(s): ${parts.map((p) => p.label).join(" | ")}`);
+  mark(`built ${parts.length} part(s)${independent ? " (independent: checked, sent and confirmed together)" : ""}: ${parts.map((p) => p.label).join(" | ")}`);
+  if (cancel?.aborted) throw new WalletCancelledError();
   opts.onStatus?.("signing");
   emitTxStatus("waiting_for_wallet");
   const signStart = Date.now();
@@ -1261,43 +1453,24 @@ export async function sendSolanaBatch(parts: BatchPart[], batchOpts: BatchOption
   const keepFresh = setTimeout(() => void refreshFor(0)?.(true).then(() => mark("refreshed while waiting for the wallet")).catch(() => undefined), 20_000);
   let signedTxs: string[];
   try {
-    signedTxs = parts.length === 1 ? [await signSolana(prepared[0].unsignedBase64)] : await signSolanaBatch(prepared.map((p) => p.unsignedBase64));
+    signedTxs = await signAll(prepared.map((p) => p.unsignedBase64), cancel);
   } finally {
     clearTimeout(keepFresh);
   }
   mark("wallet answered");
+  parts.forEach((_, i) => leg(i, "waiting"));
   // The first part was simulated just before signing: when the wallet answered quickly, nothing aged, so it is sent at once.
   const quick = Date.now() - signStart < 15_000;
-
-  // The check of one signed part right before it is sent (its fork data refreshed by the caller first).
-  const checkSigned = async (i: number) => {
-    const refresh = refreshFor(i);
-    const signedBase64 = prepared[i].sponsor ? cosign(signedTxs[i], prepared[i].sponsor!) : signedTxs[i];
-    const simulate = () =>
-      rpc<{ value: { err: unknown; logs: string[] | null } }>("simulateTransaction", [
-        signedBase64,
-        { encoding: "base64", sigVerify: false, replaceRecentBlockhash: false, commitment: "confirmed" },
-      ]);
-    let sim = await simulate();
-    // The fork's copy of a swap pool can drift from mainnet (the route was quoted on mainnet): re-clone and check again.
-    if (sim.value.err && (await healStaleDexPools(parts[i].instructions, parts[i].lookupTableAddresses ?? [])) > 0) sim = await simulate();
-    // A price that went stale between the refresh and the check: refresh once more (forced) and check again.
-    // A signed part that failed its check was never sent, so its durable nonce is unchanged and the same signature can be sent
-    // after another refresh: a second try only for a price/oracle that is still stale (the fork's refresh can take 15 s).
-    for (let tries = 0; sim.value.err && refresh && tries < 2; tries++) {
-      if (tries === 1 && !refreshable(sim.value.logs)) break;
-      await refresh(true);
-      sim = await simulate();
-      mark(`part ${i + 1} re-checked after a forced refresh (${sim.value.err ? "still failing" : "ok"})`);
-    }
-    if (sim.value.err) throw new Error(simulationMessage(sim.value, parts[i].label));
-    mark(`part ${i + 1} simulated`);
+  // Stop / failure: the signed copies of parts not yet sent are dropped (never logged or kept).
+  const drop = (i: number) => {
+    signedTxs[i] = "";
+    leg(i, "not-sent");
   };
 
   if (independent) {
     // Every part was simulated just before signing. After a slow approval, all parts' fork data is refreshed (in one pass when the
     // batch has refreshAll) and the whole batch checked again; then each part is checked, sent and confirmed, all at the same time.
-    if (!quick) {
+    if (!quick && !stop?.aborted) {
       if (refreshAll) await refreshAll(false);
       else await Promise.all(parts.map((p) => p.before?.(false)));
       mark(`all ${parts.length} parts refreshed`);
@@ -1306,34 +1479,57 @@ export async function sendSolanaBatch(parts: BatchPart[], batchOpts: BatchOption
         mark("whole batch checked again");
       }
     }
+    const notSent: number[] = [];
     const results = await Promise.allSettled(
       parts.map(async (part, i) => {
-        if (!quick) await checkSigned(i);
-        const sig = await broadcastAndConfirm(prepared[i], signedTxs[i]);
+        if (!quick && !stop?.aborted) {
+          leg(i, "checking");
+          await checkSignedPart(part, prepared[i], signedTxs[i], refreshFor(i), mark, i + 1);
+        }
+        // Stop is honoured up to the moment a part leaves the phone.
+        if (stop?.aborted) {
+          notSent.push(i);
+          drop(i);
+          return "";
+        }
+        const sig = await broadcastAndConfirm(prepared[i], signedTxs[i], (ph, s) => leg(i, ph, { signature: s }));
+        leg(i, "done", { signature: sig });
         mark(`part ${i + 1} confirmed${quick ? " (sent at once)" : ""}`);
         return sig;
       }),
     );
-    const landed = results.flatMap((r) => (r.status === "fulfilled" ? [r.value] : []));
-    const failed = results.flatMap((r, i) =>
-      r.status === "rejected" ? [{ index: i, label: parts[i].label, message: r.reason instanceof Error ? r.reason.message : String(r.reason) }] : [],
-    );
-    mark(`independent batch settled: ${landed.length} landed, ${failed.length} failed`);
+    results.forEach((r, i) => {
+      if (r.status === "rejected") leg(i, "failed", { reason: errText(r.reason) });
+    });
+    const landedIndex = results.flatMap((r, i) => (r.status === "fulfilled" && r.value ? [i] : []));
+    const landed = landedIndex.map((i) => (results[i] as PromiseFulfilledResult<string>).value);
+    const failed = results.flatMap((r, i) => (r.status === "rejected" ? [{ index: i, label: parts[i].label, message: errText(r.reason) }] : []));
+    mark(`independent batch settled: ${landed.length} landed, ${failed.length} failed, ${notSent.length} not sent`);
+    if (notSent.length) throw new StoppedError(landed, failed, { landedIndex, notSent: notSent.sort((a, b) => a - b) });
     if (!failed.length) return landed[landed.length - 1];
     // Nothing landed: the first part's own error, as for a single transaction.
     if (!landed.length) throw (results.find((r) => r.status === "rejected") as PromiseRejectedResult).reason;
-    throw new BatchPartError(failed.map((f) => f.message).join(" | "), landed, failed[0].index, failed[0].label, failed);
+    throw new BatchPartError(failed.map((f) => f.message).join(" | "), landed, failed[0].index, failed[0].label, failed, { landedIndex });
   }
 
   const landed: string[] = [];
+  const stopAt = (i: number): never => {
+    const notSent = parts.map((_, k) => k).filter((k) => k >= i);
+    notSent.forEach(drop);
+    mark(`stopped before part ${i + 1}: ${notSent.length} not sent`);
+    throw new StoppedError([...landed], [], { landedIndex: landed.map((_, k) => k), notSent });
+  };
   for (let i = 0; i < parts.length; i++) {
+    if (stop?.aborted) stopAt(i);
     try {
       // Every part, the first included, is checked again right before it is sent: the approval may have taken minutes.
       if (i === 0 && quick) {
-        landed.push(await broadcastAndConfirm(prepared[i], signedTxs[i]));
+        landed.push(await broadcastAndConfirm(prepared[i], signedTxs[i], (ph, s) => leg(i, ph, { signature: s })));
+        leg(i, "done", { signature: landed[i] });
         mark(`part ${i + 1} confirmed (sent at once)`);
         continue;
       }
+      leg(i, "checking");
       await parts[i].before?.(false);
       mark(`part ${i + 1} refreshed`);
       // A slow approval: the whole batch is checked again before anything is sent (prices may have moved meanwhile).
@@ -1341,13 +1537,160 @@ export async function sendSolanaBatch(parts: BatchPart[], batchOpts: BatchOption
         await check();
         mark("whole batch checked again");
       }
-      await checkSigned(i);
-      landed.push(await broadcastAndConfirm(prepared[i], signedTxs[i]));
+      await checkSignedPart(parts[i], prepared[i], signedTxs[i], refreshFor(i), mark, i + 1);
+    } catch (e) {
+      leg(i, "failed", { reason: errText(e) });
+      for (let k = i + 1; k < parts.length; k++) drop(k);
+      if (i === 0) throw e;
+      throw new BatchPartError(errText(e), landed, i, parts[i].label, undefined, { landedIndex: landed.map((_, k) => k), notSent: parts.map((_, k) => k).filter((k) => k > i) });
+    }
+    if (stop?.aborted) stopAt(i);
+    try {
+      landed.push(await broadcastAndConfirm(prepared[i], signedTxs[i], (ph, s) => leg(i, ph, { signature: s })));
+      leg(i, "done", { signature: landed[i] });
       mark(`part ${i + 1} confirmed`);
     } catch (e) {
+      leg(i, "failed", { reason: errText(e) });
+      for (let k = i + 1; k < parts.length; k++) drop(k);
       if (i === 0) throw e;
-      throw new BatchPartError(e instanceof Error ? e.message : String(e), landed, i, parts[i].label);
+      throw new BatchPartError(errText(e), landed, i, parts[i].label, undefined, { landedIndex: landed.map((_, k) => k), notSent: parts.map((_, k) => k).filter((k) => k > i) });
     }
   }
   return landed[landed.length - 1];
+}
+
+/** One transaction of a staged run (sendSolanaStages): the parts of one `stage` are sent together, a later stage waits for them. */
+export type StagedPart = BatchPart & { stage: number };
+
+/**
+ * A run of transactions in stages, signed up front and sent stage by stage. Every part is built (its own durable nonce and
+ * wallet-safe tables) and the first stage simulated; then all parts are signed in the fewest wallet approvals of at most
+ * `maxPerApproval` (MAX_TX_PER_APPROVAL; the approvals are asked for one after another, before anything is sent). Then stage by
+ * stage: the parts of a stage are checked (simulation of the signed bytes right before sending, after the part's `before`
+ * refresh), sent and confirmed together; the next stage starts only when every part of this one landed and `between(stage)` (e.g.
+ * a chain read that the stage did what it should) passed. A failure, a failed `between` or a Stop ends the run: nothing after it is
+ * sent and the signed copies are dropped. Throws BatchPartError / StoppedError with `landedIndex`, `failed`, `notSent` (indexes
+ * into `parts`). Returns the signatures by part index.
+ */
+export async function sendSolanaStages(
+  parts: StagedPart[],
+  batchOpts: Omit<BatchOptions, "independent" | "refreshAll"> & { maxPerApproval?: number; between?: (stage: number) => Promise<void> } = {},
+): Promise<string[]> {
+  const { onLeg, cancel, stop, maxPerApproval, between, ...opts } = batchOpts;
+  if (!parts.length) return [];
+  const t0 = Date.now();
+  const mark = (what: string) => {
+    if (__DEV__) console.log(`[tx-time] ${((Date.now() - t0) / 1000).toFixed(1)}s ${what}`);
+  };
+  const leg = safeLeg(onLeg);
+  const stages = [...new Set(parts.map((p) => p.stage))].sort((a, b) => a - b);
+  const first = stages[0];
+  const prepared = await Promise.all(
+    parts.map((part, i) =>
+      prepareTransaction(
+        part.instructions,
+        { ...opts, label: part.label, lookupTableAddresses: part.lookupTableAddresses ?? opts.lookupTableAddresses, walletSafe: true },
+        i,
+        part.stage === first,
+        part.stage === first ? part.before : undefined,
+      ),
+    ),
+  );
+  const chunks = chunkIndexes(parts.length, maxPerApproval ?? MAX_TX_PER_APPROVAL);
+  mark(`built ${parts.length} part(s) in ${stages.length} stage(s), ${chunks.length} approval(s): ${parts.map((p) => `[${p.stage}] ${p.label}`).join(" | ")}`);
+  const signed: string[] = new Array(parts.length).fill("");
+  const signStart = Date.now();
+  for (const [c, idx] of chunks.entries()) {
+    if (cancel?.aborted) throw new WalletCancelledError();
+    opts.onStatus?.("signing");
+    emitTxStatus("waiting_for_wallet");
+    const out = await signAll(idx.map((i) => prepared[i].unsignedBase64), cancel);
+    idx.forEach((i, k) => (signed[i] = out[k]));
+    mark(`approval ${c + 1} of ${chunks.length} answered (${idx.length} tx)`);
+  }
+  parts.forEach((_, i) => leg(i, "waiting"));
+  const quick = Date.now() - signStart < 15_000;
+  const landedIndex: number[] = [];
+  const sigs: string[] = new Array(parts.length).fill("");
+  // Drops the signed copies of every part of `stage` and later that has not been sent (never logged or kept).
+  const dropFrom = (stage: number, exclude: number[] = []) => {
+    const out: number[] = [];
+    parts.forEach((p, i) => {
+      if (p.stage >= stage && !exclude.includes(i) && !sigs[i]) {
+        signed[i] = "";
+        leg(i, "not-sent");
+        out.push(i);
+      }
+    });
+    return out;
+  };
+  for (const stage of stages) {
+    if (stop?.aborted) {
+      const notSent = dropFrom(stage);
+      mark(`stopped before stage ${stage}: ${notSent.length} not sent`);
+      throw new StoppedError(landedIndex.map((i) => sigs[i]), [], { landedIndex: [...landedIndex], notSent });
+    }
+    const idx = parts.map((p, i) => (p.stage === stage ? i : -1)).filter((i) => i >= 0);
+    mark(`stage ${stage}: ${idx.map((i) => parts[i].label).join(" | ")}`);
+    // Parts that share a refresh (e.g. every Perps close refreshes all markets) run it once.
+    const befores = [...new Set(idx.map((i) => parts[i].before).filter((b): b is (retry: boolean) => Promise<void> => !!b))];
+    const refresh = sharedRefresh(async (retry: boolean) => void (await Promise.all(befores.map((b) => b(retry)))));
+    const stoppedHere: number[] = [];
+    const results = await Promise.allSettled(
+      idx.map(async (i) => {
+        if (!(stage === first && quick)) {
+          leg(i, "checking");
+          await (idx.length > 1 ? refresh(false) : parts[i].before?.(false));
+          await checkSignedPart(parts[i], prepared[i], signed[i], idx.length > 1 ? refresh : parts[i].before, mark, i + 1);
+        }
+        if (stop?.aborted) {
+          stoppedHere.push(i);
+          return "";
+        }
+        const sig = await broadcastAndConfirm(prepared[i], signed[i], (ph, s) => leg(i, ph, { signature: s }));
+        sigs[i] = sig;
+        landedIndex.push(i);
+        leg(i, "done", { signature: sig });
+        mark(`part ${i + 1} confirmed`);
+        return sig;
+      }),
+    );
+    const failed = results.flatMap((r, k) => (r.status === "rejected" ? [{ index: idx[k], label: parts[idx[k]].label, message: errText(r.reason) }] : []));
+    failed.forEach((f) => leg(f.index, "failed", { reason: f.message }));
+    if (failed.length || stoppedHere.length) {
+      const notSent = dropFrom(stage, failed.map((f) => f.index));
+      mark(`stage ${stage} ended the run: ${failed.length} failed, ${notSent.length} not sent`);
+      const landed = landedIndex.map((i) => sigs[i]);
+      if (!failed.length) throw new StoppedError(landed, [], { landedIndex: [...landedIndex], notSent });
+      throw new BatchPartError(failed.map((f) => f.message).join(" | "), landed, failed[0].index, failed[0].label, failed, { landedIndex: [...landedIndex], notSent });
+    }
+    if (between && stage !== stages[stages.length - 1]) {
+      try {
+        await between(stage);
+      } catch (e) {
+        const notSent = dropFrom(stage + 1);
+        mark(`check after stage ${stage} ended the run: ${errText(e)}`);
+        throw new BatchPartError(errText(e), landedIndex.map((i) => sigs[i]), -1, "", [], { landedIndex: [...landedIndex], notSent });
+      }
+    }
+  }
+  return sigs;
+}
+
+/**
+ * FORK: writes a fresh value into this wallet's first `count` durable-nonce accounts, so any transaction signed earlier with them
+ * (a run that stopped, failed, or whose confirmation timed out) can never land afterwards. A retry calls this before it reads the
+ * chain, so what it reads is final.
+ */
+export async function retireForkNonces(wallet: string, count: number): Promise<void> {
+  await Promise.all(Array.from({ length: Math.max(1, count) }, (_, slot) => writeForkNonce(wallet, forkNonceAddress(wallet, slot))));
+}
+
+/** Which of these signatures the chain shows as landed without an error (searching history); "" counts as not landed. */
+export async function signaturesLanded(signatures: string[]): Promise<boolean[]> {
+  const sigs = signatures.filter(Boolean);
+  if (!sigs.length) return signatures.map(() => false);
+  const res = await rpc<{ value: ({ err: unknown; confirmationStatus?: string } | null)[] }>("getSignatureStatuses", [sigs, { searchTransactionHistory: true }]);
+  const ok = new Map(sigs.map((s, i) => [s, !!res.value[i] && !res.value[i]!.err && (res.value[i]!.confirmationStatus === "confirmed" || res.value[i]!.confirmationStatus === "finalized")]));
+  return signatures.map((s) => (s ? ok.get(s) ?? false : false));
 }

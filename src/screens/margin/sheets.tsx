@@ -1,5 +1,4 @@
-import { perpMark } from "@/chain/perp-mark";
-import { type ReactNode, useState } from "react";
+import { type ReactNode, useEffect, useState } from "react";
 import { Pressable, StyleSheet, Switch, Text, View } from "react-native";
 
 import { TokenLogo } from "@/components/brand";
@@ -8,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 import { hfFmt, levFmt, nf, pct, tokFmt, usd } from "@/format";
 import { ACTIVITY, type ChainData, DATA, POOLS_BY, PX, TOK } from "@/sample/data";
-import { acct, bisect, mAddDebt, mAddIdle, perpPnl, perpQty, SAFE_HF, simAcct } from "@/sample/model";
+import { acct, bisect, mAddDebt, mAddIdle, SAFE_HF, simAcct } from "@/sample/model";
 import { nowT } from "@/screens/earn/model";
 import { openTransfer } from "@/screens/move/move";
 import type { Chain } from "@/state/chain";
@@ -16,8 +15,12 @@ import { useDataVersion } from "@/state/store";
 import { useTheme } from "@/theme/use-theme";
 import { families, font } from "@/theme/tokens";
 import { closeSheet, openSheet } from "@/ui/overlay";
-import { runTx } from "@/ui/tx";
-import { solanaDepositAndBorrow, solanaFlashRepay } from "@/chain/solana/actions";
+import { runTx, type TxSpec } from "@/ui/tx";
+import { isAre, type Leg, type LegPlan, type LegRun, names } from "@/ui/legs";
+import { solanaDepositAndBorrow } from "@/chain/solana/actions";
+import { FlashRepayError, planFlashRepay, resumeFlashRepay, solanaFlashRepay, type FlashControl, type FlashLegState, type FlashPlan, type FlashResult } from "@/chain/solana/flash-repay";
+import { refreshAccountSoon } from "@/chain/account-live";
+import { inUseWallet } from "@/state/wallets";
 import { bioIcon } from "@/state/lock";
 
 /* Borrow more and Flash repay (design margin.js bmBody / frPlan), opened from the account strip's + and lightning buttons. */
@@ -194,58 +197,95 @@ function Borrow({ chain }: { chain: Chain }) {
   );
 }
 
-// Flash repay (design frPlan): closes every position to USDC, repays every loan, keeps the collateral; costs and slippage up front.
-const FEES = { perp: 0.00035, swap: 0.0003 };
+// Flash repay (design frPlan), from the chain: the review is planFlashRepay's real plan (the run re-plans on the fresh chain and builds
+// exactly that), signed in one approval (two with Perps positions open: the exact Phoenix withdraw is built after the closes landed).
+// No optimistic rewrite of the account: after the run the account is read again and the done words come from the chain.
+// Flash repay partial and stopped words, from the leg ids (close:*, phoenix, exit:*, swap:*, repay:*, send:*).
+const kindOf = (l: Leg) => l.id.split(":")[0];
+function flashPart(ok: Leg[], left: Leg[], failed: Leg[]): [string, string] {
+  const later = "so the loans were not repaid yet.";
+  const all = [...ok, ...left];
+  const closes = all.filter((l) => kindOf(l) === "close"), openC = left.filter((l) => kindOf(l) === "close" && l.phase === "failed");
+  const loans = all.filter((l) => kindOf(l) === "repay"), owed = left.filter((l) => kindOf(l) === "repay");
+  const f = failed[0] ?? left[0];
+  if (!f) return ["Account repaid", ""];
+  if (openC.length) return [`Closed ${closes.length - openC.length} of ${closes.length}`, `${names(openC)} ${isAre(openC)} still open on Phoenix, ${later}`];
+  const k = kindOf(f);
+  if (k === "phoenix") return ["Not repaid yet", `Positions closed. ${f.label} didn't go through, ${later}`];
+  if (k === "exit") return ["Not repaid yet", `Phoenix is done. ${f.label} didn't go through, ${later}`];
+  if (k === "swap") return ["Not repaid yet", `Everything is closed. ${f.label} didn't go through, ${later}`];
+  if (k === "repay") return [`Repaid ${loans.length - owed.length} of ${loans.length} loans`, `Everything is closed. ${names(owed)} ${owed.length === 1 ? "is" : "are"} still owed.`];
+  if (k === "send") return ["Account repaid", `All loans repaid. ${f.label} didn't go through; it stays in your margin account.`];
+  return ["Not confirmed", `${names(left)} didn't go through.`];
+}
+function flashStopped(ok: Leg[], left: Leg[]): [string, string] {
+  const has = (k: string) => ok.some((l) => kindOf(l) === k);
+  const owed = left.filter((l) => kindOf(l) === "repay");
+  const loans = [...ok, ...left].filter((l) => kindOf(l) === "repay");
+  if (!ok.length) return ["Stopped", "Nothing was closed or repaid."];
+  if (owed.length && owed.length === loans.length) return ["Stopped", `${has("exit") || has("swap") ? "Positions closed and turned into cash" : has("phoenix") ? "Positions closed and USDC moved out of Phoenix" : "Positions closed"}. Loans not repaid yet.`];
+  if (owed.length) return ["Stopped", `Loans partly repaid: ${names(owed)} still owed.`];
+  return ["Account repaid", "Stopped before sending anything to your wallet. It stays in your margin account."];
+}
+
 function FlashRepay({ chain }: { chain: Chain }) {
   useDataVersion();
   const { colors } = useTheme();
-  const d = DATA[chain];
   const [slip, setSlip] = useState(0.5);
   const [toWallet, setToWallet] = useState(false);
-  // venue cards start folded to one line (venue, count, total); tap to see the positions
   const [unfolded, setUnfolded] = useState<Record<string, boolean>>({});
-  const a = acct(chain);
-  const perps = d.perps.map((p) => ({
-    name: `${p.k}-PERP ${p.side}`,
-    sub: `${nf(p.lev, 2)}x on Phoenix`,
-    usdc: p.coll + perpPnl(p) - perpQty(p) * perpMark(p.k) * FEES.perp,
-    fee: perpQty(p) * perpMark(p.k) * FEES.perp,
-  }));
-  const farm = d.farm.map((f) => ({
-    name: f.name,
-    sub: `${f.venue} lending`,
-    usdc: (f.amt + f.earned) * (PX[f.sym] ?? 1),
-    fee: 0,
-  }));
-  const spot = d.spot.map((s) =>
-    s.side === "long"
-      ? {
-          name: `${s.sym} long`,
-          sub: "Sell on Jupiter",
-          out: `+${nf(s.qty * px(s.sym) * (1 - FEES.swap), 2)} USDC`,
-          usdc: s.qty * px(s.sym) * (1 - FEES.swap),
-          fee: s.qty * px(s.sym) * FEES.swap,
-        }
-      : {
-          name: `${s.sym} short`,
-          sub: "Buy back on Jupiter",
-          out: `+${nf(s.qty, 2)} ${s.sym}`,
-          usdc: s.qty * s.entry - s.qty * px(s.sym) * (1 + FEES.swap),
-          fee: s.qty * px(s.sym) * FEES.swap,
-        },
-  );
-  const idle = Object.entries(d.margin.avail).reduce((t, [k, v]) => t + v * (PX[k] ?? 1), 0) + d.phoenixIdle;
-  const debtUsd = d.margin.debt.reduce((t, x) => t + x.amt * px(x.sym), 0);
-  const costs = [...perps, ...farm, ...spot].reduce((t, x) => t + x.fee, 0);
-  const proceeds = [...perps, ...farm, ...spot].reduce((t, x) => t + x.usdc, 0) + idle;
-  const left = a.collUsd + proceeds - debtUsd;
-  const keep = left - proceeds * (slip / 100);
-  const nPos = perps.length + farm.length + spot.length;
-  const txs = nPos + d.margin.debt.length + (toWallet ? 1 : 0) + 1;
-  if (!debtUsd && !nPos)
-    return <Text style={[styles.cap, { color: colors.muted, fontSize: 14, paddingBottom: 12 }]}>Nothing to repay: the account has no loans or positions.</Text>;
+  const [plan, setPlan] = useState<FlashPlan | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  const owner = inUseWallet(chain)?.full;
+  useEffect(() => {
+    let live = true;
+    if (!owner) return;
+    planFlashRepay(owner, { toWallet, slippageBps: Math.round(slip * 100) })
+      .then((p) => live && (setPlan(p), setErr(null)))
+      .catch((e) => live && setErr(e instanceof Error ? e.message : String(e)));
+    return () => {
+      live = false;
+    };
+  }, [owner, toWallet, slip]);
 
+  if (!owner) return <Text style={[styles.cap, { color: colors.muted, fontSize: 14, paddingBottom: 12 }]}>Connect a Solana wallet to use Flash repay.</Text>;
+  if (err && !plan) return <Text style={[styles.cap, { color: colors.muted, fontSize: 14, paddingBottom: 12 }]}>Could not read your account: {err}</Text>;
+  if (!plan) return <Text style={[styles.cap, { color: colors.muted, fontSize: 14, paddingBottom: 12 }]}>Reading your account from the chain…</Text>;
+  if (plan.empty) return <Text style={[styles.cap, { color: colors.muted, fontSize: 14, paddingBottom: 12 }]}>Nothing to repay: the account has no loans, positions or Phoenix funds.</Text>;
+
+  const opts = { toWallet, slippageBps: Math.round(slip * 100) };
+  const nPos = plan.perps.length + plan.farm.length;
+  const costs = plan.costs.phoenixUsd + plan.costs.swapUsd;
+  const legPlan: LegPlan = plan.legs.map((l) => ({ id: l.id, label: l.label, noun: l.noun, stage: l.stage, approval: l.approval }));
+  const approvalsText = plan.approvals === 1 ? "1 approval" : `${plan.approvals} approvals`;
   const go = () => {
+    const done: TxSpec["done"] = { title: "Flash repay finished", line: "Your account was read again from the chain." };
+    // The done words come from the chain read after the run (exact amounts).
+    const finish = (r: FlashResult) => {
+      done.title = r.title;
+      done.line = r.line;
+      refreshAccountSoon(chain);
+      return r.lastSignature;
+    };
+    const control = (run: LegRun): FlashControl => ({ onStatus: run.onStatus, onLeg: run.onLeg, cancel: run.cancel, stop: run.stop });
+    // The last partial result: what a retry continues from (it reads the chain again and sends only what is left).
+    let last: FlashRepayError | FlashLegState[] = [];
+    // onLegs: the legs were rebuilt (approval 2 after the closes, with exact amounts): the rows follow them
+    const remember = (run: LegRun): FlashControl => ({
+      ...control(run),
+      onLegs: (ls) => {
+        if (!(last instanceof FlashRepayError)) last = ls;
+        run.onLegs?.(ls);
+      },
+    });
+    const keep = async (p: Promise<FlashResult>) => {
+      try {
+        return finish(await p);
+      } catch (e) {
+        if (e instanceof FlashRepayError) last = e;
+        throw e;
+      }
+    };
     closeSheet();
     setTimeout(
       () =>
@@ -253,102 +293,58 @@ function FlashRepay({ chain }: { chain: Chain }) {
           chain,
           fam,
           title: "Review flash repay",
-          cta: `Flash repay ${usd(debtUsd)}`,
+          cta: plan.debtUsd > 0 ? `Flash repay ${usd(plan.debtUsd)}` : toWallet ? "Close all and withdraw" : `Close ${nPos} position${nPos === 1 ? "" : "s"}`,
           legs: [
-            {
-              l: "Closes",
-              v: `${nPos} position${nPos === 1 ? "" : "s"}`,
-              s: "Perps, farm and spot",
-            },
-            {
-              l: "Repays",
-              v: usd(debtUsd),
-              s: d.margin.debt.map((x) => x.sym).join(", "),
-            },
+            { l: "Closes", v: `${nPos} position${nPos === 1 ? "" : "s"}`, s: [plan.perps.length && `Perps ${plan.perps.length}`, plan.farm.length && `Farm ${plan.farm.length}`].filter(Boolean).join(", ") || "Idle funds only" },
+            { l: "Repays", v: usd(plan.debtUsd), s: plan.loans.map((x) => x.sym).join(", ") || "No loans" },
           ],
           rows: [
             ["Est. costs", usd(costs)],
-            ["You keep at least", usd(keep), "pos"],
-            ["Transactions", `~${txs}`],
+            [toWallet ? "To your wallet (at least)" : "Left in account", usd(toWallet ? plan.sends.reduce((t, s) => t + s.usd, 0) : plan.leftUsd), "pos"],
+            ["Transactions", `${plan.txCount} (${approvalsText})`],
           ],
-          done: {
-            title: "Account repaid",
-            line: toWallet ? `${usd(left)} sent to your wallet` : `${usd(left)} left as collateral`,
+          done,
+          plan: legPlan,
+          cancelable: true,
+          stoppable: true,
+          run: (run) => keep(solanaFlashRepay(opts, remember(run))),
+          // Whatever `only` names, the retry reads the chain and builds only the work still there (landed legs are never resent).
+          retryLegs: (_only, run) => keep(resumeFlashRepay(last, opts, remember(run))),
+          // the whole operation in plain words (design MULTI-LEG.md, Flash repay rows); Retry / Continue resume only what is left
+          copy: {
+            doing: plan.debtUsd > 0 ? "Repaying your account" : "Closing your positions",
+            part: flashPart,
+            stopped: flashStopped,
+            continueLabel: (left) => (left.some((l) => l.id.startsWith("repay:")) ? "Continue repaying" : "Continue"),
           },
-          send: async () => {
-            const sigs = await solanaFlashRepay({ slippageBps: Math.round(slip * 100) });
-            return sigs[sigs.length - 1] ?? "";
-          },
-          apply: () => {
-            const usdc = proceeds - debtUsd;
-            d.perps = [];
-            d.farm = [];
-            d.spot = [];
-            d.phoenixIdle = 0;
-            d.margin.debt = [];
-            d.margin.avail = {};
-            const stable = "USDC";
-            if (toWallet) {
-              d.wallet[stable] = (d.wallet[stable] ?? 0) + Math.max(0, usdc);
-              d.margin.coll.forEach((c) => (d.wallet[c.sym] = (d.wallet[c.sym] ?? 0) + c.amt));
-              d.margin.coll = [];
-            } else d.margin.avail[stable] = Math.max(0, usdc);
-            ACTIVITY[chain].unshift({
-              t: nowT(),
-              area: "Margin",
-              action: "Repay",
-              detail: "Flash repay: every loan",
-              amt: usd(debtUsd),
-              usd: -debtUsd,
-              tx: "",
-              sym: stable,
-            });
-          },
+          // Nothing is rewritten here: the account is read again from the chain (refreshAccountSoon) after the run.
+          apply: () => {},
         }),
       300,
     );
   };
 
-  const swapV = "Jupiter";
   const groups = [
     {
       key: "perps",
       title: "Perps on Phoenix",
       logo: "PHX",
       items: [
-        ...perps,
-        ...(d.phoenixIdle > 0
-          ? [
-              {
-                name: "Idle USDC",
-                sub: "Phoenix account",
-                usdc: d.phoenixIdle,
-                fee: 0,
-              },
-            ]
-          : []),
+        ...plan.perps.map((p) => ({ name: `${p.key}-PERP ${p.side}`, sub: `Close on Phoenix, fee ~${usd(p.feeUsd)}`, usdc: p.equityUsd })),
+        ...(plan.perps.length === 0 && plan.phoenixUsdc > 0 ? [{ name: "Idle USDC", sub: "Phoenix account", usdc: plan.phoenixUsdc }] : []),
       ],
     },
-    {
-      key: "farm",
-      title: `Farm on ${d.farm[0]?.venue.split(" ")[0] ?? "Kamino"}`,
-      logo: d.farm[0]?.sym ?? "USDC",
-      items: farm,
-    },
+    { key: "farm", title: "Farm on Kamino", logo: plan.farm[0]?.sym ?? "USDC", items: plan.farm.map((f) => ({ name: `${f.sym} lending`, sub: "Exit Kamino", usdc: f.usd })) },
     {
       key: "spot",
-      title: `Spot on ${swapV}`,
-      logo: d.spot[0]?.sym ?? "USDC",
-      items: spot,
+      title: "Swaps on Jupiter",
+      logo: plan.swaps[0]?.from ?? "USDC",
+      items: plan.swaps.map((s) => ({ name: `${nf(s.inAmount, 4)} ${s.from} to ${s.to}`, sub: `At least ${nf(s.minOut, 4)} ${s.to}`, usdc: s.outUsd })),
     },
   ].filter((g) => g.items.length);
-  const costRows = (
-    [
-      ["Phoenix fees (0.035%)", perps.reduce((t, x) => t + x.fee, 0)],
-      [`${swapV} swaps (0.03%)`, spot.reduce((t, x) => t + x.fee, 0)],
-    ] as [string, number][]
-  ).filter(([, v]) => v > 0);
+  const costRows = ([["Phoenix fees", plan.costs.phoenixUsd], ["Jupiter swaps", plan.costs.swapUsd]] as [string, number][]).filter(([, v]) => v > 0);
   const line = { borderTopWidth: 1, borderTopColor: colors.divider };
+  const sendUsd = plan.sends.reduce((t, s) => t + s.usd, 0);
 
   return (
     <View style={{ gap: 14, paddingBottom: 8 }}>
@@ -356,54 +352,25 @@ function FlashRepay({ chain }: { chain: Chain }) {
         <View style={[styles.bolt, { backgroundColor: colors.purpleTint }]}>
           <Icon name="bolt" size={20} color="#CBB6FA" />
         </View>
-        <Text
-          style={{
-            flex: 1,
-            fontFamily: font.regular,
-            fontSize: 13,
-            lineHeight: 18,
-            color: colors.muted,
-          }}
-        >
-          Closes every position, then repays every loan. One approval per step.
+        <Text style={{ flex: 1, fontFamily: font.regular, fontSize: 13, lineHeight: 18, color: colors.muted }}>
+          {plan.perpsSecondApproval
+            ? "Closes your Perps positions first (one approval), then withdraws from Phoenix, repays every loan and finishes in a second approval: Phoenix only pays out the exact amount left after the closes."
+            : `Closes every position, then repays every loan. ${plan.txCount} transaction${plan.txCount === 1 ? "" : "s"}, ${approvalsText}.`}
         </Text>
       </View>
+      {plan.blocked && <Text style={[styles.cap, { color: colors.negative, fontSize: 13 }]}>{plan.blocked}</Text>}
       <View style={[styles.grid, { backgroundColor: colors.bg }]}>
         {(
           [
-            [
-              "Positions",
-              String(nPos),
-              [perps.length && `Perps ${perps.length}`, farm.length && `Farm ${farm.length}`, spot.length && `Spot ${spot.length}`].filter(Boolean).join(", ") ||
-                "Idle funds only",
-            ],
-            ["Loans", usd(debtUsd), d.margin.debt.map((x) => x.sym).join(", ") || "None"],
+            ["Positions", String(nPos), [plan.perps.length && `Perps ${plan.perps.length}`, plan.farm.length && `Farm ${plan.farm.length}`].filter(Boolean).join(", ") || "Idle funds only"],
+            ["Loans", usd(plan.debtUsd), plan.loans.map((x) => x.sym).join(", ") || "None"],
             ["Est. costs", usd(costs), "Fees and price impact"],
-            [toWallet ? "To your wallet" : "Left in account", usd(left), toWallet ? "After repaying" : "As collateral"],
+            toWallet ? ["To your wallet", usd(sendUsd), `About ${usd(plan.leftUsd)} stays`] : ["Left in account", usd(plan.leftUsd), "As collateral"],
           ] as [string, string, string][]
         ).map(([l, v, s2], i) => (
-          <View
-            key={l}
-            style={[
-              styles.cell,
-              i % 2 === 1 && {
-                borderLeftWidth: 1,
-                borderLeftColor: colors.divider,
-              },
-              i > 1 && line,
-            ]}
-          >
+          <View key={l} style={[styles.cell, i % 2 === 1 && { borderLeftWidth: 1, borderLeftColor: colors.divider }, i > 1 && line]}>
             <Text style={[styles.cap, { color: colors.muted }]}>{l}</Text>
-            <Text
-              style={{
-                fontFamily: font.semibold,
-                fontSize: 16,
-                color: colors.text,
-                fontVariant: ["tabular-nums"],
-              }}
-            >
-              {v}
-            </Text>
+            <Text style={{ fontFamily: font.semibold, fontSize: 16, color: colors.text, fontVariant: ["tabular-nums"] }}>{v}</Text>
             <Text style={[styles.cap, { color: colors.muted }]} numberOfLines={1}>
               {s2}
             </Text>
@@ -422,106 +389,61 @@ function FlashRepay({ chain }: { chain: Chain }) {
                 style={styles.gh}
                 accessibilityRole="button"
                 accessibilityState={{ expanded: !!unfolded[g.key] }}
-                accessibilityLabel={`${g.title}, ${g.items.length} ${g.items.length === 1 ? "position" : "positions"}`}
+                accessibilityLabel={`${g.title}, ${g.items.length}`}
               >
                 <TokenLogo sym={g.logo} size={20} />
-                <Text
-                  style={{
-                    flex: 1,
-                    fontFamily: font.semibold,
-                    fontSize: 13,
-                    color: colors.text,
-                  }}
-                >
+                <Text style={{ flex: 1, fontFamily: font.semibold, fontSize: 13, color: colors.text }}>
                   {g.title}
                   <Text style={{ fontFamily: font.regular, color: colors.muted }}> · {g.items.length}</Text>
                 </Text>
-                <Text
-                  style={{
-                    fontFamily: font.semibold,
-                    fontSize: 13,
-                    color: colors.text,
-                    fontVariant: ["tabular-nums"],
-                  }}
-                >
-                  {usd(g.items.reduce((t, x) => t + x.usdc, 0))}
-                </Text>
+                <Text style={{ fontFamily: font.semibold, fontSize: 13, color: colors.text, fontVariant: ["tabular-nums"] }}>{usd(g.items.reduce((t, x) => t + x.usdc, 0))}</Text>
                 <Icon name={unfolded[g.key] ? "expand_less" : "expand_more"} size={20} color="muted" />
               </Pressable>
-              {unfolded[g.key] && g.items.map((x) => (
-                <View key={x.name} style={[styles.it, line]}>
-                  <View style={{ flex: 1 }}>
-                    <Text
-                      style={{
-                        fontFamily: font.semibold,
-                        fontSize: 14,
-                        lineHeight: 20,
-                        color: colors.text,
-                      }}
-                      numberOfLines={1}
-                    >
-                      {x.name}
-                    </Text>
-                    <Text style={[styles.cap, { color: colors.muted }]} numberOfLines={1}>
-                      {x.sub}
-                    </Text>
+              {unfolded[g.key] &&
+                g.items.map((x) => (
+                  <View key={x.name} style={[styles.it, line]}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontFamily: font.semibold, fontSize: 14, lineHeight: 20, color: colors.text }} numberOfLines={1}>
+                        {x.name}
+                      </Text>
+                      <Text style={[styles.cap, { color: colors.muted }]} numberOfLines={1}>
+                        {x.sub}
+                      </Text>
+                    </View>
+                    <Text style={{ fontFamily: font.semibold, fontSize: 13, color: colors.text, fontVariant: ["tabular-nums"] }}>{`${x.usdc >= 0 ? "+" : "−"}${nf(Math.abs(x.usdc), 2)} USD`}</Text>
                   </View>
-                  <Text
-                    style={{
-                      fontFamily: font.semibold,
-                      fontSize: 13,
-                      color: colors.text,
-                      fontVariant: ["tabular-nums"],
-                    }}
-                  >
-                    {"out" in x && typeof x.out === "string" ? x.out : `${x.usdc >= 0 ? "+" : "−"}${nf(Math.abs(x.usdc), 2)} USDC`}
-                  </Text>
-                </View>
-              ))}
+                ))}
             </View>
           ))}
         </View>
       )}
 
-      {d.margin.debt.length > 0 && (
+      {plan.loans.length > 0 && (
         <View style={{ gap: 8 }}>
           <Eb t="LOANS REPAID" />
           <View style={[styles.card, { backgroundColor: colors.bg }]}>
-            {d.margin.debt.map((x, i) => (
+            {plan.loans.map((x, i) => (
               <View key={x.sym} style={[styles.it, i > 0 && line]}>
                 <TokenLogo sym={x.sym} size={28} />
                 <View style={{ flex: 1 }}>
-                  <Text
-                    style={{
-                      fontFamily: font.semibold,
-                      fontSize: 14,
-                      lineHeight: 20,
-                      color: colors.text,
-                      fontVariant: ["tabular-nums"],
-                    }}
-                  >
-                    {tokFmt(x.amt, x.sym)}
-                  </Text>
-                  <Text style={[styles.cap, { color: colors.muted }]}>Paid from the same token</Text>
+                  <Text style={{ fontFamily: font.semibold, fontSize: 14, lineHeight: 20, color: colors.text, fontVariant: ["tabular-nums"] }}>{tokFmt(x.amount, x.sym)}</Text>
+                  <Text style={[styles.cap, { color: colors.muted }]}>{plan.swaps.some((s) => s.to === x.sym) ? "Partly from a swap" : "Paid from the same token"}</Text>
                 </View>
-                <Text
-                  style={{
-                    fontFamily: font.semibold,
-                    fontSize: 13,
-                    color: colors.text,
-                    fontVariant: ["tabular-nums"],
-                  }}
-                >
-                  {usd(x.amt * px(x.sym))}
-                </Text>
+                <Text style={{ fontFamily: font.semibold, fontSize: 13, color: colors.text, fontVariant: ["tabular-nums"] }}>{usd(x.usd)}</Text>
               </View>
             ))}
           </View>
         </View>
       )}
 
+      {plan.untouched.length > 0 && (
+        <Text style={[styles.cap, { color: colors.muted }]}>
+          Not moved by Flash repay: {plan.untouched.map((u) => `${u.name} (${usd(u.usd)})`).join(", ")}.
+        </Text>
+      )}
+
       <View style={[styles.card, { backgroundColor: colors.bg, paddingTop: 6, paddingBottom: 2 }]}>
-        <Eb t="COSTS" tip="Phoenix taker fees to close perps and swap cost (quote vs oracle price), at sample rates." />
+        <Eb t="COSTS" tip="Phoenix taker fees to close perps at the current mark, and the swaps' cost against the oracle price (quoted now)." />
         {costRows.map(([l, v], i) => (
           <Pr key={l} l={l} first={i === 0}>
             <V v={usd(v)} />
@@ -529,71 +451,42 @@ function FlashRepay({ chain }: { chain: Chain }) {
         ))}
         <Pr
           l="Transactions"
-          tip="Flash repay runs step by step: each transaction needs its own approval. If one fails, the run stops and you can retry from there."
+          tip="Signed together and sent in stages: each stage waits for the one before. If a step fails, nothing after it is sent and you can retry only what is left."
           first={!costRows.length}
         >
-          <V v={`~${txs}`} />
+          <V v={`${plan.txCount} · ${approvalsText}`} />
         </Pr>
-        <Pr l="Max slippage" tip="Swaps and perp closes that would fill worse than this are not executed.">
+        <Pr l="Max slippage" tip="Perp closes and swaps that would fill worse than this are not executed.">
           <View style={[styles.seg, { backgroundColor: colors.segment }]} accessibilityRole="tablist" accessibilityLabel="Max slippage">
             {[0.1, 0.5, 1].map((v) => (
-              <Pressable
-                key={v}
-                onPress={() => setSlip(v)}
-                style={[styles.sc, slip === v && { backgroundColor: colors.segmentActive }]}
-                accessibilityRole="tab"
-                accessibilityState={{ selected: slip === v }}
-              >
-                <Text
-                  style={{
-                    fontFamily: font.semibold,
-                    fontSize: 13,
-                    color: slip === v ? colors.text : colors.muted,
-                  }}
-                >
-                  {v}%
-                </Text>
+              <Pressable key={v} onPress={() => setSlip(v)} style={[styles.sc, slip === v && { backgroundColor: colors.segmentActive }]} accessibilityRole="tab" accessibilityState={{ selected: slip === v }}>
+                <Text style={{ fontFamily: font.semibold, fontSize: 13, color: slip === v ? colors.text : colors.muted }}>{v}%</Text>
               </Pressable>
             ))}
           </View>
-        </Pr>
-        <Pr l="You keep at least">
-          <V v={usd(keep)} />
         </Pr>
       </View>
 
       <Pressable onPress={() => setToWallet(!toWallet)} style={styles.tgr} accessibilityRole="switch" accessibilityState={{ checked: toWallet }}>
         <View style={{ flex: 1, gap: 2 }}>
-          <Text
-            style={{
-              fontFamily: font.semibold,
-              fontSize: 14,
-              lineHeight: 20,
-              color: colors.text,
-            }}
-          >
-            Also withdraw to wallet
-          </Text>
+          <Text style={{ fontFamily: font.semibold, fontSize: 14, lineHeight: 20, color: colors.text }}>Also withdraw to wallet</Text>
           <Text style={[styles.cap, { color: colors.muted }]}>After repaying, send what is left to your wallet</Text>
         </View>
-        <Switch
-          value={toWallet}
-          onValueChange={setToWallet}
-          trackColor={{ true: fam.n[0], false: colors.disabled }}
-          thumbColor="#FFFFFF"
-          accessibilityLabel="Also withdraw to wallet"
-        />
+        <Switch value={toWallet} onValueChange={setToWallet} trackColor={{ true: fam.n[0], false: colors.disabled }} thumbColor="#FFFFFF" accessibilityLabel="Also withdraw to wallet" />
       </Pressable>
       <Button
         label={
-          d.margin.debt.length
-            ? `${toWallet ? "Flash repay and withdraw" : "Flash repay"} ${usd(debtUsd)}`
-            : toWallet
-              ? "Close all and withdraw"
-              : `Close ${nPos} position${nPos === 1 ? "" : "s"}`
+          plan.blocked
+            ? "Cannot repay yet"
+            : plan.loans.length
+              ? `${toWallet ? "Flash repay and withdraw" : "Flash repay"} ${usd(plan.debtUsd)}`
+              : toWallet
+                ? "Close all and withdraw"
+                : `Close ${nPos} position${nPos === 1 ? "" : "s"}`
         }
         fam={fam}
         icon={bioIcon()}
+        disabled={!!plan.blocked}
         onPress={go}
       />
     </View>

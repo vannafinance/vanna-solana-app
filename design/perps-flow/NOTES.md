@@ -191,3 +191,113 @@ type PerpsFlow = {
 5. **Is setup really one time per margin account** if the trader is later closed? The prototype labels it "One time".
 6. **Fee row:** show the per-part fee × parts, or the total of the batch?
 7. **Long wait inside a part** (after signing, e.g. a slow confirmation): keep "processed" with the glint, or add a quiet line after 20 s?
+
+---
+
+# Multi-leg transaction sheet (`multi-leg.html`)
+
+**Problem.** Close all with 2+ positions signs once, then sends one transaction per position. Today the sheet only says "Sent to Solana" with the Sent / Processed / Confirmed bar, so for 30 s to minutes the user can't tell which position is closing or which are done.
+
+**Design.** Under the header and the Sent / Processed / Confirmed labels, a compact card lists one row per leg, in order:
+- a status icon: grey dot, turning brand-gradient arc, purple check, pink cross, amber clock
+- the leg's label in plain words: "Close META short", "Convert USDC", "Open ETH long", "Return USDC to margin"
+- a short state word that follows the leg's real phases
+
+The bar above is **segmented, one segment per leg**. A segment fills when its leg is done (pink when it failed), and the active segments carry the soft glint. The labels light on real events:
+- **Sent:** any leg is sending.
+- **Processed:** a leg landed.
+- **Confirmed:** every leg is done.
+
+Each row is 40 px. A failed or unsure row adds one 12 px line with the reason.
+
+| Phase (word) | When (submit.ts) | Icon |
+|---|---|---|
+| Waiting to sign | parts built, `signSolanaBatch` waiting for the wallet | grey dot |
+| Waiting | signed, but a dependent leg waits for the previous one | grey dot |
+| Needs approval | a follow-up transaction that needs its own approval (Close all → "Return USDC to margin", `returnUsdcAfterClose`) | purple dot, breathing |
+| Checking | `before` / `refreshAll` plus the re-simulation (`checkSigned`) | slow arc |
+| Sending | `broadcastAndConfirm` broadcast | arc |
+| Confirming | waiting for `confirmed` | arc |
+| Still confirming | the confirmation timed out; the app reads the chain (`loadPerps`) to decide | amber clock + "Confirmation timed out. Reading the chain…" |
+| Done | confirmed | check (pops) |
+| Failed | simulation or send error | pink cross + reason |
+| Not sent | the wallet said no, or an earlier dependent leg failed | grey dot, muted label |
+
+**Order:**
+- Independent batches (`sendSolanaBatch` with `independent: true`, i.e. Close all) move together: all legs go to Checking at once, then each one moves on by itself, so the rows change in parallel.
+- Dependent batches (Perps open: Convert USDC, then Open ETH long; margin steps; the first-time Phoenix flow) run in order, and the next leg shows "Waiting" until the previous one is done.
+
+**Finish states:**
+- **All done:** every row ticked; header "Closed 2 positions" / "41.20 USDC is back in your margin account"; mascot tongue flick; Done.
+- **Partial:**
+  - Header "Closed 3 of 4" with "ETH long is still open. The other closes are done."
+  - The failed row shows its reason ("No liquidity near the mark. Try again shortly.").
+  - Buttons: **Close the remaining 1** (a new run with only those legs) and Done.
+  - Perps open with the order failed: "Order not placed. Your USDC is in Phoenix…" with **Retry order** and **Return USDC to margin**.
+- **Wallet rejected or timed out:** "Not confirmed / … Nothing was sent." with Try again / Close; the rows read "Not sent".
+- **Second approval declined** (the return leg): "Closed 2 positions / Your USDC stays in Phoenix for now" with **Move USDC to margin** / Done.
+- **Dismissed with X while legs run:** the sheet closes and the legs go on. A toast (the overlay toast: #2C2C2C, 44 px, radius 22) sits above the tab bar with a small spinner: "Closing positions · 2 of 4 done", and **View** reopens the sheet. When the run finishes, the final toast reads "Closed 3 of 4 · META is still open" (or "Closed 4 positions · USDC back in margin") with **View**.
+
+**Motion** happens on state changes only:
+- the row spinner turns (900 ms linear; 1400 ms while Checking)
+- the check pops (scale 0.6 → 1, spring 380 ms)
+- a failed row nudges (shake 380 ms)
+- the active row gets a light purple tint (300 ms)
+- the state word swaps in (260 ms)
+- a segment fills (500 ms, `bezier(.2,0,0,1)`)
+- the header is concept A (face + loader badge → drawn check / concerned face)
+
+Reduce motion removes every animation and transition; the icons and words alone tell the state.
+
+**Interaction:**
+1. Pick a scenario in **Simulate**:
+   - Close all · 2 positions
+   - Close all · 4 positions
+   - Perps open · two parts
+   - Close all · one leg fails
+   - Perps open · the order fails
+   - Close all · a confirmation times out
+2. Tap the sheet's button.
+3. Answer in the **mock Phantom** panel (Approve / Reject / Time out). Nothing moves before Approve.
+4. Move the chain on with **Play next step**, or with the per-leg buttons ("Checked → send", "Sent → confirm", "Confirms", "Fails", "Times out", "It landed" / "It did not land"). The **Auto-play** toggle steps every 900 ms but never answers the wallet for you.
+5. Reset any time.
+
+**Dev controls** (collapsed): speed, light/dark, reduce motion, device, phone width 320 / 360 / 380 / 412, and a debug line with every leg's phase.
+
+## What the app needs to report (data shape)
+
+```ts
+type LegPhase = "wait" | "queued" | "approve" | "check" | "send" | "confirm" | "unsure" | "done" | "failed" | "skipped";
+type Leg = { id: string; label: string; phase: LegPhase; reason?: string; signature?: string };
+type TxLegs = { legs: Leg[]; independent: boolean };
+
+// sendSolanaBatch (submit.ts) already knows every part's label and the moments below; today it reports only an overall status.
+type BatchOpts = {
+  // ...existing (computeUnits, independent, refreshAll)
+  onLeg?: (i: number, phase: LegPhase, info?: { signature?: string; reason?: string }) => void;
+};
+```
+
+Where each callback fires in `sendSolanaBatch`:
+
+| Callback | Fires at |
+|---|---|
+| `onLeg(i, "wait")` | after `prepareTransaction`, for every part |
+| `onLeg(i, "queued")` | right after signing, for the later parts of a dependent batch |
+| `onLeg(i, "check")` | before `before()` / `refreshAll()` and `checkSigned(i)` (independent: all at once) |
+| `onLeg(i, "send")` | when `broadcastAndConfirm` broadcasts |
+| `onLeg(i, "confirm")` | when it starts waiting for `confirmed` |
+| `onLeg(i, "unsure")` | when the confirmation times out (the caller then reads the chain) |
+| `onLeg(i, "done", { signature })` / `onLeg(i, "failed", { reason })` | when the part settles; for a dependent batch, mark the remaining parts `"skipped"` |
+
+Also:
+- **The second-approval leg** ("Return USDC to margin" after the last close) is added by the caller (`solanaPerpsCloseMany` → `returnUsdcAfterClose`) as `{ phase: "approve" }`, then follows the same callbacks.
+- **Close all's result after a timed-out confirmation** comes from the chain read (`stillOpen`): set those legs to `done` or `failed` from it.
+- **Labels:** user words, not part labels. Map "Close META-PERP" → "Close META short", and "Add USDC for X-PERP" (it can be two parts) → one leg "Add USDC".
+
+**Components to reuse:**
+- From `src/ui/tx.tsx`: `TxFlow` (phases, `recover` buttons → "Close the remaining N" / "Retry order", the hidden-run announcement → the toast with View), `Progress` (keep the labels and replace the single fill with one `Animated.View` segment per leg, each animating `width`), `MascotDone` / `TailLoader`.
+- From `src/ui/first-time-flow.tsx`: `Tag` / `ck` row styling for the leg rows, the `trow` layout, haptics on each confirmation, `guardSheet` while waiting for the wallet, and `useOnForeground` to re-read on return.
+- New: `LegRow` (icon cross-fade between dot / spinner / check / cross / clock, the state word, an optional reason line) and `LegList` (adds rows when a leg appears, e.g. the return leg).
+
+> **v2 of the multi-leg sheet** (whole-operation prose, one explorer link per leg, every flow in the app, retry only the failed legs and the app-side contract) is in [MULTI-LEG.md](MULTI-LEG.md).

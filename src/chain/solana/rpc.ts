@@ -36,6 +36,13 @@ export function decodeBase64(s: string): Buffer {
   return out;
 }
 
+/* The commitment for the account readers (balances, margin, Phoenix, farm, prices, pools). The RPC's default is "finalized", which on
+   the fork trails "confirmed" by ~30 slots (~12 s): a read made after a transaction confirmed kept showing the old state, and when the
+   transaction finalized between two pieces of one refresh (the Phoenix trader is read before the margin vaults), the refresh mixed
+   both states (2026-11-19: 39.79 USDC returned from Phoenix counted in Phoenix AND in the margin account, health 27.18 instead of
+   26.42). Every piece of an account read uses this one commitment; a transaction landing during a read is caught in account-live.ts. */
+export const READ_AT = { commitment: "confirmed" } as const;
+
 // Plain JSON-RPC to the Vanna Solana fork (no web3.js in the app).
 export async function rpc<T>(method: string, params: unknown[]): Promise<T> {
   const res = await fetch(SOLANA_RPC, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }) });

@@ -1,0 +1,100 @@
+/* The approved margin first-time stage (design/margin-account-open-flow.html "progress: stage", "the margin account object",
+   "docked strip"; wired as Stage in src/ui/first-time-flow.tsx). Same values; class names prefixed m- so they cannot clash with
+   the sheet's own .card / .fill / .sheen / .bar. Tokens from tx.css. */
+.mst{position:relative;height:216px;--mhero:radial-gradient(90% 70% at 100% 0%,rgba(240,160,224,0.5),rgba(240,160,224,0) 70%),linear-gradient(180deg,#6B2766 0%,#B6479E 42%,#8E3784 100%)}
+.mst .m-flow{position:absolute;left:0;top:0;overflow:visible;pointer-events:none}
+.mst .m-base{fill:none;stroke:var(--border-control);stroke-width:2;stroke-linecap:round;stroke-dasharray:0 6;opacity:0;transition:opacity .4s ease .3s}
+.mst.docked .m-base{opacity:.8}
+.mst .m-pa{fill:none;stroke:var(--link);stroke-width:2;stroke-linecap:round;stroke-dasharray:1 1;stroke-dashoffset:1;opacity:.9;transition:stroke-dashoffset .55s var(--ease),opacity .4s ease}
+.mst .m-pa.draw{stroke-dashoffset:0}
+.mst .m-pa.done{opacity:.3}
+.mst .m-pa.bad{stroke:var(--on-pink-tint);opacity:.6}
+.mst .m-pt-h{fill:var(--pt-halo);opacity:.2}.mst .m-pt-c{fill:var(--pt-core)}
+
+.mst .m-node{position:absolute;top:128px;text-align:center;opacity:0;transform:translateY(8px);transition:opacity .45s var(--ease),transform .45s var(--ease)}
+.mst.docked .m-node{opacity:.55;transform:none;transition-delay:calc(.3s + var(--d,0s))}
+.mst.docked .m-node.on,.mst.docked .m-node.bad{opacity:1;transition-delay:0s}
+.mst .m-nc{width:44px;height:44px;border-radius:22px;margin:0 auto 6px;background:var(--bg);border:1px solid var(--border);display:grid;place-items:center;position:relative;color:var(--text);transition:border-color .3s,box-shadow .4s var(--ease)}
+.mst .m-node.on .m-nc{border-color:var(--primary);box-shadow:0 0 0 5px rgba(112,58,230,.18)}
+.mst .m-node.bad .m-nc{border-color:var(--on-pink-tint);box-shadow:0 0 0 5px var(--pink-tint)}
+.mst .m-nok{position:absolute;right:-3px;bottom:-3px;width:18px;height:18px;border-radius:9px;background:var(--primary);border:2px solid var(--surface);display:grid;place-items:center;transform:scale(0);transition:transform .45s var(--spring);color:#fff}
+.mst .m-node.done .m-nok{transform:scale(1)}
+.mst .m-nl,.mst .m-nv{font-size:12px;line-height:16px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mst .m-nl{font-weight:600}
+.mst .m-nv{color:var(--muted);font-variant-numeric:tabular-nums}
+
+/* the margin account object */
+.mst .m-acct{position:absolute;left:calc(50% - 116px);top:38px;width:232px;height:140px;transition:left .6s var(--ease),top .6s var(--ease),width .6s var(--ease),height .6s var(--ease)}
+.mst.docked .m-acct{left:0;top:0;width:100%;height:64px}
+.mst .m-aglow{position:absolute;inset:-14px;background:radial-gradient(closest-side,rgba(182,71,158,.42),transparent);opacity:0;transition:opacity .6s ease}
+.mst .forming .m-aglow{opacity:.75;animation:mbreathe 1.6s ease-in-out infinite}
+.mst .settled .m-aglow{animation:none;opacity:.8}
+.mst.docked .m-aglow{opacity:.2}
+.mst.docked .m-acct.recv .m-aglow{opacity:.55}
+@keyframes mbreathe{50%{opacity:.35}}
+.mst .m-card{position:absolute;inset:0;border-radius:16px;overflow:hidden;background:transparent;transition:background .4s ease}
+.mst .forming .m-card{background:var(--bg)}
+.mst .m-fill{position:absolute;inset:0;background:var(--mhero);opacity:0;transition:opacity .55s var(--ease)}
+.mst .settled .m-fill{opacity:1}
+.mst .m-shim{position:absolute;inset:0;background:linear-gradient(100deg,transparent 30%,rgba(141,97,235,.14) 50%,transparent 70%);transform:translateX(-100%);opacity:0}
+.mst .forming:not(.settled) .m-shim{opacity:1;animation:mshim 1.35s linear infinite}
+@keyframes mshim{to{transform:translateX(100%)}}
+.mst .m-sheen{position:absolute;inset:0;background:linear-gradient(105deg,transparent 35%,rgba(255,255,255,.28) 50%,transparent 65%);transform:translateX(-110%)}
+.mst .settled .m-sheen{animation:msheen .95s var(--ease) .12s both}
+.mst .m-acct.recv .m-sheen{animation:msheen2 1.2s var(--ease) infinite}
+@keyframes msheen2{from{transform:translateX(-110%)}to{transform:translateX(110%)}}
+@keyframes msheen{to{transform:translateX(110%)}}
+.mst .m-rip{position:absolute;inset:0;border-radius:16px;border:1.5px solid #B6479E;opacity:0;pointer-events:none}
+.mst .settled .m-rip{animation:mrip .9s var(--ease) both}
+.mst .settled .m-rip.r2{animation-delay:.14s}
+@keyframes mrip{0%{opacity:.6;transform:scale(1)}100%{opacity:0;transform:scale(1.16,1.3)}}
+.mst .m-acct.settled{animation:msettle .7s var(--ease)}
+@keyframes msettle{0%{transform:scale(1)}35%{transform:scale(1.04)}100%{transform:scale(1)}}
+.mst .m-outline{position:absolute;inset:0;width:100%;height:100%;overflow:visible;pointer-events:none}
+.mst .m-outline rect{fill:none;rx:16px}
+.mst .m-obase{stroke:var(--border-control);stroke-width:1.5;stroke-dasharray:1 1;stroke-dashoffset:1;transition:stroke-dashoffset .75s var(--ease),opacity .45s ease}
+.mst .draw .m-obase{stroke-dashoffset:0}
+.mst .forming .m-obase{opacity:0}
+.mst .bad .m-obase{stroke:var(--on-pink-tint)}
+.mst .m-ograd{stroke-width:1.5;opacity:0;transition:opacity .5s ease}
+.mst .forming .m-ograd{opacity:1}
+.mst .settled .m-ograd{opacity:0}
+.mst.instant,.mst.instant *{transition:none!important}
+
+.mst .m-big{position:absolute;left:0;top:0;width:232px;height:140px;padding:16px;display:flex;flex-direction:column;justify-content:space-between;opacity:0;transition:opacity .35s ease .35s}
+.mst .draw .m-big{opacity:1}
+.mst.docked .m-big{opacity:0;transition:opacity .18s ease}
+.mst .m-btop{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.mst .m-bk{font-size:12px;color:var(--muted);transition:color .4s}
+.mst .settled .m-bk{color:rgba(255,255,255,.85)}
+.mst .m-bchain{display:flex;align-items:center;gap:6px;font-size:11px;font-weight:600;padding:4px 8px;border-radius:999px;background:var(--divider);color:var(--muted);transition:background .4s,color .4s}
+.mst .settled .m-bchain{background:rgba(255,255,255,.18);color:#fff}
+.mst .m-baddr{position:relative;height:26px}
+.mst .m-skel{position:absolute;left:0;top:6px;height:14px;width:136px;border-radius:7px;background:var(--border);transition:opacity .3s}
+.mst .m-skel.s2{width:56px;left:144px;opacity:.6}
+.mst .m-a{font-size:20px;font-weight:600;letter-spacing:.02em;line-height:26px;color:#fff;clip-path:inset(0 100% 0 0);transition:clip-path .65s var(--ease) .15s}
+.mst .settled .m-a{clip-path:inset(0 0 0 0)}
+.mst .settled .m-skel{opacity:0}
+.mst .m-bmeta{font-size:12px;line-height:16px;color:var(--muted);display:flex;align-items:center;gap:6px;margin-top:4px;transition:color .4s}
+.mst .settled .m-bmeta{color:rgba(255,255,255,.85)}
+.mst .bad .m-bmeta{color:var(--on-pink-tint)}
+.mst .m-bmeta i{width:6px;height:6px;border-radius:3px;background:var(--border-control);flex:none}
+.mst .forming .m-bmeta i{background:var(--primary);animation:mlivep 1.2s ease-in-out infinite}
+.mst .settled .m-bmeta i{background:#32EEE2;animation:none}
+.mst .bad .m-bmeta i{background:var(--on-pink-tint)}
+@keyframes mlivep{50%{opacity:.3}}
+
+/* docked strip */
+.mst .m-strip{position:absolute;inset:0;display:flex;align-items:center;padding:0 14px;gap:12px;color:#fff;opacity:0;transition:opacity .2s ease}
+.mst.docked .m-strip{opacity:1;transition:opacity .35s ease .3s}
+.mst .m-sl{display:flex;align-items:center;gap:10px;flex:0 0 auto;min-width:0}
+.mst .m-sic{width:32px;height:32px;border-radius:10px;background:rgba(255,255,255,.18);display:grid;place-items:center;flex:none}
+.mst .m-sk{font-size:11px;line-height:14px;color:rgba(255,255,255,.82);white-space:nowrap}
+.mst .m-sa{font-size:14px;font-weight:600;line-height:20px;white-space:nowrap}
+.mst .m-sr{flex:1 1 auto;min-width:0;text-align:right;font-variant-numeric:tabular-nums}
+.mst .m-sv{font-size:14px;font-weight:600;line-height:20px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;transition:color .3s}
+.mst .m-sv.flash,.mst .m-sv2.flash{color:#BFF6FA}
+.mst .m-sv2{font-size:11px;line-height:14px;color:rgba(255,255,255,.82);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;opacity:0;transition:opacity .35s ease,color .3s}
+.mst .m-sv2.show{opacity:1}
+@media(max-width:360px){.mst .m-sic{display:none}}
+.rm .mst *{animation:none!important;transition:none!important}

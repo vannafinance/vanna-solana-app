@@ -135,6 +135,24 @@ export function MascotBody({ width = 112, module, asleep, opts, flip }: { width?
   );
 }
 
+// TX face at rest (design multileg.js face "pause" / "fail"): calm = a cancelled or stopped run (flat mouth, no shake, no badge);
+// sad = a partial result. It blinks; nothing else moves.
+export function MascotRest({ size = 56, mood }: { size?: number; mood: "calm" | "sad" }) {
+  const { isDark } = useTheme();
+  const rm = useReducedMotion();
+  const s = useIdle({ near: [0.3, 0.6], far: [0.2, 0.6] }, !rm, false);
+  const xml = svgOf(
+    face({ pal: "ds", mouth: mood === "calm" ? "line" : "wavy", ...(mood === "sad" ? { eyeNear: "sad" as const } : null), lookNear: s.near, lookFar: s.far, lidNear: s.lid, lidFar: s.lid, tile: isDark ? DARK_TILE : undefined }),
+    size,
+    size,
+  );
+  return (
+    <View aria-hidden style={[{ width: size, height: size, borderRadius: size / 2, overflow: "hidden", alignItems: "center", justifyContent: "center" }, isDark && { borderWidth: 2, borderColor: "rgba(255,255,255,0.22)" }]}>
+      <SvgXml xml={xml} width={isDark ? size - 4 : size} height={isDark ? size - 4 : size} />
+    </View>
+  );
+}
+
 // TX result face (design Mascot.filled): the brand face, ring eyes; the tongue strikes once (160 ms out, 180 ms back) with happy
 // eyes while it is out, then the face idles (blinks).
 export function MascotDone({ size = 56 }: { size?: number }) {

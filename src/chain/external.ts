@@ -11,7 +11,7 @@ import { Buffer } from "buffer";
 import { AppState } from "react-native";
 
 import { appInstalled, nativeAvailable } from "@/chain/native";
-import { registerExternalSolanaSigner, WALLET_NO_ANSWER } from "@/chain/sign";
+import { registerExternalSolanaSigner, WALLET_NO_ANSWER, WalletCancelledError } from "@/chain/sign";
 import { base58 } from "@/chain/solana/prices";
 import { short, updateWalletIdentity, updateWalletSession } from "@/state/wallets";
 
@@ -133,6 +133,8 @@ async function withWallet<T>(
         hasConfig ? (config as never) : undefined,
       );
     } catch (e) {
+      // Cancelled in Vanna (see the signer below): passed on as is, never retried or reworded.
+      if (e instanceof WalletCancelledError) throw e;
       const err = e as { code?: string; message?: string };
       if (err.code === "ERROR_WALLET_NOT_FOUND" || /no.*wallet|not found/i.test(err.message ?? "")) {
         if (config.packageName) {
@@ -175,10 +177,22 @@ export function connectSolanaWallet(): Promise<ExternalConnection> {
   });
 }
 
-registerExternalSolanaSigner(async (base64Txs, entry) => {
+// CANCEL (sign.ts signSolanaBatch `cancel`): sign.ts rejects at once with WalletCancelledError and ignores this request's answer. Here
+// the request stops at the next step it can: a cancel before the sign request went out (the wallet still opening, or authorizing)
+// means the wallet is never asked to sign. Once the sign request is with the wallet, the React Native MWA module cannot withdraw it:
+// its native invoke() blocks the module's queue until the wallet answers, so endSession (and the proxied terminateSession, which on
+// React Native is just another JSON-RPC call to the wallet) would only run after that answer. The person declines it in the wallet
+// (or it times out); the session then ends normally (transact's finally), and the native mutex starts the next request only after
+// that, on a clean session.
+registerExternalSolanaSigner(async (base64Txs, entry, cancel) => {
   const pkg = await packageOf(entry);
+  const stopIfCancelled = () => {
+    if (cancel?.aborted) throw new WalletCancelledError();
+  };
+  stopIfCancelled();
   return withWallet(
     async (wallet) => {
+      stopIfCancelled();
       // The saved approval first, so a transaction only asks to be signed. A wallet that has forgotten it (-1) asks to connect again once.
       let auth;
       // Only Solflare needs the Devnet fallback; Phantom (and any wallet known to work on Mainnet) is asked for Mainnet only.
@@ -211,6 +225,7 @@ registerExternalSolanaSigner(async (base64Txs, entry) => {
         if (who.app !== entry.app || who.icon !== entry.icon) updateWalletIdentity("solana", entry.id, who);
       }
       let signed_payloads: string[];
+      stopIfCancelled();
       try {
         // Several transactions go in ONE request, so the wallet shows one approval for all of them.
         ({ signed_payloads } = await wallet.signTransactions({ payloads: base64Txs }));

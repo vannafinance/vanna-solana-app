@@ -3,7 +3,7 @@ import { Buffer } from "buffer";
 import type { FarmPos, LendPos, PerpPos } from "@/sample/data";
 
 import { decode58, findAta, findPda, TOKEN_PROGRAM_ID } from "./derive";
-import { rpc } from "./rpc";
+import { READ_AT, rpc } from "./rpc";
 import {
   KAMINO_RECEIPTS,
   PERENA_VAULTS,
@@ -40,7 +40,7 @@ export async function fetchLenderPositions(owner: string): Promise<LendPos[]> {
     meta.push({ sym, decimals: r.decimals });
   }
 
-  const res = await rpc<{ value: ({ data: [string, string] } | null)[] }>("getMultipleAccounts", [keys, { encoding: "base64" }]);
+  const res = await rpc<{ value: ({ data: [string, string] } | null)[] }>("getMultipleAccounts", [keys, { encoding: "base64", ...READ_AT }]);
   const accounts = res.value;
 
   const out: LendPos[] = [];
@@ -95,7 +95,7 @@ export async function fetchLenderPositions(owner: string): Promise<LendPos[]> {
 // cashUsd: collateral plus that unsettled balance (what the venue holds besides open positions).
 export async function fetchPhoenixPositions(marginPda: string): Promise<{ perps: PerpPos[]; idleUsd: number; cashUsd: number }> {
   const traderPda = findPda(["trader", decode58(marginPda), Uint8Array.of(0, 0)], PHOENIX_PROGRAM_ID);
-  const acc = await rpc<{ value: { data: [string, string] } | null }>("getAccountInfo", [traderPda, { encoding: "base64" }]);
+  const acc = await rpc<{ value: { data: [string, string] } | null }>("getAccountInfo", [traderPda, { encoding: "base64", ...READ_AT }]);
 
   if (!acc?.value) return { perps: [], idleUsd: 0, cashUsd: 0 };
   const buf = Buffer.from(acc.value.data[0], "base64");
@@ -149,6 +149,22 @@ export async function fetchPhoenixPositions(marginPda: string): Promise<{ perps:
   return { perps, idleUsd: 0, cashUsd };
 }
 
+// A Kamino reserve's exchange rate, read on the fork now (web lib/solana/kamino.ts readReserveRate, same fields as below):
+// receipts = underlying x collateralSupply / totalLiquidity (rounded down), shown at the receipt mint's decimals.
+export type KaminoRate = { totalLiquidity: bigint; collateralSupply: bigint; liquidityDecimals: number; receiptDecimals: number; symbol: string };
+export async function fetchKaminoRate(sym: string): Promise<KaminoRate | null> {
+  const r = KAMINO_RECEIPTS.find((x) => x.underlying === sym);
+  if (!r) return null;
+  const res = await rpc<{ value: { data: [string, string] } | null }>("getAccountInfo", [r.reserve, { encoding: "base64", ...READ_AT }]).catch(() => null);
+  if (!res?.value) return null;
+  const b = Buffer.from(res.value.data[0], "base64");
+  if (b.length < 2600) return null;
+  const totalSf = (b.readBigUInt64LE(224) << 60n) + u128At(b, 232) - u128At(b, 344) - u128At(b, 360) - u128At(b, 376);
+  const totalLiquidity = totalSf >> 60n, collateralSupply = b.readBigUInt64LE(2592);
+  if (totalLiquidity <= 0n || collateralSupply <= 0n) return null;
+  return { totalLiquidity, collateralSupply, liquidityDecimals: Number(b.readBigUInt64LE(272)), receiptDecimals: r.decimals, symbol: r.symbol };
+}
+
 // # Ported from: apps/solana/lib/solana/kamino.ts:readReserveRate
 export async function fetchKaminoPositions(marginPda: string): Promise<FarmPos[]> {
   const keys: string[] = [];
@@ -157,7 +173,7 @@ export async function fetchKaminoPositions(marginPda: string): Promise<FarmPos[]
     keys.push(ata, r.reserve);
   }
 
-  const res = await rpc<{ value: ({ data: [string, string] } | null)[] }>("getMultipleAccounts", [keys, { encoding: "base64" }]).catch(() => null);
+  const res = await rpc<{ value: ({ data: [string, string] } | null)[] }>("getMultipleAccounts", [keys, { encoding: "base64", ...READ_AT }]).catch(() => null);
   if (!res?.value) return [];
   const accounts = res.value;
 
@@ -218,7 +234,7 @@ export async function fetchVaultPositions(marginPda: string): Promise<FarmPos[]>
     perenaKeys.push(ata, v.account);
   }
 
-  const res = await rpc<{ value: ({ data: [string, string] } | null)[] }>("getMultipleAccounts", [perenaKeys, { encoding: "base64" }]).catch(() => null);
+  const res = await rpc<{ value: ({ data: [string, string] } | null)[] }>("getMultipleAccounts", [perenaKeys, { encoding: "base64", ...READ_AT }]).catch(() => null);
   if (!res?.value) return [];
   const accounts = res.value;
 

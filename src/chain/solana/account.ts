@@ -4,7 +4,7 @@ import { MINT_SYMBOL, RESERVES, VANNA_PROGRAM_ID } from "./config";
 import { fetchSolanaPools } from "./pools";
 import { base58, fetchSolanaPrices } from "./prices";
 import { decode58, findPda } from "./pda";
-import { rpc } from "./rpc";
+import { READ_AT, rpc } from "./rpc";
 import { lineWeight } from "./risk";
 import { PHUSD_MINT } from "./tokens";
 
@@ -49,7 +49,7 @@ export type SolanaAccount = {
 async function tokenBalances(owner: string, extra: Record<string, string> = {}): Promise<Record<string, number>> {
   const out: Record<string, number> = {};
   for (const programId of TOKEN_PROGRAMS) {
-    const r = await rpc<{ value: Parsed[] }>("getTokenAccountsByOwner", [owner, { programId }, { encoding: "jsonParsed" }]);
+    const r = await rpc<{ value: Parsed[] }>("getTokenAccountsByOwner", [owner, { programId }, { encoding: "jsonParsed", ...READ_AT }]);
     for (const a of r.value) {
       const { mint, tokenAmount } = a.account.data.parsed.info;
       const sym = MINT_SYMBOL[mint] ?? extra[mint];
@@ -62,12 +62,12 @@ async function tokenBalances(owner: string, extra: Record<string, string> = {}):
 // The margin account is the program address ("margin", owner); it exists once the user has created it.
 export async function findSolanaMargin(owner: string): Promise<string | null> {
   const pda = findPda(["margin", decode58(owner)], VANNA_PROGRAM_ID);
-  const r = await rpc<{ value: { data: [string, string] } | null }>("getAccountInfo", [pda, { encoding: "base64", dataSlice: { offset: 0, length: 0 } }]);
+  const r = await rpc<{ value: { data: [string, string] } | null }>("getAccountInfo", [pda, { encoding: "base64", dataSlice: { offset: 0, length: 0 }, ...READ_AT }]);
   return r.value ? pda : null;
 }
 
 export async function fetchSolanaAccount(owner: string): Promise<SolanaAccount> {
-  const [lamports, tokens, marginAddr] = await Promise.all([rpc<{ value: number }>("getBalance", [owner]), tokenBalances(owner), findSolanaMargin(owner)]);
+  const [lamports, tokens, marginAddr] = await Promise.all([rpc<{ value: number }>("getBalance", [owner, READ_AT]), tokenBalances(owner), findSolanaMargin(owner)]);
   const wallet = { ...tokens, SOL: (tokens.SOL ?? 0) + lamports.value / 1e9 };
   if (!marginAddr) return { owner, wallet, margin: null };
 
@@ -76,8 +76,8 @@ export async function fetchSolanaAccount(owner: string): Promise<SolanaAccount> 
     fetchSolanaPools(),
     tokenBalances(marginAddr, { [PHUSD_MINT]: "phUSD" }),
     // one DebtPosition per reserve at ("debt", margin, reserve); missing = no debt there
-    rpc<{ value: ({ data: [string, string] } | null)[] }>("getMultipleAccounts", [Object.values(RESERVES).map((r) => findPda(["debt", decode58(marginAddr), decode58(r.reserve)], VANNA_PROGRAM_ID)), { encoding: "base64" }]),
-    rpc<{ value: ({ data: [string, string] } | null)[] }>("getMultipleAccounts", [Object.values(RESERVES).map((r) => r.reserve), { encoding: "base64" }]),
+    rpc<{ value: ({ data: [string, string] } | null)[] }>("getMultipleAccounts", [Object.values(RESERVES).map((r) => findPda(["debt", decode58(marginAddr), decode58(r.reserve)], VANNA_PROGRAM_ID)), { encoding: "base64", ...READ_AT }]),
+    rpc<{ value: ({ data: [string, string] } | null)[] }>("getMultipleAccounts", [Object.values(RESERVES).map((r) => r.reserve), { encoding: "base64", ...READ_AT }]),
   ]);
   // phUSD (USDC converted for Phoenix, waiting in the margin account) is collateral for the program like USDC: it priced 20 phUSD at
   // the USDC price (19.9963 USD, fork 2026-11-18) with the same weights. Kept out of the token list (it is not withdrawable as is).

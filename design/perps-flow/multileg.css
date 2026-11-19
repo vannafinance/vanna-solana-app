@@ -1,0 +1,120 @@
+/* Multi-leg transaction sheet. Builds on tx.css (tokens, frame, sheet) and perps.css (views, concept A slot, wallet, dev panel).
+   Motion on state changes only: the row spinner turns, a check pops, a failed row nudges, the bar segment fills. */
+.v-run.ml{gap:14px}
+
+/* the bar: one segment per leg; a segment fills when its leg is done (count, not a made-up percentage) */
+.segbar{display:flex;gap:3px;height:4px}
+.sg{position:relative;flex:1;border-radius:2px;background:var(--divider);overflow:hidden}
+[data-theme="light"] .sg{background:#ECECEF}
+.sg i{position:absolute;left:0;top:0;bottom:0;width:0;border-radius:2px;background:#703AE6;transition:width 500ms var(--ease),background-color 300ms}
+.sg[data-p="done"] i{width:100%}
+.sg[data-p="failed"] i{width:100%;background:var(--negative)}
+.sg[data-p="skipped"] i{width:0}
+.sg .glint{display:none}
+.sg[data-p="check"] .glint,.sg[data-p="send"] .glint,.sg[data-p="confirm"] .glint,.sg[data-p="unsure"] .glint{display:block;width:60%;background:linear-gradient(90deg,rgba(112,58,230,0),rgba(112,58,230,.55),rgba(112,58,230,0));animation:glint 1600ms var(--ease) infinite}
+
+/* the legs: one compact row each (40 px), in a card */
+.lgs{background:var(--bg);border-radius:16px;padding:2px 14px}
+.lgs:empty{display:none}
+.lg{display:flex;align-items:flex-start;gap:10px;padding:10px 0;margin:0 -8px;padding-left:8px;padding-right:8px;border-radius:10px;transition:background-color 300ms}
+.lg+.lg{box-shadow:0 -1px 0 var(--divider)}
+.lg[data-p="check"],.lg[data-p="send"],.lg[data-p="confirm"],.lg[data-p="unsure"]{background:color-mix(in srgb,var(--purple-tint) 70%,transparent)}
+.lg-ic{position:relative;flex:none;width:20px;height:20px;display:grid;place-items:center;margin-top:0}
+.lg-ic>span{grid-area:1/1;display:none;align-items:center;justify-content:center}
+.i-wait{width:8px;height:8px;border-radius:4px;background:var(--border-control);opacity:.6}
+.lg[data-p="wait"] .i-wait,.lg[data-p="queued"] .i-wait,.lg[data-p="approve"] .i-wait,.lg[data-p="skipped"] .i-wait{display:flex}
+.lg[data-p="approve"] .i-wait{background:#703AE6;opacity:1;animation:breathe 1400ms ease-in-out infinite}
+.lg[data-p="check"] .i-spin,.lg[data-p="send"] .i-spin,.lg[data-p="confirm"] .i-spin{display:flex}
+.lspin{animation:tlspin 900ms linear infinite}
+.lg[data-p="check"] .lspin{animation-duration:1400ms;opacity:.7}
+.i-ok{width:20px;height:20px;border-radius:10px;background:#703AE6;color:#fff}
+.lg[data-p="done"] .i-ok{display:flex}
+.i-bad{width:20px;height:20px;border-radius:10px;background:var(--pink-tint);color:var(--on-pink-tint)}
+.lg[data-p="failed"] .i-bad{display:flex}
+.i-unsure{color:var(--warning)}
+.lg[data-p="unsure"] .i-unsure{display:flex}
+.lg-t{flex:1;min-width:0;display:flex;flex-direction:column}
+.lg-l{font-size:14px;line-height:20px;font-weight:600;color:var(--text)}
+.lg[data-p="wait"] .lg-l,.lg[data-p="queued"] .lg-l,.lg[data-p="skipped"] .lg-l{color:var(--muted);font-weight:400}
+.lg-r{font-size:12px;line-height:16px;color:var(--on-pink-tint)}
+.lg-r:empty{display:none}
+.lg[data-p="unsure"] .lg-r{color:var(--warning)}
+.lg-w{flex:none;font-size:12px;line-height:20px;color:var(--muted);white-space:nowrap}
+.lg[data-p="done"] .lg-w{color:var(--positive);font-weight:600}
+.lg[data-p="failed"] .lg-w{color:var(--on-pink-tint);font-weight:600}
+.lg[data-p="unsure"] .lg-w{color:var(--warning);font-weight:600}
+.lg[data-p="check"] .lg-w,.lg[data-p="send"] .lg-w,.lg[data-p="confirm"] .lg-w,.lg[data-p="approve"] .lg-w{color:var(--text);font-weight:600}
+.lg-w.swapin{display:inline-block;animation:swapIn 260ms var(--ease)}
+.lg.popdone .i-ok{animation:spop 380ms var(--spring)}
+.lg.shake{animation:shake 380ms var(--ease) 1}
+.lg.rise{animation:rise 280ms var(--ease) both}
+
+/* review rows */
+.legs-r{background:var(--bg);border-radius:16px;padding:0 16px}
+.row2 b.pos{color:var(--positive)}
+.row2 b.neg{color:var(--negative)}
+
+/* toast (src/ui/overlay.tsx toast: snackbar #2C2C2C, 44 px, radius 22) above the tab bar */
+.toast{position:absolute;left:16px;right:16px;bottom:100px;z-index:8;display:flex;align-items:center;gap:10px;min-height:44px;padding:8px 8px 8px 9px;border-radius:22px;background:#2C2C2C;color:#fff;font-size:14px;line-height:20px;font-weight:600;
+  box-shadow:0 10px 16px rgba(17,11,46,.28);opacity:0;transform:translateY(12px);transition:opacity 260ms var(--ease),transform 260ms var(--ease);pointer-events:none}
+.toast.on{opacity:1;transform:none;pointer-events:auto}
+.toast.toastin{animation:rise 320ms var(--ease)}
+.t-dot{width:26px;height:26px;border-radius:13px;display:flex;align-items:center;justify-content:center;flex:none;background:rgba(255,255,255,.12)}
+.t-dot.ok{background:#703AE6}
+.t-dot.bad{background:#6B0033;color:#FFB0D6}
+.t-m{flex:1;min-width:0}
+.t-a{flex:none;height:32px;padding:0 12px;border-radius:16px;color:#CBB6FA;font-weight:600;font-size:14px}
+
+/* side panel: the chain controls */
+.chainp{border:1px solid var(--panel-line);border-radius:18px;padding:16px;display:grid;gap:10px}
+.cp-hint{font-size:12px;line-height:17px;color:var(--muted)}
+.cp-hint:empty{display:none}
+.cp-row{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:6px 10px;font-size:13px;padding-top:8px;border-top:1px solid var(--panel-line)}
+.cp-row i{font-style:normal;color:var(--muted);margin-left:6px}
+.cp-b{display:flex;gap:6px;flex-wrap:wrap}
+.app button.cta{width:100%;border:0;cursor:pointer;font:inherit;font-size:16px;font-weight:600}
+.closed .scrim{pointer-events:none}
+.device .screen{width:var(--sw,412px)}
+
+/* v2: long lists scroll inside the sheet (header, bar and summary stay put); one explorer link per confirmed leg; per-row Retry */
+.lgs{max-height:268px;overflow-y:auto;overscroll-behavior:contain;scrollbar-width:thin}
+.lgs.single{display:none} /* one transaction: the normal sheet (header link, bar), no list */
+.lg{align-items:center}
+.lg-ic,.lg-w{align-self:flex-start;margin-top:0}
+.lg-sig{font-size:11px;line-height:14px;color:var(--muted)}
+.lg-sig:empty{display:none}
+.lg-x{display:none;flex:none;width:32px;height:32px;margin:-6px -6px -6px 0;border-radius:16px;align-items:center;justify-content:center;color:var(--muted)}
+.lg-x:hover{background:var(--segment);color:var(--text)}
+.lgs:not(.single) .lg[data-p="done"] .lg-x{display:flex}
+.lg-retry{display:none;flex:none;height:28px;padding:0 12px;margin:-4px 0;border-radius:14px;background:var(--pink-tint);color:var(--on-pink-tint);font-size:12px;font-weight:600}
+.lg.can-retry .lg-retry{display:inline-flex;align-items:center}
+.lg.can-retry .lg-w{display:none}
+.lg.rewind{animation:rewind 420ms var(--ease)}
+@keyframes rewind{0%{background-color:color-mix(in srgb,var(--pink-tint) 80%,transparent)}100%{background-color:color-mix(in srgb,var(--purple-tint) 70%,transparent)}}
+.rm .lg.rewind{animation:none}
+/* v3: the first-time stages sit above the header; the sheet scrolls inside itself with the title and the buttons fixed */
+.sheet{max-height:calc(100% - 44px);display:flex;flex-direction:column}
+.sheet .sbody{overflow-y:auto;min-height:0;flex:1 1 auto;overscroll-behavior:contain;scrollbar-width:thin}
+.v-run.ml .acts{position:sticky;bottom:0;z-index:4;background:var(--surface);padding:8px 0 2px;margin-top:-6px}
+.v-run.ml .acts:empty{display:none}
+.stage-host{margin:0 0 -2px}
+.v-run.ml .stage-host+.hd{margin-top:-2px}
+.seg.wide2{display:flex;flex-wrap:wrap;border-radius:14px}
+.seg.wide2 button{flex:1 1 auto;border-radius:11px;white-space:normal;text-align:center}
+/* v4: Cancel (while the wallet has not answered) and Stop (between legs): calm, secondary, no height when absent */
+.cxl{display:flex;justify-content:center;margin-top:-10px}
+.cxl:empty{display:none}
+.tbtn.quiet{height:36px;width:auto;padding:0 16px;font-size:14px;font-weight:600;color:var(--muted);border-radius:18px}
+.tbtn.quiet:hover{background:var(--segment);color:var(--text)}
+.acts .tbtn.quiet{align-self:center}
+.stopask{background:var(--bg);border-radius:16px;padding:14px 16px;display:grid;gap:10px;animation:rise 260ms var(--ease) both}
+.sa-t{font-size:15px;line-height:20px;font-weight:600}
+.sa-d{font-size:13px;line-height:18px;color:var(--muted)}
+.sa-b{display:flex;gap:8px}
+.sa-b .sm2{height:44px;border-radius:22px;font-size:14px;flex:1}
+.a-wrap[data-s="pause"] .a-breath{animation:none}
+.a-wrap[data-s="pause"] .ab-load{opacity:0;transform:scale(.6)}
+.a-wrap[data-s="pause"] .a-badge{opacity:0;transition:opacity 200ms}
+.w-req.cancelled{display:grid;gap:4px;color:var(--muted)}
+.w-req.cancelled s{opacity:.7}
+.w-req.cancelled span{font-size:12px;font-weight:600;color:var(--text)}

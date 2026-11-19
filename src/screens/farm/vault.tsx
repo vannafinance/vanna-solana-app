@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { openExplorer } from "@/components/history";
 import { Icon } from "@/components/ui/icon";
 import { Card, EmptyCard, IconAction, shareIcon } from "@/components/ui/kit";
-import { nf, pct, usd } from "@/format";
+import { nf, pct, sUsd, usd } from "@/format";
 import { ACTIVITY, DATA } from "@/sample/data";
 import { type Chain, useChain } from "@/state/chain";
 import { useDataVersion } from "@/state/store";
@@ -17,8 +17,10 @@ import { useTheme } from "@/theme/use-theme";
 import { families, font } from "@/theme/tokens";
 import { AfterTransition } from "@/ui/ready";
 import { openShare } from "@/screens/share/share";
+import { KAMINO_RECEIPTS } from "@/chain/solana/tokens";
 
 import { apyText, openFarm, posOf, px, usdC, type Vault, VAULTS, valOf } from "./farm";
+import { Analytics } from "./vault-analytics";
 import { KAM_X, PER_X } from "./vault-model";
 
 /* Farm vault detail (design SCREENS['farm-vault'] and ['farm-position'], one screen): header "<venue> lending" / "Perena vault", the vault's icon, name and venue chips, a stats grid, Your position | Analytics, How it works, and
@@ -71,7 +73,7 @@ export default function FarmVaultScreen({ id }: { id: string }) {
           <Stats v={v} k={k} />
           <SubTabs items={[["pos", "Your position"], ["an", "Analytics"]]} value={tab} onChange={setTab} fam={fam} />
           <Swap k={tab}>
-            <View style={{ gap: 12 }}>{tab === "pos" ? <YourPosition v={v} k={k} /> : <Analytics v={v} k={k} />}</View>
+            <View style={{ gap: 12 }}>{tab === "pos" ? <YourPosition v={v} k={k} /> : <Analytics v={v} />}</View>
           </Swap>
           <HowItWorks v={v} k={k} />
         </ScrollView>
@@ -112,9 +114,13 @@ function Stats({ v, k }: { v: Vault; k: Kind }) {
 }
 
 /* ---------- Your position ---------- */
-function receipt(v: Vault, k: Kind, totalTok: number, valUsd: number): [string, string] {
+function receipt(v: Vault, k: Kind, totalTok: number, valUsd: number, receiptsRaw?: string): [string, string] {
   if (k === "per") return [v.sharePrice ? nf(valUsd / v.sharePrice, 2) : "—", PER_X[perKey(v.id)].rc];
-  return [nf(totalTok, totalTok >= 0.01 ? 2 : 4), KAM_X[v.id]?.rc ?? v.sym];
+  // Kamino: the receipt tokens (cTokens) the margin account really holds, not the underlying amount (1 kUSDC is worth more than 1 USDC).
+  const dec = KAMINO_RECEIPTS.find((r) => r.underlying === v.sym)?.decimals;
+  const held = receiptsRaw && dec != null ? Number(BigInt(receiptsRaw)) / 10 ** dec : null;
+  if (held == null) return ["—", KAM_X[v.id]?.rc ?? v.sym];
+  return [nf(held, held >= 0.01 ? 2 : 4), KAM_X[v.id]?.rc ?? v.sym];
 }
 
 // Activity rows for this vault (the sheet writes "<name> on <venue>"; older rows are matched from their text).
@@ -137,15 +143,15 @@ function YourPosition({ v, k }: { v: Vault; k: Kind }) {
   let card: ReactNode = null;
   if (pos && val > 0) {
     // No value history: the app has no source for it, so only today's figures are shown (no chart).
-    const earned = pos.earned * px(pos.sym), rc = receipt(v, k, pos.amt + pos.earned, val);
+    const earnedRaw = pos.earned * px(pos.sym), earned = Math.abs(earnedRaw) < 0.005 ? 0 : earnedRaw, rc = receipt(v, k, pos.amt + pos.earned, val, pos.receiptsRaw);
     card = (
       <Card>
         <View style={{ flexDirection: "row", alignItems: "flex-end", gap: 8 }}>
           <View style={styles.strip}>
-            {([["Value", usd(val), ""], ["Earned", "+" + usd(earned), "pos"], ["Receipt", rc[0], "", rc[1]]] as [string, string, string, string?][]).map(([l, x, c, s]) => (
+            {([["Value", usd(val), ""], ["Earned", sUsd(earned), earned < 0 ? "neg" : "pos"], ["Receipt", rc[0], "", rc[1]]] as [string, string, string, string?][]).map(([l, x, c, s]) => (
               <View key={l} style={{ flex: 1, minWidth: 0 }}>
                 <Text style={[styles.stl, { color: colors.muted }]}>{l}</Text>
-                <Text style={[styles.stv, { fontSize: 16, color: c === "pos" ? colors.positive : colors.text }]} numberOfLines={1}>{x}</Text>
+                <Text style={[styles.stv, { fontSize: 16, color: c === "pos" ? colors.positive : c === "neg" ? colors.negative : colors.text }]} numberOfLines={1}>{x}</Text>
                 {s ? <Text style={[styles.stl, { color: colors.muted }]} numberOfLines={1}>{s}</Text> : null}
               </View>
             ))}
@@ -173,58 +179,6 @@ function YourPosition({ v, k }: { v: Vault; k: Kind }) {
           ))}
         </Card>
       )}
-    </>
-  );
-}
-
-/* ---------- Analytics ---------- */
-function Analytics({ v, k }: { v: Vault; k: Kind }) {
-  return k === "kam" ? <KamAnalytics v={v} /> : <PerAnalytics v={v} />;
-}
-
-function Tiles({ items }: { items: [string, string, string?, string?][] }) {
-  const { colors, isDark } = useTheme();
-  return (
-    <View style={styles.tiles}>
-      {items.map(([l, x, c, s]) => (
-        <View key={l} style={[styles.tile, { backgroundColor: colors.surface }, !isDark && styles.shadow]}>
-          <Text style={[styles.stl, { color: colors.muted }]} numberOfLines={1}>{l}</Text>
-          <Text style={[styles.stv, { fontSize: 16, color: c === "pos" ? colors.positive : c === "neg" ? colors.negative : colors.text }]} numberOfLines={1}>{x}</Text>
-          {s ? <Text style={[styles.stl, { color: colors.muted }]} numberOfLines={1}>{s}</Text> : null}
-        </View>
-      ))}
-    </View>
-  );
-}
-
-// Live figures only. Rate and share-price history (and the 30-day APY, ROI and drawdown built from it) come from the web's own
-// server records, which the app has no source for, so they are not shown.
-function KamAnalytics({ v }: { v: Vault }) {
-  const liq = v.supplyUsd !== undefined && v.borrowUsd !== undefined ? v.supplyUsd - v.borrowUsd : undefined;
-  return <Tiles items={[["Borrowed", opt(v.borrowUsd, usdC)], ["Liquidity", opt(liq, usdC)], ["Supply APY", apyText(v), "pos"], ["Borrow APY", opt(v.borrowApy, (n) => pct(n))]]} />;
-}
-
-function PerAnalytics({ v }: { v: Vault }) {
-  const { colors } = useTheme();
-  const p = PER_X[perKey(v.id)], [tip, setTip] = useState(false);
-  return (
-    <>
-      <Card>
-        <View style={styles.chh}>
-          <Text style={[styles.title, { color: colors.text, flex: 1 }]}>{p.rc}</Text>
-          <InfoBtn on={tip} onPress={() => setTip(!tip)} />
-        </View>
-        {tip && <Text style={[styles.tip, { color: colors.muted }]}>{`${p.who}. No lockup. Vanna values ${p.rc} at the share price read on its fork, which can lag Perena's mainnet price.`}</Text>}
-      </Card>
-      <Tiles
-        items={[
-          ["Share price (Vanna)", opt(v.sharePrice, (n) => "$" + nf(n, 6))],
-          ["Perena price", opt(v.perenaPrice, (n) => "$" + nf(n, 6))],
-          ["TVL", opt(v.tvlUsd, usdC)],
-          ["Holders", opt(v.holders, (n) => nf(n, 0))],
-          ["Exit fee", p.exitFee],
-        ]}
-      />
     </>
   );
 }
@@ -264,14 +218,6 @@ function HowItWorks({ v, k }: { v: Vault; k: Kind }) {
   );
 }
 
-/* ---------- small controls ---------- */
-function InfoBtn({ on, onPress }: { on: boolean; onPress: () => void }) {
-  return (
-    <Pressable onPress={onPress} hitSlop={10} accessibilityRole="button" accessibilityLabel="About this" accessibilityState={{ expanded: on }}>
-      <Icon name="info" size={18} color="muted" />
-    </Pressable>
-  );
-}
 const styles = StyleSheet.create({
   body: { padding: 16, gap: 12, paddingBottom: 24 },
   foot: { flexDirection: "row", gap: 8, paddingHorizontal: 16, paddingTop: 12, paddingBottom: 12, borderTopWidth: 1 },
@@ -285,18 +231,10 @@ const styles = StyleSheet.create({
   stl: { fontFamily: font.regular, fontSize: 12, lineHeight: 16 },
   stv: { fontFamily: font.semibold, fontSize: 18, lineHeight: 24, fontVariant: ["tabular-nums"] },
   strip: { flex: 1, flexDirection: "row", gap: 12 },
-  ctl: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 8 },
   title: { fontFamily: font.semibold, fontSize: 15, lineHeight: 20 },
   b14: { fontFamily: font.semibold, fontSize: 14, lineHeight: 20, fontVariant: ["tabular-nums"] },
   txr: { flexDirection: "row", alignItems: "center", gap: 12, minHeight: 52, borderTopWidth: 1 },
-  tiles: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
-  tile: { width: "48.5%", flexGrow: 1, borderRadius: 12, paddingVertical: 12, paddingHorizontal: 14, gap: 2 },
   shadow: { shadowColor: "#111111", shadowOpacity: 0.06, shadowRadius: 12, shadowOffset: { width: 0, height: 4 }, elevation: 1 },
-  chh: { flexDirection: "row", alignItems: "center", gap: 12, minHeight: 32 },
-  tip: { fontFamily: font.regular, fontSize: 13, lineHeight: 18 },
-  rng: { minWidth: 44, height: 32, paddingHorizontal: 8, borderRadius: 8, borderWidth: 1, alignItems: "center", justifyContent: "center" },
-  seg: { flexDirection: "row", padding: 2, borderRadius: 12, gap: 2, alignSelf: "flex-start", maxWidth: "100%" },
-  segB: { minHeight: 36, paddingHorizontal: 12, borderRadius: 10, alignItems: "center", justifyContent: "center" },
   how: { borderRadius: 16, paddingHorizontal: 16 },
   howH: { flexDirection: "row", alignItems: "center", gap: 8, minHeight: 48 },
   num: { width: 24, height: 24, borderRadius: 12, alignItems: "center", justifyContent: "center" },

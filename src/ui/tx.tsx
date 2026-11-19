@@ -9,12 +9,12 @@ import Animated, { Easing, useAnimatedStyle, useSharedValue, withTiming } from "
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 import { IconAction } from "@/components/ui/kit";
-import { MascotDone } from "@/mascot/mascot";
+import { MascotDone, MascotRest } from "@/mascot/mascot";
 import { TailLoader } from "@/mascot/tail-loader";
 import { ACCOUNT } from "@/sample/data";
 import { type Chain, CHAIN_LABEL } from "@/state/chain";
 import { refreshAccountSoon } from "@/chain/account-live";
-import { onSigned } from "@/chain/sign";
+import { onSigned, onTxStatus } from "@/chain/sign";
 import { personalReady } from "@/state/personal";
 import { mutate } from "@/state/store";
 import { inUseWallet } from "@/state/wallets";
@@ -26,13 +26,44 @@ import { type MarginFlow, MarginFlowSheet } from "./first-time-flow";
 import { pauseLiveWhile, setLivePaused } from "@/state/live-pause";
 
 import { noteTxResult } from "@/state/notes";
-import { guardSheet, openSheet, sheetOpen, toast } from "./overlay";
+import { guardSheet, interceptClose, openSheet, SheetFooter, sheetOpen, toast } from "./overlay";
 import { haptic } from "@/ui/haptics";
 import { externalWalletName, isWalletTimeout, type TxSend, type TxStatus, useOnForeground, WALLET_TIMEOUT_TEXT, waitingLine } from "./wallet-wait";
+import {
+  ACTIVE,
+  cancelledLine,
+  doneLegs,
+  type FinishKind,
+  finishOf,
+  initLegs,
+  isCancelled,
+  isStopped,
+  isWalletNo,
+  walletWords,
+  type Leg,
+  type LegAction,
+  type LegCopy,
+  type LegPlan,
+  type LegRun,
+  type LegSend,
+  legsReducer,
+  type LegsState,
+  heldBack,
+  type OnLeg,
+  retryIds,
+  runHead,
+  stopBody,
+  summary,
+} from "./legs";
+import { LegBar, LegList, QuietButton, StopConfirm } from "./leg-rows";
+import { PhoenixStage, type PhoenixStageData } from "./phoenix-stage";
 
 /* The one transaction sheet every money action uses (design core.js TX): review → sign → progress (Sent, Processed, Confirmed) → done
    or fail. Signing here is the embedded-wallet stand-in (Android passkey / fingerprint, iOS Face ID); real signers (Dynamic embedded
-   wallet, Mobile Wallet Adapter, WalletConnect) plug in at sign(). On sample data `apply` mutates the sample state. */
+   wallet, Mobile Wallet Adapter, WalletConnect) plug in at sign(). On sample data `apply` mutates the sample state.
+   An action that sends several transactions supplies `plan` (2+ legs): the progress, done and failed screens then show the multi-leg
+   layout (design/perps-flow/MULTI-LEG.md): a bar segment and a compact row per leg, the whole operation's title and summary, an
+   explorer icon per confirmed leg, Retry for only the legs left, Cancel while the wallet waits and Stop between legs. */
 export type TxSpec = {
   chain: Chain;
   fam: Family;
@@ -56,6 +87,25 @@ export type TxSpec = {
   // Ways to finish what a failure left half done (e.g. a perps open whose USDC moved but whose order failed): offered on the failed
   // screen in place of "Try again", each sent as its own transaction in this sheet. Nothing to offer = undefined or [].
   recover?: (error: unknown) => TxRecover[] | undefined;
+
+  /* ---- multi-leg (ui/legs.ts) ---- */
+  // The transactions this action sends, in plain words and in order. 2+ legs = the multi-leg layout; one leg = today's layout.
+  plan?: LegPlan;
+  // The send that reports each leg (`onLeg`) and honours the cancel / stop signals; used instead of `send` when set.
+  run?: LegSend;
+  // Builds, signs (one fresh approval) and sends only these legs: "Retry failed (N)", a row's Retry and Continue after a Stop.
+  retryLegs?: (only: string[], run: LegRun) => Promise<string | void>;
+  // The flow's own words for partial and stopped results (MULTI-LEG.md); `doing` heads the running sheet.
+  copy?: LegCopy;
+  // The chain ends the wallet request on `run.cancel` (Cancel, and the X, while the wallet has not answered).
+  cancelable?: boolean;
+  // The chain drops the unsent legs on `run.stop` (Stop between legs, 2+ legs only).
+  stoppable?: boolean;
+  // Extra buttons on a stopped result ("Return USDC to margin", "Repay 50.00 USDC"), each sent as its own transaction.
+  stopExtra?: (left: Leg[]) => TxRecover[] | undefined;
+  // A first Perps open (the Phoenix account is set up in the same approval): the Phoenix stage above the header, driven by the legs
+  // "setup", "add" and "order" (ui/phoenix-stage.tsx).
+  phoenix?: PhoenixStageData;
 };
 export type TxRecover = { label: string; send: TxSend; done: TxSpec["done"]; apply?: (hash?: string) => void };
 
@@ -120,8 +170,20 @@ export function runTx(spec: TxSpec) {
 
 type Phase = "review" | "sign" | "progress" | "done" | "fail";
 
+// How a run ended, beyond its legs: the person cancelled (before the wallet answered) or stopped (between legs), or the wallet said no
+// before anything was sent (`nothing` = its words).
+type End = { cancelled?: boolean; stopped?: boolean; nothing?: string };
+
 // The final screen of a transaction, kept so it can be shown again after its sheet was closed while it ran.
-type TxResult = { phase: "done" | "fail"; fail: string; hash: string | null; recover: TxRecover[]; done: TxSpec["done"]; timedOut: boolean };
+type TxResult = { phase: "done" | "fail"; fail: string; hash: string | null; recover: TxRecover[]; done: TxSpec["done"]; timedOut: boolean; legs?: LegsState; end?: End };
+
+// what a multi-leg run's finished screen shows, from the legs and how it ended
+function kindOf(s: LegsState, end: End): FinishKind {
+  if (end.cancelled) return doneLegs(s).length ? "stopped" : "cancelled";
+  if (end.nothing) return "nothing";
+  if (s.legs.length && s.legs.every((l) => l.phase === "done")) return "done";
+  return end.stopped ? "stopped" : "part";
+}
 
 // The sheet was closed (X) while the transaction ran; it carried on and has now finished. The result goes to Notifications, and is
 // shown: a failure re-opens its sheet on the failed screen (with any recovery buttons) when no other sheet is open; otherwise a
@@ -161,8 +223,23 @@ function TxFlow({ spec, close, initial }: { spec: TxSpec; close: () => void; ini
   // The phone's own prompt, which also offers its PIN or passcode.
   const walletApp = externalWalletName(spec.chain);
   const [timedOut, setTimedOut] = useState(initial?.timedOut ?? false);
+  // The legs (one row each) and how the run ended. The ref is the synchronous truth (events keep arriving after the sheet is hidden);
+  // the state mirrors it for rendering.
+  const [ls, setLs] = useState<LegsState>(() => initial?.legs ?? initLegs(spec.plan ?? []));
+  const lsRef = useRef<LegsState>(ls);
+  const [end, setEnd] = useState<End>(initial?.end ?? {});
+  const [stopAsk, setStopAsk] = useState(false);
+  const [usingAlt, setUsingAlt] = useState(false); // a recovery runs as its own single transaction
+  const cancelCtl = useRef<AbortController | null>(null);
+  const stopCtl = useRef<AbortController | null>(null);
+  const signedRef = useRef(false);
   // Hiding the sheet (X) does not cancel the transaction: it carries on, and its result is announced (announceHidden).
   const alive = useRef(true);
+  const act = useCallback((a: LegAction) => {
+    lsRef.current = legsReducer(lsRef.current, a);
+    if (alive.current) setLs(lsRef.current);
+  }, []);
+  const multi = (spec.plan?.length ?? 0) > 1 && !usingAlt;
   const phaseNow = useRef(phase);
   useEffect(() => {
     phaseNow.current = phase;
@@ -174,11 +251,13 @@ function TxFlow({ spec, close, initial }: { spec: TxSpec; close: () => void; ini
     },
     [],
   );
+  // The wallet has the request and has not answered: the only moment Cancel (and the X as Cancel) applies.
+  const waiting = phase === "progress" && !!walletApp && (multi ? ls.asking || (!ls.signed && !ls.heard) : step === 0);
   // The whole run is guarded, not only the wait for the wallet: sending and confirming several parts can take a minute or more,
   // and a stray tap on the dimmed screen, a drag down or Back used to close the sheet then. Only the X hides it.
   useEffect(
-    () => guardSheet(phase === "progress", step === 0 ? undefined : "Still sending. It finishes even if you close this with the X."),
-    [phase, step],
+    () => guardSheet(phase === "progress", (multi ? !ls.signed : step === 0) ? undefined : "Still sending. It finishes even if you close this with the X."),
+    [phase, step, multi, ls.signed],
   );
   // The live market sockets stand still from the tap until the transaction has finished (see live-pause.ts).
   useEffect(() => {
@@ -195,62 +274,164 @@ function TxFlow({ spec, close, initial }: { spec: TxSpec; close: () => void; ini
       .catch(() => setAuthFailed(true));
   };
 
+  // Cancel before the wallet answered: the chain ends the wallet session (nothing is sent) and rejects with its cancelled error.
+  const canCancel = waiting && !!spec.cancelable && !usingAlt;
+  // The sheet answers at once: the chain sends nothing after the abort (a late wallet answer is thrown away), so the result is shown
+  // now and the run's own rejection, when it comes, is ignored.
+  const cancelledNow = useRef(false);
+  const cancel = useCallback(() => {
+    if (!cancelCtl.current || cancelCtl.current.signal.aborted) return;
+    haptic.tap();
+    cancelCtl.current.abort();
+    cancelledNow.current = true;
+    act({ t: "cancel" });
+    setEnd({ cancelled: true });
+    setRecover([]);
+    setTimedOut(false);
+    setFail(cancelledLine(walletApp));
+    setPhase("fail");
+  }, [act, walletApp]);
+  // While the wallet waits, the X acts as Cancel (a request left in the wallet could still be approved after the sheet closed).
+  useEffect(() => {
+    interceptClose(canCancel ? () => (cancel(), true) : null);
+    return () => interceptClose(null);
+  }, [canCancel, cancel]);
+  // Stop after the approval: the legs in flight finish, the legs not yet sent are dropped. Offered only while a leg is still held back
+  // by an earlier stage; when every remaining leg is already on its way a Stop could change nothing, so there is none.
+  const canStop = multi && phase === "progress" && !!spec.stoppable && ls.signed && !ls.asking && !ls.stopping && heldBack(ls).length > 0;
+  const stop = () => {
+    setStopAsk(false);
+    if (!stopCtl.current || stopCtl.current.signal.aborted) return;
+    stopCtl.current.abort();
+    act({ t: "stop" });
+  };
+
   // `alt`: a recovery from the failed screen, sent instead of spec.send (its own done text and apply).
-  const approve = async (alt?: TxRecover) => {
+  // `only`: a retry of these legs (spec.retryLegs), one fresh approval; the legs that landed are never sent again.
+  const approve = async (alt?: TxRecover, only?: string[]) => {
     setPhase("progress");
     setStep(0);
     setTimedOut(false);
+    setStopAsk(false);
+    setEnd({});
+    setUsingAlt(!!alt);
     setDone(alt?.done ?? spec.done);
     lastAlt.current = alt;
-    const send = alt ? alt.send : spec.send;
+    signedRef.current = false;
+    cancelledNow.current = false;
+    const cancelC = (cancelCtl.current = new AbortController());
+    const stopC = (stopCtl.current = new AbortController());
+    if (!alt) act({ t: "start", only });
+    const legsOn = !alt;
+    const onStatus = (st: TxStatus) => {
+      setStep((s) => (st === "waiting_for_wallet" ? 0 : Math.max(s, st === "sending" ? 1 : 2)));
+      if (st !== "waiting_for_wallet") signedRef.current = true;
+      if (legsOn) act({ t: "status", s: st });
+    };
+    const onLeg: OnLeg = (i, p, info) => {
+      if (!legsOn) return;
+      if (ACTIVE.includes(p as never) || /^(checking|sending|confirming|done|failed)$/.test(p)) signedRef.current = true;
+      act({ t: "leg", i, phase: p, info });
+    };
+    const run: LegRun = { onStatus, onLeg, cancel: cancelC.signal, stop: stopC.signal, only, onLegs: (legs) => legsOn && act({ t: "reseed", legs }) };
+    // the wallet asked again during the run (a second approval): those rows read "Needs approval", the header "Approve once more"
+    const stopStatus = legsOn ? onTxStatus((st) => act({ t: "status", s: st })) : () => {};
+    const send: (() => Promise<string | void>) | undefined = alt
+      ? () => alt.send(onStatus)
+      : only && spec.retryLegs
+        ? () => spec.retryLegs!(only, run)
+        : spec.run
+          ? () => spec.run!(run)
+          : spec.send
+            ? () => spec.send!(onStatus)
+            : undefined;
     const apply = alt ? alt.apply ?? (() => {}) : spec.apply;
-    const onStatus = (st: TxStatus) => setStep((s) => (st === "waiting_for_wallet" ? 0 : Math.max(s, st === "sending" ? 1 : 2)));
     // "Sent" only once the wallet has really signed.
-    const stopSigned = onSigned(() => setStep((s) => Math.max(s, 1)));
+    const stopSigned = onSigned(() => {
+      signedRef.current = true;
+      setStep((s) => Math.max(s, 1));
+      if (legsOn) act({ t: "signed" });
+    });
     try {
       // A real wallet must never see a pretend success: actions without an on-chain path stop here.
       if (!send && personalReady(spec.chain)) throw new Error("This action is not connected to the chain yet. Nothing was sent.");
       let h: string | undefined;
       if (send) {
         // paused until the transaction settles, even if the sheet is hidden meanwhile
-        h = (await pauseLiveWhile(send(onStatus))) || undefined;
+        h = (await pauseLiveWhile(send())) || undefined;
         if (h) setHash(h);
         setStep(2);
       }
+      if (cancelCtl.current !== cancelC || (cancelledNow.current && cancelC.signal.aborted)) return;
+      if (legsOn) act({ t: "settle", ok: true, hash: h });
+      const stopped = stopC.signal.aborted && lsRef.current.legs.some((l) => l.phase !== "done");
+      const endNow: End = stopped ? { stopped: true } : {};
+      setEnd(endNow);
       setStep(3);
-      mutate(() => {
-        apply(h);
-        // the history row the action just added carries the chain's own transaction hash, so its explorer link is real
-        const row = h && ACTIVITY[spec.chain][0];
-        if (h && row) {
-          row.hash = h;
-          row.chain = spec.chain;
-          row.ms = Date.now();
-          row.tx = `${h.slice(0, 4)}…${h.slice(-4)}`;
-          const owner = inUseWallet(spec.chain)?.full;
-          if (owner) void rememberActivity(spec.chain, owner, { ...row });
-        }
-      });
+      if (!stopped) {
+        mutate(() => {
+          apply(h);
+          // the history row the action just added carries the chain's own transaction hash, so its explorer link is real
+          const row = h && ACTIVITY[spec.chain][0];
+          if (h && row) {
+            row.hash = h;
+            row.chain = spec.chain;
+            row.ms = Date.now();
+            row.tx = `${h.slice(0, 4)}…${h.slice(-4)}`;
+            const owner = inUseWallet(spec.chain)?.full;
+            if (owner) void rememberActivity(spec.chain, owner, { ...row });
+          }
+        });
+      }
       // re-read the real account so every screen shows the chain's figures
       if (send) refreshAccountSoon(spec.chain);
-      setPhase("done");
-      haptic.success();
-      if (!alive.current) announceHidden(spec, { phase: "done", fail: "", hash: h ?? null, recover: [], done: alt?.done ?? spec.done, timedOut: false });
+      setPhase(stopped ? "fail" : "done");
+      if (!stopped) haptic.success();
+      if (!alive.current) {
+        const isMulti = legsOn && lsRef.current.legs.length > 1;
+        const [t, l] = isMulti ? summary(finishOf(lsRef.current, kindOf(lsRef.current, endNow)), spec.copy, spec.done, lsRef.current.legs.length, walletApp) : [spec.done.title, spec.done.line ?? ""];
+        announceHidden(spec, { phase: stopped ? "fail" : "done", fail: `${t} · ${l}`, hash: h ?? null, recover: [], done: alt?.done ?? (isMulti ? { title: t, line: l } : spec.done), timedOut: false, legs: lsRef.current, end: endNow });
+      }
     } catch (e) {
+      // already shown as Cancelled when the person tapped it
+      if (cancelCtl.current !== cancelC || (cancelledNow.current && cancelC.signal.aborted)) return;
       const to = isWalletTimeout(e);
-      const msg = to ? WALLET_TIMEOUT_TEXT : e instanceof Error ? e.message : "The transaction was not sent";
-      const rec = (!to && spec.recover?.(e)) || [];
+      const cancelled = isCancelled(e) || cancelC.signal.aborted;
+      const stopped = isStopped(e) || stopC.signal.aborted;
+      const msg = cancelled ? cancelledLine(walletApp) : to ? WALLET_TIMEOUT_TEXT : e instanceof Error ? walletWords(e.message) : "The transaction was not sent";
+      const nothing = !cancelled && (to || isWalletNo(e)) && !signedRef.current && !doneLegs(lsRef.current).length;
+      if (legsOn) act({ t: "settle", ok: false, reason: msg, nothingSent: cancelled || nothing, error: e });
+      const endNow: End = { cancelled, stopped, nothing: nothing ? msg : undefined };
+      setEnd(endNow);
+      const rec = (!to && !cancelled && spec.recover?.(e)) || [];
       setTimedOut(to);
       setRecover(rec);
       setFail(msg);
       setPhase("fail");
-      haptic.error();
+      if (!cancelled && !stopped) haptic.error();
       // Something may have landed before the failure: re-read the chain so the screens show it.
       if (send) refreshAccountSoon(spec.chain);
-      if (!alive.current) announceHidden(spec, { phase: "fail", fail: msg, hash: null, recover: rec, done: alt?.done ?? spec.done, timedOut: to });
+      if (!alive.current) {
+        const isMulti = legsOn && lsRef.current.legs.length > 1;
+        const [t, l] = isMulti ? summary(finishOf(lsRef.current, kindOf(lsRef.current, endNow), msg), spec.copy, spec.done, lsRef.current.legs.length, walletApp) : ["", msg];
+        announceHidden(spec, { phase: "fail", fail: isMulti ? `${t} · ${l}` : msg, hash: null, recover: rec, done: alt?.done ?? spec.done, timedOut: to, legs: lsRef.current, end: endNow });
+      }
     } finally {
       stopSigned();
+      stopStatus();
     }
+  };
+  // Retry only what did not land (all of it, or one row and its not-sent dependents): one fresh approval.
+  const retry = (onlyId?: string) => {
+    const ids = retryIds(lsRef.current, onlyId);
+    if (ids.length) void approve(undefined, ids);
+  };
+  // Back to the review for a fresh start (only when nothing landed).
+  const restart = () => {
+    lsRef.current = initLegs(spec.plan ?? []);
+    setLs(lsRef.current);
+    setEnd({});
+    setPhase("review");
   };
   const finish = (action?: () => void) => {
     close();
@@ -306,24 +487,106 @@ function TxFlow({ spec, close, initial }: { spec: TxSpec; close: () => void; ini
     );
   }
 
-  if (phase === "fail") {
-    return (
-      <View style={{ gap: 16 }}>
-        <View style={styles.hd}>
+  /* ------------------------------------------------------------------ multi-leg: progress, done and the finish states */
+  if (multi) {
+    const finished = phase === "done" || phase === "fail";
+    const kind = finished ? kindOf(ls, end) : null;
+    const n = ls.legs.length;
+    const [title, line] = kind ? summary(finishOf(ls, kind, end.nothing), spec.copy, spec.done, n, walletApp) : runHead(ls, spec.copy, walletApp, spec.title);
+    const left = ls.legs.filter((l) => l.phase !== "done");
+    const canRetry = !!spec.retryLegs && (kind === "part" || kind === "stopped") && left.length > 0;
+    const face =
+      kind === "done" ? (
+        <MascotDone size={56} />
+      ) : kind === "cancelled" || kind === "stopped" ? (
+        <MascotRest size={56} mood="calm" />
+      ) : kind ? (
+        <View style={styles.tl}>
           <View style={[styles.ring, { backgroundColor: colors.pinkTint }]}>
             <Icon name="close" size={24} color={colors.onPinkTint} />
           </View>
+        </View>
+      ) : (
+        <TailLoader size={48} />
+      );
+    let buttons: ReactNode = null;
+    if (!finished) {
+      buttons = stopAsk && canStop ? (
+        <StopConfirm body={stopBody(ls, spec.copy)} fam={spec.fam} onStop={stop} onKeep={() => setStopAsk(false)} />
+      ) : canStop ? (
+        <QuietButton label="Stop" onPress={() => setStopAsk(true)} />
+      ) : null;
+    } else if (kind === "done") {
+      buttons = (
+        <View style={{ gap: 4 }}>
+          <Button label="Done" fam={spec.fam} onPress={() => finish()} />
+          {spec.done.action && <Button label={spec.done.action[0]} v="text" size="md" onPress={() => finish(spec.done.action![1])} />}
+        </View>
+      );
+    } else if (kind === "cancelled" || kind === "nothing") {
+      buttons = (
+        <View style={{ gap: 4 }}>
+          <Button label="Try again" fam={spec.fam} onPress={() => (timedOut || kind === "cancelled" ? void approve() : restart())} />
+          <Button label="Close" v="text" size="md" onPress={() => close()} />
+        </View>
+      );
+    } else {
+      const extra = kind === "stopped" ? spec.stopExtra?.(left) ?? [] : recover;
+      const primary = canRetry ? (kind === "stopped" ? spec.copy?.continueLabel?.(left) ?? "Continue" : `Retry failed (${left.length})`) : null;
+      // nothing to retry and nothing landed: a fresh start is safe; once a leg landed only the flow's own recoveries are offered
+      const fresh = !primary && !extra.length && !doneLegs(ls).length && !!spec.send;
+      buttons = (
+        <View style={{ gap: 8 }}>
+          {primary && <Button label={primary} fam={spec.fam} onPress={() => retry()} />}
+          {extra.map((r, i) => (
+            <Button key={r.label} label={r.label} fam={spec.fam} v={primary || i > 0 ? "outline" : undefined} size={primary || i > 0 ? "md" : undefined} onPress={() => void approve(r)} />
+          ))}
+          {fresh && <Button label="Try again" fam={spec.fam} onPress={restart} />}
+          <Button label="Done" v="text" size="md" onPress={() => close()} />
+        </View>
+      );
+    }
+    return (
+      <View style={{ gap: 16 }}>
+        {spec.phoenix && <PhoenixStage legs={ls.legs} data={spec.phoenix} />}
+        <View style={styles.hd}>
+          {face}
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <Text style={[styles.h, { color: colors.text }]}>{title}</Text>
+            {!!line && <Text style={[styles.cap, { color: colors.muted }]}>{line}</Text>}
+          </View>
+        </View>
+        {canCancel && <QuietButton label="Cancel" onPress={cancel} />}
+        <LegBar s={ls} />
+        <LegList s={ls} multi onRetry={canRetry && kind === "part" ? retry : undefined} />
+        <SheetFooter>{buttons}</SheetFooter>
+      </View>
+    );
+  }
+
+  if (phase === "fail") {
+    const calm = end.cancelled;
+    return (
+      <View style={{ gap: 16 }}>
+        <View style={styles.hd}>
+          {calm ? (
+            <MascotRest size={52} mood="calm" />
+          ) : (
+            <View style={[styles.ring, { backgroundColor: colors.pinkTint }]}>
+              <Icon name="close" size={24} color={colors.onPinkTint} />
+            </View>
+          )}
           <View style={{ flex: 1 }}>
-            <Text style={[styles.h, { color: colors.text }]}>Not confirmed</Text>
+            <Text style={[styles.h, { color: colors.text }]}>{calm ? "Cancelled" : "Not confirmed"}</Text>
             <Text style={[styles.cap, { color: colors.muted }]}>{fail}</Text>
           </View>
         </View>
         {recover.length ? (
           recover.map((r, i) => <Button key={r.label} label={r.label} fam={spec.fam} v={i === 0 ? undefined : "outline"} size={i === 0 ? undefined : "md"} onPress={() => void approve(r)} />)
         ) : (
-          <Button label="Try again" fam={spec.fam} onPress={() => (timedOut ? void approve(lastAlt.current) : setPhase("review"))} />
+          <Button label="Try again" fam={spec.fam} onPress={() => (timedOut || calm ? void approve(lastAlt.current) : setPhase("review"))} />
         )}
-        <Button label={timedOut ? "Close" : "Done"} v="text" size="md" onPress={() => close()} />
+        <Button label={timedOut || calm ? "Close" : "Done"} v="text" size="md" onPress={() => close()} />
       </View>
     );
   }
@@ -343,6 +606,7 @@ function TxFlow({ spec, close, initial }: { spec: TxSpec; close: () => void; ini
           <IconAction icon="open_in_new" label="View on Solana Explorer" onPress={() => Linking.openURL(`https://explorer.solana.com/tx/${hash}?cluster=custom&customUrl=${encodeURIComponent("https://rpc-devnet.solana.vanna.finance")}`).catch(() => toast("Couldn't open the explorer"))} />
         )}
       </View>
+      {canCancel && <QuietButton label="Cancel" onPress={cancel} />}
       <Progress step={step} />
       {phase === "done" && (
         <View style={{ gap: 4 }}>
@@ -392,6 +656,7 @@ const styles = StyleSheet.create({
   cap: { fontFamily: font.regular, fontSize: 13, lineHeight: 18 },
   bio: { width: 72, height: 72, borderRadius: 36, alignItems: "center", justifyContent: "center", marginVertical: 16 },
   hd: { flexDirection: "row", alignItems: "center", gap: 14 },
+  tl: { width: 56, height: 56, alignItems: "center", justifyContent: "center" },
   ring: { width: 52, height: 52, borderRadius: 26, alignItems: "center", justifyContent: "center" },
   bar: { height: 4, borderRadius: 2, overflow: "hidden" },
   fill: { height: 4, borderRadius: 2 },

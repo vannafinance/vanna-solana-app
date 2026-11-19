@@ -162,7 +162,7 @@ export const NOTES: Note[] = [
 ];
 
 // Phoenix account history (design DATA.perpHist).
-export type PerpHist = { t: string; a: "Open / increase" | "Close / reduce" | "Deposit to Phoenix" | "Account setup"; k: string; side: Side | ""; size: number | null; usdc: number | null; lev?: number; pnl?: number; entry?: number; qty?: number; effLev?: number; pool?: number; ms?: number; hash?: string; fromChain?: boolean };
+export type PerpHist = { t: string; a: "Open / increase" | "Close / reduce" | "Deposit to Phoenix" | "Account setup"; k: string; side: Side | ""; size: number | null; usdc: number | null; lev?: number; pnl?: number; entry?: number; qty?: number; effLev?: number; pool?: number; ms?: number; hash?: string; fromChain?: boolean; cms?: number };
 export const PERP_HIST: PerpHist[] = [
   { t: "Oct 6, 09:41", a: "Open / increase", k: "BTC", side: "short", size: 3000, usdc: 1500, lev: 2 },
   { t: "Oct 5, 14:02", a: "Open / increase", k: "SOL", side: "long", size: 6000, usdc: 1200, lev: 5 },
