@@ -16,7 +16,7 @@ import "@/state/appearance";
 import { AppLock } from "@/components/app-lock";
 import { ChainProvider } from "@/state/chain";
 import { reapplyAppearance } from "@/state/appearance";
-import { hydrateSession, isWelcomeSeen } from "@/state/session";
+import { hydrateSession, isWelcomeSeen, rememberActive, rememberPath, takeResumePath } from "@/state/session";
 import { useTheme } from "@/theme/use-theme";
 import { closeSheet, closeSheetOnNavigate, OverlayHost } from "@/ui/overlay";
 import { ThemeFadeHost } from "@/ui/theme-fade";
@@ -43,7 +43,8 @@ export default function RootLayout() {
     if (!ready) return;
     reapplyAppearance();
     const t = setTimeout(reapplyAppearance, 600);
-    const sub = AppState.addEventListener("change", (st) => st === "active" && reapplyAppearance());
+    // leaving the app notes the time: coming back within two minutes skips the intro (state/session.ts)
+    const sub = AppState.addEventListener("change", (st) => (st === "active" ? reapplyAppearance() : rememberActive()));
     return () => (clearTimeout(t), sub.remove());
   }, [ready]);
   // A reload used to restore Portfolio. Until this open's intro is finished, stay on it.
@@ -51,6 +52,15 @@ export default function RootLayout() {
     if (!ready || (isWelcomeSeen() && signedIn)) return;
     if (pathname === "/welcome" || pathname.startsWith("/sign-in")) return;
     router.replace("/welcome");
+  }, [ready, pathname, signedIn]);
+  // After a short pause in the background the phone may have closed the app: open the screen the person was on, once.
+  useEffect(() => {
+    if (!ready) return;
+    const path = takeResumePath();
+    if (path && path !== pathname) router.replace(path as never);
+  }, [ready]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (ready && isWelcomeSeen() && signedIn && pathname !== "/welcome" && !pathname.startsWith("/sign-in")) rememberPath(pathname);
   }, [ready, pathname, signedIn]);
   useEffect(() => startLiveData(), []);
   useEffect(() => startAccountLive(), []);

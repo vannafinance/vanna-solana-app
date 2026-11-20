@@ -21,7 +21,8 @@ const TOKEN_PROGRAMS = ["TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA", "TokenzQd
 const DEBT_SIZE = 137; // 8 + margin 32 + reserve 32 + borrow_shares u128 16 + bump 1 + reserved 48
 const LIQ = 1.1;
 
-type Parsed = { account: { data: { parsed: { info: { mint: string; tokenAmount: { uiAmount: number | null } } } } } };
+type Parsed = { account: { data: { parsed: { info: { mint: string; tokenAmount: { amount: string; decimals: number } } } } } };
+const WSOL_MINT = "So11111111111111111111111111111111111111112";
 
 
 export type SolanaAccount = {
@@ -45,15 +46,20 @@ export type SolanaAccount = {
   };
 };
 
-// `extra`: more mints to name (mint -> symbol) besides the registry tokens.
-async function tokenBalances(owner: string, extra: Record<string, string> = {}): Promise<Record<string, number>> {
+// `extra`: more mints to name (mint -> symbol) besides the registry tokens. Amounts are the raw token amounts over the mint's decimals,
+// as the website reads them (lib/solana/balances.ts): a Token-2022 stock token's scaled display amount (RPC `uiAmount`) is not the
+// balance the program values. `skipWsol`: a wallet's SOL is its native balance only; wrapped SOL in a token account is not added to it
+// (the margin account's SOL collateral is wrapped SOL, so it is kept there).
+async function tokenBalances(owner: string, extra: Record<string, string> = {}, skipWsol = false): Promise<Record<string, number>> {
   const out: Record<string, number> = {};
   for (const programId of TOKEN_PROGRAMS) {
     const r = await rpc<{ value: Parsed[] }>("getTokenAccountsByOwner", [owner, { programId }, { encoding: "jsonParsed", ...READ_AT }]);
     for (const a of r.value) {
       const { mint, tokenAmount } = a.account.data.parsed.info;
+      if (skipWsol && mint === WSOL_MINT) continue;
       const sym = MINT_SYMBOL[mint] ?? extra[mint];
-      if (sym && tokenAmount.uiAmount) out[sym] = (out[sym] ?? 0) + tokenAmount.uiAmount;
+      const raw = BigInt(tokenAmount.amount || "0");
+      if (sym && raw > 0n) out[sym] = (out[sym] ?? 0) + Number(raw) / 10 ** tokenAmount.decimals;
     }
   }
   return out;
@@ -67,7 +73,7 @@ export async function findSolanaMargin(owner: string): Promise<string | null> {
 }
 
 export async function fetchSolanaAccount(owner: string): Promise<SolanaAccount> {
-  const [lamports, tokens, marginAddr] = await Promise.all([rpc<{ value: number }>("getBalance", [owner, READ_AT]), tokenBalances(owner), findSolanaMargin(owner)]);
+  const [lamports, tokens, marginAddr] = await Promise.all([rpc<{ value: number }>("getBalance", [owner, READ_AT]), tokenBalances(owner, {}, true), findSolanaMargin(owner)]);
   const wallet = { ...tokens, SOL: (tokens.SOL ?? 0) + lamports.value / 1e9 };
   if (!marginAddr) return { owner, wallet, margin: null };
 

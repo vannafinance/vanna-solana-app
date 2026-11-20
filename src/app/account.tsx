@@ -18,7 +18,7 @@ import { ACCOUNT, DATA } from "@/sample/data";
 import { initialOf } from "@/components/avatar";
 import { useRewards } from "@/sample/rewards";
 import { openEditName } from "@/screens/rewards/edit";
-import { setConfirmTx, setLockEnabled, useBiometricLabel, useLock } from "@/state/lock";
+import { hasDeviceSecurity, setConfirmTx, setLockEnabled, useBiometricLabel, useLock } from "@/state/lock";
 import { haptic } from "@/ui/haptics";
 import { hasMargin, walletUsd } from "@/sample/model";
 import { type AppearanceMode, setAppearance, useAppearance } from "@/state/appearance";
@@ -153,9 +153,9 @@ export default function Account() {
             icon={bioLabel?.includes("Face") || (!bioLabel && ios) ? "face" : "fingerprint"}
             label={`${bioLabel ?? (ios ? "Face ID" : "Fingerprint")} for transactions`}
             value={lock.confirmTx}
-            onChange={(v) => setConfirmTx(v).then((ok) => !ok && toast("Not turned on: couldn't confirm it's you", "err"))}
+            onChange={(v) => setConfirmTx(v).then(async (ok) => !ok && toast((await hasDeviceSecurity()) ? "Not turned on: couldn't confirm it's you" : "Set up a screen lock or fingerprint in your phone's settings first", "err"))}
           />
-          <ToggleRow icon="lock" label="App lock" value={lock.enabled} onChange={(v) => setLockEnabled(v).then((ok) => ok ? v && toast(`Vanna locks after 5 minutes away`) : toast("Not turned on: couldn't confirm it's you", "err"))} />
+          <ToggleRow icon="lock" label="App lock" value={lock.enabled} onChange={(v) => setLockEnabled(v).then(async (ok) => (ok ? v && toast(`Vanna locks after 2 minutes away`) : toast((await hasDeviceSecurity()) ? "Not turned on: couldn't confirm it's you" : "Set up a screen lock or fingerprint in your phone's settings first", "err")))} />
           <InfoRow icon="devices" label="This session" value="Installed app" />
         </Card>
 

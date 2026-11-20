@@ -10,13 +10,15 @@
 import { Buffer } from "buffer";
 import { AppState } from "react-native";
 
-import { appInstalled, nativeAvailable } from "@/chain/native";
+import { appInstalled } from "@/chain/native";
 import { registerExternalSolanaSigner, WALLET_NO_ANSWER, WalletCancelledError } from "@/chain/sign";
 import { base58 } from "@/chain/solana/prices";
 import { setWalletNoToken, short, updateWalletIdentity, updateWalletSession } from "@/state/wallets";
 
 export type WalletIdentity = { app: string; logo: string; icon?: string };
-export type ExternalConnection = WalletIdentity & { address: string; session: string; baseUri?: string };
+export type ExternalConnection = WalletIdentity & { address: string; session: string; baseUri?: string; pkg?: string };
+/** A wallet app found on the phone (see wallet-detect.ts): its Android package, its own name and its own icon (PNG data URI). */
+export type DetectedWallet = { pkg: string; label: string; icon: string | null };
 
 // Wallets verify the app by fetching <uri>/.well-known/assetlinks.json and matching the Android package + signing key. For this host the
 // file must be public (the access page must exempt that path) and list package finance.vanna.app with our build's SHA-256 (see the handoff).
@@ -70,7 +72,8 @@ const packageFor = (app?: string) => (app ? KNOWN.find((k) => k.app === app)?.pk
 // The Android package of a saved wallet, so signing opens it directly instead of Android's chooser. Neither Phantom nor Solflare
 // sends a link, and entries saved before wallets could be told apart are named "Wallet": those are recognised from what was saved
 // (Phantom's auth token, Solflare's icon), then from the only known wallet on the phone. Unknown: the chooser shows, as before.
-async function packageOf(entry: { app?: string; session?: string; icon?: string }): Promise<string | undefined> {
+async function packageOf(entry: { app?: string; pkg?: string; session?: string; icon?: string }): Promise<string | undefined> {
+  if (entry.pkg) return entry.pkg;
   const named = packageFor(entry.app);
   if (named) return named;
   const who = await identifyWallet({ auth_token: entry.session, wallet_icon: entry.icon });
@@ -114,24 +117,33 @@ const mwa = () => import("@solana-mobile/mobile-wallet-adapter-protocol");
 class StaleApproval extends Error {}
 const declined = (e: unknown) => /declin|reject|denied|not signed|^-3\b|ERROR_NOT_SIGNED/i.test(text(e));
 
-/** The known wallets installed on this phone, for the wallet list shown when connecting. */
-export type InstalledWallet = { app: string; logo: string; pkg: string };
-export async function installedKnownWallets(): Promise<InstalledWallet[]> {
-  const found = await Promise.all(KNOWN.map(async (k) => ((await appInstalled(k.pkg).catch(() => false)) ? { app: k.app, logo: k.logo, pkg: k.pkg } : null)));
-  return found.filter((k): k is InstalledWallet => k != null);
-}
+// Ends a wallet request when the person cancels: the callback returns at once, which makes transact end the session, and with the
+// patched native module (scripts/patch-mwa.js) that closes the connection and frees the library's one-session lock. The wallet's own
+// answer, if it comes later, goes nowhere.
+const untilCancelled = <T,>(work: Promise<T>, signal?: AbortSignal): Promise<T> => {
+  if (!signal) return work;
+  return new Promise<T>((resolve, reject) => {
+    const stop = () => reject(new WalletCancelledError());
+    if (signal.aborted) return stop();
+    signal.addEventListener("abort", stop, { once: true });
+    work.then(
+      (v) => (signal.removeEventListener("abort", stop), resolve(v)),
+      (e) => (signal.removeEventListener("abort", stop), reject(e)),
+    );
+  });
+};
 
 async function withWallet<T>(
   work: Parameters<Awaited<ReturnType<typeof mwa>>["transact"]>[0] extends (w: infer W) => unknown ? (wallet: W) => Promise<T> : never,
   target?: { baseUri?: string; packageName?: string },
+  cancel?: AbortSignal,
 ): Promise<T> {
   const { transact } = await mwa();
   const config: { baseUri?: string; packageName?: string } = {};
   if (target?.baseUri) config.baseUri = target.baseUri;
-  // Solflare omits wallet_uri_base, so pinning its Android package skips the system chooser on every transaction.
-  if (target?.packageName && (!nativeAvailable || (await appInstalled(target.packageName).catch(() => false)))) {
-    config.packageName = target.packageName;
-  }
+  // Wallets rarely send wallet_uri_base, so pinning the wallet app's Android package skips the system chooser on every request. A
+  // package that turns out not to be installed is dropped below (ERROR_WALLET_NOT_FOUND) and the chooser shows as a last resort.
+  if (target?.packageName) config.packageName = target.packageName;
   const hasConfig = Object.keys(config).length > 0;
   for (let attempt = 0; ; attempt++) {
     let connected = false;
@@ -140,7 +152,7 @@ async function withWallet<T>(
       return await transact(
         (async (wallet: Parameters<typeof work>[0]) => {
           connected = true;
-          return work(wallet);
+          return untilCancelled(work(wallet), cancel);
         }) as never,
         hasConfig ? (config as never) : undefined,
       );
@@ -173,7 +185,7 @@ async function withWallet<T>(
 
 // `target`: the wallet the person chose in Vanna's list; it opens directly (no Android chooser) and is known by name. Without one,
 // Android's chooser shows and the wallet is told apart by what it sends.
-export function connectSolanaWallet(target?: InstalledWallet): Promise<ExternalConnection> {
+export function connectSolanaWallet(target?: DetectedWallet, cancel?: AbortSignal): Promise<ExternalConnection> {
   return withWallet(async (wallet) => {
     let auth;
     for (const chain of CHAINS) {
@@ -188,18 +200,18 @@ export function connectSolanaWallet(target?: InstalledWallet): Promise<ExternalC
     const account = auth.accounts[0];
     if (!account) throw new Error("The wallet didn't share an account");
     const sent = await identifyWallet(auth as AuthLike);
-    const who = target ? { app: target.app, logo: target.logo, icon: sent.icon } : sent;
-    return { address: base58(Buffer.from(account.address, "base64")), session: auth.auth_token, baseUri: auth.wallet_uri_base || undefined, ...who };
-  }, target ? { packageName: target.pkg } : undefined);
+    // A wallet the person picked in Vanna's list is known by the name and icon Android gives it; the reply only names one picked in Android's own list.
+    const who: WalletIdentity = target ? { app: target.label, logo: KNOWN.find((k) => k.pkg === target.pkg)?.logo ?? "VANNA", icon: target.icon ?? sent.icon } : sent;
+    return { address: base58(Buffer.from(account.address, "base64")), session: auth.auth_token, baseUri: auth.wallet_uri_base || undefined, pkg: target?.pkg ?? packageFor(who.app), ...who };
+  }, target ? { packageName: target.pkg } : undefined, cancel);
 }
 
 // CANCEL (sign.ts signSolanaBatch `cancel`): sign.ts rejects at once with WalletCancelledError and ignores this request's answer. Here
-// the request stops at the next step it can: a cancel before the sign request went out (the wallet still opening, or authorizing)
-// means the wallet is never asked to sign. Once the sign request is with the wallet, the React Native MWA module cannot withdraw it:
-// its native invoke() blocks the module's queue until the wallet answers, so endSession (and the proxied terminateSession, which on
-// React Native is just another JSON-RPC call to the wallet) would only run after that answer. The person declines it in the wallet
-// (or it times out); the session then ends normally (transact's finally), and the native mutex starts the next request only after
-// that, on a clean session.
+// the request is also ended: `withWallet` returns from the session as soon as the signal aborts, transact ends the session, and the
+// patched native module (scripts/patch-mwa.js: `invoke` no longer blocks the module thread) closes the connection and frees the library's
+// one-session lock, so the next request starts at once. The wallet may keep showing its approval screen; approving it later does nothing,
+// because the session is gone. (Before the session is connected, while the wallet is still opening, a cancel can only wait for the
+// association timeout.) Needs a native rebuild.
 registerExternalSolanaSigner(async (base64Txs, entry, cancel) => {
   const pkg = await packageOf(entry);
   const stopIfCancelled = () => {
@@ -268,6 +280,7 @@ registerExternalSolanaSigner(async (base64Txs, entry, cancel) => {
       return signed_payloads;
     },
     { baseUri: entry.baseUri, packageName: pkg },
+    cancel,
   );
   try {
     return await run(!entry.noToken);

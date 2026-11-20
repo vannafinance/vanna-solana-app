@@ -105,7 +105,7 @@ export async function fetchPhoenixPositions(marginPda: string): Promise<{ perps:
   const len = Number(buf.readBigUInt64LE(224));
   const EXTENSION_KEY = 0xff000000n;
 
-  const open: { sym: string; side: "long" | "short"; qty: number; notional: number }[] = [];
+  const open: { sym: string; side: "long" | "short"; qty: number; notional: number; assetId: number; baseLots: bigint; snapshot: bigint }[] = [];
   for (let j = 0; j < len; j++) {
     const at = 240 + 40 * j;
     if (buf.length < at + 40) break;
@@ -127,6 +127,9 @@ export async function fetchPhoenixPositions(marginPda: string): Promise<{ perps:
       side: baseLots > 0n ? "long" : "short",
       qty: Math.abs(Number(baseLots)) / 10 ** mkt.lotDecimals,
       notional: Math.abs(Number(virtualQuoteLots)) / 1e6,
+      assetId,
+      baseLots,
+      snapshot: buf.readBigInt64LE(at + 24),
     });
   }
 
@@ -134,6 +137,8 @@ export async function fetchPhoenixPositions(marginPda: string): Promise<{ perps:
   const total = open.reduce((t, o) => t + o.notional, 0);
   const cash = Math.max(0, cashUsd);
   const lev = cash > 0 ? total / cash : 0;
+  // funding to date, as the website's position row; left out (the estimate shows) when it cannot be read
+  const funding = await import("./actions").then((m) => m.phoenixFundingUsd(open.map((o) => ({ assetId: o.assetId, baseLots: o.baseLots, snapshot: o.snapshot })))).catch(() => new Map<number, number>());
   const perps: PerpPos[] = open.map((o) => ({
     id: `p-${o.sym.toLowerCase()}`,
     k: o.sym,
@@ -143,6 +148,7 @@ export async function fetchPhoenixPositions(marginPda: string): Promise<{ perps:
     entry: o.qty > 0 ? o.notional / o.qty : 0,
     qty: o.qty,
     pool: cash,
+    fundingUsd: funding.get(o.assetId),
     t: today(),
   }));
   // the whole collateral is assigned to the open positions, so none of it is idle

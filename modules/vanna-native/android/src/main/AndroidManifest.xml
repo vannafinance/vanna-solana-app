@@ -5,5 +5,10 @@
     <package android:name="com.solflare.mobile" />
     <package android:name="app.backpack.mobile" />
     <package android:name="com.solanamobile.seedvault" />
+    <!-- Every wallet app that answers Mobile Wallet Adapter's link, whatever its name: this is how the wallet list is found. -->
+    <intent>
+      <action android:name="android.intent.action.VIEW" />
+      <data android:scheme="solana-wallet" />
+    </intent>
   </queries>
 </manifest>

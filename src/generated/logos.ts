@@ -32,6 +32,7 @@ export const LOGO_PNG = {
   "AVAIL": require("../../assets/logos/AVAIL.png"),
   "AqUSDC": require("../../assets/logos/AqUSDC.png"),
   "BACKPACK": require("../../assets/logos/BACKPACK.png"),
+  "PHOENIX": require("../../assets/logos/PHOENIX.png"),
   "BANXA": require("../../assets/logos/BANXA.png"),
   "BINANCE": require("../../assets/logos/BINANCE.png"),
   "BLEND": require("../../assets/logos/BLEND.png"),

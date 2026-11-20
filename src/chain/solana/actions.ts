@@ -2872,6 +2872,28 @@ async function readPhoenixExchangeNow(): Promise<PhoenixExchangeState> {
   };
 }
 
+// Funding owed on each open position, as the website reads it (phoenix.ts positionEquityUsd): (market cumulative funding - the
+// position's snapshot) x base lots, in micro-USD, negated (a long pays when the rate is positive). Funding settles hourly, so the
+// perp asset map (a ~1.6 MB read) is only read again after 5 minutes; a position keeps its last figure until then.
+const fundingCache = new Map<string, { at: number; cum: Map<number, bigint> }>();
+export async function phoenixFundingUsd(positions: { assetId: number; baseLots: bigint; snapshot: bigint }[]): Promise<Map<number, number>> {
+  const out = new Map<number, number>();
+  if (!positions.length) return out;
+  const ex = await readPhoenixExchange();
+  const hit = fundingCache.get(ex.perpAssetMap);
+  let cum = hit && Date.now() - hit.at < 300_000 ? hit.cum : null;
+  if (!cum) {
+    const markets = await fetchPerpAssetMap(ex.perpAssetMap);
+    cum = new Map(markets.map((m) => [m.assetId, m.cumulativeFunding] as const));
+    fundingCache.set(ex.perpAssetMap, { at: Date.now(), cum });
+  }
+  for (const p of positions) {
+    const c = cum.get(p.assetId);
+    if (c !== undefined) out.set(p.assetId, -Number((c - p.snapshot) * p.baseLots) / 1e6);
+  }
+  return out;
+}
+
 // Ported from apps/solana/lib/solana/phoenix.ts:decodePerpAssetMap
 export function decodePerpAssetMap(data: Buffer): PhoenixMarketState[] {
   const markets: PhoenixMarketState[] = [];

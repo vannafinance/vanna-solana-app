@@ -36,7 +36,7 @@ export type Side = "long" | "short";
 export type SpotPos = { id: string; sym: string; side: Side; qty: number; entry: number; t: string };
 // qty: the size in tokens when read from the chain (Phoenix base lots); without it the size is coll x lev / entry.
 // lev: the position's effective leverage on Phoenix's shared (cross-margin) collateral; pool: all USDC collateral in Phoenix.
-export type PerpPos = { id: string; k: string; side: Side; lev: number; coll: number; entry: number; t: string; qty?: number; pool?: number };
+export type PerpPos = { id: string; k: string; side: Side; lev: number; coll: number; entry: number; t: string; qty?: number; pool?: number; fundingUsd?: number };
 // earnedUnknown: read from the chain but the history cannot prove the cost basis, so earnings show "—" (earned stays 0, amt is
 // the full value). receiptsRaw: the receipt tokens held (raw), to check the history against.
 export type FarmPos = { id: string; venue: string; name: string; sym: string; icon: string; amt: number; apy: number; earned: number; since: string; earnedUnknown?: boolean; receiptsRaw?: string };

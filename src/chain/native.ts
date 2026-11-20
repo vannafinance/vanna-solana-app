@@ -9,6 +9,8 @@ const native = requireOptionalNativeModule<VannaNativeModule>("VannaNative");
 export const nativeAvailable = native != null;
 export const openInApp = async (uri: string, packageName: string): Promise<boolean> => (native ? native.openInApp(uri, packageName) : false);
 export const appInstalled = async (packageName: string): Promise<boolean> => (native ? native.appInstalled(packageName) : false);
+export type InstalledWalletApp = { packageName: string; label: string; icon: string | null };
+export const installedWallets = async (): Promise<InstalledWalletApp[]> => (native ? native.installedWallets() : []);
 export const launchApp = async (packageName: string): Promise<boolean> => (native ? native.launchApp(packageName) : false);
 export const shareImage = async (uri: string, text: string, name: string): Promise<boolean> => (native ? native.shareImage(uri, text, name) : false);
 export const saveImage = async (uri: string, name: string): Promise<boolean> => (native ? native.saveImage(uri, name) : false);

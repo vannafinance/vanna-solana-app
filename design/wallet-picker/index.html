@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Wallet Picker</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="picker.css">
+</head>
+<body>
+<!-- Prototype chrome (not part of the design): state switcher, theme, phone width, scenario. -->
+<header class="top">
+  <div class="brand"><span class="dot"></span><div>Connect a wallet<small>Wallet picker prototype. Dark only. The bar, the notes and the side panel are not part of the design.</small></div></div>
+  <div class="grow"></div>
+
+  <div class="seg" id="layout" role="group" aria-label="Detected wallets as a list or a grid (prototype switch)">
+    <button data-layout-set="grid">Grid (design)</button><button data-layout-set="list">List (compare)</button>
+  </div>
+  <div class="seg" id="width" role="group" aria-label="Phone width">
+    <button data-width-set="360">360 px</button><button data-width-set="412">412 px</button>
+  </div>
+  <label class="toggle"><input type="checkbox" id="rm"> Reduce motion</label>
+</header>
+<nav class="states" aria-label="Jump to a state">
+  <span class="lbl">Jump to state</span>
+  <div class="chips" id="states"></div>
+</nav>
+<main class="stage">
+  <div class="phones" id="phones"></div>
+  <aside class="panel" id="panel"></aside>
+</main>
+<script src="vanna-mark.js"></script>
+<script src="picker.js"></script>
+</body>
+</html>

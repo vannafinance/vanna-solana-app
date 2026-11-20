@@ -90,7 +90,7 @@ function Pools() {
                     <Text style={{ fontFamily: font.regular, fontSize: 12, color: r.earnedKnown && sign(r.earned) === "pos" ? C.pos : C.muted }}>{r.earnedKnown ? sUsd(r.earned) : "—"}</Text>
                   </View>
                 </View>
-                <Pairs items={[{ label: "Supplied", value: tokFmt(r.amt, r.sym) }, { label: "APY", value: pct(r.apy) }]} />
+                <Pairs items={[{ label: "Supplied", value: tokFmt(r.held, r.sym) }, { label: "APY", value: pct(r.apy) }]} />
                 <View style={styles.acts}>
                   <IconAction icon={supplyMark} label={`Supply more ${r.sym}`} onPress={() => openAmount(chain, r.sym, "supply")} />
                   <IconAction icon={withdrawMark} label={`Withdraw ${r.sym}`} onPress={() => openAmount(chain, r.sym, "withdraw")} />

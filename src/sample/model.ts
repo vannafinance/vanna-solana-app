@@ -208,7 +208,7 @@ export const openPositions = (chain: Chain) => [...perpPositions(chain), ...farm
 export function lendRows(chain: Chain) {
   return DATA[chain].lend.map((l) => {
     const p = poolOf(chain, l.sym);
-    return { sym: l.sym, amt: l.amt, apy: p?.supA ?? 0, value: (l.amt + l.earned) * px(l.sym), earned: l.earned * px(l.sym), earnedKnown: !l.earnedUnknown, since: l.since };
+    return { sym: l.sym, amt: l.amt, held: l.amt + l.earned, apy: p?.supA ?? 0, value: (l.amt + l.earned) * px(l.sym), earned: l.earned * px(l.sym), earnedKnown: !l.earnedUnknown, since: l.since };
   });
 }
 

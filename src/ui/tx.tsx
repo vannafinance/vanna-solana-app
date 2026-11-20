@@ -175,6 +175,10 @@ type Phase = "review" | "sign" | "progress" | "done" | "fail";
 type End = { cancelled?: boolean; stopped?: boolean; nothing?: string };
 
 // The final screen of a transaction, kept so it can be shown again after its sheet was closed while it ran.
+const MIN_SHOWN_MS = 1800;
+const MIN_STEP_MS = 600;
+const nowMs = () => Date.now();
+const sinceMs = (t: number) => Date.now() - t;
 type TxResult = { phase: "done" | "fail"; fail: string; hash: string | null; recover: TxRecover[]; done: TxSpec["done"]; timedOut: boolean; legs?: LegsState; end?: End };
 
 // what a multi-leg run's finished screen shows, from the legs and how it ended
@@ -328,10 +332,20 @@ function TxFlow({ spec, close, initial }: { spec: TxSpec; close: () => void; ini
       if (st !== "waiting_for_wallet") signedRef.current = true;
       if (legsOn) act({ t: "status", s: st });
     };
+    // A fast wallet can finish several steps in a blink (the first-time account steps, Close all): each step the sheet shows stays up for
+    // a short minimum before the next one replaces it. Only what is drawn is paced, never the sending, and a failure is shown without waiting.
+    let paced: Promise<void> = Promise.resolve();
+    let lastLegAt = 0;
     const onLeg: OnLeg = (i, p, info) => {
       if (!legsOn) return;
       if (ACTIVE.includes(p as never) || /^(checking|sending|confirming|done|failed)$/.test(p)) signedRef.current = true;
-      act({ t: "leg", i, phase: p, info });
+      const failed = p === "failed";
+      paced = paced.then(async () => {
+        const left = lastLegAt && !failed ? MIN_STEP_MS - sinceMs(lastLegAt) : 0;
+        if (left > 0) await new Promise<void>((r) => setTimeout(r, left));
+        lastLegAt = nowMs();
+        act({ t: "leg", i, phase: p, info });
+      });
     };
     const run: LegRun = { onStatus, onLeg, cancel: cancelC.signal, stop: stopC.signal, only, onLegs: (legs) => legsOn && act({ t: "reseed", legs }) };
     // the wallet asked again during the run (a second approval): those rows read "Needs approval", the header "Approve once more"
@@ -347,8 +361,10 @@ function TxFlow({ spec, close, initial }: { spec: TxSpec; close: () => void; ini
             : undefined;
     const apply = alt ? alt.apply ?? (() => {}) : spec.apply;
     // "Sent" only once the wallet has really signed.
+    let signedAt = 0;
     const stopSigned = onSigned(() => {
       signedRef.current = true;
+      signedAt = nowMs();
       setStep((s) => Math.max(s, 1));
       if (legsOn) act({ t: "signed" });
     });
@@ -359,11 +375,18 @@ function TxFlow({ spec, close, initial }: { spec: TxSpec; close: () => void; ini
       if (send) {
         // paused until the transaction settles, even if the sheet is hidden meanwhile
         h = (await pauseLiveWhile(send())) || undefined;
+        // A real wallet can sign and confirm in under a second, which would skip the sending animation: it stays up for a short minimum
+        // after the wallet signed (never on a failure, which jumps to the error as before).
+        const shown = signedAt ? MIN_SHOWN_MS - sinceMs(signedAt) : 0;
+        if (shown > 0) await new Promise<void>((r) => setTimeout(r, shown));
         if (h) setHash(h);
         setStep(2);
       }
       if (cancelCtl.current !== cancelC || (cancelledNow.current && cancelC.signal.aborted)) return;
-      if (legsOn) act({ t: "settle", ok: true, hash: h });
+      if (legsOn) {
+        await paced;
+        act({ t: "settle", ok: true, hash: h });
+      }
       const stopped = stopC.signal.aborted && lsRef.current.legs.some((l) => l.phase !== "done");
       const endNow: End = stopped ? { stopped: true } : {};
       setEnd(endNow);
@@ -400,7 +423,11 @@ function TxFlow({ spec, close, initial }: { spec: TxSpec; close: () => void; ini
       const stopped = isStopped(e) || stopC.signal.aborted;
       const msg = cancelled ? cancelledLine(walletApp) : to ? WALLET_TIMEOUT_TEXT : e instanceof Error ? walletWords(e.message) : "The transaction was not sent";
       const nothing = !cancelled && (to || isWalletNo(e)) && !signedRef.current && !doneLegs(lsRef.current).length;
-      if (legsOn) act({ t: "settle", ok: false, reason: msg, nothingSent: cancelled || nothing, error: e });
+      if (legsOn) {
+        // steps already queued are drawn first (so the failure never lands before them), but never held more than a moment
+        await Promise.race([paced, new Promise<void>((r) => setTimeout(r, 700))]);
+        act({ t: "settle", ok: false, reason: msg, nothingSent: cancelled || nothing, error: e });
+      }
       const endNow: End = { cancelled, stopped, nothing: nothing ? msg : undefined };
       setEnd(endNow);
       const rec = (!to && !cancelled && spec.recover?.(e)) || [];
@@ -477,7 +504,7 @@ function TxFlow({ spec, close, initial }: { spec: TxSpec; close: () => void; ini
       <View style={{ alignItems: "center", gap: 6, paddingVertical: 8 }}>
         <SignWithBiometrics onConfirm={confirmIdentity} />
         <Text style={[styles.h, { color: colors.text }]}>{ios ? "Face ID" : "Confirm it's you"}</Text>
-        <Pressable onPress={confirmIdentity} accessibilityRole="button" accessibilityLabel={ios ? "Face ID, tap to confirm" : "Use your passkey"} style={[styles.bio, { backgroundColor: colors.purpleTint }]}>
+        <Pressable onPress={confirmIdentity} accessibilityRole="button" accessibilityLabel={ios ? "Face ID, tap to confirm" : "Confirm with your fingerprint or screen lock"} style={[styles.bio, { backgroundColor: colors.purpleTint }]}>
           <Icon name={ios ? "face" : "fingerprint"} size={44} color="#703AE6" />
         </Pressable>
         <Text style={[styles.cap, { color: colors.muted }]}>{authFailed ? "That didn't work. Try again, or use your phone's PIN." : ios ? "Look at your phone" : "Touch the sensor"}</Text>

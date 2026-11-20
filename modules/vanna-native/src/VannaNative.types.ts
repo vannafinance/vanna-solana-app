@@ -3,6 +3,8 @@ export interface VannaNativeModule {
   openInApp(uri: string, packageName: string): Promise<boolean>;
   /** True when the named app is installed. */
   appInstalled(packageName: string): Promise<boolean>;
+  /** Every app that answers the Mobile Wallet Adapter link: package, name and icon (PNG data URI, or null). */
+  installedWallets(): Promise<{ packageName: string; label: string; icon: string | null }[]>;
   /** Brings an installed app to the front. */
   launchApp(packageName: string): Promise<boolean>;
   /** Image and post text together in the phone share menu. */

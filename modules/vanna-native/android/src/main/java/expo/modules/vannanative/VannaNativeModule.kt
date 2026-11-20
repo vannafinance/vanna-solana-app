@@ -23,6 +23,37 @@ class VannaNativeModule : Module() {
       }
     }
 
+    // Every app on the phone that answers Mobile Wallet Adapter's association link (what Android's own wallet list is built from):
+    // its name, its icon as a PNG data URI (about 96 px, null when it cannot be drawn) and its package name. One entry per app; Vanna itself
+    // is left out. Needs the <queries> entry for the solana-wallet scheme in this module's manifest.
+    AsyncFunction("installedWallets") {
+      val context = appContext.reactContext ?: return@AsyncFunction emptyList<Map<String, Any?>>()
+      val pm = context.packageManager
+      val probe = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("solana-wallet:/v1/associate/local"))
+      val found = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+        pm.queryIntentActivities(probe, android.content.pm.PackageManager.ResolveInfoFlags.of(0L))
+      } else {
+        @Suppress("DEPRECATION") pm.queryIntentActivities(probe, 0)
+      }
+      found
+        .filter { it.activityInfo.packageName != context.packageName }
+        .distinctBy { it.activityInfo.packageName }
+        .map { info ->
+          val icon = try {
+            val drawable = info.loadIcon(pm)
+            val bitmap = android.graphics.Bitmap.createBitmap(96, 96, android.graphics.Bitmap.Config.ARGB_8888)
+            drawable.setBounds(0, 0, 96, 96)
+            drawable.draw(android.graphics.Canvas(bitmap))
+            val out = java.io.ByteArrayOutputStream()
+            bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, out)
+            "data:image/png;base64," + android.util.Base64.encodeToString(out.toByteArray(), android.util.Base64.NO_WRAP)
+          } catch (_: Exception) {
+            null
+          }
+          mapOf<String, Any?>("packageName" to info.activityInfo.packageName, "label" to info.loadLabel(pm).toString(), "icon" to icon)
+        }
+    }
+
     AsyncFunction("appInstalled") { packageName: String ->
       appContext.reactContext?.packageManager?.getLaunchIntentForPackage(packageName) != null
     }

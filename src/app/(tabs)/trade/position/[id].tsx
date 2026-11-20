@@ -12,7 +12,7 @@ import { perpMark } from "@/chain/perp-mark";
 import { openTx } from "@/components/history";
 import { DATA, PERP_HIST } from "@/sample/data";
 import { perpPnl, perpQty } from "@/sample/model";
-import { closePosition, FUNDING, fundingOf, levTag, liqFor, openTicket, PERP_MKTS, priceFmt } from "@/screens/trade/perps";
+import { closePosition, FUNDING, fundingOf, levTag, liqFor, openTicket, PERP_MKTS, priceFmt, useFundingCountdown } from "@/screens/trade/perps";
 import { useChain } from "@/state/chain";
 import { useDataVersion } from "@/state/store";
 import { useTheme } from "@/theme/use-theme";
@@ -28,6 +28,7 @@ export default function PerpPosition() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { chain } = useChain();
   const { colors } = useTheme();
+  const countdown = useFundingCountdown();
   const p = DATA[chain].perps.find((x) => x.id === id);
   const title = p ? `${p.k}-PERP ${p.side}` : "Position";
 
@@ -44,8 +45,6 @@ export default function PerpPosition() {
   const m = PERP_MKTS.find((x) => x.k === p.k)!;
   const mark = perpMark(p.k), qty = perpQty(p), size = qty * mark, pnl = perpPnl(p), equity = p.coll + pnl;
   const liq = liqFor(chain, p), f = fundingOf(p), lev = size / Math.max(1e-9, equity);
-  const now = new Date();
-  const next = `${String((now.getHours() + 1) % 24).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
   // The transaction that opened it, as saved with the History row (none for a position opened before the app kept it).
   const openHash = PERP_HIST.find((h) => h.a === "Open / increase" && h.k === p.k && h.side === p.side && h.hash)?.hash;
   const cells: [string, string, string, string?][] = [
@@ -57,7 +56,7 @@ export default function PerpPosition() {
     ["Liq. price", liq ? priceFmt(liq) : "None", liq ? `${pct((liq / mark - 1) * 100, 1)} away` : ""],
     ["Funding to date", sUsd(f), f < 0 ? "Paid" : "Received", sign(f)],
     ["Funding rate", Number.isFinite(m.fund) ? `${m.fund >= 0 ? "+" : "−"}${nf(Math.abs(m.fund), 4)}% / 1h` : "—", `${spct(m.fund * 24 * 365, 1)} a year, ${(m.fund >= 0) === (p.side === "long") ? "you pay" : "you earn"}`, m.fund >= 0 ? "pos" : "neg"],
-    ["Next funding", next, "Every hour"],
+    ["Next funding", countdown, "Every hour"],
     ["Opened", p.t.split(",")[0], `${p.t.split(", ")[1] ?? ""} UTC`],
   ];
 

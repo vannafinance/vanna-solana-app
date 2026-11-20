@@ -25,6 +25,8 @@ export type WalletEntry = {
   icon?: string;
   /** The wallet dropped the session when asked to sign with the saved approval (Backpack): connect afresh each time instead. */
   noToken?: boolean;
+  /** The wallet app's Android package: opens that app directly for every later request. */
+  pkg?: string;
 };
 
 type State = {
@@ -36,11 +38,40 @@ let state: State = { signedIn: false, wallets: { solana: [] }, inUse: { solana: 
 const subs = new Set<() => void>();
 const changed = new Set<() => void>();
 const KEY = "vanna.wallets";
+// The wallet's approval token is a credential: it is kept in the phone's encrypted store (Android Keystore), one entry per wallet, and
+// never in AsyncStorage. The store is a native module, loaded on first use: a development build made before it was added has no such
+// module, and there the token stays with the other saved fields (a release build always has it).
+type Secure = typeof import("expo-secure-store");
+let securePromise: Promise<Secure | null> | null = null;
+const secure = () => (securePromise ??= import("expo-secure-store").then((m) => m, () => null));
+const skey = (id: string) => `vanna.session.${id.replace(/[^A-Za-z0-9._-]/g, "_")}`;
+const written = new Map<string, string>();
+async function persist() {
+  const snap = state;
+  const sec = await secure();
+  const wallets = snap.wallets.solana;
+  AsyncStorage.setItem(KEY, JSON.stringify(sec ? { ...snap, wallets: { solana: wallets.map(({ session: _session, ...w }) => w) } } : snap)).catch(() => {});
+  if (!sec) return;
+  const ids = new Set<string>();
+  for (const w of wallets) {
+    ids.add(w.id);
+    if (w.session && written.get(w.id) !== w.session) {
+      written.set(w.id, w.session);
+      sec.setItemAsync(skey(w.id), w.session).catch(() => written.delete(w.id));
+    }
+  }
+  for (const id of [...written.keys()]) {
+    if (!ids.has(id)) {
+      written.delete(id);
+      sec.deleteItemAsync(skey(id)).catch(() => {});
+    }
+  }
+}
 const set = (p: Partial<State>) => {
   state = { ...state, ...p };
-  subs.forEach((f) => f());
+  subs.forEach((s) => s());
   changed.forEach((f) => f());
-  AsyncStorage.setItem(KEY, JSON.stringify(state)).catch(() => {});
+  void persist();
 };
 // Fired after connecting, switching the wallet in use, or disconnecting. The account reader subscribes.
 export const onWalletsChanged = (fn: () => void) => (changed.add(fn), () => changed.delete(fn));
@@ -51,11 +82,22 @@ export async function hydrateWallets() {
   try {
     const saved = JSON.parse(raw) as Partial<State> & { wallets?: Partial<Record<string, WalletEntry[]>> };
     // Only connected (external) Solana wallets are kept; anything saved by another build (email wallets, other chains) is dropped.
-    const solana = (saved.wallets?.solana ?? []).filter((w) => w.kind === "external" && !w.sample);
+    const kept = (saved.wallets?.solana ?? []).filter((w) => w.kind === "external" && !w.sample);
+    // Tokens come back from the encrypted store; one saved in plain text by an older build is moved there (persist below).
+    const sec = await secure();
+    const solana = await Promise.all(
+      kept.map(async (w) => {
+        const stored = sec ? await sec.getItemAsync(skey(w.id)).catch(() => null) : null;
+        const session = stored ?? w.session;
+        if (stored) written.set(w.id, stored);
+        return session ? { ...w, session } : w;
+      }),
+    );
     const inUse = solana.some((w) => w.id === saved.inUse?.solana) ? (saved.inUse?.solana ?? null) : (solana[0]?.id ?? null);
     state = { signedIn: solana.length > 0, wallets: { solana }, inUse: { solana: inUse } };
     subs.forEach((f) => f());
     changed.forEach((f) => f());
+    void persist();
   } catch {}
 }
 export const walletState = () => state;
@@ -75,8 +117,8 @@ export const short = (a: string) => `${a.slice(0, 4)}…${a.slice(-4)}`;
 export const inUseWallet = (c: Chain) => state.wallets[c].find((w) => w.id === state.inUse[c]) ?? null;
 
 // A wallet the person just approved. `session` and `baseUri` are what open and sign with it later without a new connection.
-export function addExternalWallet(c: Chain, app: WalletApp, logo: string, full: string, session: string, baseUri?: string, icon?: string): WalletEntry {
-  const w: WalletEntry = { id: `${app}-${full.slice(0, 6)}`, app, logo, addr: short(full), full, kind: "external", session, baseUri, icon };
+export function addExternalWallet(c: Chain, app: WalletApp, logo: string, full: string, session: string, baseUri?: string, icon?: string, pkg?: string): WalletEntry {
+  const w: WalletEntry = { id: `${app}-${full.slice(0, 6)}`, app, logo, addr: short(full), full, kind: "external", session, baseUri, icon, pkg };
   set({ wallets: { ...state.wallets, [c]: capped([...state.wallets[c].filter((x) => x.full !== full), w]) }, inUse: { ...state.inUse, [c]: w.id }, signedIn: true });
   return w;
 }

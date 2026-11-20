@@ -1,37 +1,25 @@
-import { connectSolanaWallet, installedKnownWallets, type InstalledWallet } from "@/chain/external";
-import { addExternalWallet, type WalletEntry } from "@/state/wallets";
+import type { WalletEntry } from "@/state/wallets";
+import { openConnectSheet } from "@/ui/connect-sheet";
 import { haptic } from "@/ui/haptics";
-import { toast } from "@/ui/overlay";
-import { pickWallet } from "@/ui/pick-wallet";
 
-// One tap: the wallets installed on the phone are listed (Phantom, Solflare, Backpack, Seed Vault) and the person taps theirs; it opens
-// directly through Mobile Wallet Adapter, with no Android chooser, and joins the list as the wallet in use. Only one installed: it
-// connects at once, no list. A wallet not in the list is reached by "Other wallet" (Android's own chooser). Returns the wallet, or null
-// when the person backed out or the wallet didn't answer (the reason is shown as a toast).
-const OTHER = { app: "Other wallet", logo: "VANNA", pkg: "" };
+// Connect wallet (intro) and Add wallet (Account): the Connect a wallet sheet (ui/connect-sheet.tsx) runs the whole connection, from
+// the wallet apps found on the phone to the Connected animation, and asks which wallet to replace when 2 are kept. Returns the new
+// wallet (now the one in use), or null when the person backed out or it didn't connect (the sheet showed why).
+// A double tap must not open a second sheet. A sheet lost without closing must not leave the button dead until the app is restarted:
+// after CONNECT_MS (the sheet's own wallet wait) plus a margin the next tap opens a new one.
+const CONNECT_MS = 90_000;
 let busy = false;
-export async function connectAndAddWallet(): Promise<WalletEntry | null> {
-  if (busy) return null;
+let busyAt = 0;
+let run = 0;
+export async function connectAndAddWallet(opts: { replacingId?: string } = {}): Promise<WalletEntry | null> {
+  if (busy && Date.now() - busyAt < CONNECT_MS + 5_000) return null;
+  const mine = ++run;
   busy = true;
+  busyAt = Date.now();
   haptic.tap();
   try {
-    const installed = await installedKnownWallets();
-    let target: InstalledWallet | undefined;
-    if (installed.length === 1) target = installed[0];
-    else if (installed.length > 1) {
-      const pick = await pickWallet([...installed, OTHER]);
-      if (!pick) return null;
-      target = pick.pkg ? pick : undefined;
-    }
-    const r = await connectSolanaWallet(target);
-    const w = addExternalWallet("solana", r.app, r.logo, r.address, r.session, r.baseUri, r.icon);
-    haptic.success();
-    return w;
-  } catch (e) {
-    haptic.error();
-    toast((e as Error).message || "Couldn't connect your wallet", "err");
-    return null;
+    return await openConnectSheet(opts);
   } finally {
-    busy = false;
+    if (run === mine) busy = false;
   }
 }

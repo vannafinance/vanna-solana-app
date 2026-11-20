@@ -70,7 +70,7 @@ export const FUNDING: Record<string, [string, number, number][]> = {
   p2: [["Oct 7", 16, 0.25], ["Oct 6", 15, 0.2]],
 };
 export const fundingOf = (p: PerpPos) =>
-  FUNDING[p.id] ? FUNDING[p.id].reduce((t, d) => t + d[2], 0) : -(p.side === "long" ? 1 : -1) * p.coll * p.lev * ((PERP_MKTS.find((m) => m.k === p.k)?.fund ?? 0) / 100);
+  p.fundingUsd != null ? p.fundingUsd : FUNDING[p.id] ? FUNDING[p.id].reduce((t, d) => t + d[2], 0) : -(p.side === "long" ? 1 : -1) * p.coll * p.lev * ((PERP_MKTS.find((m) => m.k === p.k)?.fund ?? 0) / 100);
 // Phoenix is cross-margined: one pool of USDC backs every position. Liquidation of a position (est.): the price where its share
 // of the pool plus its P&L falls to the maintenance margin. Long: (entry*qty - coll) / (qty*(1 - m)); short: (entry*qty + coll) /
 // (qty*(1 + m)). No such price (a long backed by more USDC than its size) = null, shown as "None".
@@ -79,13 +79,33 @@ export const pooledLiq = (side: Side, qty: number, entry: number, coll: number):
   const p = side === "long" ? (entry * qty - coll) / (qty * (1 - MAINT)) : (entry * qty + coll) / (qty * (1 + MAINT));
   return p > 0 ? p : null;
 };
-// The NEARER of two liquidation prices: Vanna's own margin check (the account's health at 1.10, which a big account can push very far
-// away) and Phoenix's on the position's share of the shared collateral. Whichever is hit first is the one that matters.
-export const liqFor = (chain: Chain, p: PerpPos) => {
-  const vanna = liqPriceOf(chain, p.k, p.side), phoenix = pooledLiq(p.side, perpQty(p), p.entry, p.coll);
-  if (vanna == null || phoenix == null) return vanna ?? phoenix;
-  return p.side === "long" ? Math.max(vanna, phoenix) : Math.min(vanna, phoenix);
+// Liquidation price as the website shows it (lib/solana/perps.ts): only the price where the whole margin account reaches health 1.10 when
+// this market alone moves; None when no move of this market gets there. Phoenix's own zero-equity price is a separate figure (zeroEquityFor).
+export const liqFor = (chain: Chain, p: PerpPos) => liqPriceOf(chain, p.k, p.side);
+export const zeroEquityFor = (p: PerpPos) => pooledLiq(p.side, perpQty(p), p.entry, p.coll);
+// Leverage as each website screen shows it: the trading screen's position row is the current size over its collateral (1.46x), the
+// Portfolio table is the current size over its equity (2.95x). Both over all open positions and the shared Phoenix pool.
+export function perpLevNow(chain: Chain, p: PerpPos, over: "collateral" | "equity"): number {
+  const all = DATA[chain].perps;
+  const exposure = all.reduce((t, x) => t + perpQty(x) * perpMark(x.k), 0);
+  const coll = all.reduce((t, x) => t + x.coll, 0);
+  const base = over === "collateral" ? coll : coll + all.reduce((t, x) => t + perpPnl(x), 0);
+  return exposure > 0 && base > 0 ? exposure / base : p.lev;
+}
+// Time to the next hourly funding as mm:ss, as the website's market bar; ticks once a second where it is used.
+export const fundingCountdown = () => {
+  const d = new Date();
+  const v = 3599 - (d.getMinutes() * 60 + d.getSeconds());
+  return String(Math.floor(v / 60)).padStart(2, "0") + ":" + String(v % 60).padStart(2, "0");
 };
+export function useFundingCountdown() {
+  const [cd, setCd] = useState(fundingCountdown);
+  useEffect(() => {
+    const id = setInterval(() => setCd(fundingCountdown()), 1000);
+    return () => clearInterval(id);
+  }, []);
+  return cd;
+}
 // Leverage chip: one decimal, two below 2x (0.98x must not read as 1x).
 // A Perps trade row: shown now and kept on the phone for this wallet, so the open and the close are both still listed after a restart.
 const logPerp = (chain: Chain, row: Omit<PerpHist, "ms" | "hash">, hash?: string) => addPerpHist(inUseWallet(chain)?.full, { ...row, hash });
@@ -171,7 +191,10 @@ export function PositionCard({ p }: { p: PerpPos }) {
           <TokenLogo sym={p.k} size={40} />
           <View style={{ flex: 1, gap: 4 }}>
             <Text style={[styles.t, { color: colors.text, fontSize: 16 }]}>{perpPair(p.k)}</Text>
-            <Tag label={`${p.side === "long" ? "Long" : "Short"} ${levTag(p.lev)}`} tone={p.side} />
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+              <Tag label={`${p.side === "long" ? "Long" : "Short"} ${levTag(perpLevNow(chain, p, "collateral"))}`} tone={p.side} />
+              <TokenLogo sym="PHOENIX" size={16} />
+            </View>
             {p.pool != null && (
               <Text style={[styles.cap, { color: colors.muted }]}>{`On ${nf(p.pool, 2)} USDC shared Phoenix collateral`}</Text>
             )}

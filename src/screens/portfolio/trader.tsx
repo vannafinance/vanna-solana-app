@@ -3,7 +3,7 @@ import { useState } from "react";
 import { LinearGradient } from "expo-linear-gradient";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
-import { VannaMark } from "@/components/brand";
+import { TokenLogo, VannaMark } from "@/components/brand";
 import { Chart } from "@/components/chart";
 import { InfoTip } from "@/components/form";
 import { HistoryList } from "@/components/history";
@@ -14,7 +14,7 @@ import { nf, pct, sign, spct, sUsd, tokFmt, usd } from "@/format";
 import { perpMark } from "@/chain/perp-mark";
 import { ACTIVITY, DATA, PERP_HIST, type PerpPos } from "@/sample/data";
 import { acct, farmPositions, hasMargin, liqPriceOf, lossBuffer, marginPnl, type Position, perpPnl, perpQty, portfolioTotals, priceOf, priceRoom, spotPositions } from "@/sample/model";
-import { CloseAllBar, closePosition, levTag, liqFor, priceFmt } from "@/screens/trade/perps";
+import { CloseAllBar, closePosition, levTag, liqFor, perpLevNow, priceFmt } from "@/screens/trade/perps";
 import { useChain } from "@/state/chain";
 import { useAccountRead } from "@/chain/account-live";
 import { usePersonal } from "@/state/personal";
@@ -387,10 +387,10 @@ function PerpCard({ p }: { p: PerpPos }) {
   const mark = perpMark(p.k), qty = perpQty(p), pnl = perpPnl(p), liq = liqFor(chain, p);
   const marked = Number.isFinite(mark) && mark > 0;
   const name = `${p.k}-PERP`, tone = sign(pnl) === "neg" ? colors.negative : colors.positive;
-  // liqFor uses the margin account's own check (health 1.10) when it has one, else Phoenix's on the shared collateral
-  const tip = liqPriceOf(chain, p.k, p.side) != null
+  // liqFor is the margin account's own check (health 1.10), as the website: None when no move of this market alone reaches it
+  const tip = liq != null
     ? `If only ${p.k} moves, the price where the whole margin account reaches health factor 1.10.`
-    : `Estimate: the ${p.k} price where this position's share of the shared Phoenix collateral, plus its P&L, falls to the 5% maintenance margin.`;
+    : `No move of ${p.k} alone brings the whole margin account to health factor 1.10.`;
   return (
     <Pressable onPress={() => router.push(`/trade/position/${p.id}` as Href)} accessibilityRole="button" accessibilityLabel={`${name} ${p.side}, open the position`}>
       <Card>
@@ -398,8 +398,9 @@ function PerpCard({ p }: { p: PerpPos }) {
           <TokenBadge sym={p.k} size={40} />
           <View style={{ flex: 1, gap: 4 }}>
             <Text style={{ fontFamily: font.semibold, fontSize: 16, color: colors.text }}>{name}</Text>
-            <View style={{ flexDirection: "row" }}>
-              <Tag label={`${p.side === "long" ? "Long" : "Short"} ${levTag(p.lev)}`} tone={p.side} />
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+              <Tag label={`${p.side === "long" ? "Long" : "Short"} ${levTag(perpLevNow(chain, p, "equity"))}`} tone={p.side} />
+              <TokenLogo sym="PHOENIX" size={16} />
             </View>
             {p.pool != null && <Text style={[styles.tip, { color: colors.muted, paddingBottom: 0 }]}>{`On ${nf(p.pool, 2)} USDC shared Phoenix collateral`}</Text>}
           </View>

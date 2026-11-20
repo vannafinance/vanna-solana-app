@@ -6,6 +6,7 @@ import { HeroStage } from "@/components/intro/hero-stage";
 import { PillButton } from "@/components/intro/pill-button";
 import { RiseIn } from "@/components/intro/rise-in";
 import { useRewards } from "@/sample/rewards";
+import { authenticate, lockState } from "@/state/lock";
 import { markWelcomeSeen } from "@/state/session";
 import { useWallets } from "@/state/wallets";
 
@@ -21,6 +22,17 @@ export default function Welcome() {
   const enter = () => {
     markWelcomeSeen();
     router.replace("/portfolio" as Href);
+  };
+  // Continue with the app lock on asks for the phone's fingerprint, face or PIN first (this is the lock for a fresh start).
+  const proceed = async () => {
+    if (waiting) return;
+    if (lockState().enabled) {
+      setWaiting(true);
+      const ok = await authenticate("Unlock Vanna");
+      setWaiting(false);
+      if (!ok) return;
+    }
+    enter();
   };
   const connect = async () => {
     if (waiting) return;
@@ -40,7 +52,7 @@ export default function Welcome() {
           label={signedIn ? "Continue" : waiting ? "Waiting for your wallet…" : "Connect wallet"}
           height={56}
           shineAfter={START_AT + 750}
-          onPress={signedIn ? enter : connect}
+          onPress={signedIn ? proceed : connect}
         />
       </RiseIn>
     </HeroStage>

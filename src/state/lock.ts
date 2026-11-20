@@ -5,22 +5,23 @@ import { Platform } from "react-native";
 
 // App lock with the phone's own biometrics (expo-local-authentication, works in Expo Go too).
 // Android: fingerprint and/or face unlock (whatever the phone counts as secure); iPhone: Face ID or Touch ID.
-// If none is set up, the phone's PIN / passcode is the fallback. Locks on open and after 5 minutes in the background.
-export const LOCK_AFTER_MS = 5 * 60 * 1000;
+// If none is set up, the phone's PIN / passcode is the fallback. Locks after 2 minutes in the background (the same two minutes after which
+// the intro plays again, see state/session.ts). A fresh start is not locked here: the intro's Continue button asks for the biometrics.
+export const LOCK_AFTER_MS = 2 * 60 * 1000;
 type State = { enabled: boolean; locked: boolean; confirmTx: boolean };
 let state: State = { enabled: false, locked: false, confirmTx: false };
 const subs = new Set<() => void>();
 const set = (p: Partial<State>) => ((state = { ...state, ...p }), subs.forEach((f) => f()));
 export const lockState = () => state;
 
-// Saved on the phone: before, a restart forgot both switches. With the lock on, the app opens locked.
+// Saved on the phone: before, a restart forgot both switches.
 const KEY = "vanna-lock";
 const save = () => AsyncStorage.setItem(KEY, JSON.stringify({ enabled: state.enabled, confirmTx: state.confirmTx })).catch(() => {});
 AsyncStorage.getItem(KEY)
   .then((raw) => {
     if (!raw) return;
     const s = JSON.parse(raw) as Partial<State>;
-    set({ enabled: !!s.enabled, confirmTx: !!s.confirmTx, locked: !!s.enabled });
+    set({ enabled: !!s.enabled, confirmTx: !!s.confirmTx });
   })
   .catch(() => {});
 
@@ -49,6 +50,12 @@ export function useBiometricLabel() {
     biometricLabel().then(setLabel);
   }, []);
   return label;
+}
+
+/** False when the phone has no screen lock, fingerprint or face set up at all: then neither switch can be turned on. */
+export async function hasDeviceSecurity(): Promise<boolean> {
+  const level = await LocalAuthentication.getEnrolledLevelAsync().catch(() => LocalAuthentication.SecurityLevel.NONE);
+  return level !== LocalAuthentication.SecurityLevel.NONE;
 }
 
 export async function authenticate(reason: string): Promise<boolean> {

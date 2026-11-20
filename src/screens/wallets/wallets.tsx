@@ -6,23 +6,17 @@ import { Icon } from "@/components/ui/icon";
 import { Card } from "@/components/ui/kit";
 import { WalletLogo } from "@/components/wallet-logo";
 import { CHAIN_LABEL, type Chain } from "@/state/chain";
-import { canAddWallet, MAX_WALLETS, removeWallet, setWalletInUse, useWallets, walletState } from "@/state/wallets";
+import { MAX_WALLETS, removeWallet, setWalletInUse, useWallets, walletState } from "@/state/wallets";
 import { useTheme } from "@/theme/use-theme";
 import { font } from "@/theme/tokens";
 import { haptic } from "@/ui/haptics";
 import { closeSheet, openSheet, toast } from "@/ui/overlay";
 
-// Add one more wallet (Account > Wallets > Add): Android's own wallet chooser opens straight away and lists what is installed.
-export const openAddWallet = (c: Chain = "solana") => {
-  if (!canAddWallet(c)) {
-    toast(`You can keep ${MAX_WALLETS} wallets. Remove one first`, "err");
-    return;
-  }
+// Add one more wallet (Account > Wallets > Add): the Connect a wallet sheet lists the wallet apps not connected yet; with 2 kept it
+// first asks which one the new wallet replaces. The sheet shows its own toast when the wallet connects.
+export const openAddWallet = (_c: Chain = "solana") => {
   closeSheet();
-  setTimeout(async () => {
-    const w = await connectAndAddWallet();
-    if (w) toast(`${w.app} added`);
-  }, 200);
+  setTimeout(() => void connectAndAddWallet(), 200);
 };
 
 // Account > Wallets: every kept wallet; tap one to make it the one in use (no approval). Long-press removes it. Add opens the chooser.
