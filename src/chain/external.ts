@@ -102,14 +102,14 @@ function friendly(e: unknown): Error {
 }
 
 // Solflare simulates every transaction against the network the wallet is connected to (Mainnet), not the app's own RPC, and blocks the
-// request with "Insufficient SOL" when the wallet has no real Mainnet SOL (Solflare's developers confirmed this on 2026-11-20 and offer
-// no bypass). Vanna's test network is a fork of mainnet, so Solflare can't sign there: it is left out of the wallet list (see
-// UNSUPPORTED_WALLET_PACKAGES) and this message covers a Solflare connected before that. The Devnet fallback below stays for other wallets.
+// request with "Insufficient SOL" when the wallet has no real Mainnet SOL (its developers confirmed this on 2026-11-20 and offer no bypass).
+// Vanna's test network is a fork of mainnet, so a Solflare wallet needs a little real Mainnet SOL for that check; it is not spent, because
+// Vanna sends the signed transaction to its own test RPC. The Devnet fallback below stays for wallets set to another network.
 const CHAINS = [SOLANA_CHAIN, "solana:devnet", "solana:testnet"] as const;
 const wrongChain = (e: unknown) =>
   (e as { code?: unknown } | null)?.code === -7 || /chain.*not supported|unsupported (chain|cluster|network)|ERROR_CHAIN_NOT_SUPPORTED|wrong (network|cluster)/i.test(text(e));
 const SOLFLARE_FEES =
-  "Solflare can't sign transactions on Vanna's test network: it checks them against Mainnet, where this wallet has no SOL. Use Backpack or Phantom for now.";
+  "Solflare checks transactions against Mainnet and needs a little real SOL in this wallet for that check (it isn't spent: Vanna sends to its own test network). Add a small amount of SOL to this wallet, or use Backpack or Phantom.";
 
 const mwa = () => import("@solana-mobile/mobile-wallet-adapter-protocol");
 
