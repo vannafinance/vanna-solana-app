@@ -21,6 +21,7 @@ import { acct, hasMargin, levText, liqPriceOf, mbal, mTake, perpLev, perpPnl, pe
 import { nowT } from "@/screens/earn/model";
 import { openShare } from "@/screens/share/share";
 import { type Chain, useChain } from "@/state/chain";
+import { markOwnClose } from "@/state/notes";
 import { personalReady } from "@/state/personal";
 import { inUseWallet } from "@/state/wallets";
 import { useDataVersion } from "@/state/store";
@@ -249,6 +250,7 @@ export function closePosition(chain: Chain, p: PerpPos) {
       // a real account is read again from the chain after the run; only the sample account is rewritten here
       if (!real) {
         const d = DATA[chain];
+        markOwnClose(p.id);
         d.perps = d.perps.filter((q) => q.id !== p.id);
         if (last) d.margin.avail.USDC = (d.margin.avail.USDC ?? 0) + Math.max(0, back);
         else d.phoenixIdle += Math.max(0, back);
@@ -325,6 +327,7 @@ export function closeAll(chain: Chain) {
       // a real account is read again from the chain after the run; only the sample account is rewritten here
       if (!real) {
         const x = DATA[chain];
+        ps.forEach((p) => markOwnClose(p.id));
         x.perps = x.perps.filter((q) => !ps.some((p) => p.id === q.id));
         x.margin.avail.USDC = (x.margin.avail.USDC ?? 0) + back;
         x.phoenixIdle = 0;

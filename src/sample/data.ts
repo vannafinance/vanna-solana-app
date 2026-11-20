@@ -151,6 +151,8 @@ export type Note = {
   title: string;
   msg: string;
   time: string;
+  /** When it happened (ms): the list shows the time since from this. Notes made by the app always have it. */
+  at?: number;
   unread: boolean;
 };
 

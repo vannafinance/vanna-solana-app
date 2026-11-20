@@ -4,6 +4,7 @@ import { AppState } from "react-native";
 
 import { ACCOUNT, ACTIVITY, DATA, NOTES, PERP_HIST, type ChainData } from "@/sample/data";
 import { rewardsNow, setRewards } from "@/sample/rewards";
+import { watchAccount } from "@/state/note-watch";
 import type { Chain } from "@/state/chain";
 import { loadActivity, loadPerpHist, mergeChainPerpHist } from "@/state/activity-store";
 import { perpHistFromChain } from "./solana/perp-history";
@@ -242,6 +243,8 @@ async function readOnce(chain: Chain) {
     }
     dropped[chain] = 0;
     replace(chain, d, live);
+    // notes for what changed since the last read (a health limit crossed, a position that closed)
+    void watchAccount(w.full, live?.hf, d.perps.map((p) => ({ id: p.id, k: p.k, side: p.side })));
     if (hist) snapshotPnl(chain, w.full, hist, ledger, added, firstRead);
     // this wallet's transaction history: what the chain shows (every refresh: only new signatures are read), plus rows the
     // phone saved that the chain does not list (yet). Without a chain read, the saved rows alone (once per wallet).

@@ -21,7 +21,7 @@ import { AfterTransition } from "@/ui/ready";
 /* Notifications (design screens/notifications.js): Mark all read, filter pills, Today / Earlier cards; one line per note that opens in
    place with its message and one action. Empty = the sleeping chameleon. */
 type F = "all" | Note["cat"];
-const FILTERS: [F, string][] = [["all", "All"], ["health", "Health"], ["trades", "Trades"], ["earn", "Earn"], ["rewards", "Rewards"]];
+const FILTERS: [F, string][] = [["all", "All"], ["health", "Health"], ["trades", "Trades"], ["earn", "Earn"]];
 const isToday = (t: string) => /^(now|\d+\s?[smh])$/i.test(t.trim());
 
 const BADGE: Record<Note["badge"], { icon: IconName; bg: string }> = {

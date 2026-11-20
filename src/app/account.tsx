@@ -4,7 +4,7 @@ import { StatusBar } from "expo-status-bar";
 import * as WebBrowser from "expo-web-browser";
 import { LinearGradient } from "expo-linear-gradient";
 import type { ReactNode } from "react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import Animated, { Easing, useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
 import { Platform, Pressable, ScrollView, StyleSheet, Switch, Text, View } from "react-native";
 
@@ -19,6 +19,7 @@ import { DATA } from "@/sample/data";
 import { initialOf } from "@/components/avatar";
 import { useRewards } from "@/sample/rewards";
 import { openEditName } from "@/screens/rewards/edit";
+import { setNotePref, useNotePrefs } from "@/state/notes";
 import { hasDeviceSecurity, setConfirmTx, setLockEnabled, useBiometricLabel, useLock } from "@/state/lock";
 import { haptic } from "@/ui/haptics";
 import { hasMargin, walletUsd } from "@/sample/model";
@@ -47,7 +48,7 @@ export default function Account() {
   const mine = usePersonal(chain);
   const me = useRewards();
   const appearance = useAppearance();
-  const [notif, setNotif] = useState({ health: true, trades: true, earn: true });
+  const notif = useNotePrefs();
   const lock = useLock();
   const bioLabel = useBiometricLabel();
   const ios = Platform.OS === "ios";
@@ -142,9 +143,9 @@ export default function Account() {
 
         <Card style={styles.list}>
           <Head>Notifications</Head>
-          <ToggleRow icon="monitor_heart" label="Health" value={notif.health} onChange={(v) => setNotif({ ...notif, health: v })} />
-          <ToggleRow icon="candlestick_chart" label="Trades" value={notif.trades} onChange={(v) => setNotif({ ...notif, trades: v })} />
-          <ToggleRow icon="savings" label="Earn" value={notif.earn} onChange={(v) => setNotif({ ...notif, earn: v })} />
+          <ToggleRow icon="monitor_heart" label="Health" value={notif.health} onChange={(v) => setNotePref("health", v)} />
+          <ToggleRow icon="candlestick_chart" label="Trades" value={notif.trades} onChange={(v) => setNotePref("trades", v)} />
+          <ToggleRow icon="savings" label="Earn" value={notif.earn} onChange={(v) => setNotePref("earn", v)} />
           <NavRow icon="notifications" label="All" onPress={() => router.push("/notifications")} />
         </Card>
 
