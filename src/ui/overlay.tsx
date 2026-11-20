@@ -186,7 +186,8 @@ function SheetView({ spec }: { spec: SheetSpec }) {
   const opened = useRef(false);
 
   const finish = () => {
-    set({ sheet: null });
+    // Only this sheet is cleared: another sheet opened while this one was closing (Add wallet after the Wallets sheet) stays.
+    if (state.sheet === spec) set({ sheet: null });
     spec.onClose?.();
   };
   const close = () => {

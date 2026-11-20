@@ -10,11 +10,12 @@ import { Platform, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 
 
 import { CHAIN_LOGO, TokenLogo, Wordmark } from "@/components/brand";
 import { ScreenHeader } from "@/components/screen-header";
+import { WalletLogo } from "@/components/wallet-logo";
 import { Icon } from "@/components/ui/icon";
 import type { IconName } from "@/components/ui/material-symbols";
 import { Card, IconAction } from "@/components/ui/kit";
 import { usd } from "@/format";
-import { ACCOUNT, DATA } from "@/sample/data";
+import { DATA } from "@/sample/data";
 import { initialOf } from "@/components/avatar";
 import { useRewards } from "@/sample/rewards";
 import { openEditName } from "@/screens/rewards/edit";
@@ -92,7 +93,7 @@ export default function Account() {
 
         <Card style={styles.list}>
           <Head>Wallet</Head>
-          <InfoRow icon="login" label="Connected with" value={inUseWallet(chain)?.app ?? ""} after={ACCOUNT.verified ? <Icon name="verified" size={16} color={colors.positive} filled /> : undefined} />
+          <InfoRow icon="login" label="Connected with" value={inUseWallet(chain)?.app ?? ""} after={inUseWallet(chain) ? <WalletLogo logo={inUseWallet(chain)!.logo} icon={inUseWallet(chain)!.icon} size={20} /> : undefined} />
           {(["solana"] as Chain[]).map((c) => {
             const w = inUseWallet(c);
             return (
@@ -106,7 +107,8 @@ export default function Account() {
                       <Text style={{ fontFamily: font.semibold, fontSize: 10, color: colors.onTealTint }}>In use</Text>
                     </View>
                   )}
-                  <Text style={[styles.rv, { flex: 0, color: w ? colors.text : colors.link, fontFamily: font.regular }]}>{w ? `${w.app} ${w.addr}` : "Connect a wallet"}</Text>
+                  {w && <WalletLogo logo={w.logo} icon={w.icon} size={20} />}
+                  <Text style={[styles.rv, { flex: 0, color: w ? colors.text : colors.link, fontFamily: font.regular }]}>{w ? w.addr : "Connect a wallet"}</Text>
                 </View>
                 {w && (
                   <Pressable onPress={() => void Clipboard.setStringAsync(w.full).then(() => toast("Address copied"))} accessibilityRole="button" accessibilityLabel={`Copy ${CHAIN_LABEL[c]} address`} hitSlop={8}>

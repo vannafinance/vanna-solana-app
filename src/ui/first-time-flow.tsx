@@ -78,18 +78,19 @@ const EASE = Easing.bezier(0.2, 0, 0, 1);
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 const explorer = (h: string) => `https://explorer.solana.com/tx/${h}?cluster=custom&customUrl=${encodeURIComponent("https://rpc-devnet.solana.vanna.finance")}`;
 
-// what the account holds once the first k steps have confirmed
-function holdingsAt(f: MarginFlow, k: number): Holdings {
+// what the account holds once the assets marked `landed` (one flag per MarginFlow.assets) are in it
+function holdingsOf(f: MarginFlow, landed: boolean[]): Holdings {
   const h: Holdings = { col: { ...f.base.col }, debt: { ...f.base.debt } };
-  f.steps.slice(0, k).forEach((s) =>
-    s.assets.forEach((j) => {
-      const a = f.assets[j];
-      const side = a.role === "dep" ? h.col : h.debt;
-      side[a.sym] = (side[a.sym] ?? 0) + a.amt;
-    }),
-  );
+  f.assets.forEach((a, j) => {
+    if (!landed[j]) return;
+    const side = a.role === "dep" ? h.col : h.debt;
+    side[a.sym] = (side[a.sym] ?? 0) + a.amt;
+  });
   return h;
 }
+// One transaction can confirm the account, every deposit and every borrow at once; the stage then plays them in order, one step
+// this long each, after the confirmation (never before it, never on a failure, not at all with Reduce motion).
+const LAND_STEP_MS = 650;
 // one asset reads as its amount, several fold to a count ("3 assets")
 const lineOf = (side: Record<string, number>, suffix: string, empty: string) => {
   const k = Object.keys(side);
@@ -135,6 +136,8 @@ export function MarginFlowSheet({ spec, close }: { spec: TxSpec; close: () => vo
   const [hashes, setHashes] = useState<string[]>(() => steps.map(() => ""));
   const [addr, setAddr] = useState<string | null>(null);
   const [docked, setDocked] = useState(!isNew);
+  // While a confirmed step's assets are played in (LAND_STEP_MS): how many of them have landed so far; null = none being played.
+  const [land, setLand] = useState<number | null>(null);
   const [failIdx, setFailIdx] = useState(0);
   const [failMsg, setFailMsg] = useState("");
   const [timedOut, setTimedOut] = useState(false); // the wallet never answered: nothing was sent
@@ -166,8 +169,11 @@ export function MarginFlowSheet({ spec, close }: { spec: TxSpec; close: () => vo
       setHalt(null);
       setStopAsk(false);
       setStopping(false);
+      setLand(null);
       stopRef.current = false;
       const hs = [...hashes];
+      // the played-in steps run only while the sheet is on screen; hidden, the result is announced without waiting
+      const pace = (ms: number) => sleep(rm || !alive.current ? 0 : ms);
       for (let i = from; i < steps.length; i++) {
         if (!alive.current) {
           toast("Stopped. The steps already approved are on chain; open it again to finish.", "info");
@@ -199,12 +205,30 @@ export function MarginFlowSheet({ spec, close }: { spec: TxSpec; close: () => vo
           if (h && i < steps.length - 1) spec.onStepDone?.(i, h);
           setSub(2);
           await sleep(rm ? 0 : 450);
-          if (steps[i].key === "open") setAddr((await f.accountAddr().catch(() => null)) ?? null);
+          const opens = steps[i].key === "open";
+          if (opens) setAddr((await f.accountAddr().catch(() => null)) ?? null);
+          // Several things confirmed by this one transaction: the account card fills first, then it docks, then each asset lands in
+          // turn (deposits, then borrows, in the flow's order) before the sheet finishes.
+          const n = steps[i].assets.length;
+          const play = !rm && alive.current && (opens ? n > 0 : n > 1);
+          if (play) setLand(0);
           setSub(3);
           setDone((d) => d.map((x, j) => x || j === i));
           haptic.success();
+          if (play) {
+            if (opens) {
+              await pace(LAND_STEP_MS);
+              setDocked(true);
+            }
+            for (let q = 1; q <= n; q++) {
+              await pace(LAND_STEP_MS);
+              setLand(q);
+            }
+            await pace(LAND_STEP_MS);
+            setLand(null);
+          }
           const last = i === steps.length - 1;
-          await sleep(rm ? 0 : last ? 600 : 900);
+          await sleep(rm || play ? 0 : last ? 600 : 900);
           if (!last && steps[i].key === "open") {
             setDocked(true);
             await sleep(rm ? 0 : 650);
@@ -348,7 +372,7 @@ export function MarginFlowSheet({ spec, close }: { spec: TxSpec; close: () => vo
   }
 
   const last = cur === steps.length - 1;
-  const finalFace = sub === 3 && last;
+  const finalFace = sub === 3 && last && land === null;
   const waiting = !bad && sub === 0 && !!walletApp;
 
   /* ------------------------------------------------------------- several steps: stage, header, bar and one row per step (v3) */
@@ -402,7 +426,7 @@ export function MarginFlowSheet({ spec, close }: { spec: TxSpec; close: () => vo
     const finished = phase === "done" || phase === "fail";
     return (
       <View style={{ gap: 20 }}>
-        <Stage chain={spec.chain} flow={f} lite={lite} cur={phase === "done" ? steps.length - 1 : cur} sub={phase === "done" ? 3 : sub} bad={failed || bad} docked={docked} addr={addr} done={done} />
+        <Stage chain={spec.chain} flow={f} lite={lite} cur={phase === "done" ? steps.length - 1 : cur} sub={phase === "done" ? 3 : sub} bad={failed || bad} docked={docked} addr={addr} done={done} land={land} />
         <View style={styles.hd}>
           {phase === "done" || (!finished && finalFace) ? (
             <MascotDone size={56} />
@@ -479,7 +503,7 @@ export function MarginFlowSheet({ spec, close }: { spec: TxSpec; close: () => vo
   const caption = waiting ? waitingLine(walletApp!) : steps[cur].doing;
   return (
     <View style={{ gap: 20 }}>
-      <Stage chain={spec.chain} flow={f} lite={lite} cur={cur} sub={sub} bad={bad} docked={docked} addr={addr} done={done} />
+      <Stage chain={spec.chain} flow={f} lite={lite} cur={cur} sub={sub} bad={bad} docked={docked} addr={addr} done={done} land={land} />
       <View style={styles.hd}>
         {finalFace ? (
           <MascotDone size={56} />
@@ -561,9 +585,9 @@ function Particle(p: { clock: SharedValue<number>; i: number; gap: number; delay
 }
 
 function Stage({
-  chain, flow, lite, cur, sub, bad, docked, addr, done,
+  chain, flow, lite, cur, sub, bad, docked, addr, done, land,
 }: {
-  chain: Chain; flow: MarginFlow; lite: boolean; cur: number; sub: number; bad: boolean; docked: boolean; addr: string | null; done: boolean[];
+  chain: Chain; flow: MarginFlow; lite: boolean; cur: number; sub: number; bad: boolean; docked: boolean; addr: string | null; done: boolean[]; land: number | null;
 }) {
   const { colors, isDark } = useTheme();
   const rm = useReducedMotion();
@@ -575,6 +599,11 @@ function Stage({
   const openDone = isNew && done[0];
   const running = (i: number) => cur === i && !done[i];
   const stepOf = assets.map((_, j) => steps.findIndex((s) => s.assets.includes(j)));
+  // an asset is in the account once its step confirmed and, while that step is played in (`land`), its turn has come
+  const landed = assets.map((_, j) => {
+    const s = stepOf[j];
+    return s >= 0 && done[s] && (land === null || s !== cur || steps[s].assets.indexOf(j) < land);
+  });
 
   // account card: forming (open step sent) -> settled (open confirmed) -> docked
   const form = useSharedValue(0);
@@ -595,7 +624,8 @@ function Stage({
 
   // flows: every asset of the running step streams up from its node
   const clock = useSharedValue(0);
-  const flowing = !bad && (sub === 1 || sub === 2) && steps[cur].assets.length > 0;
+  // (only into the docked strip: while a new account's card is still forming there is nothing for them to land in yet)
+  const flowing = !bad && docked && (sub === 1 || sub === 2) && steps[cur].assets.length > 0;
   const many = steps[cur].assets.length > 1;
   const loop = 7 * 170 + 860 + 300 + assets.length * 110;
   useEffect(() => {
@@ -606,29 +636,32 @@ function Stage({
     } else cancelAnimation(clock);
   }, [flowing, cur, rm]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // strip lines: a single landing asset counts up when its step confirms, then the line settles (several fold to "3 assets")
-  const k = done.filter(Boolean).length;
-  const seen = useRef(k);
-  const [held, setHeld] = useState(() => holdingsAt(flow, k));
+  // strip lines: a single landing asset counts up when it lands, then the line settles (several fold to "3 assets")
+  const landKey = landed.map(Number).join("");
+  const seen = useRef(landed);
+  const [held, setHeld] = useState(() => holdingsOf(flow, landed));
   // a single landing asset counts up on the UI thread (CountText); `tick` only says which line is counting
   const [tick, setTick] = useState<{ col?: [string, number, number]; debt?: [string, number, number] }>({});
   const flash = useSharedValue(0);
   useEffect(() => {
-    if (k <= seen.current) return;
-    const before = holdingsAt(flow, seen.current), after = holdingsAt(flow, k);
-    const moved = steps.slice(seen.current, k).flatMap((s) => s.assets.map((j) => assets[j]));
-    seen.current = k;
+    const was = seen.current;
+    const moved = assets.filter((_, j) => landed[j] && !was[j]);
+    if (!moved.length) return;
+    const before = holdingsOf(flow, was), after = holdingsOf(flow, landed);
+    seen.current = landed;
     setHeld(after);
     flash.value = rm ? 0 : withSequence(withTiming(1, { duration: 1 }), withTiming(1, { duration: 650 }), withTiming(0, { duration: 1 }));
     if (!rm) {
       (["col", "debt"] as const).forEach((side) => {
         const a = moved.filter((x) => (x.role === "dep") === (side === "col"));
-        if (a.length !== 1 || Object.keys(after[side]).length !== 1) return;
+        if (!a.length) return;
+        // a second asset on the same side folds the line to a count at once, even if the first is still counting up
+        if (a.length !== 1 || Object.keys(after[side]).length !== 1) return setTick((tk) => ({ ...tk, [side]: undefined }));
         const sym = a[0].sym, from = before[side][sym] ?? 0, to = after[side][sym];
         setTick((tk) => ({ ...tk, [side]: [sym, from, to] }));
       });
     }
-  }, [k]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [landKey]); // eslint-disable-line react-hooks/exhaustive-deps
   const endTick = useCallback((side: "col" | "debt") => setTick((tk) => ({ ...tk, [side]: undefined })), []);
   const flashTop = useAnimatedStyle(() => ({ color: flash.value > 0.5 ? "#BFF6FA" : "#FFFFFF" }));
   const flashSub = useAnimatedStyle(() => ({ color: flash.value > 0.5 ? "#BFF6FA" : "rgba(255,255,255,0.82)" }));
@@ -661,9 +694,10 @@ function Stage({
   const nodeState = (j: number): "idle" | "on" | "done" | "bad" => {
     const s = stepOf[j];
     if (s < 0) return "idle";
-    if (done[s]) return "done";
+    if (landed[j]) return "done";
     if (s === cur && bad) return "bad";
-    return docked && running(s) ? "on" : "idle";
+    // confirmed but not landed yet (its turn in the played-in sequence has not come): it stays lit until it lands
+    return docked && (running(s) || done[s]) ? "on" : "idle";
   };
   const addrText = addr ? short(addr) : "…";
   const debtText = lineOf(held.debt, " borrowed", "");
