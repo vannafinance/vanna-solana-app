@@ -9,17 +9,21 @@ import type { Chain } from "./chain";
 import { inUseWallet, onWalletsChanged } from "./wallets";
 
 // Notifications: the current chain's notes plus the account-wide ones. The design's sample notes only in a non-real build.
-// In a real build each wallet's notes are kept on the phone (the last 100) and come back after a restart. They are raised by the app
+// In a real build each wallet's notes are kept on the phone (the last 100, none older than 15 days) and come back after a restart. They are raised by the app
 // itself while it runs (a transaction that finished behind a closed sheet, a health factor that crossed a limit, a position that closed:
 // see note-watch.ts); nothing reaches the phone while the app is closed.
 let notes: Note[] = REAL_BUILD ? [] : NOTES.map((n) => ({ ...n }));
 const subs = new Set<() => void>();
 const emit = () => subs.forEach((s) => s());
 
+// A note older than 15 days is dropped (when the list loads, on every save and when it is shown).
+const KEEP_MS = 15 * 24 * 60 * 60 * 1000;
+const fresh = (n: Note) => !n.at || Date.now() - n.at < KEEP_MS;
+
 let owner: string | null = null;
 const nkey = (o: string) => `vanna.notes.v1.${o}`;
 const persist = () => {
-  if (REAL_BUILD && owner) AsyncStorage.setItem(nkey(owner), JSON.stringify(notes.slice(0, 100))).catch(() => {});
+  if (REAL_BUILD && owner) AsyncStorage.setItem(nkey(owner), JSON.stringify(notes.filter(fresh).slice(0, 100))).catch(() => {});
 };
 async function loadNotes(o: string | null) {
   owner = o;
@@ -30,7 +34,7 @@ async function loadNotes(o: string | null) {
     saved = raw ? (JSON.parse(raw) as Note[]) : [];
   } catch {}
   if (owner !== o) return;
-  notes = saved;
+  notes = saved.filter(fresh);
   emit();
 }
 // the wallet in use decides whose notes show
@@ -78,7 +82,7 @@ export function useNotes(chain: Chain) {
     (cb) => (subs.add(cb), () => subs.delete(cb)),
     () => notes,
   );
-  return all.filter((n) => n.chain === chain || n.chain === "account").map((n) => (n.at ? { ...n, time: ago(n.at) } : n));
+  return all.filter((n) => (n.chain === chain || n.chain === "account") && fresh(n)).map((n) => (n.at ? { ...n, time: ago(n.at) } : n));
 }
 
 export function markRead(id?: string) {
