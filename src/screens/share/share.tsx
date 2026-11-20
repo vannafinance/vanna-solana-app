@@ -15,7 +15,7 @@ import { levFmt, nf, pct, tokFmt, usd } from "@/format";
 import { MascotFace } from "@/mascot/mascot";
 import { VannaMark, Wordmark } from "@/components/brand";
 import { ACTIVITY, DATA, PX } from "@/sample/data";
-import { acct, perpPnl, poolOf, spotPnl } from "@/sample/model";
+import { acct, levText, perpLev, perpPnl, poolOf, spotPnl } from "@/sample/model";
 import { type Chain, CHAIN_LABEL, useChain } from "@/state/chain";
 import { families, font } from "@/theme/tokens";
 import { useTheme } from "@/theme/use-theme";
@@ -47,8 +47,8 @@ function cardOf(chain: Chain, s: ShareSpec): Card | null {
     case "perps": {
       const p = d.perps.find((x) => x.id === s.id);
       if (!p) return null;
-      const pl = perpPnl(p), r = (pl / p.coll) * 100, lv = `${p.lev}x`, pos = `${an(lv)} ${lv} ${p.k} ${p.side}`;
-      return { title: `${p.k}-PERP ${p.side === "long" ? "Long" : "Short"} ${p.lev}x`, big: sPct(r), profit: pl >= 0, hf, row: [["Entry", price(p.entry)], ["Mark", price(perpMark(p.k))], ["PnL", sUsd2(pl)]],
+      const pl = perpPnl(p), r = (pl / p.coll) * 100, lv = levText(perpLev(chain, p)), pos = `${an(lv)} ${lv} ${p.k} ${p.side}`;
+      return { title: `${p.k}-PERP ${p.side === "long" ? "Long" : "Short"} ${lv}`, big: sPct(r), profit: pl >= 0, hf, row: [["Entry", price(p.entry)], ["Mark", price(perpMark(p.k))], ["PnL", sUsd2(pl)]],
         post: pl >= 0 ? `Up ${pct(Math.abs(r))} on ${pos}, opened ${credit}. ${tryIt}` : `Down ${pct(Math.abs(r))} on ${pos} on Vanna testnet. Same account, one health factor. ${REF}` };
     }
     case "spot": {

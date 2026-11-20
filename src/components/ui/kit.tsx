@@ -186,7 +186,7 @@ export function EmptyCard({ title, action, onAction, module, always }: { title: 
     return (
       <Card style={{ alignItems: "center", gap: 12, paddingVertical: 24 }}>
         <MascotBody width={96} module={module} asleep />
-        <Text style={[styles.headTitle, { color: colors.muted, flex: 0, fontSize: 16 }]}>{read === "failed" ? "Can't read your account right now. Retrying…" : "Loading your account…"}</Text>
+        <Text style={[styles.headTitle, { color: colors.muted, flex: 0, fontSize: 16, textAlign: "center", paddingHorizontal: 16 }]}>{read === "failed" ? "Can't read your account right now. Retrying…" : "Loading your account…"}</Text>
       </Card>
     );
   }

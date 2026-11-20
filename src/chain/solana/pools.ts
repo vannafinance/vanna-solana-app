@@ -4,19 +4,18 @@ import type { Pool } from "@/sample/data";
 
 import { RESERVES, VANNA_PROGRAM_ID } from "./config";
 import { decode58, findPda } from "./pda";
+import { base58 } from "./prices";
+import { annualBorrowRate, type CurveWad, ratePerSecWad, WAD } from "./rate-curve";
 import { forkNow, READ_AT, rpc } from "./rpc";
 
 // Live Earn pools on Solana, read straight from the Vanna lending program's Reserve accounts on the mainnet fork, with the
 // exact maths of the web app (apps/solana/lib/solana/math.ts, ports of the on-chain interest.rs / shares.rs):
 // interest is projected to the fork clock, supplied = liquidity + borrows - protocol fees, borrow APR from the rate
-// curve, supply APR = borrow x utilisation x (1 - reserve factor).
-const WAD = 1_000_000_000_000_000_000n;
-const HALF_WAD = WAD / 2n;
-const SECONDS_PER_YEAR = 31_556_952n;
-
+// curve (rate-curve.ts), supply APR = borrow x utilisation x (1 - reserve factor).
 type Reserve = {
+  liquidityVault: string;
   liquidity: bigint; borrows: bigint; fees: bigint; last: bigint; reserveFactorBps: bigint;
-  curve: { linear: bigint; jump: bigint; mult: bigint };
+  curve: CurveWad;
   supplyCap: bigint; borrowCap: bigint; status: number;
 };
 const U64_MAX = 18_446_744_073_709_551_615n;
@@ -27,10 +26,12 @@ export const shareMintOf = (mint: string) => findPda(["share_mint", decode58(min
 const u64 = (b: Buffer, o: number) => b.readBigUInt64LE(o);
 const i64 = (b: Buffer, o: number) => b.readBigInt64LE(o);
 
-// Reserve account (IDL vanna_credit_layer, after the 8-byte discriminator and four pubkeys): supply_cap 136, borrow_cap 144,
-// accounted liquidity 152, borrows 160, fees 200, last update 208, rate curve 216..240, reserve factor 240, status 242.
+// Reserve account (IDL vanna_credit_layer, after the 8-byte discriminator and four pubkeys, the third being liquidity_vault at 72):
+// supply_cap 136, borrow_cap 144, accounted liquidity 152, borrows 160, fees 200, last update 208, rate curve 216..240, reserve
+// factor 240, status 242.
 function decodeReserve(b: Buffer): Reserve {
   return {
+    liquidityVault: base58(b.subarray(72, 104)),
     supplyCap: u64(b, 136), borrowCap: u64(b, 144),
     liquidity: u64(b, 152), borrows: u64(b, 160), fees: u64(b, 200), last: i64(b, 208),
     curve: { linear: u64(b, 216), jump: u64(b, 224), mult: u64(b, 232) },
@@ -39,18 +40,6 @@ function decodeReserve(b: Buffer): Reserve {
 }
 
 const utilWad = (liq: bigint, bor: bigint) => (liq + bor === 0n ? 0n : (bor * WAD) / (liq + bor));
-function wadPow(base: bigint, exp: number): bigint {
-  const mul = (a: bigint, c: bigint) => (a * c + HALF_WAD) / WAD;
-  if (base === 0n) return exp === 0 ? WAD : 0n;
-  let result = exp % 2 === 1 ? base : WAD, e = Math.floor(exp / 2), b = base;
-  while (e > 0) { b = mul(b, b); if (e % 2 === 1) result = mul(result, b); e = Math.floor(e / 2); }
-  return result;
-}
-function ratePerSecWad(c: Reserve["curve"], u: bigint): bigint {
-  const poly = (u * c.linear) / WAD + (wadPow(u, 32) * c.linear) / WAD + (wadPow(u, 64) * c.jump) / WAD;
-  return (c.mult * poly) / (SECONDS_PER_YEAR * WAD);
-}
-const annualBorrow = (c: Reserve["curve"], u: bigint) => Number((ratePerSecWad(c, u) * SECONDS_PER_YEAR * 1_000_000_000n) / WAD) / 1e9;
 
 // Interest accrued to `now` (the fork clock), lenders' rounding as on-chain.
 function project(r: Reserve, now: bigint): Reserve {
@@ -82,7 +71,7 @@ export async function fetchSolanaPools(): Promise<Pool[]> {
     const d = 10 ** RESERVES[sym].decimals;
     const u = utilWad(r.liquidity, r.borrows);
     const util = Number((u * 1_000_000n) / WAD) / 1e6;
-    const borrowApr = annualBorrow(r.curve, u);
+    const borrowApr = annualBorrowRate(r.curve, u);
     const rf = Number(r.reserveFactorBps) / 10_000;
     const supplyApr = borrowApr * util * (1 - rf);
     const lender = r.liquidity + r.borrows - r.fees;
@@ -94,7 +83,9 @@ export async function fetchSolanaPools(): Promise<Pool[]> {
       sym, sup: Number(lender) / d, bor: Number(r.borrows) / d, util: util * 100, borA: borrowApr * 100, supA: supplyApr * 100,
       live: true, rate: shares > 0n ? Number((lender * 1_000_000_000n) / shares) / 1e9 : 1, rf: rf * 100,
       supCap: cap(r.supplyCap), borCap: cap(r.borrowCap), status: STATUS_LABELS[r.status] ?? `Status ${r.status}`,
-      curve: { l: f(r.curve.linear), j: f(r.curve.jump), m: f(r.curve.mult) },
+      curve: { l: f(r.curve.linear), j: f(r.curve.jump), m: f(r.curve.mult) }, curveWad: r.curve, rfBps: Number(r.reserveFactorBps),
+      // lenders' cash in the vault (web math.ts availableLenderCash): accounted liquidity - protocol fees
+      avail: Number(r.liquidity > r.fees ? r.liquidity - r.fees : 0n) / d, vault: r.liquidityVault,
     }];
   });
 }

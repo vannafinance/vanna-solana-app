@@ -2,6 +2,7 @@
 // Powers Guest mode and every screen until the chain adapters are wired. Prototype clock: Oct 7.
 
 import { REAL_BUILD } from "@/chain/build";
+import type { CurveWad } from "@/chain/solana/rate-curve";
 import type { Chain } from "@/state/chain";
 
 export const PX: Record<string, number> = {
@@ -22,9 +23,12 @@ export const TOK: Record<string, { name: string; lt: number; stable?: boolean; d
 // Read from the chain (chain/solana/pools.ts): `live` is set once a read succeeded, so screens show "—" before that instead of numbers.
 // rate = underlying per share (lender total / share-mint supply), rf = reserve factor (%), caps in tokens (null = no cap),
 // curve = the reserve's rate-curve coefficients (fractions), status = the reserve's status label.
+// curveWad / rfBps = the same coefficients and reserve factor raw (WAD, basis points) for the exact rate curve (rate-curve.ts),
+// avail = lenders' cash in the vault (liquidity - fees, tokens), vault = the reserve's liquidity vault address.
 export type Pool = {
   sym: string; sup: number; supA: number; bor: number; borA: number; util: number; vSupply?: number; rate?: number;
   live?: boolean; rf?: number; supCap?: number | null; borCap?: number | null; status?: string; curve?: { l: number; j: number; m: number };
+  curveWad?: CurveWad; rfBps?: number; avail?: number; vault?: string;
 };
 
 // Placeholders until the first live read (chain/live.ts) replaces them; never shown as numbers (live is unset).

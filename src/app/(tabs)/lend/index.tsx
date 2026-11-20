@@ -1,3 +1,4 @@
+import { useTabReset } from "@/state/tab-reset";
 import { useLocalSearchParams } from "expo-router";
 import { useState } from "react";
 
@@ -11,7 +12,7 @@ import { useChain } from "@/state/chain";
 import { useDataVersion } from "@/state/store";
 
 // Lend (design group 'lend'): Earn.
-export default function Lend() {
+function Lend() {
   useDataVersion();
   const { chain } = useChain();
   const params = useLocalSearchParams<{ tab?: string }>();
@@ -49,4 +50,10 @@ export default function Lend() {
       <Earn tab={earnTab} setTab={setEarnTab} />
     </ModulePage>
   );
+}
+
+// Tapping this tab's icon in the bottom bar again builds the page afresh (state/tab-reset.ts).
+export default function LendRoot() {
+  const reset = useTabReset("lend");
+  return <Lend key={reset} />;
 }

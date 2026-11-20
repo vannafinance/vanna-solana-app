@@ -11,7 +11,7 @@ import { nf, pct, sign, spct, sUsd, tokFmt, usd } from "@/format";
 import { perpMark } from "@/chain/perp-mark";
 import { openTx } from "@/components/history";
 import { DATA, PERP_HIST } from "@/sample/data";
-import { perpPnl, perpQty } from "@/sample/model";
+import { levText, perpLev, perpPnl, perpQty } from "@/sample/model";
 import { closePosition, FUNDING, fundingOf, levTag, liqFor, openTicket, PERP_MKTS, priceFmt, useFundingCountdown } from "@/screens/trade/perps";
 import { useChain } from "@/state/chain";
 import { useDataVersion } from "@/state/store";
@@ -44,7 +44,7 @@ export default function PerpPosition() {
 
   const m = PERP_MKTS.find((x) => x.k === p.k)!;
   const mark = perpMark(p.k), qty = perpQty(p), size = qty * mark, pnl = perpPnl(p), equity = p.coll + pnl;
-  const liq = liqFor(chain, p), f = fundingOf(p), lev = size / Math.max(1e-9, equity);
+  const liq = liqFor(chain, p), f = fundingOf(p), lev = perpLev(chain, p);
   // The transaction that opened it, as saved with the History row (none for a position opened before the app kept it).
   const openHash = PERP_HIST.find((h) => h.a === "Open / increase" && h.k === p.k && h.side === p.side && h.hash)?.hash;
   const cells: [string, string, string, string?][] = [
@@ -52,7 +52,7 @@ export default function PerpPosition() {
     ["Mark", priceFmt(mark), `${spct((mark / p.entry - 1) * 100)} from entry`],
     ["Size", tokFmt(qty, p.k), usd(size)],
     ["Collateral", usd(p.coll), `Equity ${usd(equity)}`],
-    ["Leverage", levTag(lev), p.pool != null ? `On ${nf(p.pool, 2)} USDC shared Phoenix collateral` : `Opened at ${levTag(p.lev)}`],
+    ["Leverage", levText(lev), p.pool != null ? `On ${nf(p.pool, 2)} USDC shared Phoenix collateral` : `Opened at ${levText(p.lev)}`],
     ["Liq. price", liq ? priceFmt(liq) : "None", liq ? `${pct((liq / mark - 1) * 100, 1)} away` : ""],
     ["Funding to date", sUsd(f), f < 0 ? "Paid" : "Received", sign(f)],
     ["Funding rate", Number.isFinite(m.fund) ? `${m.fund >= 0 ? "+" : "−"}${nf(Math.abs(m.fund), 4)}% / 1h` : "—", `${spct(m.fund * 24 * 365, 1)} a year, ${(m.fund >= 0) === (p.side === "long") ? "you pay" : "you earn"}`, m.fund >= 0 ? "pos" : "neg"],
@@ -71,7 +71,10 @@ export default function PerpPosition() {
               <TokenLogo sym={p.k} size={44} />
               <View style={{ flex: 1, gap: 4 }}>
                 <Text style={[styles.pair, { color: colors.text }]}>{p.k}-PERP</Text>
-                <Tag label={`${p.side === "long" ? "Long" : "Short"} ${levTag(lev)}`} tone={p.side} />
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                  <Tag label={`${p.side === "long" ? "Long" : "Short"} ${levText(lev)}`} tone={p.side} />
+                  <TokenLogo sym="PHOENIX" size={16} />
+                </View>
               </View>
               <View style={{ alignItems: "flex-end" }}>
                 <Text style={[styles.pnl, { color: sign(pnl) === "neg" ? colors.negative : colors.positive }]}>{sUsd(pnl)}</Text>

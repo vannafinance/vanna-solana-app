@@ -34,7 +34,8 @@ const TF = ["1m", "5m", "15m", "1H", "4H", "1D"] as const;
 
 const cdTxt = () => {
   const d = new Date();
-  const v = 3599 - (d.getMinutes() * 60 + d.getSeconds());
+  // UTC like the website: funding settles on the UTC hour, and the phone's own clock can be half an hour off
+  const v = 3599 - (d.getUTCMinutes() * 60 + d.getUTCSeconds());
   return String(Math.floor(v / 60)).padStart(2, "0") + ":" + String(v % 60).padStart(2, "0");
 };
 

@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lend Pool Detail</title>
+<link rel="icon" href="data:,">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="lend.css">
+</head>
+<body>
+<!-- Prototype chrome (not part of the design): pool, phone width, position state, jump to a state. -->
+<header class="top">
+  <div class="brand"><span class="dot"></span><div>Lend pool detail<small>Prototype, dark only. Everything outside the phone is not part of the design.</small></div></div>
+  <div class="grow"></div>
+  <div class="seg" id="pools" role="group" aria-label="Pool (prototype switch)"></div>
+  <div class="seg" id="width" role="group" aria-label="Phone width">
+    <button data-width="360">360 px</button><button data-width="412">412 px</button>
+  </div>
+  <div class="seg" id="pos" role="group" aria-label="Position state">
+    <button data-has="0">Empty position</button><button data-has="1">With position</button>
+  </div>
+</header>
+<nav class="states" aria-label="Jump to a state">
+  <span class="lbl">Jump to</span>
+  <div class="chips" id="states"></div>
+</nav>
+<main class="stage">
+  <div class="phones" id="phone"></div>
+  <aside class="panel" id="panel"></aside>
+</main>
+<script src="logos.js"></script>
+<script src="pools-data.js"></script>
+<script src="chameleon.js"></script>
+<script src="lend.js"></script>
+</body>
+</html>

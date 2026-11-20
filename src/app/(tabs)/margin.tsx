@@ -1,3 +1,4 @@
+import { useTabReset } from "@/state/tab-reset";
 import { useFocusEffect } from "expo-router";
 import { useCallback, useState } from "react";
 import { View } from "react-native";
@@ -13,7 +14,7 @@ import { usePersonal } from "@/state/personal";
 import { useDataVersion } from "@/state/store";
 
 // Margin (design V4: one page; the action switch Leverage | Repay | Transfer sits in the pill).
-export default function Margin() {
+function Margin() {
   useDataVersion();
   const { chain } = useChain();
   const [act, setAct] = useState<MarginAct>("leverage");
@@ -43,4 +44,10 @@ export default function Margin() {
       <MarginBody act={act} setAct={setAct} />
     </ModulePage>
   );
+}
+
+// Tapping this tab's icon in the bottom bar again builds the page afresh (state/tab-reset.ts).
+export default function MarginRoot() {
+  const reset = useTabReset("margin");
+  return <Margin key={reset} />;
 }

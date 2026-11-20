@@ -20,7 +20,7 @@ import Svg, { Circle, Line, Path, Rect } from "react-native-svg";
 
 import { connectSolanaWallet, type DetectedWallet, type ExternalConnection } from "@/chain/external";
 import { launchApp, nativeAvailable } from "@/chain/native";
-import { detectWallets, lastWalletPackage, rememberWalletPackage } from "@/chain/wallet-detect";
+import { detectWallets, lastWalletPackage, rememberWalletPackage, signsHere } from "@/chain/wallet-detect";
 import { VannaMark } from "@/components/brand";
 import { RiseIn } from "@/components/intro/rise-in";
 import { Icon } from "@/components/ui/icon";
@@ -45,7 +45,7 @@ type Done = { name: string; icon: string | null; logo: string; addr: string };
 type Step =
   | { v: "detect" }
   | { v: "list" }
-  | { v: "none" }
+  | { v: "none"; blocked?: string[] }
   | { v: "all" }
   | { v: "replace" }
   // w null: opened through Android's own chooser, so the wallet is not known until it answers
@@ -91,6 +91,12 @@ function failOf(e: unknown): Fail | "cancelled" {
   return "error";
 }
 
+/** "Solflare isn't supported yet on Vanna's test network." (the names are the ones Android gives), or "" when there is none. */
+function notSupported(names: string[]): string {
+  if (!names.length) return "";
+  return `${names.join(" and ")} ${names.length > 1 ? "aren't" : "isn't"} supported yet on Vanna's test network.`;
+}
+
 function ConnectSheet({ opts, close, out, onGone }: { opts: { replacingId?: string }; close: () => void; out: Out; onGone: () => void }) {
   const { colors } = useTheme();
   const rm = useReducedMotion();
@@ -102,6 +108,8 @@ function ConnectSheet({ opts, close, out, onGone }: { opts: { replacingId?: stri
     !intro && !opts.replacingId && walletState().wallets[C].length >= MAX_WALLETS ? { v: "replace" } : { v: "detect" },
   );
   const [found, setFound] = useState<DetectedWallet[]>([]);
+  // wallet apps on the phone that can't sign on the test network: named in a short note, never offered
+  const [unsupported, setUnsupported] = useState<string[]>([]);
   const [last, setLast] = useState<string | null>(null);
   const [skel, setSkel] = useState(false);
 
@@ -113,6 +121,8 @@ function ConnectSheet({ opts, close, out, onGone }: { opts: { replacingId?: stri
   const req = useRef(0);
   // The running connection can be ended (Cancel, another wallet, the guard): its wallet session is closed so the next request can start.
   const ctl = useRef<AbortController | null>(null);
+  // A fast, unexplained failure is tried once more by itself (the wallet is often not ready the first time after a sign out): not shown.
+  const retried = useRef(false);
   const active = useRef<{ w: DetectedWallet | null; single: boolean; at: number }>({ w: null, single: false, at: 0 });
   const detectSeq = useRef(0);
   const timers = useRef<{ guard?: ReturnType<typeof setTimeout>; open?: ReturnType<typeof setTimeout>; done?: ReturnType<typeof setTimeout> }>({});
@@ -142,7 +152,10 @@ function ConnectSheet({ opts, close, out, onGone }: { opts: { replacingId?: stri
       skelAt = Date.now();
       setSkel(true);
     }, 150);
-    const [all, lead] = await Promise.all([detectWallets(), intro ? lastWalletPackage() : Promise.resolve(null)]);
+    const [found0, lead] = await Promise.all([detectWallets(), intro ? lastWalletPackage() : Promise.resolve(null)]);
+    // wallet apps that can't sign on the test network are not offered (wallet-detect.ts)
+    const all = found0.filter(signsHere);
+    setUnsupported(found0.filter((w) => !signsHere(w)).map((w) => w.label));
     clearTimeout(t);
     if (skelAt) await sleep(Math.max(0, skelAt + 400 - Date.now()));
     if (!alive.current || detectSeq.current !== seq) return;
@@ -150,12 +163,13 @@ function ConnectSheet({ opts, close, out, onGone }: { opts: { replacingId?: stri
     setLast(lead);
     const list = visible(all, lead);
     if (!list.length && all.length) setStep({ v: "all" });
-    else if (!all.length) setStep({ v: "none" });
+    else if (!all.length) setStep({ v: "none", blocked: found0.filter((w) => !signsHere(w)).map((w) => w.label) });
     else if (list.length === 1) connect(list[0], true);
     else setStep({ v: "list" });
   }
 
-  function connect(w: DetectedWallet | null, single: boolean) {
+  function connect(w: DetectedWallet | null, single: boolean, auto = false) {
+    if (!auto) retried.current = false;
     const id = ++req.current;
     detectSeq.current++;
     ctl.current?.abort();
@@ -200,6 +214,10 @@ function ConnectSheet({ opts, close, out, onGone }: { opts: { replacingId?: stri
   function failed(e: unknown) {
     const { w, single } = active.current;
     const kind = failOf(e);
+    if (kind === "error" && w && !retried.current && Date.now() - active.current.at < 8000) {
+      retried.current = true;
+      return connect(w, single, true);
+    }
     // Android's chooser closed without a pick: back to the list (or closed, with no list behind it). A wallet closed before it took
     // the request: a decline.
     if (kind === "cancelled" && !w) return single ? close() : setStep({ v: "list" });
@@ -365,10 +383,10 @@ function ConnectSheet({ opts, close, out, onGone }: { opts: { replacingId?: stri
       body = <DetectView skel={skel} rm={!!rm} />;
       break;
     case "list":
-      body = <GridView wallets={visible(found, last)} last={intro ? last : null} onPick={pick} onOther={() => connect(null, false)} />;
+      body = <GridView wallets={visible(found, last)} note={notSupported(unsupported)} last={intro ? last : null} onPick={pick} onOther={() => connect(null, false)} />;
       break;
     case "none":
-      body = <NoneView onCheck={() => void detect()} />;
+      body = <NoneView onCheck={() => void detect()} blocked={step.blocked ?? []} />;
       break;
     case "all":
       body = <AllView onClose={close} />;
@@ -490,7 +508,7 @@ function SkelBox({ w, h, r, rm }: { w: number; h: number; r: number; rm: boolean
   );
 }
 
-function GridView({ wallets, last, onPick, onOther }: { wallets: DetectedWallet[]; last: string | null; onPick: (w: DetectedWallet) => void; onOther: () => void }) {
+function GridView({ wallets, last, note, onPick, onOther }: { wallets: DetectedWallet[]; last: string | null; note: string; onPick: (w: DetectedWallet) => void; onOther: () => void }) {
   const { colors, isDark } = useTheme();
   const press = isDark ? "rgba(255,255,255,0.06)" : "rgba(17,17,17,0.06)";
   return (
@@ -544,6 +562,11 @@ function GridView({ wallets, last, onPick, onOther }: { wallets: DetectedWallet[
           </View>
         </Pressable>
       </Rise>
+      {note ? (
+        <Rise i={3} style={{ marginTop: 10 }}>
+          <Text style={[styles.altS, { color: colors.muted, textAlign: "center" }]}>{note}</Text>
+        </Rise>
+      ) : null}
     </View>
   );
 }
@@ -570,7 +593,7 @@ function Centre({ icon, title, line, alert, children }: { icon: ReactNode; title
   );
 }
 
-function NoneView({ onCheck }: { onCheck: () => void }) {
+function NoneView({ onCheck, blocked }: { onCheck: () => void; blocked: string[] }) {
   const { colors } = useTheme();
   return (
     <Centre
@@ -579,8 +602,8 @@ function NoneView({ onCheck }: { onCheck: () => void }) {
           <WalletGlyph size={30} color={colors.onPurpleTint} />
         </View>
       }
-      title="No wallet app found"
-      line="Install any Solana wallet app that supports Mobile Wallet Adapter, then come back here."
+      title={blocked.length ? "Wallet not supported yet" : "No wallet app found"}
+      line={blocked.length ? `${notSupported(blocked)} Install another Solana wallet app that supports Mobile Wallet Adapter, then come back here.` : "Install any Solana wallet app that supports Mobile Wallet Adapter, then come back here."}
     >
       <TextBtn
         label="See wallets that work with Vanna"

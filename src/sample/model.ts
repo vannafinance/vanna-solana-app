@@ -167,6 +167,8 @@ export type Position = {
   size: number;
   // false: a farm position whose earnings the chain's history cannot prove ("—")
   pnlKnown?: boolean;
+  /** The venue's logo, shown next to the tags (Perps: Phoenix). */
+  venue?: string;
   tags: { label: string; tone: "long" | "short" | "grey" | "teal" }[];
 };
 
@@ -180,13 +182,24 @@ export function spotPositions(chain: Chain): Position[] {
   });
 }
 
+// Leverage of a Perps position as the website shows it: all open positions' current size over the shared Phoenix collateral (1.45x).
+export function perpLev(chain: Chain, p: PerpPos): number {
+  const all = DATA[chain].perps;
+  const exposure = all.reduce((t, x) => t + perpQty(x) * perpMark(x.k), 0);
+  const coll = all.reduce((t, x) => t + x.coll, 0);
+  return exposure > 0 && coll > 0 ? exposure / coll : p.lev;
+}
+/** `1.45x`: two decimals below 2x, one from 2x (0.98x must not read as 1x). */
+export const levText = (l: number) => `${l < 2 ? Number(l.toFixed(2)) : Number(l.toFixed(1))}x`;
+
 export function perpPositions(chain: Chain): Position[] {
   if (chain !== "solana") return [];
   return DATA[chain].perps.map((p) => {
     const pnl = perpPnl(p);
     return {
       sub: "perps", id: p.id, sym: p.k, name: `${p.k}-PERP`, pnl, pct: p.coll ? (pnl / p.coll) * 100 : 0, size: perpQty(p) * perpMark(p.k),
-      tags: [{ label: `${p.side === "long" ? "Long" : "Short"} ${p.lev}x`, tone: p.side }],
+      venue: "PHOENIX",
+      tags: [{ label: `${p.side === "long" ? "Long" : "Short"} ${levText(perpLev(chain, p))}`, tone: p.side }],
     };
   });
 }

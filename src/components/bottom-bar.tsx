@@ -1,3 +1,4 @@
+import { type Href, router } from "expo-router";
 import type { BottomTabBarProps } from "expo-router/tabs";
 import { LinearGradient } from "expo-linear-gradient";
 import { useEffect } from "react";
@@ -5,6 +6,7 @@ import { Pressable, StyleSheet, Text, View } from "react-native";
 import Animated, { Easing, useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { resetTab } from "@/state/tab-reset";
 import { useTheme } from "@/theme/use-theme";
 import { BRAND_GRADIENT, families, type FamilyName, font } from "@/theme/tokens";
 
@@ -74,7 +76,13 @@ export function BottomBar({ state, navigateToTab }: BottomTabBarProps) {
         return (
           <Pressable
             key={route.key}
-            onPress={() => navigateToTab(route.key)}
+            onPress={() => {
+              // the tab you are on: back to its main page; another tab: switch to it
+              if (on) {
+                router.navigate(`/${route.name}` as Href);
+                resetTab(route.name);
+              } else navigateToTab(route.key);
+            }}
             accessibilityRole="tab"
             accessibilityState={{ selected: on }}
             accessibilityLabel={group.label}

@@ -1,3 +1,4 @@
+import { useTabReset } from "@/state/tab-reset";
 import { useState } from "react";
 
 import { AccountStrip } from "@/components/account-strip";
@@ -11,7 +12,7 @@ import { useDataVersion } from "@/state/store";
 
 // Trade (design group 'trade'): Spot | Perps in the pill (Spot has Swap | History sub-tabs). Hero = the Borrow & Trade account strip.
 type Sec = "spot" | "perps";
-export default function Trade() {
+function Trade() {
   useDataVersion();
   const { chain } = useChain();
   const [section, setSection] = useState<Sec>("spot");
@@ -34,4 +35,10 @@ export default function Trade() {
       {section === "spot" ? <Spot /> : <Perps tab={perpTab} setTab={setPerpTab} />}
     </ModulePage>
   );
+}
+
+// Tapping this tab's icon in the bottom bar again builds the page afresh (state/tab-reset.ts).
+export default function TradeRoot() {
+  const reset = useTabReset("trade");
+  return <Trade key={reset} />;
 }

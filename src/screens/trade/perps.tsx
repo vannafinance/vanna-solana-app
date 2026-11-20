@@ -17,7 +17,7 @@ import { hfFmt, levFmt, nf, pct, sign, spct, sUsd, tokFmt, usd } from "@/format"
 import { ACTIVITY, DATA, PERP_HIST, type PerpHist, type PerpPos, type Side } from "@/sample/data";
 import { openTx } from "@/components/history";
 import { addPerpHist } from "@/state/activity-store";
-import { acct, hasMargin, liqPriceOf, mbal, mTake, perpPnl, perpQty, simAcct } from "@/sample/model";
+import { acct, hasMargin, levText, liqPriceOf, mbal, mTake, perpLev, perpPnl, perpQty, simAcct } from "@/sample/model";
 import { nowT } from "@/screens/earn/model";
 import { openShare } from "@/screens/share/share";
 import { type Chain, useChain } from "@/state/chain";
@@ -83,19 +83,11 @@ export const pooledLiq = (side: Side, qty: number, entry: number, coll: number):
 // this market alone moves; None when no move of this market gets there. Phoenix's own zero-equity price is a separate figure (zeroEquityFor).
 export const liqFor = (chain: Chain, p: PerpPos) => liqPriceOf(chain, p.k, p.side);
 export const zeroEquityFor = (p: PerpPos) => pooledLiq(p.side, perpQty(p), p.entry, p.coll);
-// Leverage as each website screen shows it: the trading screen's position row is the current size over its collateral (1.46x), the
-// Portfolio table is the current size over its equity (2.95x). Both over all open positions and the shared Phoenix pool.
-export function perpLevNow(chain: Chain, p: PerpPos, over: "collateral" | "equity"): number {
-  const all = DATA[chain].perps;
-  const exposure = all.reduce((t, x) => t + perpQty(x) * perpMark(x.k), 0);
-  const coll = all.reduce((t, x) => t + x.coll, 0);
-  const base = over === "collateral" ? coll : coll + all.reduce((t, x) => t + perpPnl(x), 0);
-  return exposure > 0 && base > 0 ? exposure / base : p.lev;
-}
 // Time to the next hourly funding as mm:ss, as the website's market bar; ticks once a second where it is used.
+// The website counts in UTC (funding settles on the UTC hour); the phone's own clock is half an hour off in India.
 export const fundingCountdown = () => {
   const d = new Date();
-  const v = 3599 - (d.getMinutes() * 60 + d.getSeconds());
+  const v = 3599 - (d.getUTCMinutes() * 60 + d.getUTCSeconds());
   return String(Math.floor(v / 60)).padStart(2, "0") + ":" + String(v % 60).padStart(2, "0");
 };
 export function useFundingCountdown() {
@@ -192,7 +184,7 @@ export function PositionCard({ p }: { p: PerpPos }) {
           <View style={{ flex: 1, gap: 4 }}>
             <Text style={[styles.t, { color: colors.text, fontSize: 16 }]}>{perpPair(p.k)}</Text>
             <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-              <Tag label={`${p.side === "long" ? "Long" : "Short"} ${levTag(perpLevNow(chain, p, "collateral"))}`} tone={p.side} />
+              <Tag label={`${p.side === "long" ? "Long" : "Short"} ${levTag(perpLev(chain, p))}`} tone={p.side} />
               <TokenLogo sym="PHOENIX" size={16} />
             </View>
             {p.pool != null && (
@@ -238,7 +230,7 @@ export function closePosition(chain: Chain, p: PerpPos) {
   const close = (r: LegRun) => solanaPerpsClose({ market: p.k, side: p.side, control: ctl(r, () => "close", false), returnControl: retCtl(r) });
   runTx({
     chain, fam, title: `Close ${pair}`, cta: "Close position",
-    legs: [{ l: "You close", v: `${p.side === "long" ? "Long" : "Short"} ${Number(p.lev.toFixed(1))}x ${p.k}`, s: `${tokFmt(perpQty(p), p.k)} at ${priceFmt(px(p.k))}` }, { l: last ? "Back to your margin account" : "Stays in Phoenix as collateral", v: `${nf(Math.max(0, back), 2)} USDC`, s: last ? "A second approval moves it home" : undefined }],
+    legs: [{ l: "You close", v: `${p.side === "long" ? "Long" : "Short"} ${levText(perpLev(chain, p))} ${p.k}`, s: `${tokFmt(perpQty(p), p.k)} at ${priceFmt(px(p.k))}` }, { l: last ? "Back to your margin account" : "Stays in Phoenix as collateral", v: `${nf(Math.max(0, back), 2)} USDC`, s: last ? "A second approval moves it home" : undefined }],
     rows: [["P&L", sUsd(pnl), pnl >= 0 ? "pos" : "neg"], ["Taker fee", usd(perpQty(p) * px(p.k) * TAKER)]],
     done: { title: `Closed ${p.k} ${p.side}`, line: last ? `${sUsd(pnl)} P&L. ${nf(Math.max(0, back), 2)} USDC is back in your margin account` : `${sUsd(pnl)} P&L, the USDC stays in Phoenix` },
     // the last position: close, then the USDC home (its own approval); otherwise one transaction
@@ -345,6 +337,7 @@ export function closeAll(chain: Chain) {
 
 function CloseAllBody({ cs, fee, pnl, idle, back }: { cs: { p: PerpPos; pnl: number }[]; fee: number; pnl: number; idle: number; back: number }) {
   const { colors } = useTheme();
+  const { chain } = useChain();
   const n = cs.length;
   const row = (l: string, v: string, tone?: string) => (
     <View key={l} style={[styles.car, { borderTopWidth: 1, borderTopColor: colors.divider }]}>
@@ -362,7 +355,10 @@ function CloseAllBody({ cs, fee, pnl, idle, back }: { cs: { p: PerpPos; pnl: num
           <TokenLogo sym={p.k} size={28} />
           <Text style={{ width: 92, fontFamily: font.semibold, fontSize: 15, color: colors.text }} numberOfLines={1}>{perpPair(p.k)}</Text>
           <View style={{ flex: 1, alignItems: "flex-start" }}>
-            <Tag label={`${p.side === "long" ? "Long" : "Short"} ${Number(p.lev.toFixed(1))}x`} tone={p.side} />
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+              <Tag label={`${p.side === "long" ? "Long" : "Short"} ${levText(perpLev(chain, p))}`} tone={p.side} />
+              <TokenLogo sym="PHOENIX" size={16} />
+            </View>
           </View>
           <Text style={{ fontFamily: font.semibold, fontSize: 15, color: v < 0 ? colors.negative : colors.positive, fontVariant: ["tabular-nums"] }}>{sUsd(v)}</Text>
         </View>
@@ -445,6 +441,7 @@ function TradeRow({ h, first }: { h: (typeof PERP_HIST)[number]; first: boolean 
           <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
             <Tag label={open ? "Open" : "Close"} tone="grey" />
             {h.side !== "" && <Tag label={`${h.side === "long" ? "Long" : "Short"}${h.lev != null ? ` ${levTag(h.lev)}` : ""}`} tone={h.side} />}
+            {h.side !== "" && <TokenLogo sym="PHOENIX" size={16} />}
           </View>
           {differs && <HistNote text={`Position ${levTag(h.effLev!)} on ${nf(h.pool ?? 0, 2)} USDC shared Phoenix collateral`} />}
         </View>

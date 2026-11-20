@@ -4,12 +4,12 @@ import { hydrateWallets, walletState } from "./wallets";
 
 // The intro plays on every fresh open. A reload was landing inside the app because the phone had saved "welcome seen". That flag is
 // kept only for the rest of this run (Explore first / finish sign-in), then the next launch shows the intro again, EXCEPT when the
-// app was last used less than RESUME_MS ago by a signed-in wallet: the phone only closed it in the background, so it opens on the
+// app was last used less than RESUME_MS (1 minute) ago by a signed-in wallet: the phone only closed it in the background, so it opens on the
 // screen the person was on (a short pause, not a restart).
 const KEY = "vanna.welcomeSeen";
 const ACTIVE_KEY = "vanna.lastActive";
 const PATH_KEY = "vanna.lastPath";
-export const RESUME_MS = 2 * 60 * 1000;
+export const RESUME_MS = 60 * 1000;
 let welcomeSeen = false;
 let resumePath: string | null = null;
 export const isWelcomeSeen = () => welcomeSeen;

@@ -13,8 +13,8 @@ import { Card, EmptyCard, IconAction, Pairs, shareIcon, Tag, TokenBadge } from "
 import { nf, pct, sign, spct, sUsd, tokFmt, usd } from "@/format";
 import { perpMark } from "@/chain/perp-mark";
 import { ACTIVITY, DATA, PERP_HIST, type PerpPos } from "@/sample/data";
-import { acct, farmPositions, hasMargin, liqPriceOf, lossBuffer, marginPnl, type Position, perpPnl, perpQty, portfolioTotals, priceOf, priceRoom, spotPositions } from "@/sample/model";
-import { CloseAllBar, closePosition, levTag, liqFor, perpLevNow, priceFmt } from "@/screens/trade/perps";
+import { acct, farmPositions, hasMargin, levText, liqPriceOf, lossBuffer, marginPnl, perpLev, type Position, perpPnl, perpQty, portfolioTotals, priceOf, priceRoom, spotPositions } from "@/sample/model";
+import { CloseAllBar, closePosition, liqFor, priceFmt } from "@/screens/trade/perps";
 import { useChain } from "@/state/chain";
 import { useAccountRead } from "@/chain/account-live";
 import { usePersonal } from "@/state/personal";
@@ -399,7 +399,7 @@ function PerpCard({ p }: { p: PerpPos }) {
           <View style={{ flex: 1, gap: 4 }}>
             <Text style={{ fontFamily: font.semibold, fontSize: 16, color: colors.text }}>{name}</Text>
             <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-              <Tag label={`${p.side === "long" ? "Long" : "Short"} ${levTag(perpLevNow(chain, p, "equity"))}`} tone={p.side} />
+              <Tag label={`${p.side === "long" ? "Long" : "Short"} ${levText(perpLev(chain, p))}`} tone={p.side} />
               <TokenLogo sym="PHOENIX" size={16} />
             </View>
             {p.pool != null && <Text style={[styles.tip, { color: colors.muted, paddingBottom: 0 }]}>{`On ${nf(p.pool, 2)} USDC shared Phoenix collateral`}</Text>}

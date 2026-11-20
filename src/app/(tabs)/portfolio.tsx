@@ -1,3 +1,4 @@
+import { useTabReset } from "@/state/tab-reset";
 import { useRef, useState } from "react";
 import { ScrollView, type ScrollViewInstance, StyleSheet, View } from "react-native";
 
@@ -15,7 +16,7 @@ import { useDataVersion } from "@/state/store";
 const PAGES: [PfPage, string][] = [["overview", "Overview"], ["lender", "Lender"], ["trader", "Trader"]];
 const order = (p: PfPage) => PAGES.findIndex(([k]) => k === p);
 
-export default function Portfolio() {
+function Portfolio() {
   useDataVersion(); // the hero and cards read the chain data, which arrives after sign-in
   const { colors } = useTheme();
   const { chain } = useChain();
@@ -56,3 +57,9 @@ export default function Portfolio() {
 const styles = StyleSheet.create({
   body: { padding: 16 },
 });
+
+// Tapping this tab's icon in the bottom bar again builds the page afresh (state/tab-reset.ts).
+export default function PortfolioRoot() {
+  const reset = useTabReset("portfolio");
+  return <Portfolio key={reset} />;
+}

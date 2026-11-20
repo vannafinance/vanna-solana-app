@@ -14,6 +14,8 @@ export type AssetRisk = {
   oracle: string; // e.g. "Kamino Scope, Pyth fallback"
   maxAgeSecs: number;
   priceFeed: string | null; // the account the price is read from (Pyth feed, else the Scope prices account)
+  scopePrices: string | null; // the oracle's Scope prices account, null when it has none
+  pythPrice: string | null; // the oracle's Pyth feed, null when it has none
 };
 
 export const ASSET_RISK: Record<string, AssetRisk> = {};
@@ -51,6 +53,8 @@ export function riskFrom(assets: Map<number, AssetConfigState>): Record<string, 
       oracle: oracleLabel(a.oracle),
       maxAgeSecs: a.maxPriceAgeSecs,
       priceFeed: set(a.oracle.pythPrice) ? a.oracle.pythPrice : set(a.oracle.scopePrices) ? a.oracle.scopePrices : null,
+      scopePrices: set(a.oracle.scopePrices) ? a.oracle.scopePrices : null,
+      pythPrice: set(a.oracle.pythPrice) ? a.oracle.pythPrice : null,
     };
   }
   return out;

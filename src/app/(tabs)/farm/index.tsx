@@ -1,3 +1,4 @@
+import { useTabReset } from "@/state/tab-reset";
 import { AccountStrip } from "@/components/account-strip";
 import { ModulePage } from "@/components/module-page";
 import { pct, usd } from "@/format";
@@ -9,7 +10,7 @@ import { usePersonal } from "@/state/personal";
 import { useDataVersion } from "@/state/store";
 
 // Farm: the hero is the Borrow & Trade account strip with the farm's value and net APY.
-export default function FarmPage() {
+function FarmPage() {
   useDataVersion();
   const { chain } = useChain();
   const ready = usePersonal(chain);
@@ -26,4 +27,10 @@ export default function FarmPage() {
       <Farm tab={tab} />
     </ModulePage>
   );
+}
+
+// Tapping this tab's icon in the bottom bar again builds the page afresh (state/tab-reset.ts).
+export default function FarmPageRoot() {
+  const reset = useTabReset("farm");
+  return <FarmPage key={reset} />;
 }

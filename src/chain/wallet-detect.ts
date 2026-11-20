@@ -14,6 +14,12 @@ export async function detectWallets(): Promise<DetectedWallet[]> {
     .sort((a, b) => a.label.localeCompare(b.label));
 }
 
+// Wallet apps that can't sign on Vanna's test network, which is a fork of mainnet: Solflare checks every transaction against real Mainnet,
+// where the test wallet holds no SOL, and blocks it (its developers confirmed there is no bypass). They stay out of the list until the app
+// runs on a real network; remove the package from here then.
+export const UNSUPPORTED_WALLET_PACKAGES = new Set(["com.solflare.mobile"]);
+export const signsHere = (w: DetectedWallet) => !UNSUPPORTED_WALLET_PACKAGES.has(w.pkg);
+
 // The wallet used to connect last time: listed first with a "Last used" tag (only on the first connect, when nothing is connected yet).
 const LAST_KEY = "vanna.lastWalletPackage";
 export const lastWalletPackage = () => AsyncStorage.getItem(LAST_KEY).catch(() => null);

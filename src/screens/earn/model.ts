@@ -1,5 +1,5 @@
 import { assetConfigPda } from "@/chain/solana/actions";
-import { RESERVES } from "@/chain/solana/config";
+import { RESERVES, VANNA_PROGRAM_ID } from "@/chain/solana/config";
 import { shareMintOf } from "@/chain/solana/pools";
 import { ASSET_RISK } from "@/chain/solana/risk";
 import { nf, tokFmt } from "@/format";
@@ -7,7 +7,7 @@ import { ACTIVITY, DATA, type Pool, POOLS_BY, PX, TOK } from "@/sample/data";
 import { lendTotals } from "@/sample/model";
 import type { Chain } from "@/state/chain";
 
-/* Earn helpers (design screens/earn.js): vault categories, vToken shares, free liquidity, the rate curve, and supply / withdraw on the
+/* Earn helpers (design screens/earn.js): vault categories, vToken shares, free liquidity, the website's pool formats and addresses, and supply / withdraw on the
    sample state. */
 
 export const CATS = ["xStocks", "PreStocks", "Crypto", "Stablecoins"] as const;
@@ -50,34 +50,40 @@ export function earnTotals(chain: Chain) {
   return { val, earned, apy: L.length ? lendTotals(chain).apy : 0, n: L.length };
 }
 
-// The reserve's own rate curve (on-chain interest.rs, web math.ts): borrow APR = mult x (u x linear + u^32 x linear + u^64 x jump),
-// lenders earn borrow x utilisation x (1 - reserve factor). Null until the pool has been read from the chain.
-export function rateCurve(p: Pool) {
-  if (!p.live || !p.curve) return null;
-  const { l, j, m } = p.curve, rf = (p.rf ?? 0) / 100;
-  const borrow = (u: number) => m * (u * l + Math.pow(u, 32) * l + Math.pow(u, 64) * j);
-  const lender = (u: number) => borrow(u) * u * (1 - rf);
-  const u0 = p.util / 100;
-  const samples = Array.from({ length: 101 }, (_, i) => ({ u: i / 100, b: borrow(i / 100), l: lender(i / 100) }));
-  return { samples, cur: { u: u0, b: borrow(u0), l: lender(u0) } };
-}
+// The website's Lend pool formats (earn-format.ts): fT for a position's amounts ("1.00", "2.35K", dust to 6 digits), fL for pool
+// totals ("18.82K"), fXr for the share exchange rate (9 digits, trailing zeros dropped), shortAddr for an address (6…6).
+export const fT = (n: number) =>
+  !(n > 0) ? "0" : n >= 1e6 ? (n / 1e6).toFixed(2) + "M" : n >= 1e3 ? (n / 1e3).toFixed(2) + "K" : n < 0.01 ? n.toFixed(6).replace(/\.?0+$/, "") : n.toFixed(2);
+export const fL = (n: number) => (n >= 1e6 ? (n / 1e6).toFixed(2) + "M" : n >= 1e3 ? (n / 1e3).toFixed(2) + "K" : n.toFixed(2));
+export const fXr = (x: number) => x.toFixed(9).replace(/\.?0+$/, "");
+export const shortAddr = (a: string) => (a.length > 14 ? `${a.slice(0, 6)}…${a.slice(-6)}` : a);
 
 // Collateral rules shown on a vault, from the program's AssetConfig accounts (chain/solana/risk.ts, filled by live.ts):
 // [asset, collateral enabled, borrow enabled, liquidation bonus %, LTV %, liquidation threshold %]. Empty until read.
 export const collList = (_chain: Chain): [string, boolean, boolean, number, number, number][] =>
   Object.values(ASSET_RISK).map((r) => [r.sym, r.collateral, r.borrow, r.liqBonus, r.ltv, r.liqThreshold]);
 
-// The vault's on-chain accounts: [label, short form, full address]. Reserve from config.ts, share mint and asset config are
-// program PDAs (seeds "share_mint" / "asset" + mint), the price account is the oracle's Pyth feed (else its Scope account).
-const short = (a: string) => `${a.slice(0, 4)}…${a.slice(-4)}`;
-const addrCache: Record<string, [string, string][]> = {};
-export function addrsOf(s: string): [string, string, string][] {
-  const r = RESERVES[s];
+// The vault's on-chain accounts as the website lists them (earn-pool-tabs.tsx): [label, full address]. Reserve and mint from
+// config.ts, share mint and asset config are program PDAs (seeds "share_mint" / "asset" + mint), the liquidity vault is read from
+// the Reserve (pools.ts), the price accounts from the asset's oracle config (risk.ts). An address the pool does not use (SKR has
+// no Scope prices) is left out, and a lone Pyth feed is just "Pyth Feed".
+const pdaCache: Record<string, [string, string]> = {};
+export function addrsOf(p: Pool): [string, string][] {
+  const s = p.sym, r = RESERVES[s];
   if (!r) return [];
-  addrCache[s] ??= [["Reserve", r.reserve], ["vToken mint", shareMintOf(r.mint)], ["Asset config", assetConfigPda(r.mint)], ["Token mint", r.mint]];
-  const feed = ASSET_RISK[s]?.priceFeed;
-  const rows: [string, string][] = [...addrCache[s], ...(feed ? [["Price feed", feed] as [string, string]] : [])];
-  return rows.map(([l, a]) => [l, short(a), a]);
+  const [share, asset] = (pdaCache[s] ??= [shareMintOf(r.mint), assetConfigPda(r.mint)]);
+  const risk = ASSET_RISK[s];
+  const rows: [string, string | null | undefined][] = [
+    [`${shareSym(s)} Share Mint`, share],
+    [`${s} Reserve`, r.reserve],
+    ["Liquidity Vault", p.vault],
+    ["Asset Config", risk?.assetConfig ?? asset],
+    ["Scope Prices", risk?.scopePrices],
+    [risk?.scopePrices ? "Pyth Fallback Feed" : "Pyth Feed", risk?.pythPrice],
+    [`${s} Mint`, r.mint],
+    ["Vanna Lending Program", VANNA_PROGRAM_ID],
+  ];
+  return rows.filter((x): x is [string, string] => !!x[1]);
 }
 
 const now = () => {

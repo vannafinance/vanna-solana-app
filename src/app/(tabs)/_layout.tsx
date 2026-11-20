@@ -1,6 +1,9 @@
-import { Tabs } from "expo-router";
+import { Tabs, router } from "expo-router";
+import { useEffect } from "react";
+import { BackHandler, Platform } from "react-native";
 
 import { BottomBar } from "@/components/bottom-bar";
+import { toast } from "@/ui/overlay";
 
 export default function TabsLayout() {
   return (

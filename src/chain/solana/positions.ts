@@ -86,6 +86,24 @@ export async function fetchLenderPositions(owner: string): Promise<LendPos[]> {
   return out;
 }
 
+// Funding to date per open position, read after the account itself (never in its way) and kept for the next read.
+let fundingLast = new Map<number, number>();
+let fundingBusy = false;
+function warmFunding(list: { assetId: number; baseLots: bigint; snapshot: bigint }[]) {
+  if (fundingBusy || !list.length) return;
+  fundingBusy = true;
+  void new Promise<void>((r) => setTimeout(r, 4000))
+    .then(() => import("./actions"))
+    .then((m) => m.phoenixFundingUsd(list))
+    .then((map) => {
+      fundingLast = map;
+    })
+    .catch(() => {})
+    .finally(() => {
+      fundingBusy = false;
+    });
+}
+
 // # Ported from: apps/solana/lib/solana/phoenix-state.ts:decodeTrader
 // Phoenix is cross-margined: one trader account holds the phUSD collateral (6 decimals, 1:1 USD) for every position, so a
 // position has no collateral of its own. Read from the trader account: collateral, and per position its size (base lots)
@@ -138,7 +156,8 @@ export async function fetchPhoenixPositions(marginPda: string): Promise<{ perps:
   const cash = Math.max(0, cashUsd);
   const lev = cash > 0 ? total / cash : 0;
   // funding to date, as the website's position row; left out (the estimate shows) when it cannot be read
-  const funding = await import("./actions").then((m) => m.phoenixFundingUsd(open.map((o) => ({ assetId: o.assetId, baseLots: o.baseLots, snapshot: o.snapshot })))).catch(() => new Map<number, number>());
+  // It is read in the background (the perp asset map it comes from is a ~1.6 MB read): this read uses the last figures, the next one the new.
+  warmFunding(open.map((o) => ({ assetId: o.assetId, baseLots: o.baseLots, snapshot: o.snapshot })));
   const perps: PerpPos[] = open.map((o) => ({
     id: `p-${o.sym.toLowerCase()}`,
     k: o.sym,
@@ -148,7 +167,7 @@ export async function fetchPhoenixPositions(marginPda: string): Promise<{ perps:
     entry: o.qty > 0 ? o.notional / o.qty : 0,
     qty: o.qty,
     pool: cash,
-    fundingUsd: funding.get(o.assetId),
+    fundingUsd: fundingLast.get(o.assetId),
     t: today(),
   }));
   // the whole collateral is assigned to the open positions, so none of it is idle

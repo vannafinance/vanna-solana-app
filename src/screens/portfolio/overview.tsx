@@ -10,6 +10,7 @@ import { useChain } from "@/state/chain";
 import { useAccountRead } from "@/chain/account-live";
 import { usePersonal } from "@/state/personal";
 import { useTheme } from "@/theme/use-theme";
+import { TokenLogo } from "@/components/brand";
 import { brand, font } from "@/theme/tokens";
 
 import { usePfColors, type TraderSub } from "./shared";
@@ -145,10 +146,11 @@ function PositionsCard({ openTrader }: { openTrader: (sub?: TraderSub) => void }
           lead={<TokenBadge sym={p.sym} />}
           title={p.name}
           sub={
-            <View style={{ flexDirection: "row", gap: 4 }}>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
               {p.tags.map((t) => (
                 <Tag key={t.label} {...t} />
               ))}
+              {p.venue ? <TokenLogo sym={p.venue} size={16} /> : null}
             </View>
           }
           value={p.pnlKnown === false ? "—" : sUsd(p.pnl)}
