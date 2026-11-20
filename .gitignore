@@ -58,3 +58,8 @@ design/**/.port
 
 # Project notes and handoffs: kept on the developer machine, not in the repository
 docs/
+
+# Assistant instruction files: kept on the developer machine, not in the repository
+AGENTS.md
+CLAUDE.md
+GEMINI.md
