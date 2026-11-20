@@ -55,3 +55,6 @@ credentials/
 # Gradle caches (created by IDE Java extensions) and design-server runtime files
 .gradle/
 design/**/.port
+
+# Project notes and handoffs: kept on the developer machine, not in the repository
+docs/
